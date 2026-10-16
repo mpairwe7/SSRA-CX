@@ -56,10 +56,21 @@ class PayeEstimateResult(BaseModel):
     numeric_claims: list[NumericClaim]
 
 
+WithholdingCategory = Literal[
+    "goods_and_services",
+    "rent",
+    "technical_fees",
+    "government_contractors_resident",
+    "government_contractors_non_resident",
+    "mobile_money_commissions",
+    "end_of_service_benefits",
+]
+
+
 class WithholdingEstimateResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    category: Literal["goods_and_services", "rent", "technical_fees"]
+    category: WithholdingCategory
     gross_amount_ssp: str
     rate_percent: str
     withholding_tax_ssp: str
@@ -284,7 +295,7 @@ class TaxFactsRegistry:
     def calculate_withholding_estimate(
         self,
         gross_amount_ssp: Decimal | int | float | str,
-        category: Literal["goods_and_services", "rent", "technical_fees"] = "goods_and_services",
+        category: WithholdingCategory = "goods_and_services",
         *,
         as_of: date | None = None,
     ) -> WithholdingEstimateResult:

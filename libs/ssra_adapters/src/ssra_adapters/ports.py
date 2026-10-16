@@ -44,7 +44,15 @@ class LedgerBalanceRecord(BaseModel):
 class OfficialChannelEntry(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    channel_type: Literal["DOMAIN", "PAYMENT_PORTAL", "SMS_SENDER_ID", "WHATSAPP", "BANK_TSA_PATH"]
+    channel_type: Literal[
+        "DOMAIN",
+        "PAYMENT_PORTAL",
+        "SMS_SENDER_ID",
+        "WHATSAPP",
+        "BANK_TSA_PATH",
+        "SUPPORT_EMAIL",
+        "SUPPORT_PHONE",
+    ]
     identifier: str
     status: Literal["OFFICIAL_VERIFIED", "UNVERIFIED_OR_SCAM"]
     guidance: str
@@ -138,7 +146,7 @@ class MockETaxAdapter:
 
 
 class MockOfficialChannelsAdapter:
-    """Curated anti-impersonation registry of official SSRA channels (`OQ-011`)."""
+    """Curated anti-impersonation registry of official SSRA channels (`etax.nra.gov.ss`, `nra.gov.ss`)."""
 
     def __init__(self) -> None:
         self._verified_time = datetime(2026, 10, 16, 0, 0, tzinfo=UTC)
@@ -153,11 +161,116 @@ class MockOfficialChannelsAdapter:
                 ),
                 verified_at=self._verified_time,
             ),
+            "nra.gov.ss": OfficialChannelEntry(
+                channel_type="DOMAIN",
+                identifier="https://www.nra.gov.ss/",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: https://www.nra.gov.ss/ is the official South Sudan Revenue Authority website and verification portal (/tools).",
+                verified_at=self._verified_time,
+            ),
+            "www.nra.gov.ss": OfficialChannelEntry(
+                channel_type="DOMAIN",
+                identifier="https://www.nra.gov.ss/",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: https://www.nra.gov.ss/ is the official South Sudan Revenue Authority website and verification portal (/tools).",
+                verified_at=self._verified_time,
+            ),
             "cms.nra.gov.ss": OfficialChannelEntry(
                 channel_type="DOMAIN",
                 identifier="https://cms.nra.gov.ss/",
                 status="OFFICIAL_VERIFIED",
-                guidance="OFFICIAL: Official SSRA document and statutory publication domain.",
+                guidance="OFFICIAL: Official SSRA document and statutory publication domain (Financial Acts & SSRA Act 2023).",
+                verified_at=self._verified_time,
+            ),
+            "eservices.gov.ss": OfficialChannelEntry(
+                channel_type="DOMAIN",
+                identifier="https://eservices.gov.ss/",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Republic of South Sudan National eServices single-window portal.",
+                verified_at=self._verified_time,
+            ),
+            "business.eservices.gov.ss": OfficialChannelEntry(
+                channel_type="DOMAIN",
+                identifier="https://business.eservices.gov.ss/",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Ministry of Justice Business Registration validation portal required before business TIN registration on e-Tax.",
+                verified_at=self._verified_time,
+            ),
+            "www.trade.eservices.gov.ss": OfficialChannelEntry(
+                channel_type="DOMAIN",
+                identifier="https://www.trade.eservices.gov.ss/",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Ministry of Trade and Industry portal for mandatory Trade Accreditation Permits (SSRA Public Notice 5 Oct 2024).",
+                verified_at=self._verified_time,
+            ),
+            "customs.eservices.gov.ss": OfficialChannelEntry(
+                channel_type="DOMAIN",
+                identifier="https://customs.eservices.gov.ss/",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Official SSRA eCustoms portal for Custom Declaration Applications (SAD Form 17A) and Custom Agents License Applications.",
+                verified_at=self._verified_time,
+            ),
+            "ecustoms.nra.gov.ss": OfficialChannelEntry(
+                channel_type="DOMAIN",
+                identifier="https://ecustoms.nra.gov.ss/",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Official SSRA Customs Revenue Division eCustoms resources and FAQs portal.",
+                verified_at=self._verified_time,
+            ),
+            "mofp.gov.ss": OfficialChannelEntry(
+                channel_type="DOMAIN",
+                identifier="https://mofp.gov.ss/",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Republic of South Sudan Ministry of Finance and Planning (MoFP) official portal.",
+                verified_at=self._verified_time,
+            ),
+            "boss.gov.ss": OfficialChannelEntry(
+                channel_type="DOMAIN",
+                identifier="https://boss.gov.ss/",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Bank of South Sudan (BoSS) official portal publishing official exchange rates and SSRA Block Account directives.",
+                verified_at=self._verified_time,
+            ),
+            "support@nra.gov.ss": OfficialChannelEntry(
+                channel_type="SUPPORT_EMAIL",
+                identifier="support@nra.gov.ss",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Official SSRA e-Tax Helpdesk support email published on https://etax.nra.gov.ss/ and https://www.nra.gov.ss/.",
+                verified_at=self._verified_time,
+            ),
+            "+211918806493": OfficialChannelEntry(
+                channel_type="SUPPORT_PHONE",
+                identifier="+211 918806493",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Published SSRA e-Tax Helpdesk support line on https://etax.nra.gov.ss/. Note: SSRA officers will never ask for your OTP or cash payment.",
+                verified_at=self._verified_time,
+            ),
+            "+211912388318": OfficialChannelEntry(
+                channel_type="SUPPORT_PHONE",
+                identifier="+211 912388318",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Published SSRA e-Tax Helpdesk support line on https://etax.nra.gov.ss/.",
+                verified_at=self._verified_time,
+            ),
+            "+211919382390": OfficialChannelEntry(
+                channel_type="SUPPORT_PHONE",
+                identifier="+211 919382390",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Published SSRA e-Tax Helpdesk support line on https://etax.nra.gov.ss/.",
+                verified_at=self._verified_time,
+            ),
+            "+211917803637": OfficialChannelEntry(
+                channel_type="SUPPORT_PHONE",
+                identifier="+211 917803637",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Published SSRA e-Tax Helpdesk support line on https://etax.nra.gov.ss/.",
+                verified_at=self._verified_time,
+            ),
+            "+211921058043": OfficialChannelEntry(
+                channel_type="SUPPORT_PHONE",
+                identifier="+211 921058043",
+                status="OFFICIAL_VERIFIED",
+                guidance="OFFICIAL: Published SSRA e-Tax Helpdesk support line on https://etax.nra.gov.ss/.",
                 verified_at=self._verified_time,
             ),
             "ssra": OfficialChannelEntry(
@@ -184,9 +297,17 @@ class MockOfficialChannelsAdapter:
 
     def verify_identifier(self, candidate: str) -> OfficialChannelEntry:
         normalised = (
-            candidate.strip().lower().removeprefix("https://").removeprefix("http://").rstrip("/")
+            candidate.strip()
+            .lower()
+            .removeprefix("https://")
+            .removeprefix("http://")
+            .removeprefix("mailto:")
+            .rstrip("/")
         )
-        entry = self._official_identifiers.get(normalised)
+        compact_phone = normalised.replace(" ", "").replace("-", "")
+        entry = self._official_identifiers.get(normalised) or self._official_identifiers.get(
+            compact_phone
+        )
         if entry is not None:
             return entry
         return OfficialChannelEntry(
@@ -253,16 +374,88 @@ class MockECustomsAdapter:
                 description="Semi-milled or wholly milled rice (essential foodstuff schedule)",
                 duty_rate_percent="0",
                 excise_rate_percent="0",
-                legal_ref="Customs Service Act 2013 & Financial Act 2024/2025 Tariff Schedule (Subject to OQ-002)",
+                legal_ref="Customs Service Act 2013 & Financial Act 2024/2025 Tariff Schedule",
+                boss_official_fx_rate_ssp_per_usd=self._boss_fx_ssp_per_usd,
+                as_of=fixed_time,
+            ),
+            "2201.10": CustomsTariffItem(
+                hs_code="2201.10",
+                description="Mineral waters and aerated waters (unsweetened/unflavored)",
+                duty_rate_percent="35",
+                excise_rate_percent="15",
+                legal_ref="Financial Act 2024/2025 (Ch. 22 Customs 35%, HS 22.01 Excise 15%, Effective 2 Dec 2024)",
+                boss_official_fx_rate_ssp_per_usd=self._boss_fx_ssp_per_usd,
+                as_of=fixed_time,
+            ),
+            "2203.00": CustomsTariffItem(
+                hs_code="2203.00",
+                description="Beer made from malt",
+                duty_rate_percent="35",
+                excise_rate_percent="50",
+                legal_ref="Financial Act 2024/2025 (Ch. 22 Customs 35%, HS 22.03 Excise 50%, Effective 2 Dec 2024)",
+                boss_official_fx_rate_ssp_per_usd=self._boss_fx_ssp_per_usd,
+                as_of=fixed_time,
+            ),
+            "2402.20": CustomsTariffItem(
+                hs_code="2402.20",
+                description="Cigarettes containing tobacco",
+                duty_rate_percent="35",
+                excise_rate_percent="100",
+                legal_ref="Financial Act 2024/2025 (Ch. 24 Customs 35%, HS 24.02 Excise 100%, Effective 2 Dec 2024)",
+                boss_official_fx_rate_ssp_per_usd=self._boss_fx_ssp_per_usd,
+                as_of=fixed_time,
+            ),
+            "3303.00": CustomsTariffItem(
+                hs_code="3303.00",
+                description="Perfumes and toilet waters",
+                duty_rate_percent="15",
+                excise_rate_percent="25",
+                legal_ref="Financial Act 2024/2025 (HS 33.03 Excise 25%, Effective 2 Dec 2024)",
+                boss_official_fx_rate_ssp_per_usd=self._boss_fx_ssp_per_usd,
+                as_of=fixed_time,
+            ),
+            "3901.10": CustomsTariffItem(
+                hs_code="3901.10",
+                description="Plastics in primary form (polyethylene)",
+                duty_rate_percent="5",
+                excise_rate_percent="0",
+                legal_ref="Financial Act 2024/2025 (Ch. 39 39.01-39.08 Customs 5%, Effective 2 Dec 2024)",
+                boss_official_fx_rate_ssp_per_usd=self._boss_fx_ssp_per_usd,
+                as_of=fixed_time,
+            ),
+            "8702.10": CustomsTariffItem(
+                hs_code="8702.10",
+                description="Motor vehicles for transport of 10 or more persons (buses)",
+                duty_rate_percent="15",
+                excise_rate_percent="10",
+                legal_ref="Financial Act 2024/2025 (HS 87.02 Excise 10%, Effective 2 Dec 2024)",
                 boss_official_fx_rate_ssp_per_usd=self._boss_fx_ssp_per_usd,
                 as_of=fixed_time,
             ),
             "8703.23": CustomsTariffItem(
                 hs_code="8703.23",
-                description="Passenger motor vehicles (1,500 cc to 3,000 cc)",
+                description="Passenger motor cars and station wagons (HS 87.03)",
                 duty_rate_percent="20",
-                excise_rate_percent="15",
-                legal_ref="Customs Service Act 2013 & Financial Act 2024/2025 Tariff Schedule (Subject to OQ-002)",
+                excise_rate_percent="25",
+                legal_ref="Financial Act 2024/2025 (HS 87.03 Excise 25%, Effective 2 Dec 2024)",
+                boss_official_fx_rate_ssp_per_usd=self._boss_fx_ssp_per_usd,
+                as_of=fixed_time,
+            ),
+            "8704.21": CustomsTariffItem(
+                hs_code="8704.21",
+                description="Motor vehicles for the transport of goods (trucks)",
+                duty_rate_percent="15",
+                excise_rate_percent="10",
+                legal_ref="Financial Act 2024/2025 (HS 87.04 Excise 10%, Effective 2 Dec 2024)",
+                boss_official_fx_rate_ssp_per_usd=self._boss_fx_ssp_per_usd,
+                as_of=fixed_time,
+            ),
+            "8711.20": CustomsTariffItem(
+                hs_code="8711.20",
+                description="Motorcycles and mopeds (HS 87.11)",
+                duty_rate_percent="15",
+                excise_rate_percent="25",
+                legal_ref="Financial Act 2024/2025 (HS 87.11 Excise 25%, Effective 2 Dec 2024)",
                 boss_official_fx_rate_ssp_per_usd=self._boss_fx_ssp_per_usd,
                 as_of=fixed_time,
             ),

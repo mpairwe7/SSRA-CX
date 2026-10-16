@@ -51,7 +51,41 @@ class KnowledgeCorpusAdapter:
                 "جمارك",
                 "سعر الصرف",
                 "gamarik",
+                "accreditation permit",
+                "trade.eservices.gov.ss",
             )
+        )
+        is_bpt_query = any(
+            k in expanded_q
+            for k in ("business profit tax", "bpt", "advance bpt", "rental investment")
+        )
+        is_excise_query = any(
+            k in expanded_q for k in ("excise", "beer", "cigarettes", "tobacco", "perfumes")
+        )
+        is_support_tools_query = any(
+            k in expanded_q
+            for k in ("support@nra.gov.ss", "e-invoice-search", "helpdesk", "918806493")
+        )
+        is_einvoice_query = any(
+            k in expanded_q for k in ("b2b e-invoice", "e-invoice", "qr code", "purchases")
+        )
+        is_ecustoms_manual_query = any(
+            k in expanded_q
+            for k in (
+                "customs.eservices.gov.ss",
+                "ecustoms",
+                "sad form 17a",
+                "release note",
+                "declaration stages",
+            )
+        )
+        is_faq_penalty_query = any(
+            k in expanded_q
+            for k in ("installment", "extension", "late filing", "late payment", "underestimation")
+        )
+        is_depreciation_query = any(
+            k in expanded_q
+            for k in ("depreciation", "tangible property", "intangible property", "15 april")
         )
         for chk in self._chunks:
             haystack = f"{chk['doc_title']} {chk['section_anchor']} {chk['content']}".lower()
@@ -62,6 +96,20 @@ class KnowledgeCorpusAdapter:
             if is_tcc_query and "TCC" in anchor:
                 score += 14
             if is_customs_query and "Customs-Valuation-FX" in anchor:
+                score += 14
+            if is_bpt_query and "Business-Profit-Tax" in anchor:
+                score += 14
+            if is_excise_query and "Excise-Tax-Schedule" in anchor:
+                score += 14
+            if is_support_tools_query and "Official-Support-And-Verification-Tools" in anchor:
+                score += 14
+            if is_einvoice_query and "B2B-EInvoice" in anchor:
+                score += 14
+            if is_ecustoms_manual_query and "eCustoms-Declaration" in anchor:
+                score += 14
+            if is_faq_penalty_query and "Penalties-Extensions-And-Installments" in anchor:
+                score += 14
+            if is_depreciation_query and "Depreciation-And-Quarterly-Advance-Tax" in anchor:
                 score += 14
             if chk.get("language") == language and score > 0:
                 score += 15

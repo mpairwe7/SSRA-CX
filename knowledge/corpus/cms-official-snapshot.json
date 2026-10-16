@@ -1,0 +1,467 @@
+{
+  "snapshot_version": "2026.10.1",
+  "source": "https://cms.nra.gov.ss/graphql",
+  "quarantined_upstream_xss_or_pentest_records": 41,
+  "collections": {
+    "aboutUs": {
+      "title": "About Us",
+      "par1": "The South Sudan Revenue Authority (Formerly National Revenue Authority) is the revenue service of the South Sudan Government; it is a non-oil Revenue collecting body that was established in 2016 under the National Revenue Authority Act, 2016. The South Sudan Revenue Authority branches include but are not limited to Domestic Tax division and Customs division.",
+      "head1": "Core functions of SSRA include;",
+      "head2": "Our Core Business",
+      "head3": "Our Vision and Mission Statement",
+      "head4": "Core Values",
+      "head5": "Our Mandate",
+      "branches": "Parent Ministry: Ministry of Finance Jurisdiction: The Republic South Sudan"
+    },
+    "abouts": [],
+    "individualIntroductions": [
+      {
+        "id": "1",
+        "title": "Introduction",
+        "heading": "Individual Taxpayer",
+        "slug": "individual-taxpayer",
+        "intro": "An individual taxpayer is any person who is liable for paying taxes. Any person having an income can be registered as a taxpayer. This applies to South Sudanese nationals, residents and non-residents whose source of income is in South Sudan."
+      },
+      {
+        "id": "2",
+        "title": "Introduction",
+        "heading": "Individual Taxable Income",
+        "slug": "individual-taxable-income",
+        "intro": "Taxable Income is the income that the government imposes tax on. Taxable income not only covers one\u2019s salary but also earnings or compensation in other forms such as:"
+      },
+      {
+        "id": "3",
+        "title": "Introduction",
+        "heading": "The Taxpayer Identification Number (TIN)",
+        "slug": "the-taxpayer-identification-number",
+        "intro": "A TIN is a unique number specifically issued to identify a person upon successfully registering as a taxpayer."
+      },
+      {
+        "id": "4",
+        "title": "Introduction",
+        "heading": "Where the TIN applies",
+        "slug": "where-the-tin-applies",
+        "intro": "A TIN is created for tax purposes and any related tax matters linked to the registered individual, such as:"
+      }
+    ],
+    "tinRegistrations": [
+      {
+        "id": "1",
+        "title": "TIN Registration",
+        "heading": "Registering for a TIN",
+        "slug": "registering-for-a-tin",
+        "intro": "Individuals registering for a TIN will require the following:"
+      },
+      {
+        "id": "2",
+        "title": "TIN Registration",
+        "heading": "Where to register as a taxpayer",
+        "slug": "where-to-register-as-a-taxpayer",
+        "intro": "Registering as a taxpayer can be done in any of the following ways:",
+        "content": "Upon registration, a taxpayer will be issued a unique tax identification number (TIN) which will be reflected on all tax related documents related to the individual, like filing returns, transactions and other documents."
+      },
+      {
+        "id": "3",
+        "title": "TIN Registration",
+        "heading": "Cancellation of a TIN Registration",
+        "slug": "cancellation-of-a-tin-registration",
+        "intro": "A registered TIN can be cancelled following any of these conditions:"
+      },
+      {
+        "id": "4",
+        "title": "TIN Registration",
+        "heading": "Changing of Registration Status",
+        "slug": "changing-of-registration-status",
+        "intro": "In case of any changes in the legal status of a person, a notice of changes within 15 day should be addressed to the Directorate of Taxation."
+      }
+    ],
+    "taxesForIndividuals": [
+      {
+        "id": "1",
+        "title": "Taxes for individuals",
+        "heading": "Personal-income-tax(PIT)",
+        "slug": "personal-income-tax-pit",
+        "intro": "Is a direct tax taxed based on the monthly income earned by the individual. According to the Financial Act of 2019/2020, the following are the percentages for Personal Income Tax:"
+      },
+      {
+        "id": "2",
+        "title": "Taxes for individuals",
+        "heading": "Withholding Tax",
+        "slug": "withholding-tax",
+        "intro": "Is a Direct Tax taxed on the individual\u2019s earnings can be withheld by an employer, business or any entity that is responsible for withholding tax, and paid directly to the government. The employer must file withholding tax on a monthly basis. The following are liable for withholding tax for the government:"
+      },
+      {
+        "id": "3",
+        "title": "Taxes for individuals",
+        "heading": "Advance Tax",
+        "slug": "advance-tax",
+        "intro": "Is an indirect tax, taxpayers shall remit an advance payment of tax in an amount prescribed by regulation on or before the following dates:"
+      }
+    ],
+    "indFaqs": [
+      {
+        "id": "6",
+        "head": "Is there a penalty for non-compliance?",
+        "body": "Penalties and additional charges will be applied according to the Taxation Act Sections 36, 37 and 38 on late payments and filing."
+      },
+      {
+        "id": "7",
+        "head": "What happens if I do not file my returns before the deadline?",
+        "body": "Penalty charges of 5% shall be counted till the day the payment is executed."
+      },
+      {
+        "id": "8",
+        "head": "Who has access to my tax information?",
+        "body": "Tax information is confidential. Unless authorized by law, no person has the right to request the taxation department for information of tax other than his/her personal information or tax information of a business in which he/she is a partner."
+      },
+      {
+        "id": "9",
+        "head": "Can my TIN expire?",
+        "body": "The TIN issued to an individual cannot expire but it can be canceled, in a situation where an individual dies, or if the legal status of a person changes, if a person was registered in error, or if there is any other cases legally accepted by the laws of South Sudan"
+      }
+    ],
+    "businessIntroductions": [
+      {
+        "id": "1",
+        "title": "TIN Registration for business",
+        "heading": "What is considered a Business",
+        "slug": "what-is-considered-a-business",
+        "intro": "A business is any small, medium or large organization which is required to be legally registered. Any Business registered within the Republic of South Sudan is liable for a specific percentage or amount in tax based on the category the business falls under."
+      },
+      {
+        "id": "2",
+        "title": "TIN Registration for business",
+        "heading": "Categories of Businesses",
+        "slug": "categories-of-businesses",
+        "intro": "Businesses in the Republic of South Sudan include profit making companies, non governmental organizations and government institutions, they are categorised in any of the following"
+      },
+      {
+        "id": "3",
+        "title": "TIN Registration for business",
+        "heading": "The SSRA TIN for business",
+        "slug": "the-nra-tin-for-business",
+        "intro": "A TIN (Tax Identification Number) is a unique number issued to any legally registered entity to identify the taxpayer and help in management of all tax related matters and transactions."
+      },
+      {
+        "id": "4",
+        "title": "TIN Registration for business",
+        "heading": "Why businesses need to register for a TIN",
+        "slug": "why-businesses-need-to-register-for-a-tin",
+        "intro": "A TIN is made for tax purposes and any related tax matters linked to the specific business or company, such as:"
+      },
+      {
+        "id": "5",
+        "title": "Taxes that apply to Businesses",
+        "heading": "Types of Taxes that Apply on Businesses",
+        "slug": "types-of-taxes-that-apply-on-business",
+        "intro": "Taxes are levied according to the nature of the business. Taxes that apply to businesses include the following:"
+      },
+      {
+        "id": "6",
+        "title": "TIN Registration for business",
+        "heading": "Key terms to understand",
+        "slug": "key-terms-to-understand"
+      }
+    ],
+    "tinRegBuses": [
+      {
+        "id": "1",
+        "title": "TIN Registration for business",
+        "heading": "How a business can register for tax",
+        "slug": "how-a-business-can-register-for-tax",
+        "intro": "Registration can be done through any of the following ways;"
+      },
+      {
+        "id": "2",
+        "title": "TIN Registration for business",
+        "heading": "Documents required to register",
+        "slug": "documents-required-to-register"
+      },
+      {
+        "id": "3",
+        "title": "TIN Registration for business",
+        "heading": "Cancellation of Registration",
+        "slug": "cancellation-of-registration",
+        "intro": "Cancellation of a business TIN can occur if"
+      },
+      {
+        "id": "4",
+        "title": "TIN Registration for business",
+        "heading": "Change of Registration Status",
+        "slug": "change-of-registration-status",
+        "intro": "In case of any changes in the legal status of a person, a notice of changes within 15 day should be addressed to the NRA."
+      }
+    ],
+    "taxAppBsns": [
+      {
+        "id": "1",
+        "title": "Taxes that apply to Businesses",
+        "heading": "Business profit tax",
+        "slug": "business-profit-tax",
+        "intro": "Business profit tax is an indirect tax charged on the taxable profit (Net profit) on the percentages prescribed in Schedule 1 of the Taxation Act of 2019/2020."
+      },
+      {
+        "id": "2",
+        "title": "Taxes that apply to Businesses",
+        "heading": "Withholding tax",
+        "slug": "withholding-tax",
+        "intro": "This is a method where the payer of certain incomes is responsible for deducting tax at source from payments made. The deducted tax must be remitted to the NRA. Withholding tax is meant to be filed on a specific date."
+      },
+      {
+        "id": "3",
+        "title": "Taxes that apply to Businesses",
+        "heading": "Advance Tax",
+        "slug": "advance-tax",
+        "intro": "Advance tax is an indirect tax charged based on the projected net profit of a business per quarter. This is then reconciled annually. Taxpayers shall remit an advance payment of tax in an amount prescribed by regulation on or before the following dates;"
+      },
+      {
+        "id": "4",
+        "title": "Taxes that apply to Businesses",
+        "heading": "Excise tax",
+        "slug": "excise-tax",
+        "intro": "Excise duty is a tax imposed on goods and services manufactured in South Sudan or imported into South Sudan. This is an indirect tax which is included in the selling price of excisable goods and specific services. Excise tax is specified generally but is based on the goods or item multiplied by the individual excisable services according to Schedule 1 of the Financial Act of 2019/2020."
+      }
+    ],
+    "penalties": [
+      {
+        "id": "2",
+        "title": "Penalties",
+        "heading": "Penalty for late payment/partial payment",
+        "slug": "penalty-for-late-payment-partial-payment",
+        "content": "NB: In a situation where the taxpayer notified the Commissioner General of the NRA about the underestimation, the taxpayer will be liable for penalty of 5%"
+      },
+      {
+        "id": "3",
+        "title": "Penalties",
+        "heading": "Due dates for tax payment",
+        "slug": "due-dates-for-tax-payment",
+        "intro": "All tax payments are due on or before the 15th of the following month when the tax is due, with the exception of PIT and business profit tax"
+      },
+      {
+        "id": "6",
+        "title": "Penalties",
+        "content": "Restored"
+      }
+    ],
+    "dedAndDeps": [
+      {
+        "id": "1",
+        "title": "Deduction and depreciation",
+        "heading": "Depreciation on Tangible Property",
+        "slug": "depreciation-on-tangible-property",
+        "intro": "Tangible properties acquired by the business owner and used for his/her economical activities shall be recovered with time as prescribed by section 74 of the TA 2009 as amended, tangible properties shall be categorized to;",
+        "content1": "Section 74 (3) The amount allowed as a depreciation deduction for the tax period shall be determined by applying the following percentages to the capital account of each category at the close of the tax period.",
+        "content2": "*Which mean the duration of which the amount of the tangible property value retrieving will be determine by the tax deducted from it at the end of every tax period, which include the cost of the tangible asset insurance and freight."
+      },
+      {
+        "id": "2",
+        "title": "Deduction and depreciation",
+        "heading": "Deduction of Intangible Property",
+        "slug": "deduction-of-intangible-property",
+        "intro": "Based on section 75 intangible property which has limited life i.e. including patents, copyrights, licenses for drawings and models, contracts and franchises, are deductible according to their useful life from amortization charges as determined by regulation."
+      }
+    ],
+    "cdrTables": [
+      {
+        "id": "1",
+        "category": "Category 1",
+        "description": "Buildings and other structures",
+        "rate": "Ten percent (10%)"
+      },
+      {
+        "id": "2",
+        "category": "Category 2",
+        "description": "Vehicles, office equipment and computers.",
+        "rate": "Thirty Three percent (33%)"
+      },
+      {
+        "id": "3",
+        "category": "Category 3",
+        "description": "Any other property",
+        "rate": "Twenty Five percent (25%)"
+      }
+    ],
+    "cpTables": [
+      {
+        "id": "1",
+        "category": "Category 1",
+        "property": "Buildings and other structures."
+      },
+      {
+        "id": "2",
+        "category": "Category 2",
+        "property": "Vehicles, office equipment and computers."
+      },
+      {
+        "id": "3",
+        "category": "Category 3",
+        "property": "Any other property"
+      }
+    ],
+    "crTables": [
+      {
+        "id": "1",
+        "category": "Category 1",
+        "rate": "Ten percent (10%)"
+      },
+      {
+        "id": "2",
+        "category": "Category 2",
+        "rate": "Thirty Three percent (33%)"
+      },
+      {
+        "id": "3",
+        "category": "Category 3",
+        "rate": "Twenty Five percent (25%)"
+      }
+    ],
+    "ftTables": [
+      {
+        "id": "1",
+        "date": "15 April",
+        "period": "1 January to 31 March"
+      },
+      {
+        "id": "2",
+        "date": "15 July",
+        "period": "1 April to 30 June"
+      },
+      {
+        "id": "3",
+        "date": "15 October",
+        "period": "1 July to 30 September"
+      },
+      {
+        "id": "4",
+        "date": "15 January",
+        "period": "1 October to 31 December"
+      }
+    ],
+    "idtTables": [
+      {
+        "id": "1",
+        "item": "1",
+        "descr": "On all imported food items",
+        "tax": "Two percent 2%"
+      },
+      {
+        "id": "2",
+        "item": "2",
+        "descr": "On all other imported goods",
+        "tax": "Four percent 4%"
+      }
+    ],
+    "ppTables": [
+      {
+        "id": "1",
+        "pit": "Monthly income SSP 0- 2,000",
+        "perc": "0%"
+      },
+      {
+        "id": "2",
+        "pit": "Monthly income SSP 2001- 5,000",
+        "perc": "5%"
+      },
+      {
+        "id": "3",
+        "pit": "Monthly income SSP 5,001\u2013 10,000",
+        "perc": "10%"
+      },
+      {
+        "id": "4",
+        "pit": "Monthly income SSP 10,001- 15,000",
+        "perc": "15"
+      },
+      {
+        "id": "5",
+        "pit": "Monthly income SSP 15,001 & above",
+        "perc": "20%"
+      }
+    ],
+    "taxComCerts": [
+      {
+        "id": "2",
+        "title": "Tax Compliance Certificate",
+        "heading": "Tax Compliance certificate Validity",
+        "slug": "tax-compliance-certificate-validity",
+        "intro": "Tax Compliance Certificates are valid for twelve (3) months only. Application for a TCC (Tax Compliance Certificate) is done through iTax platform and the certificate is sent to applicants' email address. Or the NRA offices"
+      },
+      {
+        "id": "3",
+        "title": "Tax Compliance Certificate",
+        "heading": "Applying for a Compliance Certificate",
+        "slug": "applying-for-a-compliance-certificate",
+        "intro": "Taxpayers seeking Tax Compliance Certificate must be compliant in:"
+      }
+    ],
+    "bsnFaqs": [
+      {
+        "id": "6",
+        "head": "What happens is I do not file my returns before the deadline?",
+        "body": "Penalty charges of 5% shall be counted till the day the payment is executed."
+      },
+      {
+        "id": "7",
+        "head": "Can I apply for an extension on the filing deadline?",
+        "body": "Yes, as long as the taxpayer applies for the extension before the last day of payment, he/she can be granted 2 months to file the returns."
+      },
+      {
+        "id": "8",
+        "head": "Who has access to my tax information?",
+        "body": "Tax information are confidential, unless authorized by law, no person has the right to request the taxation department for information of tax other than his/her personal information or tax information of a business in which he/she is a partner,"
+      },
+      {
+        "id": "9",
+        "head": "What if the deadline for filing is not a business day?",
+        "body": "If the deadline for filing the tax is not a business working day the following business day shall be considered to be the deadline, though granting the extension of filing date does not suspend the accrual of interest."
+      },
+      {
+        "id": "10",
+        "head": "What is considered to be imported goods?",
+        "body": "All goods brought or entered into South Sudan are considered imported goods and shall be subject to an advance payment of business profit tax, excise tax and general sales tax or otherwise as the goods may be categorized."
+      },
+      {
+        "id": "11",
+        "head": "What should I do to be exempted from tax as a contractor?",
+        "body": "Certificate of exemption is issued by the minister of finance, therefore if a foreign contractor is exempted from business profit tax he/she should present the certificate of exemption."
+      }
+    ],
+    "invIntros": [
+      {
+        "id": "1",
+        "title": "Introduction",
+        "heading": "Investment in South Sudan",
+        "slug": "investment-in-south-sudan",
+        "intro": "South Sudan has developed strong growth prospects supported by flourishing peace, rising levels of literacy and increasing opportunities for business. As the youngest nation in the world, South Sudan is open for business to companies, organizations and businesses seeking the strategic opportunity of tapping into the potential of a fast emerging market in Africa.",
+        "content1": "Great opportunities exist in South Sudan's natural resources, including but not limited to oil, precious metals and gum arabica. South Sudan offers a rich cultural experience and a vast wealth of natural attractions including the majestic white Nile. Gain insight into the many diverse and fascinating cultures found in the country\u2014presenting endless opportunities for the tourism industry.",
+        "content2": "Both fiscal and non-fiscal incentives are available in South Sudan. The National Revenue Authority implements the issuance of tax incentives in collaboration with other regulators and facilitators such as the Ministry of Investment."
+      }
+    ],
+    "agIntros": [
+      {
+        "id": "2",
+        "title": "Introduction",
+        "heading": "Becoming a Tax Agent",
+        "slug": "becoming-a-tax-agent",
+        "intro": "You need a license to operate as a tax agent for the SSRA. These are some of the requirements to become a tax agent:",
+        "content": "A list of certified Tax Agents shall be published periodically by the SSRA to the public."
+      }
+    ],
+    "ourLocations": [
+      {
+        "id": "1",
+        "title": "Our Location",
+        "heading": "Headquarters",
+        "slug": "headquarters",
+        "intro": "The South Sudan Revenue Authority is the revenue service of the South Sudan Government; it is a non-oil Revenue collecting body that was established in 2016 under the National Revenue Authority Act, 2016. The South Sudan Revenue Authority branches include but are not limited to Domestic Tax division and Customs division."
+      },
+      {
+        "id": "2",
+        "title": "Our Locations",
+        "heading": "Other Locations",
+        "slug": "other-locations",
+        "intro": "The South Sudan Revenue Authority is the revenue service of the South Sudan Government; it is a non-oil Revenue collecting body that was established in 2016 under the National Revenue Authority Act, 2016. The South Sudan Revenue Authority branches include but are not limited to Domestic Tax division and Customs division."
+      }
+    ]
+  }
+}

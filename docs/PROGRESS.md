@@ -32,7 +32,7 @@
 - [x] Shared contracts (`packages/contracts/schemas/*.schema.json`) generating both TypeScript + Zod 4 and Python Pydantic v2 models via `task gen`.
 
 ### Phase 1 — Public Assistant (`Gate 1` Reference Implementation & 600-Item Eval Suite Complete)
-- [x] **Grounded Q&A & Multilingual Corpus (`en`, `pga`, `ar` RTL):** Seeded in `knowledge/corpus/seed-documents.json` and `knowledge/tax-facts/seed-2026.10.1.yaml` with `ai/termbase/glossary.yaml`.
+- [x] **Grounded Q&A & Multilingual Corpus (`en`, `pga`, `ar` RTL):** Seeded in `knowledge/corpus/seed-documents.json` (29 multilingual chunks), `knowledge/tax-facts/seed-2026.10.1.yaml` (57 statutory facts), `knowledge/sources.yaml` (16 official sources), `knowledge/corpus/pdfs/` (40 official SSRA/NRA/MoFP Acts, Manuals, Regulations, Circulars, and Reports verified in `pdf-manifest.json`), and `knowledge/corpus/cms-official-snapshot.json` (sanitized GraphQL export from `cms.nra.gov.ss/graphql` with 41 poisoned/pentest upstream records quarantined) alongside `ai/termbase/glossary.yaml`.
 - [x] **Guided Journeys (`services/agent-runtime/src/ssra_runtime/graphs/guided_journey.py`):** Step-by-step journeys for TIN registration (Citizen, MoJ-validated Business, NGO), return filing & March 2026 cash-free bank remittance, and obtaining a TCC.
 - [x] **Deterministic Calculators (`libs/ssra_rules`, `mcp-servers/tax-facts`):** `calculate_paye_estimate` and `calculate_withholding_estimate` tested with Hypothesis property-based tests and badged as informational estimates.
 - [x] **"Is This Really SSRA?" Anti-Impersonation (`mcp-servers/official-channels`):** `verify_payment_account`, `verify_sender`, and `report_scam` (`T2` with confirmation).

@@ -69,7 +69,17 @@ def test_paye_monotonicity_and_accounting_identity(g1: Decimal, delta: Decimal) 
 
 @given(
     amount=st.decimals(min_value=Decimal("0"), max_value=Decimal("100000000"), places=2),
-    cat=st.sampled_from(["goods_and_services", "rent", "technical_fees"]),
+    cat=st.sampled_from(
+        [
+            "goods_and_services",
+            "rent",
+            "technical_fees",
+            "government_contractors_resident",
+            "government_contractors_non_resident",
+            "mobile_money_commissions",
+            "end_of_service_benefits",
+        ]
+    ),
 )
 def test_withholding_accounting_identity(amount: Decimal, cat: str) -> None:
     reg = TaxFactsRegistry.from_yaml_file()
@@ -82,6 +92,39 @@ def test_withholding_accounting_identity(amount: Decimal, cat: str) -> None:
     net = Decimal(res.net_payable_ssp)
     assert Decimal("0") <= tax <= amount
     assert tax + net == amount
+
+
+def test_financial_act_2024_2025_rates_in_registry() -> None:
+    reg = TaxFactsRegistry.from_yaml_file()
+    as_of = date(2026, 10, 16)
+    assert reg.get_fact("bpt.standard.rate_percent", as_of=as_of).value == "30"
+    assert reg.get_fact("bpt.imported_goods_advance.rate_percent", as_of=as_of).value == "4"
+    assert (
+        reg.get_fact("wht.government_contractors_resident.rate_percent", as_of=as_of).value == "15"
+    )
+    assert (
+        reg.get_fact("wht.government_contractors_non_resident.rate_percent", as_of=as_of).value
+        == "20"
+    )
+    assert reg.get_fact("wht.mobile_money_commissions.rate_percent", as_of=as_of).value == "10"
+    assert reg.get_fact("excise.beer_2203.rate_percent", as_of=as_of).value == "50"
+    assert reg.get_fact("excise.passenger_cars_8703.rate_percent", as_of=as_of).value == "25"
+    assert reg.get_fact("customs.exports_ch99.rate_percent", as_of=as_of).value == "18"
+    assert reg.get_fact("gaming.gross_gaming_tax.rate_percent", as_of=as_of).value == "24"
+    assert reg.get_fact("pit.nsif_pension_deduction.rate_percent", as_of=as_of).value == "8"
+    assert reg.get_fact("bpt.depreciation.cat1_buildings.rate_percent", as_of=as_of).value == "10"
+    assert (
+        reg.get_fact("bpt.depreciation.cat2_vehicles_computers.rate_percent", as_of=as_of).value
+        == "33"
+    )
+    assert (
+        reg.get_fact("bpt.depreciation.cat3_other_property.rate_percent", as_of=as_of).value == "25"
+    )
+    assert reg.get_fact("customs.passenger_baggage_exemption.max_usd", as_of=as_of).value == "500"
+    assert reg.get_fact("penalty.late_filing_or_payment.rate_percent", as_of=as_of).value == "5"
+    assert reg.get_fact("filing.extension.max_months", as_of=as_of).value == "2"
+    assert reg.get_fact("payment.installment.max_months", as_of=as_of).value == "6"
+    assert reg.get_fact("etax.filing_and_einvoice.fee_ssp", as_of=as_of).value == "0"
 
 
 def test_negative_amounts_rejected() -> None:

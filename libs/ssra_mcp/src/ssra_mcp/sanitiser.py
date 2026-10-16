@@ -9,10 +9,22 @@ from urllib.parse import urlparse
 
 ALLOWED_SSRA_DOMAINS: frozenset[str] = frozenset(
     {
+        "nra.gov.ss",
+        "www.nra.gov.ss",
         "etax.nra.gov.ss",
+        "ecustoms.nra.gov.ss",
         "cms.nra.gov.ss",
+        "eservices.gov.ss",
+        "business.eservices.gov.ss",
+        "customs.eservices.gov.ss",
+        "www.trade.eservices.gov.ss",
         "ssra.gov.ss",
+        "etax.ssra.gov.ss",
         "assist.ssra.gov.ss",
+        "mofp.gov.ss",
+        "www.mofp.gov.ss",
+        "boss.gov.ss",
+        "mojca.gov.ss",
     }
 )
 

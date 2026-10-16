@@ -1,8 +1,11 @@
-# Structured, Versioned Tax Facts Seed Registry (Section 7 & 17)
-# Governance Note: Confirm statutory schedule updates with SSRA Legal (OQ-009) before Phase 1 production launch.
+# Structured, Versioned Tax Facts Registry (Sections 2, 7 & 17)
+# Grounded in the Taxation Act 2009 (R.E. 2021), Tax Act 2009 Regulations (2012), Customs Service Act 2013 (R.E. 2022),
+# Financial Act 2023/2024, Financial Act 2024/2025 (SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005, effective 2 Dec 2024),
+# and Official SSRA e-Tax / eCustoms Manuals & FAQs.
 
 snapshot_version: "2026.10.1"
 facts:
+  # 1. Personal Income Tax / PAYE Brackets, NSIF Deduction & Deadlines
   - key: "paye.bracket.1.max_monthly_ssp"
     value: "50000"
     unit: "SSP"
@@ -10,7 +13,7 @@ facts:
     applies_to: "Resident individual monthly employment income exempt band"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 Chapter XI as amended by Financial Act 2024/2025 (Subject to OQ-009 Legal Sign-off)"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
@@ -21,7 +24,7 @@ facts:
     applies_to: "Monthly employment income up to paye.bracket.1.max_monthly_ssp"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 Chapter XI as amended by Financial Act 2024/2025 (Subject to OQ-009 Legal Sign-off)"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
@@ -32,7 +35,7 @@ facts:
     applies_to: "Resident individual monthly employment income band 2 upper limit"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 Chapter XI as amended by Financial Act 2024/2025 (Subject to OQ-009 Legal Sign-off)"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
@@ -43,7 +46,7 @@ facts:
     applies_to: "Monthly employment income between bracket 1 and bracket 2"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 Chapter XI as amended by Financial Act 2024/2025 (Subject to OQ-009 Legal Sign-off)"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
@@ -54,7 +57,7 @@ facts:
     applies_to: "Resident individual monthly employment income band 3 upper limit"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 Chapter XI as amended by Financial Act 2024/2025 (Subject to OQ-009 Legal Sign-off)"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
@@ -65,7 +68,7 @@ facts:
     applies_to: "Monthly employment income between bracket 2 and bracket 3"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 Chapter XI as amended by Financial Act 2024/2025 (Subject to OQ-009 Legal Sign-off)"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
@@ -76,7 +79,18 @@ facts:
     applies_to: "Monthly employment income exceeding paye.bracket.3.max_monthly_ssp"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 Chapter XI as amended by Financial Act 2024/2025 (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "pit.nsif_pension_deduction.rate_percent"
+    value: "8"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Deduction from gross employment income for pension or National Social Insurance Fund (NSIF) contribution"
+    effective_from: "2009-01-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 Chapter XI & Official SSRA PIT Guide (nra.gov.ss/individual/taxes-for-individuals/1/personal-income-tax-pit)"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
@@ -84,13 +98,81 @@ facts:
     value: "15"
     unit: "DAY_OF_MONTH"
     currency: "NONE"
-    applies_to: "Monthly PAYE return and remittance due day of following month (Africa/Juba)"
+    applies_to: "Monthly PAYE, WHT and Excise return and remittance due day of following month (Africa/Juba)"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended, Part IV Section 18 (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 as amended, Part IV Section 18 / Chapter XI"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
+  # 2. Business Profit Tax (BPT), Depreciation Pools & Advance Tax on Imports
+  - key: "bpt.standard.rate_percent"
+    value: "30"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Flat Business Profit Tax rate for Small, Medium, and Large Business Enterprises on taxable net profit"
+    effective_from: "2023-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 Chapter XII Sections 66-68 as amended by Financial Acts 2023/2024 & 2024/2025"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "bpt.imported_goods_advance.rate_percent"
+    value: "4"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Advance Business Profit Tax on imported goods (creditable upon filing BPT return)"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005 (Effective 2 Dec 2024)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "bpt.rental_investment.rate_percent"
+    value: "30"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Tax on income derived from rental investments for businesses exclusively in the real estate sector"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005 (Effective 2 Dec 2024)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "bpt.depreciation.cat1_buildings.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Category 1 tangible property depreciation rate: Buildings and other structures"
+    effective_from: "2009-01-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 Section 74 & Tax Act Regulations 2012 Regulation 1.74"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "bpt.depreciation.cat2_vehicles_computers.rate_percent"
+    value: "33"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Category 2 tangible property depreciation rate: Vehicles, office equipment and computers"
+    effective_from: "2009-01-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 Section 74 & Tax Act Regulations 2012 Regulation 1.74"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "bpt.depreciation.cat3_other_property.rate_percent"
+    value: "25"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Category 3 tangible property depreciation rate: Any other tangible business property"
+    effective_from: "2009-01-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 Section 74 & Tax Act Regulations 2012 Regulation 1.74"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  # 3. Withholding Tax (WHT) Schedule (Taxation Act 2009 Chapter XIV & Financial Act 2024/2025)
   - key: "wht.goods_and_services.rate_percent"
     value: "10"
     unit: "PERCENT"
@@ -98,7 +180,7 @@ facts:
     applies_to: "Domestic withholding tax on contracted goods and services (standard estimate band)"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IX (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 Chapter XIV Section 92 as amended by Financial Act 2024/2025"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
@@ -109,7 +191,7 @@ facts:
     applies_to: "Withholding tax on rental payments (standard estimate band)"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IX (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 Chapter XIV Section 92 as amended by Financial Act 2024/2025"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
@@ -117,13 +199,436 @@ facts:
     value: "15"
     unit: "PERCENT"
     currency: "NONE"
-    applies_to: "Withholding tax on technical, management, and professional fees (standard estimate band)"
+    applies_to: "Withholding tax on technical, management, and professional fees"
     effective_from: "2024-07-01"
     effective_to: null
-    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IX (Subject to OQ-009 Legal Sign-off)"
+    legal_ref: "Taxation Act 2009 Chapter XIV Section 92 as amended by Financial Act 2024/2025"
     approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
     version: "2026.10.1"
 
+  - key: "wht.government_contractors_resident.rate_percent"
+    value: "15"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Withholding tax on payments to resident Government contractors (increased from 5% to 15%)"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005 (Effective 2 Dec 2024)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "wht.government_contractors_non_resident.rate_percent"
+    value: "20"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Withholding tax on payments to non-resident Government contractors (increased from 5% to 20%)"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005 (Effective 2 Dec 2024)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "wht.mobile_money_commissions.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Withholding tax on mobile money commissions paid to dealers"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005 (Effective 2 Dec 2024)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "wht.end_of_service_benefits.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Tax rate on End of Service Benefits (EOSB), Social Insurance Fund & Pension"
+    effective_from: "2024-07-12"
+    effective_to: null
+    legal_ref: "SSRA Clarification Circular on Tax Rate for EOSB (Issued 12 July 2024)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  # 4. Excise Tax Schedule (Financial Act 2024/2025, effective 2 Dec 2024)
+  - key: "excise.mineral_water_2201.rate_percent"
+    value: "15"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 22.01 Mineral and aerated waters (unsweetened/unflavored)"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "excise.beer_2203.rate_percent"
+    value: "50"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 22.03 Beer made from malt"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "excise.wine_fermented_2204_2206.rate_percent"
+    value: "50"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 22.04-22.06 Wine of fresh grapes, vermouth, and other fermented beverages"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "excise.spirits_2207_2208.rate_percent"
+    value: "100"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 22.07-22.08 Ethyl alcohol, spirits, liqueurs and other spirituous beverages"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "excise.tobacco_2402_2404.rate_percent"
+    value: "100"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 24.02-24.04 Cigars, cigarettes, manufactured tobacco, and nicotine products"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "excise.perfumes_cosmetics_3303_3307.rate_percent"
+    value: "25"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 33.03-33.07 Perfumes, beauty/make-up, hair preparations, and toiletries"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "excise.buses_8702.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 87.02 Motor vehicles for transport of 10 or more persons (including driver)"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "excise.passenger_cars_8703.rate_percent"
+    value: "25"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 87.03 Passenger motor cars, station wagons, and racing cars"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "excise.goods_vehicles_8704.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 87.04 Motor vehicles for the transport of goods"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "excise.vehicle_bodies_8707.rate_percent"
+    value: "5"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 87.07 Bodies (including cabs) for motor vehicles of headings 87.01 to 87.05"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "excise.motorcycles_8711.rate_percent"
+    value: "25"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "HS 87.11 Motorcycles (including mopeds) and cycles fitted with an auxiliary motor"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Excise Schedule & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  # 5. Customs Duty Schedule & Exemptions (Customs Service Act 2013 R.E. 2022 & Financial Act 2024/2025)
+  - key: "customs.passenger_baggage_exemption.max_usd"
+    value: "500"
+    unit: "USD"
+    currency: "USD"
+    applies_to: "Maximum customs-exempt value for non-commercial goods accompanying passenger baggage"
+    effective_from: "2013-01-01"
+    effective_to: null
+    legal_ref: "Customs Service Act 2013 R.E. 2022 Section 54(1) & Chapter 6 as amended by Financial Act 2023/2024"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.meat_ch02.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 2 (02.01-02.10) Meat and edible meat offal"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.fish_ch03.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 3 (03.01-03.08) Fish, crustaceans, and mollusks"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.beverages_ch22.rate_percent"
+    value: "35"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 22 (22.01-22.09) Beverages, spirits, and vinegar"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.tobacco_ch24.rate_percent"
+    value: "35"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 24 (24.01-24.03) Tobacco and manufactured tobacco substitutes"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.plastics_primary_3901_3908.rate_percent"
+    value: "5"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 39 (39.01-39.08) Plastics and articles thereof in primary form"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.plastics_articles_3909_3926.rate_percent"
+    value: "15"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 39 (39.09-39.26) Plastic sacks, bags, and other plastic articles"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.leather_ch41_43.rate_percent"
+    value: "20"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapters 41-43 Raw hides, leather, travel goods, handbags, and fur"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.banknotes_over_10k_usd_ch49.rate_percent"
+    value: "0.5"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 49 Banknotes for foreign currency exceeding USD 10,000"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.precious_metals_ch71.rate_percent"
+    value: "40"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 71 (71.01-71.18) Pearls, precious stones, precious metals, and jewelry"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.exports_ch99.rate_percent"
+    value: "18"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 99 Export duty rate"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.re_export_strategic_ch100.rate_percent"
+    value: "15"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 100 Re-export of strategic goods (fuel, sugar, medicine)"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.iron_steel_raw_ch101.rate_percent"
+    value: "5"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 101 Iron and steel in primary/raw form"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "customs.medical_optical_ch102.rate_percent"
+    value: "5"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Chapter 102 Optical, photographic, precision, medical or surgical instruments"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 Customs Schedule & Customs Service Act 2013"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  # 6. Lottery and Gaming Taxes (Financial Act 2024/2025)
+  - key: "gaming.excise.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Excise tax on lottery and gaming operations"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "gaming.gross_gaming_tax.rate_percent"
+    value: "24"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Gross gaming tax rate on betting and lottery operators"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "gaming.platform_royalty.rate_percent"
+    value: "20"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Royalty on lottery and gaming platform vendors/service providers"
+    effective_from: "2024-12-02"
+    effective_to: null
+    legal_ref: "Financial Act 2024/2025 & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  # 7. Penalties, Extensions, Installments & Administrative Rules (Taxation Act 2009 & Regulations 2012)
+  - key: "penalty.late_filing_or_payment.rate_percent"
+    value: "5"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Monthly non-compounding penalty rate on unpaid principal tax for late filing, late payment, or notified underestimation"
+    effective_from: "2009-01-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 Sections 36-38, Regulations 1.37-1.40 & Official SSRA FAQ"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "filing.extension.max_months"
+    value: "2"
+    unit: "MONTHS"
+    currency: "NONE"
+    applies_to: "Maximum filing extension granted when requested before the due date (excludes Chapter XIV WHT and Chapter XV Excise)"
+    effective_from: "2009-01-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 Section 21(3), Regulation 1.21(3) & Official SSRA Business FAQ"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "payment.installment.max_months"
+    value: "6"
+    unit: "MONTHS"
+    currency: "NONE"
+    applies_to: "Maximum duration of a written installment payment agreement approved by the Director General of Taxation"
+    effective_from: "2012-01-01"
+    effective_to: null
+    legal_ref: "Tax Act 2009 Regulations (2012) Regulation 1.22(2)(d)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "payment.installment.min_downpayment_percent"
+    value: "25"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Minimum upfront payment percentage required upon signing an installment agreement (if no bank guarantee)"
+    effective_from: "2012-01-01"
+    effective_to: null
+    legal_ref: "Tax Act 2009 Regulations (2012) Regulation 1.22(2)(e)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "tin.status_change_notification.deadline_days"
+    value: "15"
+    unit: "DAYS"
+    currency: "NONE"
+    applies_to: "Statutory deadline in days to notify the Directorate of Taxation of any change in taxpayer legal status"
+    effective_from: "2009-01-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 Section 18 & Official SSRA TIN Registration Guide"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "etax.filing_and_einvoice.fee_ssp"
+    value: "0"
+    unit: "SSP"
+    currency: "SSP"
+    applies_to: "Official fee for filing tax returns and generating B2B e-Invoices on the SSRA e-Tax portal (free of charge)"
+    effective_from: "2021-07-07"
+    effective_to: null
+    legal_ref: "NRA e-Tax Filing & Declaration Manual Module 2 (Slide 3) & B2B e-Invoice Manual (Slide 2)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  # 8. Fiscal Calendar
   - key: "fiscal.year.start_month"
     value: "7"
     unit: "MONTHS"

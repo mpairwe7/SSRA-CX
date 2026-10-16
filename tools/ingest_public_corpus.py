@@ -23,6 +23,8 @@ from ssra_rules import TaxFactsRegistry
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES_YAML = ROOT / "knowledge" / "sources.yaml"
 CORPUS_JSON = ROOT / "knowledge" / "corpus" / "seed-documents.json"
+PDF_MANIFEST_JSON = ROOT / "knowledge" / "corpus" / "pdfs" / "pdf-manifest.json"
+CMS_SNAPSHOT_JSON = ROOT / "knowledge" / "corpus" / "cms-official-snapshot.json"
 TERMBASE_YAML = ROOT / "ai" / "termbase" / "glossary.yaml"
 MANIFEST_OUT = ROOT / "knowledge" / "snapshot-manifest-2026.10.1.json"
 
@@ -30,12 +32,19 @@ MANIFEST_OUT = ROOT / "knowledge" / "snapshot-manifest-2026.10.1.json"
 def build_snapshot_manifest() -> dict[str, object]:
     sources_raw = yaml.safe_load(SOURCES_YAML.read_text(encoding="utf-8"))
     corpus_raw = json.loads(CORPUS_JSON.read_text(encoding="utf-8"))
+    pdf_manifest_raw = json.loads(PDF_MANIFEST_JSON.read_text(encoding="utf-8"))
+    cms_snapshot_raw = json.loads(CMS_SNAPSHOT_JSON.read_text(encoding="utf-8"))
     termbase_raw = yaml.safe_load(TERMBASE_YAML.read_text(encoding="utf-8"))
     registry = TaxFactsRegistry.from_yaml_file()
 
     snapshot_version = str(sources_raw["snapshot_version"])
     assert corpus_raw["snapshot_version"] == snapshot_version
+    assert pdf_manifest_raw["snapshot_version"] == snapshot_version
+    assert cms_snapshot_raw["snapshot_version"] == snapshot_version
     assert registry.snapshot_version == snapshot_version
+
+    pdf_files = list(pdf_manifest_raw.get("files", []))
+    assert all(bool(item.get("valid_pdf_header")) for item in pdf_files)
 
     chunks = list(corpus_raw["chunks"])
     facts = [f.model_dump(mode="json") for f in registry.list_facts()]
@@ -48,6 +57,7 @@ def build_snapshot_manifest() -> dict[str, object]:
             "chunks": chunks,
             "tax_facts": facts,
             "terms": terms,
+            "pdf_manifest_sha256s": [f["sha256"] for f in pdf_files],
         },
         sort_keys=True,
         ensure_ascii=False,
@@ -64,6 +74,7 @@ def build_snapshot_manifest() -> dict[str, object]:
         "checksum_sha256": checksum,
         "counts": {
             "sources": len(sources_raw.get("sources", [])),
+            "official_pdfs": len(pdf_files),
             "chunks": len(chunks),
             "tax_facts": len(facts),
             "termbase_entries": len(terms),

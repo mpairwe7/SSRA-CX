@@ -435,3 +435,23 @@ def test_remaining_mcp_catalog_tools_and_hybrid_retrieval_postprocessing() -> No
         locale="en",
     )
     assert len(ranked) == 1
+
+    # Verify official South Sudan portals, support email & eTax helpdesk numbers in official-channels
+    oc = create_official_channels_mcp_server()
+    for official_id in (
+        "https://www.nra.gov.ss/",
+        "https://business.eservices.gov.ss/",
+        "https://customs.eservices.gov.ss/",
+        "https://ecustoms.nra.gov.ss/",
+        "https://www.trade.eservices.gov.ss/",
+        "https://mofp.gov.ss/",
+        "https://boss.gov.ss/",
+        "support@nra.gov.ss",
+        "+211 918806493",
+    ):
+        v_res = oc.handle_call_tool(
+            tool_name="verify_sender",
+            arguments={"sender_id_or_url": official_id},
+            bearer_token=None,
+        )
+        assert v_res["structuredContent"]["status"] == "OFFICIAL_VERIFIED"

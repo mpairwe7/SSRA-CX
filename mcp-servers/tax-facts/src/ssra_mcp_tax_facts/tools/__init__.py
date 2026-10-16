@@ -178,7 +178,15 @@ def build_tax_facts_tools(registry: TaxFactsRegistry) -> list[RegisteredTool]:
                     "gross_amount_ssp": {"type": ["string", "number"]},
                     "category": {
                         "type": "string",
-                        "enum": ["goods_and_services", "rent", "technical_fees"],
+                        "enum": [
+                            "goods_and_services",
+                            "rent",
+                            "technical_fees",
+                            "government_contractors_resident",
+                            "government_contractors_non_resident",
+                            "mobile_money_commissions",
+                            "end_of_service_benefits",
+                        ],
                     },
                 },
             },

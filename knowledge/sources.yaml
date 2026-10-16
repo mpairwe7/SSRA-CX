@@ -1,17 +1,17 @@
-# SSRA Assist Knowledge Sources Manifest (Section 7 & 16)
-# Note: Only public, SSRA-approved statutory instruments and guidance are listed here.
+# SSRA Assist Knowledge Sources Manifest (Sections 2, 7 & 16, Appendix B)
+# Grounded in official South Sudan Revenue Authority (SSRA / NRA) portals, acts, manuals, FAQs, and circulars.
 # No confidential drafts or taxpayer records are ever committed to Git.
 
 snapshot_version: "2026.10.1"
-approved_by: "SSRA Legal & Policy Directorate (Seed Baseline — Pending OQ-009 Sign-off)"
+approved_by: "SSRA Legal & Policy Directorate (Seed Baseline — Subject to OQ-009 Sign-off)"
 published_at: "2026-10-16T00:00:00Z"
 
 sources:
   - id: "doc_ssra_act_2023"
-    title: "South Sudan Revenue Authority Act, 2016 (as amended October 2023)"
+    title: "South Sudan Revenue Authority Act, 2016 (as amended October 2023 & R.E. 2024)"
     doc_type: "ACT"
     issuer: "Transitional National Legislative Assembly / SSRA"
-    gazette_or_circular_ref: "SSRA Amendment Act 2023 (Renaming NRA to SSRA)"
+    gazette_or_circular_ref: "SSRA Amendment Act 2023 (Renaming NRA to SSRA) & R.E. 2024"
     url: "https://cms.nra.gov.ss/uploads/SOUTH_SUDAN_REVENUE_AUTHORIRTY_ACT_2023_final_copy_677778ef23.pdf"
     effective_from: "2023-10-01"
     effective_to: null
@@ -21,11 +21,11 @@ sources:
     approval_state: "PUBLISHED"
 
   - id: "doc_taxation_act_2009"
-    title: "Taxation Act, 2009 (as amended by Annual Financial Acts)"
+    title: "The Taxation Act, 2009 (Revised Edition 2021 Consolidated, with Taxation Amendment Act 2012 & Regulations)"
     doc_type: "ACT"
     issuer: "Republic of South Sudan / SSRA"
-    gazette_or_circular_ref: "Taxation Act 2009 Consolidated"
-    url: "https://etax.nra.gov.ss/"
+    gazette_or_circular_ref: "Laws of South Sudan, Taxation Act 2009 R.E. 2021 Consolidated"
+    url: "https://cms.nra.gov.ss/uploads/TAXATION_ACT_2021_R_E_CONSOLIDATED_f4f9ed8876.pdf"
     effective_from: "2009-01-01"
     effective_to: null
     supersedes: null
@@ -33,25 +33,142 @@ sources:
     audience: "PUBLIC"
     approval_state: "PUBLISHED"
 
-  - id: "doc_financial_act_2024_2025"
-    title: "Financial Act 2024/2025 & SSRA Implementation Circular"
+  - id: "doc_customs_service_act_2013"
+    title: "The Customs Service Act, 2013 (Revised Edition 2022, Consolidated as at 7 October 2022)"
+    doc_type: "ACT"
+    issuer: "Republic of South Sudan / SSRA Customs Division"
+    gazette_or_circular_ref: "Customs Service Act 2013 R.E. 2022"
+    url: "https://cms.nra.gov.ss/uploads/CUSTOMS_SERVICE_ACT_2013_R_E_2022_68bd20069c.pdf"
+    effective_from: "2013-01-01"
+    effective_to: null
+    supersedes: null
+    languages: ["en", "ar", "pga"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_financial_act_2023_2024"
+    title: "Laws of South Sudan: Financial Act FY 2023/2024"
     doc_type: "FINANCIAL_ACT"
-    issuer: "Ministry of Finance and Planning / SSRA"
-    gazette_or_circular_ref: "Financial Act FY 2024/2025 Circular"
-    url: "https://etax.nra.gov.ss/"
-    effective_from: "2024-07-01"
+    issuer: "Ministry of Finance and Planning (MoFP) / SSRA"
+    gazette_or_circular_ref: "Financial Act 2023/2024"
+    url: "https://cms.nra.gov.ss/uploads/FINANCIAL_Act_FY_2023_2024_MAIL_97b32cab38.pdf"
+    effective_from: "2023-07-01"
+    effective_to: "2024-12-01"
+    supersedes: "Financial Act 2022/2023"
+    languages: ["en"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_financial_act_2024_2025"
+    title: "Financial Act 2024/2025 & SSRA Operationalization Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005"
+    doc_type: "FINANCIAL_ACT"
+    issuer: "Transitional National Legislative Assembly / MoFP / SSRA"
+    gazette_or_circular_ref: "RSS/SSRA/J/002/CG/GEN/VOL. II/005 (Assented 25 Nov 2024, Effective 2 Dec 2024)"
+    url: "https://cms.nra.gov.ss/uploads/Financial_Act_2024_2025_464925c180.pdf"
+    effective_from: "2024-12-02"
     effective_to: null
     supersedes: "Financial Act 2023/2024"
     languages: ["en", "ar", "pga"]
     audience: "PUBLIC"
     approval_state: "PUBLISHED"
 
-  - id: "doc_etax_cash_free_directive_2026"
-    title: "March 2026 Directive on Exclusive National e-Tax & Cash-Free Bank Collection"
+  - id: "doc_etax_registration_manual_v001"
+    title: "NRA e-Tax Training Manual V 001: Taxpayer Registration"
+    doc_type: "MANUAL"
+    issuer: "SSRA Domestic Tax & ICT Divisions"
+    gazette_or_circular_ref: "SSRA-ETAX-MANUAL-REG-V001 (Published 15 Nov 2021)"
+    url: "https://cms.nra.gov.ss/uploads/NRA_e_Tax_Training_Manual_V_001_Registration_eae52f383f.pdf"
+    effective_from: "2021-11-15"
+    effective_to: null
+    supersedes: null
+    languages: ["en"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_etax_filing_declaration_manual_m2"
+    title: "NRA e-Tax Platform Manual Module 2: Taxpayer Declaration & Filing"
+    doc_type: "MANUAL"
+    issuer: "SSRA Domestic Tax & ICT Divisions"
+    gazette_or_circular_ref: "SSRA-ETAX-MANUAL-FILING-M2 (Published 15 Nov 2021)"
+    url: "https://cms.nra.gov.ss/uploads/NRA_e_Tax_Filing_Declaration_Manual_7425326530.pdf"
+    effective_from: "2021-11-15"
+    effective_to: null
+    supersedes: null
+    languages: ["en"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_etax_b2b_einvoice_manual"
+    title: "NRA e-Tax Platform Manual: B2B e-Invoice Training Manual"
+    doc_type: "MANUAL"
+    issuer: "SSRA Domestic Tax Division & Bank of South Sudan"
+    gazette_or_circular_ref: "SSRA-ETAX-MANUAL-B2B-EINVOICE (Published 30 May 2022)"
+    url: "https://cms.nra.gov.ss/uploads/NRA_e_Tax_Invoices_Training_Manual_1_b05ff1324c.pdf"
+    effective_from: "2022-05-30"
+    effective_to: null
+    supersedes: null
+    languages: ["en"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_customs_declaration_manual_and_ecustoms"
+    title: "SSRA Custom Declaration Training Manual & eCustoms Portal (ecustoms.nra.gov.ss)"
+    doc_type: "MANUAL"
+    issuer: "SSRA Customs Revenue Division"
+    gazette_or_circular_ref: "SSRA-ECUSTOMS-MANUAL-2022 (Published 20 Jul 2022)"
+    url: "https://ecustoms.nra.gov.ss/customs/FAQS"
+    effective_from: "2022-07-20"
+    effective_to: null
+    supersedes: null
+    languages: ["en"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_trade_accreditation_notice_2024"
+    title: "SSRA Public Notice: Requirement of Mandatory Trade Accreditation Permit for Imported Goods"
     doc_type: "CIRCULAR"
+    issuer: "South Sudan Revenue Authority (SSRA) & Ministry of Trade and Industry"
+    gazette_or_circular_ref: "SSRA-NOTICE-2024-10-05-ACCREDITATION (Published 7 Oct 2024)"
+    url: "https://www.trade.eservices.gov.ss/"
+    effective_from: "2024-10-05"
+    effective_to: null
+    supersedes: null
+    languages: ["en", "ar", "pga"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_mofep_humanitarian_exemption_2024"
+    title: "MoFP Ministerial Order No. 001/2024 on Humanitarian Tax Exemptions, SSRA PIT/Surtax Circular & EOSB 10% Circular"
+    doc_type: "CIRCULAR"
+    issuer: "Ministry of Finance and Planning (MoFP) & SSRA"
+    gazette_or_circular_ref: "MoFP Order No. 001/2024 (11 Nov 2024), PIT Circular (10 Jul 2024) & EOSB Circular (12 Jul 2024)"
+    url: "https://www.nra.gov.ss/resources"
+    effective_from: "2024-07-10"
+    effective_to: null
+    supersedes: null
+    languages: ["en"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_ssra_governance_ethics_ict_2026"
+    title: "SSRA Scheme of Service (2021), Staff Code of Conduct and Ethics (2022), Staff Regulations (2022) & ICT Policy (2026)"
+    doc_type: "POLICY"
     issuer: "South Sudan Revenue Authority (SSRA)"
-    gazette_or_circular_ref: "SSRA-DIR-2026-03-CASHFREE"
-    url: "https://etax.nra.gov.ss/"
+    gazette_or_circular_ref: "SSRA-ICT-POLICY-2026-04-09 & SSRA-GOVERNANCE-MANUALS"
+    url: "https://cms.nra.gov.ss/uploads/NRA_SCHEME_OF_SERVICE_MANUAL_37ebe0f60e.pdf"
+    effective_from: "2026-04-09"
+    effective_to: null
+    supersedes: null
+    languages: ["en"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_etax_cash_free_directive_2026"
+    title: "March 2026 Cash-Free e-Tax Directive & SSRA Circular No. 2026/07/01 / BoSS Block Account Remittance Directive"
+    doc_type: "CIRCULAR"
+    issuer: "South Sudan Revenue Authority (SSRA) & Bank of South Sudan (BoSS)"
+    gazette_or_circular_ref: "SSRA-DIR-2026-03-CASHFREE & SSRA Circular No. 2026/07/01 (31 Jul 2026)"
+    url: "https://boss.gov.ss/governor-addis-ababa-directs-close-monitoring-of-tax-collection-and-revenue-remittance"
     effective_from: "2026-03-01"
     effective_to: null
     supersedes: null
@@ -59,15 +176,41 @@ sources:
     audience: "PUBLIC"
     approval_state: "PUBLISHED"
 
-  - id: "doc_etax_registration_guide"
-    title: "SSRA e-Tax Portal Guide: TIN Registration, Filing, Payment & Tax Compliance Certificates (TCC)"
-    doc_type: "PROCEDURE"
-    issuer: "SSRA Domestic Tax Department"
-    gazette_or_circular_ref: "SSRA-ETAX-GUIDE-2026"
-    url: "https://etax.nra.gov.ss/"
-    effective_from: "2021-07-01"
+  - id: "doc_mofp_fy24_25_budget_execution_report_2026"
+    title: "Ministry of Finance and Planning (MoFP) FY 2024/2025 Budget Execution Report & August 2026 Tax Reform Proposals"
+    doc_type: "REPORT"
+    issuer: "Ministry of Finance and Planning (MoFP) & SSRA"
+    gazette_or_circular_ref: "MoFP-FY2024-25-EXECUTION-REPORT-V3 (Published Jan 2026)"
+    url: "https://mofp.gov.ss/wp-content/uploads/2026/03/2024_25_Execution-Report_v3.pdf"
+    effective_from: "2026-01-15"
     effective_to: null
     supersedes: null
-    languages: ["en", "ar", "pga"]
+    languages: ["en"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_ssra_official_faqs"
+    title: "Official SSRA Individual & Business Frequently Asked Questions (nra.gov.ss)"
+    doc_type: "FAQ"
+    issuer: "South Sudan Revenue Authority (SSRA)"
+    gazette_or_circular_ref: "SSRA-WEB-FAQS-INDIVIDUAL-AND-BUSINESS-2026"
+    url: "https://nra.gov.ss/business/frequently-asked-questions"
+    effective_from: "2023-10-01"
+    effective_to: null
+    supersedes: null
+    languages: ["en"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_etax_registration_guide"
+    title: "Official SSRA e-Tax Portal & Website Guide (etax.nra.gov.ss & nra.gov.ss/tools): TIN Registration, Verification, Filing, Payment & TCC"
+    doc_type: "PROCEDURE"
+    issuer: "SSRA Domestic Tax & ICT Divisions"
+    gazette_or_circular_ref: "SSRA-ETAX-PORTAL-2026"
+    url: "https://etax.nra.gov.ss/"
+    effective_from: "2021-07-07"
+    effective_to: null
+    supersedes: null
+    languages: ["en", "ar", "pga", "din", "nus", "bfa", "zne", "shk"]
     audience: "PUBLIC"
     approval_state: "PUBLISHED"

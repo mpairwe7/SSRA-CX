@@ -1,11 +1,12 @@
 {
   "approval_state": "PUBLISHED",
-  "approved_by": "SSRA Legal & Policy Directorate (Seed Baseline \u2014 Pending OQ-009 Sign-off)",
-  "checksum_sha256": "0ea2b21eb59eae355c212e8e12fbe6c99930c0adadb095641807c1a85c7110bd",
+  "approved_by": "SSRA Legal & Policy Directorate (Seed Baseline \u2014 Subject to OQ-009 Sign-off)",
+  "checksum_sha256": "20a9ea103467b5708ca5a90e3dd7face65ad045c03089d0061b8796097d382e6",
   "counts": {
-    "chunks": 17,
-    "sources": 5,
-    "tax_facts": 12,
+    "chunks": 29,
+    "official_pdfs": 40,
+    "sources": 16,
+    "tax_facts": 57,
     "termbase_entries": 5
   },
   "locales_covered": [
