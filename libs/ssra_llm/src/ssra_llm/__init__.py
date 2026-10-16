@@ -16,6 +16,7 @@ from ssra_llm.router import (
     DegradationMode,
     ModelRouteDecision,
     SovereignModelRouter,
+    VllmServingGuard,
 )
 
 __all__ = [
@@ -26,6 +27,7 @@ __all__ = [
     "ModelRouteDecision",
     "PromptRegistry",
     "SovereignModelRouter",
+    "VllmServingGuard",
     "compact_context_for_node",
     "estimate_token_count",
     "load_routing_config",

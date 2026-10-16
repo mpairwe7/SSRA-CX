@@ -1,0 +1,49 @@
+{
+  "realm": "ssra",
+  "enabled": true,
+  "displayName": "South Sudan Revenue Authority (SSRA) Sovereign Identity Realm",
+  "sslRequired": "all",
+  "registrationAllowed": false,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 900,
+  "ssoSessionMaxLifespan": 28800,
+  "webAuthnPolicySignatureAlgorithms": ["ES256", "EdDSA"],
+  "webAuthnPolicyAttestationConveyancePreference": "direct",
+  "webAuthnPolicyAuthenticatorAttachment": "cross-platform",
+  "webAuthnPolicyRequireResidentKey": "Yes",
+  "webAuthnPolicyUserVerificationRequirement": "required",
+  "identityProviders": [
+    {
+      "alias": "ssra-national-idp",
+      "providerId": "oidc",
+      "enabled": true,
+      "trustEmail": false
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "ssra-web-bff",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "ssra-staff-console",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "default.acr.values": "urn:ssra:acr:passkey"
+      }
+    }
+  ]
+}

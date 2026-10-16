@@ -15,6 +15,12 @@ from ssra_security.auth import (
     compute_action_digest,
 )
 from ssra_security.encryption import OpenBaoTransitEncryptor
+from ssra_security.keycloak import (
+    ALLOWED_IDP_ALIASES,
+    ALLOWED_WEBAUTHN_ALGORITHMS,
+    KeycloakOidcClaims,
+    KeycloakOidcSecurityService,
+)
 from ssra_security.redaction import RedactionResult, mask_tin, redact_pii
 from ssra_security.siem import (
     OcsfSecurityEvent,
@@ -26,11 +32,15 @@ from ssra_security.siem import (
 )
 
 __all__ = [
+    "ALLOWED_IDP_ALIASES",
+    "ALLOWED_WEBAUTHN_ALGORITHMS",
     "GENESIS_HASH",
     "AuditEvent",
     "ConfirmationRecord",
     "ConfirmationTokenManager",
     "HashChainedAuditLedger",
+    "KeycloakOidcClaims",
+    "KeycloakOidcSecurityService",
     "OcsfSecurityEvent",
     "OpenBaoTransitEncryptor",
     "RedactionResult",

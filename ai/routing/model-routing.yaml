@@ -1,12 +1,59 @@
-# Sovereign Model Routing & 5-Step Degradation Ladder (Section 6.4 & 13)
+# Sovereign Model Routing, vLLM Serving, HuggingFace Offline Cache & 5-Step Degradation Ladder (Section 6.4, 11 & 13)
 
 version: "2026.10.1"
 gateway_url: "http://localhost:8090"
 
 budgets:
   max_tokens_per_turn: 2048
-  max_tool_calls_per_turn: 4
+  max_tool_calls_per_turn: 16
   max_wall_time_ms: 8000
+
+vllm_serving:
+  min_version: "0.26.0"  # Patched against CVE-2026-73559, CVE-2026-54233, CVE-2026-54234, CVE-2026-54236, CVE-2026-44222
+  guided_decoding_backend: "xgrammar"
+  enable_prefix_caching: true
+  max_prompts_per_request: 1  # CVE-2026-73559: Disallow prompt list fan-out
+
+hf_cache:
+  hf_home: "/var/cache/ssra/huggingface"
+  hf_hub_offline: true
+  transformers_offline: true
+  local_files_only: true
+  models:
+    llm_primary:
+      repo_id: "Qwen/Qwen2.5-14B-Instruct"
+      engine: "vllm"
+    llm_fast_router:
+      repo_id: "Qwen/Qwen2.5-7B-Instruct"
+      engine: "vllm"
+    llm_secondary:
+      repo_id: "meta-llama/Llama-3.3-8B-Instruct"
+      engine: "vllm"
+    embedding_primary:
+      repo_id: "Qwen/Qwen3-Embedding-8B"
+      engine: "vllm"
+    reranker_primary:
+      repo_id: "Qwen/Qwen3-Reranker-8B"
+      engine: "vllm"
+    asr_whisper:
+      repo_id: "openai/whisper-large-v3-turbo"
+      engine: "vllm-audio"
+      locales: ["en", "ar"]
+    asr_omnilingual:
+      repo_id: "facebook/mms-1b-all"
+      engine: "hf-transformers-offline"
+      locales: ["pga", "din", "nus", "bfa", "zne", "shk"]
+    tts_mms:
+      engine: "hf-vits-offline"
+      checkpoints_by_locale:
+        en: "facebook/mms-tts-eng"
+        ar: "facebook/mms-tts-ara"
+        pga: "facebook/mms-tts-ara"
+        din: "facebook/mms-tts-dik"
+        nus: "facebook/mms-tts-nus"
+        bfa: "facebook/mms-tts-bfa"
+        zne: "facebook/mms-tts-zne"
+        shk: "facebook/mms-tts-shk"
 
 node_routes:
   input_guard:

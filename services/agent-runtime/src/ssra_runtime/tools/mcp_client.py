@@ -9,6 +9,7 @@ Enforces:
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from ssra_core import AuthLevel, McpErrorCode, RiskTier, SSRAError, new_id
@@ -26,7 +27,8 @@ from ssra_mcp_taxpayer import create_taxpayer_mcp_server
 from ssra_mcp_tcc import create_tcc_mcp_server
 from ssra_security import ConfirmationTokenManager, TokenExchangeService
 
-from ssra_runtime.schemas import ToolArtifact
+from ssra_runtime.guardrails.injection import check_prompt_injection
+from ssra_runtime.schemas import ToolArtifact, TurnBudget
 
 
 class GovernedMcpGatewayClient:
@@ -58,11 +60,31 @@ class GovernedMcpGatewayClient:
             srv.token_service = self.token_service
             srv.confirmation_manager = self.confirmation_manager
 
-        # Pin tool description SHA-256 hashes at gateway startup (Section 8.3 & 12.2 ASI04)
+        # Pin tool description SHA-256 hashes & scan for MCP03:2025 tool poisoning at startup (Section 8.3 & ASI02/ASI04)
         self._pinned_description_hashes: dict[str, str] = {}
         for srv_name, srv in self._servers.items():
             for tool_name, tool in srv.tools.items():
+                self.scan_tool_metadata_for_poisoning(
+                    srv_name, tool_name, tool.description, tool.input_schema
+                )
                 self._pinned_description_hashes[f"{srv_name}.{tool_name}"] = tool.description_sha256
+
+    @staticmethod
+    def scan_tool_metadata_for_poisoning(
+        srv_name: str,
+        tool_name: str,
+        description: str,
+        input_schema: dict[str, Any],
+    ) -> None:
+        """Scan MCP tool descriptions and JSON schemas for embedded prompt injection (CSA July 2026 MCP03:2025)."""
+        desc_scan = check_prompt_injection(description)
+        schema_scan = check_prompt_injection(json.dumps(input_schema, sort_keys=True))
+        if desc_scan.is_blocked or schema_scan.is_blocked:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"MCP03 tool metadata poisoning detected in '{srv_name}.{tool_name}'",
+                status_code=403,
+            )
 
     @property
     def servers(self) -> dict[str, StatelessMcpServer]:
@@ -84,7 +106,16 @@ class GovernedMcpGatewayClient:
         auth_level: AuthLevel = AuthLevel.ANONYMOUS,
         subject_ref: str | None = None,
         traceparent: str | None = None,
+        budget: TurnBudget | None = None,
     ) -> ToolArtifact:
+        if budget is not None:
+            if budget.tool_calls_used >= budget.max_tool_calls:
+                raise SSRAError(
+                    McpErrorCode.RATE_LIMITED,
+                    f"Turn tool-call budget ({budget.max_tool_calls}) exceeded (ASI08/ASI10 guard)",
+                    status_code=429,
+                )
+            budget.tool_calls_used += 1
         srv = self._servers.get(server_name)
         if srv is None:
             raise SSRAError(
