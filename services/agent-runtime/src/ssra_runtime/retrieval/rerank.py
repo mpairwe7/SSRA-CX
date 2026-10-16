@@ -1,10 +1,41 @@
-"""Multilingual reranker for retrieved legal chunks (Section 7)."""
+"""Multilingual & Cross-Lingual Termbase-Enriched Reranker for Retrieved Legal Chunks (Section 7)."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from ssra_core import expand_ssra_nra_synonyms
+from ssra_llm import load_termbase
+
+
+def expand_query_with_multilingual_termbase(query: str) -> str:
+    """Expand localized/Creole/Nilotic tax terms to canonical English statutory keywords via glossary.yaml."""
+    expanded = expand_ssra_nra_synonyms(query)
+    lower_q = expanded.lower()
+    tb = load_termbase()
+    extra_keywords: list[str] = []
+    for entry in tb.get("terms", []):
+        if not isinstance(entry, dict):
+            continue
+        en_term = str(entry.get("en", ""))
+        matched = False
+        for loc_key in ("ar", "pga", "din", "nus", "bfa", "zne", "shk"):
+            loc_val = str(entry.get(loc_key, "")).lower()
+            # Match either the full localized phrase or distinct localized tokens (>= 4 chars)
+            tokens = [
+                t.strip("()/")
+                for t in loc_val.split()
+                if len(t.strip("()/")) >= 4
+                and t.strip("()/") not in ("ssra", "online", "bank", "sudan", "south")
+            ]
+            if (loc_val and loc_val in lower_q) or any(tok in lower_q for tok in tokens):
+                matched = True
+                break
+        if matched and en_term and en_term.lower() not in lower_q:
+            extra_keywords.append(en_term)
+    if extra_keywords:
+        return f"{expanded} {' '.join(extra_keywords)}"
+    return expanded
 
 
 def rerank_chunks(
@@ -14,7 +45,7 @@ def rerank_chunks(
     locale: str,
     top_k: int = 3,
 ) -> list[dict[str, Any]]:
-    expanded = expand_ssra_nra_synonyms(query).lower()
+    expanded = expand_query_with_multilingual_termbase(query).lower()
     terms = [t for t in expanded.split() if len(t) >= 2]
 
     def _score(chk: dict[str, Any]) -> int:

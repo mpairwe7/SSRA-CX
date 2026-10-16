@@ -18,12 +18,35 @@ from ssra_runtime.state import ConversationGraphState
 
 
 def detect_language(text: str, default_locale: LocaleCode = LocaleCode.EN) -> LocaleCode:
-    # Detect Arabic script (U+0600..U+06FF)
+    # 1. Detect Arabic script (U+0600..U+06FF)
     if any("\u0600" <= ch <= "\u06ff" for ch in text):
         return LocaleCode.AR
     lower = text.lower()
-    # Common Juba Arabic Latin-script markers
-    pga_markers = ("kif", "ta dariba", "gurush", "mawgi", "zol", "bikun", "shunu")
+    # 2. Tier C Nilotic & Central Sudanic languages (Dinka, Nuer, Bari, Zande, Shilluk)
+    if any(m in lower for m in ("tënë", "wëu", "ajul", "bɛ̈ŋic", "paguot")):
+        return LocaleCode.DIN
+    if any(m in lower for m in ("yiööth", "juäärä", "cuɔl", "gɔ̱r", "thok naath")):
+        return LocaleCode.NUS
+    if any(m in lower for m in ("kaser", "lɔŋɔt", "banki lo", "kegga namba")):
+        return LocaleCode.BFA
+    if any(m in lower for m in ("marã", "tumosi", "dunduko", "rogo ssra")):
+        return LocaleCode.ZNE
+    if any(m in lower for m in ("cøøri", "ocul jami", "bëëne", "dhøg")):
+        return LocaleCode.SHK
+    # 3. Juba Arabic (pga) Latin-script markers & code-switching
+    pga_markers = (
+        "kif",
+        "ta dariba",
+        "dariba",
+        "gurush",
+        "mawgi",
+        "zol",
+        "bikun",
+        "shunu",
+        "gamarik",
+        "tasjil",
+        "shahada ta imtisal",
+    )
     if any(m in lower for m in pga_markers):
         return LocaleCode.PGA
     return default_locale
@@ -99,7 +122,7 @@ def output_guard_node(state: ConversationGraphState) -> dict[str, Any]:
             allowed_masked_tin = str(art["tin_masked"])
             break
 
-    grounding_res = validate_grounding(answer)
+    grounding_res = validate_grounding(answer, tool_artifacts=artifacts)
     num_res = validate_numeric_provenance(answer, tool_artifacts=artifacts)
     pii_res = verify_no_cross_subject_or_unmasked_pii(
         full_text, allowed_masked_tin=allowed_masked_tin

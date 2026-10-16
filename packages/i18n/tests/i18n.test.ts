@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { getMessages, getTextDirection, PHASE1_LOCALES, ROADMAP_LOCALES } from "../src/index.js";
+import { getMessages, getTextDirection, ROADMAP_LOCALES } from "../src/index.js";
 
-describe("@ssra/i18n", () => {
-  it("supports BCP-47 tags en, ar (RTL), pga and Phase 4 national languages", () => {
-    expect(PHASE1_LOCALES).toEqual(["en", "pga", "ar"]);
-    expect(ROADMAP_LOCALES).toContain("din");
-    expect(ROADMAP_LOCALES).toContain("nus");
+describe("@ssra/i18n 8-Locale South Sudan Catalog", () => {
+  it("provides localized UI catalogs across all 8 ROADMAP_LOCALES and RTL for Arabic", () => {
+    expect(ROADMAP_LOCALES).toHaveLength(8);
     expect(getTextDirection("ar")).toBe("rtl");
-    expect(getTextDirection("en")).toBe("ltr");
-    expect(getTextDirection("pga")).toBe("ltr");
-    expect(getMessages("ar").cashFreeBanner).toContain("etax.nra.gov.ss");
+    for (const loc of ROADMAP_LOCALES) {
+      const msg = getMessages(loc);
+      expect(msg.appTitle).toContain("SSRA");
+      expect(msg.cashFreeBanner).toContain("https://etax.nra.gov.ss/");
+    }
   });
 });
