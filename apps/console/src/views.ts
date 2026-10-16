@@ -241,3 +241,6 @@ export function buildOpsPageShell(params: {
     allGatesPassClaimAllowed: isLive && params.allMetricsPassed,
   };
 }
+
+export * from "./dashboards.js";
+export * from "./roles-and-audit.js";
