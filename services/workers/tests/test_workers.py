@@ -1,0 +1,80 @@
+"""Tests for services/workers (Docling-style legal structure chunker, Knowledge Release gate, and Africa/Juba SLA timers)."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+from ssra_workers import (
+    KnowledgeReleaseJob,
+    ReminderCandidate,
+    chunk_legal_document_by_structure,
+    evaluate_case_sla,
+    run_consent_checked_filing_reminder_campaign,
+    verify_knowledge_release_gate,
+)
+
+
+def test_legal_structure_chunking_preserves_part_and_section_anchors() -> None:
+    sample_act = """
+    PART IV: PERSONAL INCOME TAX (PAYE)
+    Section 18: Monthly Withholding and Remittance
+    Every employer shall withhold PAYE and remit via e-Tax by day 15 of the following month.
+    Section 19: Electronic Tax Certificates
+    Taxpayers may download their TIN certificate on etax.nra.gov.ss.
+    """
+    chunks = chunk_legal_document_by_structure(doc_id="doc_tax_act", raw_text=sample_act)
+    anchors = [c.section_anchor for c in chunks]
+    assert "Part-IV-Sec-18" in anchors
+    assert "Part-IV-Sec-19" in anchors
+    assert all(len(c.checksum_sha256) == 64 for c in chunks)
+
+
+def test_knowledge_release_gate_and_sla_escalation() -> None:
+    failed_job = KnowledgeReleaseJob(
+        snapshot_version="2026.11.0",
+        approved_by="SSRA Legal",
+        eval_gate_passed=False,
+    )
+    assert verify_knowledge_release_gate(failed_job) == "ROLLED_BACK:2026.11.0"
+
+    t0 = datetime(2026, 10, 16, 6, 0, tzinfo=UTC)
+    t_late = t0 + timedelta(hours=5)
+    sla = evaluate_case_sla(
+        case_id="case_01",
+        priority="HIGH",
+        created_at_utc=t0,
+        now_utc=t_late,
+    )
+    assert sla.is_breached is True
+    assert sla.escalate_to_supervisor is True
+
+    # Consent-checked campaign skips anyone without active opt-in or with STOP revocation
+    summary = run_consent_checked_filing_reminder_campaign(
+        tax_period_year=2026,
+        tax_period_month=10,
+        candidates=[
+            ReminderCandidate(
+                subject_ref="sub_opted_in",
+                channel="whatsapp",
+                locale="en",
+                opt_in_granted=True,
+                stop_revoked=False,
+            ),
+            ReminderCandidate(
+                subject_ref="sub_stopped",
+                channel="whatsapp",
+                locale="en",
+                opt_in_granted=True,
+                stop_revoked=True,
+            ),
+            ReminderCandidate(
+                subject_ref="sub_no_consent",
+                channel="sms",
+                locale="pga",
+                opt_in_granted=False,
+                stop_revoked=False,
+            ),
+        ],
+    )
+    assert summary.dispatched_subjects == ("sub_opted_in",)
+    assert set(summary.skipped_no_consent_subjects) == {"sub_stopped", "sub_no_consent"}

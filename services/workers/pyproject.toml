@@ -1,0 +1,22 @@
+[project]
+name = "ssra-workers"
+version = "0.1.0"
+description = "SSRA Assist Temporal Background Workers (knowledge release, re-index, eval gate, SLA timers)"
+requires-python = ">=3.12,<3.16"
+dependencies = [
+    "temporalio==1.34.0",
+    "pydantic==2.14.0",
+    "ssra-core",
+    "ssra-security",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ssra_workers"]
+
+[tool.uv.sources]
+ssra-core = { workspace = true }
+ssra-security = { workspace = true }

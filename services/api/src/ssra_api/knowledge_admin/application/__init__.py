@@ -1,0 +1,111 @@
+"""Application layer for knowledge_admin bounded context (6-Step Knowledge Release Workflow — Section 7)."""
+
+from __future__ import annotations
+
+import hashlib
+from dataclasses import replace
+
+from ssra_core import McpErrorCode, SSRAError
+
+from ssra_api.knowledge_admin.domain import KnowledgeSnapshotEntity
+
+
+class KnowledgeReleaseWorkflowEngine:
+    """Implements Draft -> Legal Review -> Approval -> Publish (with Eval Gate) -> 1-Step Rollback."""
+
+    def __init__(self) -> None:
+        self._snapshots: dict[str, KnowledgeSnapshotEntity] = {
+            "2026.10.1": KnowledgeSnapshotEntity(
+                version="2026.10.1",
+                status="PUBLISHED",
+                approved_by="SSRA Legal Directorate",
+                checksum="7760efe3102ce836d6a6c73c7399d837d752fd1d791be07a1780f1241ef09f34",
+            )
+        }
+        self._active_version: str = "2026.10.1"
+        self._previous_published_version: str = "2026.10.1"
+
+    def get_active(self) -> KnowledgeSnapshotEntity:
+        return self._snapshots[self._active_version]
+
+    def create_draft(self, *, version: str, content_digest_input: str) -> KnowledgeSnapshotEntity:
+        checksum = hashlib.sha256(content_digest_input.encode("utf-8")).hexdigest()
+        snap = KnowledgeSnapshotEntity(
+            version=version,
+            status="DRAFT",
+            approved_by="PENDING_LEGAL_REVIEW",
+            checksum=checksum,
+        )
+        self._snapshots[version] = snap
+        return snap
+
+    def submit_for_legal_review(self, version: str) -> KnowledgeSnapshotEntity:
+        snap = self._get_or_404(version)
+        if snap.status != "DRAFT":
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Snapshot {version} must be in DRAFT state to submit for legal review",
+                status_code=400,
+            )
+        updated = replace(snap, status="LEGAL_REVIEW")
+        self._snapshots[version] = updated
+        return updated
+
+    def approve_snapshot(self, version: str, *, legal_approver: str) -> KnowledgeSnapshotEntity:
+        snap = self._get_or_404(version)
+        if snap.status != "LEGAL_REVIEW":
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Snapshot {version} must be in LEGAL_REVIEW state before approval",
+                status_code=400,
+            )
+        updated = replace(snap, status="APPROVED", approved_by=legal_approver)
+        self._snapshots[version] = updated
+        return updated
+
+    def publish_snapshot(
+        self, version: str, *, eval_regression_passed: bool
+    ) -> KnowledgeSnapshotEntity:
+        snap = self._get_or_404(version)
+        if snap.status != "APPROVED":
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Snapshot {version} must be APPROVED by SSRA Legal before publish",
+                status_code=400,
+            )
+        if not eval_regression_passed:
+            # Step 6 automatic rollback on eval gate failure (Section 7)
+            rolled = replace(snap, status="ROLLED_BACK")
+            self._snapshots[version] = rolled
+            return rolled
+
+        self._previous_published_version = self._active_version
+        published = replace(snap, status="PUBLISHED")
+        self._snapshots[version] = published
+        self._active_version = version
+        return published
+
+    def rollback_to_previous(self) -> KnowledgeSnapshotEntity:
+        current = self._snapshots[self._active_version]
+        self._snapshots[self._active_version] = replace(current, status="ROLLED_BACK")
+        self._active_version = self._previous_published_version
+        return self._snapshots[self._active_version]
+
+    def _get_or_404(self, version: str) -> KnowledgeSnapshotEntity:
+        snap = self._snapshots.get(version)
+        if snap is None:
+            raise SSRAError(
+                McpErrorCode.NOT_FOUND, f"Snapshot '{version}' not found", status_code=404
+            )
+        return snap
+
+
+_engine = KnowledgeReleaseWorkflowEngine()
+
+
+def get_workflow_engine() -> KnowledgeReleaseWorkflowEngine:
+    return _engine
+
+
+def get_active_snapshot_use_case() -> KnowledgeSnapshotEntity:
+    return _engine.get_active()

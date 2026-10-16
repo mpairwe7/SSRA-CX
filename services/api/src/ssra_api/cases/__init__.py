@@ -1,0 +1,1 @@
+"""Cases bounded context."""

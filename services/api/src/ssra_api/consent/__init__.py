@@ -1,0 +1,1 @@
+"""Consent bounded context."""
