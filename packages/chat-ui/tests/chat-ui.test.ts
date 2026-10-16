@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCallReceptionistScreen,
+  buildChatComposerState,
+  buildFloatingChatHeader,
+  cleanMarkdownForSpeech,
+  computeCallOrbFrame,
+  createRevealQueue,
   escapeHtmlStrict,
+  evaluateCaptionScrollPin,
   GENERATIVE_UI_STORYBOOK_FIXTURES,
+  groupConversationsByRecency,
+  joinDictated,
+  nextRevealIndex,
   OfflineOutboxQueue,
   parseAguiSseStream,
   renderGenerativeUICard,
@@ -190,5 +200,109 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
 
     expect(GENERATIVE_UI_STORYBOOK_FIXTURES).toHaveLength(7);
     expect(verifyAllStorybookFixturesRenderAccessibly()).toBe(true);
+
+    // Chatv2 word-boundary reveal queue, floating header, single-toggle voice mode, and rail grouping
+    expect(nextRevealIndex("PAYE is due on the 15th", 0, 5)).toBe(8); // snaps to "PAYE is "
+    const committed: string[] = [];
+    const rq = createRevealQueue({
+      onCommit: (txt) => committed.push(txt),
+      instant: true,
+    });
+    rq.push("PAYE is 0% up to 300,000 SSP.");
+    expect(committed.at(-1)).toBe("PAYE is 0% up to 300,000 SSP.");
+
+    const floatingHdr = buildFloatingChatHeader({
+      hasStartedChat: true,
+      railCollapsed: true,
+      railPeekHover: true,
+      conversationTitle: "PAYE Filing 2026",
+      conversationPinned: true,
+      locale: "en",
+    });
+    expect(floatingHdr.railPeekActive).toBe(true);
+    expect(floatingHdr.restoreFocusToTriggerBeforeModal).toBe(true);
+
+    expect(joinDictated("How do I", "register for TIN?")).toBe("How do I register for TIN?");
+    const compState = buildChatComposerState({
+      message: "",
+      isLoading: false,
+      isRecording: true,
+      voiceMode: true,
+      audioLevels: [0.1, 0.5, 0.8, 0.4, 0.2],
+      dictationNotice: "Listening in Juba Arabic…",
+    });
+    expect(compState.narrationEnabled).toBe(true);
+    expect(compState.primaryAction).toBe("mic");
+    expect(compState.waveformBars).toHaveLength(5);
+
+    expect(
+      cleanMarkdownForSpeech("Visit **https://etax.nra.gov.ss/** [Sec-18] for `TIN` registration."),
+    ).toBe("Visit official SSRA portal for TIN registration.");
+
+    const nowMs = 1_792_152_000_000;
+    const grouped = groupConversationsByRecency(
+      [
+        { id: "c1", title: "Pinned TIN Guide", updatedAtMs: nowMs - 500_000_000, pinned: true },
+        { id: "c2", title: "Today PAYE", updatedAtMs: nowMs - 1_000 },
+        { id: "c3", title: "Yesterday Customs", updatedAtMs: nowMs - 100_000_000 },
+      ],
+      nowMs,
+    );
+    expect(grouped.pinned).toHaveLength(1);
+    expect(grouped.today).toHaveLength(1);
+    expect(grouped.yesterday).toHaveLength(1);
+
+    // Call Receptionist (Pre-call consent, CallLanguageChip, CallOrb echo tie-breaker, scroll pin)
+    const preCall = buildCallReceptionistScreen({
+      status: "consent",
+      durationSeconds: 0,
+      language: "pga",
+      languageName: "Juba Arabic",
+      languageSource: "auto",
+    });
+    expect(preCall.viewMode).toBe("pre_call_consent");
+    expect(preCall.languageChip.chipLabel).toBe("Juba Arabic · auto");
+
+    const liveCall = buildCallReceptionistScreen({
+      status: "ai",
+      durationSeconds: 75,
+      language: "pga",
+      languageName: "Juba Arabic",
+      languageSource: "override",
+    });
+    expect(liveCall.viewMode).toBe("live_call");
+    expect(liveCall.formattedDuration).toBe("01:15");
+    expect(liveCall.languageChip.chipLabel).toBe("Juba Arabic · chosen");
+    expect(liveCall.canRequestOfficer).toBe(true);
+
+    // Playback wins ties over mic input so speaker echo never flickers the orb to listening
+    const orbSpeaking = computeCallOrbFrame({
+      active: true,
+      prefersReducedMotion: false,
+      previousSmoothed: 0,
+      inputLevel: 0.4,
+      outputLevel: 0.4,
+    });
+    expect(orbSpeaking.mode).toBe("speaking");
+    expect(orbSpeaking.smoothedLevel).toBeGreaterThan(0);
+
+    const orbReduced = computeCallOrbFrame({
+      active: true,
+      prefersReducedMotion: true,
+      previousSmoothed: 0.5,
+      inputLevel: 0.8,
+      outputLevel: 0.8,
+    });
+    expect(orbReduced.mode).toBe("idle");
+    expect(orbReduced.smoothedLevel).toBe(0);
+
+    expect(
+      evaluateCaptionScrollPin({ scrollHeight: 1000, scrollTop: 680, clientHeight: 300 })
+        .pinnedToBottom,
+    ).toBe(true);
+    expect(
+      evaluateCaptionScrollPin({ scrollHeight: 1000, scrollTop: 500, clientHeight: 300 })
+        .showJumpToLatest,
+    ).toBe(true);
   });
 });
