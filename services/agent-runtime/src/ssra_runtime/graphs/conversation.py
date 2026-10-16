@@ -7,16 +7,21 @@ Executes the 11-node deterministic shell in strict order:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel
 from ssra_core import (
     AuthLevel,
     ChannelName,
     ConversationEvent,
+    Intent,
     LocaleCode,
+    McpErrorCode,
     RiskTier,
+    SSRAError,
 )
 from ssra_security import HashChainedAuditLedger
 
@@ -35,9 +40,36 @@ from ssra_runtime.nodes import (
     understand_node,
 )
 from ssra_runtime.replay import ConversationReplayStore, ReconstructedTurnRecord
-from ssra_runtime.schemas import RuntimeTurnResponse
+from ssra_runtime.schemas import PendingConfirmation, RuntimeTurnResponse
 from ssra_runtime.state import ConversationGraphState
 from ssra_runtime.tools import GovernedMcpGatewayClient
+
+_SAFE_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_:-]{1,128}$")
+
+
+def validate_safe_thread_id(thread_id: str) -> str:
+    """Validate thread_id format per CVE-2026-48776 to prevent path traversal or key injection."""
+    cleaned = thread_id.strip()
+    if not _SAFE_THREAD_ID_RE.match(cleaned):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"Unsafe or malformed thread_id '{thread_id[:32]}' rejected (CVE-2026-48776)",
+            status_code=400,
+        )
+    return cleaned
+
+
+def verify_checkpoint_primitives_only(value: Any) -> bool:
+    """Verify state values are JSON-safe primitives or Pydantic models (CVE-2026-48775 / CVE-2026-27794)."""
+    if value is None or isinstance(value, (str, int, float, bool, BaseModel)):
+        return True
+    if isinstance(value, (list, tuple)):
+        return all(verify_checkpoint_primitives_only(v) for v in value)
+    if isinstance(value, dict):
+        return all(
+            isinstance(k, str) and verify_checkpoint_primitives_only(v) for k, v in value.items()
+        )
+    return False
 
 
 class SSRAConversationRuntime:
@@ -54,10 +86,13 @@ class SSRAConversationRuntime:
         self.audit_ledger = audit_ledger or HashChainedAuditLedger()
         self.replay_store = replay_store or ConversationReplayStore()
         self.checkpointer = InMemorySaver()
+        self._thread_subject_binding: dict[str, str] = {}
+        self._pending_by_thread: dict[str, tuple[PendingConfirmation, Intent | None, RiskTier]] = {}
         self._compiled = self._build_graph()
 
     def reconstruct_conversation(self, thread_id: str) -> list[ReconstructedTurnRecord]:
-        return self.replay_store.reconstruct_thread(thread_id)
+        safe_id = validate_safe_thread_id(thread_id)
+        return self.replay_store.reconstruct_thread(safe_id)
 
     def _build_graph(self) -> Any:
         builder: StateGraph[ConversationGraphState] = StateGraph(ConversationGraphState)
@@ -156,11 +191,33 @@ class SSRAConversationRuntime:
         confirmation_token: str | None = None,
         idempotency_key: str | None = None,
     ) -> RuntimeTurnResponse:
+        safe_thread_id = validate_safe_thread_id(event.subject)
+
+        # ASI03 / ASI06: Prevent cross-subject thread hijacking on bound threads
+        bound_subject = self._thread_subject_binding.get(safe_thread_id)
+        if bound_subject is not None and subject_ref is not None and subject_ref != bound_subject:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"Cross-subject thread hijacking blocked on thread '{safe_thread_id}' (ASI03)",
+                status_code=403,
+            )
+        if subject_ref is not None:
+            self._thread_subject_binding[safe_thread_id] = subject_ref
+
         text_parts = [p.value for p in event.data.parts if p.kind == "text"]
         user_text = " ".join(text_parts).strip()
 
+        # Microsoft agent-framework#8132: Restore pending confirmation context when resuming with confirmation_token
+        restored_pending: PendingConfirmation | None = None
+        restored_intent: Intent | None = None
+        restored_tier: RiskTier | None = None
+        if confirmation_token and safe_thread_id in self._pending_by_thread:
+            restored_pending, restored_intent, restored_tier = self._pending_by_thread[
+                safe_thread_id
+            ]
+
         initial_state: ConversationGraphState = {
-            "thread_id": event.subject,
+            "thread_id": safe_thread_id,
             "channel": event.data.channel,
             "locale": event.data.locale,
             "capabilities": event.data.capabilities,
@@ -173,17 +230,36 @@ class SSRAConversationRuntime:
             "artifacts": [],
             "citations": [],
             "safety_flags": [],
-            "pending_confirmation": None,
+            "pending_confirmation": restored_pending,
             "handoff_state": None,
         }
+        if restored_intent is not None:
+            initial_state["intent"] = restored_intent
+        if restored_tier is not None:
+            initial_state["tier"] = restored_tier
+
+        assert verify_checkpoint_primitives_only(initial_state)
 
         final_state: ConversationGraphState = self._compiled.invoke(
             initial_state,
-            config={"configurable": {"thread_id": event.subject}},
+            config={
+                "configurable": {"thread_id": safe_thread_id},
+                "recursion_limit": 25,
+            },
         )
 
+        out_pending = final_state.get("pending_confirmation")
+        if out_pending is not None:
+            self._pending_by_thread[safe_thread_id] = (
+                out_pending,
+                final_state.get("intent"),
+                final_state.get("tier", RiskTier.T2),
+            )
+        else:
+            self._pending_by_thread.pop(safe_thread_id, None)
+
         resp = RuntimeTurnResponse(
-            thread_id=event.subject,
+            thread_id=safe_thread_id,
             channel=final_state.get("channel", ChannelName.WEB),
             locale=final_state.get("locale", LocaleCode.EN),
             auth_level=final_state.get("auth_level", AuthLevel.ANONYMOUS),

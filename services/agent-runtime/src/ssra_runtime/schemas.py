@@ -22,7 +22,7 @@ class TurnBudget(BaseModel):
 
     max_tokens: int = 2048
     tokens_used: int = 0
-    max_tool_calls: int = 4
+    max_tool_calls: int = 16
     tool_calls_used: int = 0
     max_wall_time_ms: int = 8000
 

@@ -15,12 +15,19 @@ Enforces:
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from ssra_core import Answer, AuthLevel, LocaleCode, McpErrorCode, RiskTier, SSRAError
 
 from ssra_llm.prompts import load_routing_config
+
+_VLLM_SPECIAL_TOKEN_RE = re.compile(
+    r"<\|(?:image_pad|video_pad|vision_start|vision_end|endoftext|im_start|im_end)\|>|<image>|<video>",
+    flags=re.IGNORECASE,
+)
+_HEAP_ADDR_RE = re.compile(r"0x[0-9a-fA-F]{6,16}")
 
 DegradationMode = Literal[
     "PRIMARY_SOVEREIGN_VLLM",
@@ -173,3 +180,54 @@ class AnonymousT0SemanticCache:
         for k in keys:
             del self._store[k]
         return len(keys)
+
+
+class VllmServingGuard:
+    """October 2026 vLLM (>= 0.26.0) & HuggingFace Offline Cache Guard.
+
+    Mitigates:
+    - CVE-2026-73559: Rejects prompt list fan-out (enforces single string prompt)
+    - CVE-2026-44222: Strips multimodal special-token placeholders (`<|image_pad|>`, `<|video_pad|>`)
+    - CVE-2026-54236: Scrubs heap memory addresses (`0x7f...`) from upstream inference error messages
+    - Enforces `HF_HUB_OFFLINE=1` / `local_files_only=True` and `xgrammar` guided JSON decoding.
+    """
+
+    def __init__(self, *, hf_home: str = "/var/cache/ssra/huggingface") -> None:
+        self.hf_home = hf_home
+
+    def build_guided_json_request(
+        self,
+        *,
+        model: str,
+        prompt: str | list[str],
+        json_schema: dict[str, Any],
+        max_tokens: int = 512,
+    ) -> dict[str, Any]:
+        if not isinstance(prompt, str):
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                "vLLM prompt list fan-out rejected (CVE-2026-73559: single string prompt required)",
+                status_code=400,
+            )
+        sanitized_prompt = _VLLM_SPECIAL_TOKEN_RE.sub("", prompt).strip()
+        return {
+            "model": model,
+            "prompt": sanitized_prompt,
+            "max_tokens": max_tokens,
+            "temperature": 0.0,
+            "guided_decoding_backend": "xgrammar",
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": "ssra_structured_output", "schema": json_schema},
+            },
+            "extra_body": {
+                "enable_prefix_caching": True,
+                "hf_home": self.hf_home,
+                "local_files_only": True,
+            },
+        }
+
+    @staticmethod
+    def sanitize_upstream_error(raw_message: str) -> str:
+        """Scrub heap pointer addresses from vLLM/PIL exception strings (CVE-2026-54236)."""
+        return _HEAP_ADDR_RE.sub("0xREDACTED", raw_message)

@@ -23,6 +23,11 @@ def execute_self_service_subgraph(
     thread_id = state.get("thread_id", "thr_default")
     artifacts: list[ToolArtifact] = list(state.get("artifacts", []))
 
+    # Microsoft agent-framework#8132: If resuming a pending confirmation with confirmation_token_in, preserve it for confirm_node
+    existing_pending = state.get("pending_confirmation")
+    if existing_pending is not None and state.get("confirmation_token_in"):
+        return {"pending_confirmation": existing_pending, "artifacts": artifacts}
+
     if intent_name == IntentName.GET_BALANCE:
         art = gateway.invoke_tool(
             server_name="ledger",

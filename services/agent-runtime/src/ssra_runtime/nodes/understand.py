@@ -202,6 +202,20 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
 
 
 def understand_node(state: ConversationGraphState) -> dict[str, Any]:
+    # Microsoft agent-framework#8132: Preserve restored intent/tier on AG-UI confirmation resume turns
+    existing_intent = state.get("intent")
+    if (
+        state.get("pending_confirmation") is not None
+        and state.get("confirmation_token_in")
+        and existing_intent is not None
+    ):
+        tier = _INTENT_TIERS.get(existing_intent.intent.value, state.get("tier", RiskTier.T2))
+        return {
+            "intent": existing_intent,
+            "slots": dict(existing_intent.slots),
+            "tier": tier,
+        }
+
     text = state.get("redacted_user_text") or state.get("raw_user_text", "")
     locale = state.get("locale", LocaleCode.EN)
     intent_obj = classify_intent_deterministic(text, locale)
