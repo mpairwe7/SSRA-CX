@@ -245,6 +245,24 @@ def test_mcp_2026_07_28_tasks_extension_and_deprecated_features_rejected() -> No
     assert r_cancel.status_code == 200
     assert r_cancel.json()["task"]["status"] == "CANCELLED"
 
+    # 3. State-Handle Hijacking (MCP 2026-07-28): another subject cannot access or cancel taskId
+    tok_other = kn.token_service.mint_exchanged_token(
+        audience="mcp-knowledge",
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_attacker_99",
+    )
+    r_hijack = client.post(
+        "/mcp",
+        headers={
+            "Mcp-Method": "tasks/get",
+            "Mcp-Name": "knowledge",
+            "Authorization": f"Bearer {tok_other}",
+        },
+        json={"method": "tasks/get", "params": {"taskId": task_id}},
+    )
+    assert r_hijack.status_code == 403
+    assert "WWW-Authenticate" in r_hijack.headers
+
 
 def test_mcp_server_template_generator_blocks_t4_and_renders_valid_code() -> None:
     import sys

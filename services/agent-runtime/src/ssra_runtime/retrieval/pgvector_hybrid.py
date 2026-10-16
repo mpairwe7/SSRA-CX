@@ -14,11 +14,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-PGVECTOR_ITERATIVE_SCAN_SQL = "SET LOCAL hnsw.iterative_scan = 'relaxed_order';"
+PGVECTOR_ITERATIVE_SCAN_SQL = (
+    "SET LOCAL hnsw.iterative_scan = 'relaxed_order'; "
+    "SET LOCAL hnsw.max_scan_tuples = 20000; "
+    "SET LOCAL hnsw.scan_mem_multiplier = 2;"
+)
 
 
 def build_pgvector_hybrid_rrf_sql() -> str:
-    """Return parameterized SQL for hybrid FTS + pgvector HNSW retrieval filtered by published snapshot."""
+    """Return parameterized SQL for hybrid FTS + pgvector 0.8.7 HNSW MATERIALIZED CTE retrieval."""
     return """
     WITH lexical AS (
         SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank_cd(search_tsv, plainto_tsquery('simple', :query)) DESC) AS r_lex
@@ -30,8 +34,8 @@ def build_pgvector_hybrid_rrf_sql() -> str:
           AND search_tsv @@ plainto_tsquery('simple', :query)
         LIMIT :candidate_pool
     ),
-    dense AS (
-        SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> :query_embedding) AS r_vec
+    dense_relaxed AS MATERIALIZED (
+        SELECT id, (embedding <=> :query_embedding) AS distance
         FROM knowledge_chunks
         WHERE snapshot_version = :snapshot_version
           AND language = :language
@@ -39,6 +43,11 @@ def build_pgvector_hybrid_rrf_sql() -> str:
           AND (effective_to IS NULL OR :as_of_date <= effective_to)
         ORDER BY embedding <=> :query_embedding
         LIMIT :candidate_pool
+    ),
+    dense AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY distance + 0) AS r_vec
+        FROM dense_relaxed
+        ORDER BY distance + 0
     )
     SELECT c.id, c.doc_title, c.section_anchor, c.language, c.effective_from, c.content,
            COALESCE(1.0 / (:rrf_k + l.r_lex), 0.0) + COALESCE(1.0 / (:rrf_k + d.r_vec), 0.0) AS rrf_score

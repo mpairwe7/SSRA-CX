@@ -162,12 +162,19 @@ class StatelessMcpServer:
             ],
         }
 
-    def handle_task_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
-        """MCP 2026-07-28 Tasks extension for long-running operations (Section 8.1)."""
+    def handle_task_method(
+        self,
+        method: str,
+        params: dict[str, Any],
+        *,
+        caller_sub: str = "ANONYMOUS",
+    ) -> dict[str, Any]:
+        """MCP 2026-07-28 Tasks extension with State-Handle Hijacking protection (Section 8.1 & 8.2)."""
         if method == "tasks/create":
             task_id = new_id("task")
             task_rec = {
                 "taskId": task_id,
+                "owner_sub": caller_sub,
                 "status": "RUNNING",
                 "operation": str(params.get("operation", "background_task")),
                 "createdAt": utc_now().isoformat(),
@@ -182,6 +189,12 @@ class StatelessMcpServer:
                 McpErrorCode.NOT_FOUND,
                 f"Task '{task_id}' not found on server '{self.server_name}'",
                 status_code=404,
+            )
+        if rec.get("owner_sub") != caller_sub:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "State-handle hijacking blocked: caller does not own taskId",
+                status_code=403,
             )
         if method == "tasks/cancel":
             rec["status"] = "CANCELLED"
@@ -381,8 +394,19 @@ class StatelessMcpServer:
                     return JSONResponse(content=self.handle_list_tools(), status_code=200)
 
                 if req.method.startswith("tasks/"):
+                    caller_sub = "ANONYMOUS"
+                    if authorization:
+                        raw_tok = authorization.removeprefix("Bearer ").strip()
+                        claims = self.token_service.verify_exchanged_token(
+                            raw_tok,
+                            expected_audience=self.audience,
+                            required_tier=RiskTier.T0,
+                        )
+                        caller_sub = claims.sub or "ANONYMOUS"
                     return JSONResponse(
-                        content=self.handle_task_method(req.method, req.params),
+                        content=self.handle_task_method(
+                            req.method, req.params, caller_sub=caller_sub
+                        ),
                         status_code=200,
                     )
 
@@ -396,6 +420,13 @@ class StatelessMcpServer:
                 )
                 return JSONResponse(content=result, status_code=200)
             except SSRAError as err:
+                err_headers: dict[str, str] = {}
+                if err.status_code in (401, 403):
+                    err_headers["WWW-Authenticate"] = (
+                        f'Bearer realm="{self.audience}", '
+                        f'resource="https://mcp.ssra.gov.ss/servers/{self.server_name}", '
+                        f'error="{err.code.value.lower()}"'
+                    )
                 return JSONResponse(
                     content={
                         "error": {
@@ -404,6 +435,7 @@ class StatelessMcpServer:
                         }
                     },
                     status_code=err.status_code,
+                    headers=err_headers,
                 )
 
         return app

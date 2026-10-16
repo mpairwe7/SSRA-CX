@@ -1,9 +1,15 @@
-"""Prompt-injection and goal-hijack guardrail (OWASP Agentic ASI01 & ASI02, Section 6.1 & 12.2)."""
+"""Prompt-injection and goal-hijack guardrail with 6-Pass Unicode/Homoglyph Normalizer (OWASP Agentic ASI01 & ASI02, Section 6.1 & 12.2)."""
 
 from __future__ import annotations
 
+import html
 import re
+import unicodedata
 from dataclasses import dataclass
+
+_ZERO_WIDTH_AND_BIDI_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", flags=re.DOTALL)
+_WHITESPACE_RE = re.compile(r"\s+")
 
 _INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
@@ -35,15 +41,39 @@ _INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 
+def normalise_adversarial_input(raw_text: str) -> str:
+    """Execute 6-pass canonicalization before prompt-injection scanning (OWASP ASI01 2026)."""
+    # Pass 1: HTML entity decode
+    step1 = html.unescape(raw_text)
+    # Pass 2: Strip zero-width and Unicode Bidirectional Override characters
+    step2 = _ZERO_WIDTH_AND_BIDI_RE.sub("", step1)
+    # Pass 3: Unicode NFKC compatibility normalization (collapses fullwidth chars U+FF49.. to ASCII)
+    step3 = unicodedata.normalize("NFKC", step2)
+    # Pass 4: Strip hidden HTML comments
+    step4 = _HTML_COMMENT_RE.sub(" ", step3)
+    # Pass 5: Strip combining diacritical marks used to obfuscate ASCII keywords
+    step5 = "".join(
+        ch for ch in unicodedata.normalize("NFD", step4) if unicodedata.category(ch) != "Mn"
+    )
+    # Pass 6: Collapse repeated whitespace
+    return _WHITESPACE_RE.sub(" ", step5).strip()
+
+
 @dataclass(frozen=True)
 class InjectionCheckResult:
     is_blocked: bool
     flags: list[str]
+    normalised_text: str = ""
 
 
 def check_prompt_injection(text: str) -> InjectionCheckResult:
+    normalised = normalise_adversarial_input(text)
     flags: list[str] = []
     for flag_name, pattern in _INJECTION_PATTERNS:
-        if pattern.search(text):
+        if pattern.search(text) or pattern.search(normalised):
             flags.append(flag_name)
-    return InjectionCheckResult(is_blocked=len(flags) > 0, flags=flags)
+    return InjectionCheckResult(
+        is_blocked=len(flags) > 0,
+        flags=flags,
+        normalised_text=normalised,
+    )
