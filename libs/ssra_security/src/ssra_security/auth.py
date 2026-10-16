@@ -185,6 +185,7 @@ class TokenExchangeService:
         *,
         expected_audience: str,
         required_tier: RiskTier,
+        expected_resource: str | None = None,
     ) -> SubjectTokenClaims:
         if "." not in token:
             raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Malformed bearer token", status_code=401)
@@ -199,6 +200,12 @@ class TokenExchangeService:
             raise SSRAError(
                 McpErrorCode.NOT_AUTHORIZED,
                 f"Token audience '{claims.aud}' does not match '{expected_audience}'",
+                status_code=403,
+            )
+        if expected_resource is not None and claims.resource != expected_resource:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"RFC 8707 resource '{claims.resource}' does not match '{expected_resource}'",
                 status_code=403,
             )
         if utc_now() > claims.exp:

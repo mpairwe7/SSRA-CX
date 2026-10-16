@@ -32,6 +32,50 @@ from ssra_security import (
 
 MCP_PROTOCOL_VERSION = "2026-07-28"
 JSON_SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema"
+MAX_MCP_TASKS = 512
+MAX_MCP_IDEMPOTENT_CACHE = 1024
+
+_ALLOWED_MCP_HOSTS: frozenset[str] = frozenset(
+    {
+        "testserver",
+        "localhost",
+        "127.0.0.1",
+        "mcp.ssra.gov.ss",
+        "agentgateway",
+    }
+)
+_ALLOWED_MCP_ORIGINS: frozenset[str] = frozenset(
+    {
+        "https://assist.ssra.gov.ss",
+        "https://console.ssra.gov.ss",
+        "http://localhost:3000",
+        "http://localhost:3001",
+    }
+)
+
+
+def validate_mcp_transport_headers(host: str | None, origin: str | None) -> None:
+    """Block Streamable HTTP DNS rebinding and untrusted browser Origins (CVE-2026-81092, CVE-2026-11624)."""
+    if host is not None:
+        clean_host = host.strip().lower().split(":", 1)[0]
+        if not clean_host or (
+            clean_host not in _ALLOWED_MCP_HOSTS
+            and not clean_host.endswith(".ssra.gov.ss")
+            and not clean_host.endswith(".svc.cluster.local")
+        ):
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"MCP DNS rebinding blocked: untrusted Host header '{host}' (CVE-2026-81092)",
+                status_code=403,
+            )
+    if origin is not None:
+        clean_origin = origin.strip()
+        if clean_origin.lower() == "null" or clean_origin not in _ALLOWED_MCP_ORIGINS:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"MCP cross-origin request blocked: untrusted Origin '{origin}' (CVE-2026-11624)",
+                status_code=403,
+            )
 
 
 class ToolAnnotations(BaseModel):
@@ -171,6 +215,17 @@ class StatelessMcpServer:
     ) -> dict[str, Any]:
         """MCP 2026-07-28 Tasks extension with State-Handle Hijacking protection (Section 8.1 & 8.2)."""
         if method == "tasks/create":
+            if len(self._tasks) >= MAX_MCP_TASKS:
+                reclaimable = [
+                    tid for tid, trec in self._tasks.items() if trec.get("status") != "RUNNING"
+                ]
+                if not reclaimable:
+                    raise SSRAError(
+                        McpErrorCode.RATE_LIMITED,
+                        f"Active MCP task capacity ({MAX_MCP_TASKS}) reached",
+                        status_code=429,
+                    )
+                self._tasks.pop(reclaimable[0], None)
             task_id = new_id("task")
             task_rec = {
                 "taskId": task_id,
@@ -216,13 +271,15 @@ class StatelessMcpServer:
                 status_code=404,
             )
 
-        # 1. Verify OAuth 2.1 / RFC 8693 token
+        # 1. Verify OAuth 2.1 / RFC 8693 token & RFC 8707 resource indicator
+        expected_res = f"https://mcp.ssra.gov.ss/servers/{self.audience}"
         if bearer_token:
             raw_tok = bearer_token.removeprefix("Bearer ").strip()
             claims = self.token_service.verify_exchanged_token(
                 raw_tok,
                 expected_audience=self.audience,
                 required_tier=tool.tier,
+                expected_resource=expected_res,
             )
         else:
             if tool.tier != RiskTier.T0:
@@ -333,6 +390,18 @@ class StatelessMcpServer:
 
         return response_envelope
 
+    def get_protected_resource_metadata(self) -> dict[str, Any]:
+        """RFC 9728 OAuth 2.0 Protected Resource Metadata for MCP 2026-07-28."""
+        resource_uri = f"https://mcp.ssra.gov.ss/servers/{self.audience}"
+        return {
+            "resource": resource_uri,
+            "authorization_servers": ["https://sso.ssra.gov.ss/realms/ssra"],
+            "scopes_supported": [f"mcp:{self.server_name}:invoke", f"mcp:{self.server_name}:read"],
+            "bearer_methods_supported": ["header"],
+            "mcp_protocol_version": MCP_PROTOCOL_VERSION,
+            "resource_documentation": f"{resource_uri}/docs",
+        }
+
     def create_fastapi_app(self) -> FastAPI:
         app = FastAPI(
             title=f"SSRA MCP Server — {self.server_name}",
@@ -347,6 +416,11 @@ class StatelessMcpServer:
                 "protocol": MCP_PROTOCOL_VERSION,
             }
 
+        @app.get(f"/.well-known/oauth-protected-resource/servers/{self.audience}")
+        @app.get("/.well-known/oauth-protected-resource")
+        async def oauth_protected_resource() -> dict[str, Any]:
+            return self.get_protected_resource_metadata()
+
         @app.post("/mcp")
         async def mcp_endpoint(
             request: Request,
@@ -356,6 +430,10 @@ class StatelessMcpServer:
             traceparent: str | None = Header(default=None, alias="traceparent"),
         ) -> JSONResponse:
             try:
+                validate_mcp_transport_headers(
+                    request.headers.get("host"),
+                    request.headers.get("origin"),
+                )
                 body = await request.json()
                 req = StatelessMcpRequest.model_validate(body)
                 if req.meta.protocolVersion != MCP_PROTOCOL_VERSION:
@@ -401,6 +479,7 @@ class StatelessMcpServer:
                             raw_tok,
                             expected_audience=self.audience,
                             required_tier=RiskTier.T0,
+                            expected_resource=f"https://mcp.ssra.gov.ss/servers/{self.audience}",
                         )
                         caller_sub = claims.sub or "ANONYMOUS"
                     return JSONResponse(
@@ -422,9 +501,12 @@ class StatelessMcpServer:
             except SSRAError as err:
                 err_headers: dict[str, str] = {}
                 if err.status_code in (401, 403):
+                    res_meta_url = f"https://mcp.ssra.gov.ss/.well-known/oauth-protected-resource/servers/{self.audience}"
                     err_headers["WWW-Authenticate"] = (
                         f'Bearer realm="{self.audience}", '
-                        f'resource="https://mcp.ssra.gov.ss/servers/{self.server_name}", '
+                        f'resource="https://mcp.ssra.gov.ss/servers/{self.audience}", '
+                        f'resource_metadata="{res_meta_url}", '
+                        f'scope="mcp:{self.server_name}:invoke", '
                         f'error="{err.code.value.lower()}"'
                     )
                 return JSONResponse(

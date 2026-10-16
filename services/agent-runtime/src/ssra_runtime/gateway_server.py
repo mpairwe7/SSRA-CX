@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from ssra_core import AuthLevel, McpErrorCode, SSRAError
+from ssra_mcp import MCP_PROTOCOL_VERSION, validate_mcp_transport_headers
 
 from ssra_runtime.tools import GovernedMcpGatewayClient
 
@@ -33,6 +34,17 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
             "daily_spend_usd": state["daily_spend_usd"],
             "daily_usd_cap": daily_usd_cap,
             "pinned_tools_count": len(gateway.pinned_description_hashes),
+        }
+
+    @app.get("/.well-known/oauth-protected-resource/gateway")
+    @app.get("/.well-known/oauth-protected-resource")
+    async def oauth_protected_resource() -> dict[str, Any]:
+        return {
+            "resource": "https://mcp.ssra.gov.ss/gateway",
+            "authorization_servers": ["https://sso.ssra.gov.ss/realms/ssra"],
+            "scopes_supported": [f"mcp:{s}:invoke" for s in sorted(gateway.servers)],
+            "bearer_methods_supported": ["header"],
+            "mcp_protocol_version": MCP_PROTOCOL_VERSION,
         }
 
     @app.post("/v1/spend/record")
@@ -60,11 +72,16 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
         request: Request,
         mcp_method: str | None = Header(default=None, alias="Mcp-Method"),
         mcp_name: str | None = Header(default=None, alias="Mcp-Name"),
+        authorization: str | None = Header(default=None, alias="Authorization"),
         x_ssra_auth_level: str = Header(default="ANONYMOUS", alias="X-SSRA-Auth-Level"),
         x_ssra_subject_ref: str | None = Header(default=None, alias="X-SSRA-Subject-Ref"),
         traceparent: str | None = Header(default=None, alias="traceparent"),
     ) -> JSONResponse:
         try:
+            validate_mcp_transport_headers(
+                request.headers.get("host"),
+                request.headers.get("origin"),
+            )
             if state["daily_spend_usd"] >= daily_usd_cap:
                 raise SSRAError(
                     McpErrorCode.RATE_LIMITED,
@@ -91,6 +108,21 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
                     tools_list_cache[mcp_name] = srv.handle_list_tools()
                 return JSONResponse(status_code=200, content=tools_list_cache[mcp_name])
 
+            resolved_auth_level = AuthLevel(x_ssra_auth_level)
+            resolved_subject_ref = x_ssra_subject_ref
+            if authorization:
+                from ssra_core import RiskTier
+
+                raw_tok = authorization.removeprefix("Bearer ").strip()
+                claims = gateway.token_service.verify_exchanged_token(
+                    raw_tok,
+                    expected_audience=srv.audience,
+                    required_tier=RiskTier.T0,
+                    expected_resource=f"https://mcp.ssra.gov.ss/servers/{srv.audience}",
+                )
+                resolved_auth_level = claims.auth_level
+                resolved_subject_ref = claims.sub
+
             body = await request.json()
             params = dict(body.get("params", {}))
             tool_name = str(params.get("name", ""))
@@ -100,8 +132,8 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
                 server_name=mcp_name,
                 tool_name=tool_name,
                 arguments=arguments,
-                auth_level=AuthLevel(x_ssra_auth_level),
-                subject_ref=x_ssra_subject_ref,
+                auth_level=resolved_auth_level,
+                subject_ref=resolved_subject_ref,
                 traceparent=traceparent,
             )
             return JSONResponse(
