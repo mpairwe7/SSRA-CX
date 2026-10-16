@@ -40,7 +40,7 @@ export function renderGenerativeUICard(
       componentName: null,
       ariaRole: "status",
       dir,
-      safeHtml: `<div role="status" dir="${dir}" class="ssra-text-fallback">${safeText}</div>`,
+      safeHtml: `<div role="status" aria-live="polite" dir="${dir}" class="ssra-text-fallback">${safeText}</div>`,
     };
   }
 

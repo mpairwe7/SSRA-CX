@@ -16,15 +16,37 @@ export interface ProxyRequestContext {
   readonly saveDataHeader?: string;
   readonly hasHttpOnlySessionCookie?: boolean;
   readonly nonce: string;
+  readonly hostHeader?: string;
+  readonly allowedHosts?: readonly string[];
+  readonly nextResumeHeader?: string;
 }
 
 export interface ProxyDecision {
-  readonly status: 200 | 307 | 401;
+  readonly status: 200 | 307 | 400 | 401;
   readonly redirectLocation?: string;
   readonly locale: LocaleCode;
   readonly dir: "ltr" | "rtl";
   readonly lowDataMode: boolean;
   readonly headers: Record<string, string>;
+}
+
+const IPV6_HOST_PATTERN = /^\[[0-9a-fA-F:]+\](?::(\d{1,5}))?$/;
+const DNS_HOST_PATTERN =
+  /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.?(?::(\d{1,5}))?$/;
+
+function isValidHttpHostHeader(host: string): boolean {
+  const m = IPV6_HOST_PATTERN.exec(host) ?? DNS_HOST_PATTERN.exec(host);
+  if (!m) {
+    return false;
+  }
+  const portStr = m[1];
+  if (portStr !== undefined) {
+    const port = Number(portStr);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function buildSecurityHeaders(nonce: string, strictConsole = false): Record<string, string> {
@@ -47,6 +69,7 @@ export function buildSecurityHeaders(nonce: string, strictConsole = false): Reco
 
   return {
     "Content-Security-Policy": cspDirectives.join("; "),
+    "Cache-Control": "private, no-cache, no-store, must-revalidate",
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
     "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Resource-Policy": "same-origin",
@@ -84,6 +107,35 @@ export function executeProxy(req: ProxyRequestContext): ProxyDecision {
     "X-SSRA-Dir": dir,
     "X-SSRA-Low-Data": lowDataMode ? "1" : "0",
   };
+
+  // CVE-2026-27979: Block untrusted client `next-resume` header
+  if (req.nextResumeHeader !== undefined && req.nextResumeHeader !== "") {
+    return {
+      status: 400,
+      locale,
+      dir,
+      lowDataMode,
+      headers,
+    };
+  }
+
+  // CVE-2026-64649: Validate Host header grammar & optional allow-list
+  if (req.hostHeader !== undefined) {
+    const cleanHost = req.hostHeader.trim().toLowerCase();
+    const allowlistFail =
+      req.allowedHosts &&
+      req.allowedHosts.length > 0 &&
+      !req.allowedHosts.some((host) => host.trim().toLowerCase() === cleanHost);
+    if (!cleanHost || !isValidHttpHostHeader(cleanHost) || allowlistFail) {
+      return {
+        status: 400,
+        locale,
+        dir,
+        lowDataMode,
+        headers,
+      };
+    }
+  }
 
   // Gate /[locale]/account routes on httpOnly server-side BFF session cookie
   const isAccountRoute = req.pathname.includes("/account") || req.pathname.includes("/(account)");

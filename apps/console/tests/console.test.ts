@@ -23,6 +23,32 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
         passkeyVerified: true,
         officeCode: "JUBA_HQ",
         idleAgeSeconds: 120,
+        originHeader: "null",
+        allowedOrigin: "https://console.ssra.gov.ss",
+      }),
+    ).toEqual({ allowed: false, reason: "NULL_OR_UNTRUSTED_ORIGIN" });
+
+    expect(
+      authorizeConsoleAccess({
+        staffId: "stf_01",
+        role: "legal_approver",
+        passkeyVerified: true,
+        officeCode: "JUBA_HQ",
+        idleAgeSeconds: 120,
+        originHeader: "https://evil.example.com",
+        allowedOrigin: "https://console.ssra.gov.ss",
+      }),
+    ).toEqual({ allowed: false, reason: "NULL_OR_UNTRUSTED_ORIGIN" });
+
+    expect(
+      authorizeConsoleAccess({
+        staffId: "stf_01",
+        role: "legal_approver",
+        passkeyVerified: true,
+        officeCode: "JUBA_HQ",
+        idleAgeSeconds: 120,
+        originHeader: "https://console.ssra.gov.ss",
+        allowedOrigin: "https://console.ssra.gov.ss",
       }),
     ).toEqual({ allowed: true });
 
@@ -32,6 +58,8 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
       passkeyVerified: true,
       officeCode: "JUBA_HQ",
       idleAgeSeconds: 30,
+      originHeader: "https://console.ssra.gov.ss",
+      allowedOrigin: "https://console.ssra.gov.ss",
     };
     expect(
       validateCopilotDraftApproval(session, {

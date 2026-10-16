@@ -4,6 +4,8 @@ import { renderPublicHomeModel } from "../src/app/[locale]/(public)/page.js";
 import { renderPublicStatusBanner } from "../src/app/[locale]/(public)/status.js";
 import {
   buildHttpOnlySessionCookieHeader,
+  buildSessionLogoutHeaders,
+  dispatchServiceWorkerLogoutPurge,
   validateBffCsrfMutation,
 } from "../src/app/api/auth/session/route.js";
 import { buildRuntimeStreamRequest } from "../src/app/api/chat/stream/route.js";
@@ -32,6 +34,52 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
     expect(decision.headers["Content-Security-Policy"]).toContain(
       "require-trusted-types-for 'script'",
     );
+    expect(decision.headers["Cache-Control"]).toBe("private, no-cache, no-store, must-revalidate");
+
+    // CVE-2026-27979: Block untrusted next-resume header
+    expect(
+      executeProxy({
+        pathname: "/en",
+        nonce: "n1",
+        nextResumeHeader: "1",
+      }).status,
+    ).toBe(400);
+
+    // CVE-2026-64649: Block untrusted Host header
+    expect(
+      executeProxy({
+        pathname: "/en",
+        nonce: "n1",
+        hostHeader: "evil.example.com",
+        allowedHosts: ["assist.ssra.gov.ss"],
+      }).status,
+    ).toBe(400);
+
+    // CVE-2026-27978: Reject 'null' Origin on CSRF mutation & CVE-2026-50184 Clear-Site-Data on logout
+    expect(
+      validateBffCsrfMutation({
+        method: "POST",
+        originHeader: "null",
+        allowedOrigin: "https://assist.ssra.gov.ss",
+        csrfCookieToken: "tok1",
+        csrfHeaderToken: "tok1",
+      }),
+    ).toEqual({ valid: false, reason: "CSRF_NULL_ORIGIN_REJECTED" });
+    const logout = buildSessionLogoutHeaders();
+    expect(logout["Set-Cookie"]).toContain("Max-Age=0");
+    expect(logout["Clear-Site-Data"]).toBe('"cache", "cookies", "storage"');
+    expect(logout["Cache-Control"]).toBe("no-store");
+    const posted: Array<{ readonly type: string }> = [];
+    expect(
+      dispatchServiceWorkerLogoutPurge({
+        serviceWorker: {
+          controller: {
+            postMessage: (m) => posted.push(m),
+          },
+        },
+      }),
+    ).toBe(true);
+    expect(posted).toEqual([{ type: "SSRA_LOGOUT_PURGE" }]);
   });
 
   it("blocks unauthenticated access to /[locale]/account routes", () => {

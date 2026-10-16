@@ -81,7 +81,20 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(parsed.lastEventId).toBe("evt_3");
     expect(parsed.accumulatedText).toBe("PAYE is due by day 15.");
 
-    const outbox = new OfflineOutboxQueue();
+    const outbox = new OfflineOutboxQueue(2);
+    expect(() => new OfflineOutboxQueue(0)).toThrow(RangeError);
+    expect(
+      outbox.enqueue({
+        id: "q_pii",
+        message: "My TIN is 100 200 1234",
+        locale: "en",
+        tier: "T0",
+        queuedAtIso: "2026-10-16T08:00:00Z",
+      }),
+    ).toEqual({
+      queued: false,
+      reason: "SECURITY_POLICY_PII_REJECTED_FROM_OFFLINE_QUEUE",
+    });
     expect(
       outbox.enqueue({
         id: "q_1",
@@ -91,6 +104,27 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
         queuedAtIso: "2026-10-16T08:00:00Z",
       }).queued,
     ).toBe(true);
+    expect(
+      outbox.enqueue({
+        id: "q_1b",
+        message: "What is the BPT rate?",
+        locale: "en",
+        tier: "T0",
+        queuedAtIso: "2026-10-16T08:01:00Z",
+      }).queued,
+    ).toBe(true);
+    expect(
+      outbox.enqueue({
+        id: "q_over_cap",
+        message: "Third T0 message exceeds capacity",
+        locale: "en",
+        tier: "T0",
+        queuedAtIso: "2026-10-16T08:02:00Z",
+      }),
+    ).toEqual({
+      queued: false,
+      reason: "OFFLINE_OUTBOX_CAPACITY_EXCEEDED",
+    });
 
     // T1 personal queries must never be written to shared-device offline storage
     expect(

@@ -30,14 +30,25 @@ def main() -> None:
         f"Public bundle gzip size {gzip_kb:.2f} KB exceeds {TARGET_FIRST_LOAD_JS_GZIP_KB} KB target"
     )
 
-    # 2. Verify WCAG 2.2 AA touch target (>= 44px), RTL Arabic support, and ARIA landmarks in packages/ui & chat-ui
+    # 2. Verify WCAG 2.2 AA touch target (>= 44px), SC 2.4.11/2.4.13 focus ring, SC 3.3.8 OTP autofill, RTL Arabic support, and ARIA landmarks
     ui_src = (ROOT / "packages" / "ui" / "src" / "index.ts").read_text(encoding="utf-8")
+    ui_comp_src = (ROOT / "packages" / "ui" / "src" / "components.ts").read_text(encoding="utf-8")
     chat_comp_src = (ROOT / "packages" / "chat-ui" / "src" / "components.ts").read_text(
         encoding="utf-8"
     )
+    sw_src = (ROOT / "apps" / "web" / "public" / "sw.js").read_text(encoding="utf-8")
     assert "minTouchTargetPx: 44" in ui_src, "WCAG 2.2 AA 44px touch target missing in packages/ui"
-    assert 'role="region"' in chat_comp_src and "aria-label=" in chat_comp_src, (
-        "ARIA region/label attributes missing in packages/chat-ui/src/components.ts"
+    assert "focusOutlineCss:" in ui_src, (
+        "WCAG 2.2 SC 2.4.13 focus indicator token missing in packages/ui"
+    )
+    assert 'autoComplete: "one-time-code"' in ui_comp_src, (
+        "WCAG 2.2 SC 3.3.8 OTP one-time-code missing"
+    )
+    assert 'role="region"' in chat_comp_src and 'aria-live="polite"' in chat_comp_src, (
+        "ARIA region/live attributes missing in packages/chat-ui/src/components.ts"
+    )
+    assert "SSRA_LOGOUT_PURGE" in sw_src and "no-store" in sw_src, (
+        "CVE-2026-50184 Service Worker logout purge & no-store guard missing in apps/web/public/sw.js"
     )
 
     print(

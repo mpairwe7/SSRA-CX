@@ -55,6 +55,17 @@ This file is the authoritative engineering and safety rulebook for all coding ag
   5. UI changes verified for WCAG 2.2 AA accessibility, low-bandwidth budgets (≤ 150 KB gzip first-load JS), and i18n (`en`, `pga`, and RTL `ar`).
   6. ADR written in `docs/adr/` for any decision with a real reversal cost.
 
+---
+
+## 5. Mandatory Feature-Branch, Pull Request, CI & CodeRabbit Workflow (`pr-ci-coderabbit-workflow`)
+
+1. **Never push directly to `main`:** Every code, configuration, knowledge-base, or documentation change must be committed to a feature/fix branch (`feat/<slug>`, `fix/<slug>`, `chore/<slug>`) branched from the latest `origin/main`.
+2. **Always authenticate as `mpairwe7` via `~/bin/gh` (`gh-mpairwe7` skill):** Run `~/bin/gh auth switch --user mpairwe7 && ~/bin/gh api user --jq .login` immediately before every `git push`, `pr create`, `pr comment`, or `pr merge`.
+3. **Open a Pull Request & Preserve Issue State (`no-issue-autoclose` skill):** Open a PR against `main` using `~/bin/gh pr create` with bare `(#N)` issue references only (never `fixes #N`, `closes #N`, or `resolves #N`).
+4. **Watch CI & Resolve Any Failures Immediately:** Monitor GitHub Actions checks (`~/bin/gh pr checks <PR> --watch`). If any CI step fails, inspect `~/bin/gh run view <RUN_ID> --log-failed`, fix the root cause on the feature branch, push the fix commit, and re-verify until 100% of CI checks are green.
+5. **Resolve All CodeRabbit (`coderabbitai[bot]`) & Reviewer Comments:** Inspect all PR reviews, inline review comments, and issue comments (`~/bin/gh api repos/mpairwe7/SSRA-CX/pulls/<PR>/comments`, `/reviews`, and `/issues/<PR>/comments`). Address every actionable finding on the branch before merging.
+6. **Merge Only When CI is 100% Green:** Merge via `~/bin/gh pr merge <PR> --squash --delete-branch` only after all CI checks pass and review comments are resolved, then sync local `main` (`git checkout main && git pull --ff-only origin main`).
+
 <!-- BEGIN:turborepo-agent-rules -->
 
 # This is NOT the Turborepo you know
