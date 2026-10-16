@@ -1,20 +1,23 @@
-# SSRA Assist — Operational Runbooks: Incident Response, Rollback & DR (`docs/runbooks/README.md`)
+# SSRA Assist — Operational Runbooks: Docker Compose Deployment, Incident Response, Rollback & DR (`docs/runbooks/README.md`)
 
-**Status:** v1.1 (Phases 0–4 Reference Implementation)  
-**Date:** 2026-10-16  
+**Status:** v2.0 (Docker Compose 2026 Standardization — Kubernetes Decommissioned)  
+**Date:** 2026-10-17  
 **References:** [`docs/00-master-prompt.md`](../00-master-prompt.md) Sections 7, 11, 12.3, 12.5, 13, 15
+
+> **2026 Containerization Standard:** All local, staging, production, and disaster-recovery (DR) operations standardize on **Docker Compose (`docker compose` v2.39+ / Compose Specification 2026)** using [`infra/compose/docker-compose.yml`](../../infra/compose/docker-compose.yml) and [`infra/compose/docker-compose.prod.yml`](../../infra/compose/docker-compose.prod.yml). Legacy Kubernetes deployment instructions are decommissioned across operational runbooks to eliminate multi-cluster control-plane overhead at the National Communication Authority (NCA) data centre while enforcing `read_only: true` root filesystems, `cap_drop: ["ALL"]`, `no-new-privileges:true`, `pids_limit`, and `sovereign_internal_net` (`internal: true`) network segmentation.
 
 ---
 
-## 1. Developer & CI Operations (`Taskfile.yml`)
+## 1. Developer, CI & Production Docker Compose Operations (`Taskfile.yml`)
 
 | Command | Action |
 |---|---|
-| `task up` | Start local Docker Compose stack (`infra/compose/docker-compose.yml`) and run end-to-end AG-UI smoke test (`tools/smoke_test_stack.py`) |
-| `task down` | Stop local Docker Compose stack cleanly |
-| `task gen` | Regenerate Pydantic v2 models, TypeScript types, Zod 4 schemas, and OpenAPI 3.1 client (`services/api/openapi.json` → `@ssra/api-client`) |
+| `task up` | Start local hardened Docker Compose stack (`infra/compose/docker-compose.yml`) and run end-to-end AG-UI smoke test (`tools/smoke_test_stack.py`) |
+| `task down` | Stop local Docker Compose stack cleanly (`--remove-orphans`) |
+| `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.prod.yml --profile prod up -d --wait` | Deploy production NCA Sovereign stack (including offline `vllm-sovereign` GPU container and `postgres-wal-archiver`) |
+| `task gen` | Regenerate Pydantic v2 models, TypeScript types, Zod 4 schemas, OpenAPI 3.1 client, and CycloneDX 1.6 SBOM + ML-BOM |
 | `task lint` | Run Ruff check/format, `basedpyright` strict, `import-linter`, JSON Schema 2020-12 validator (33 MCP tools), `gitleaks`, Biome, and TypeScript `tsc` |
-| `task test` | Run Python (`pytest` + Hypothesis) and TypeScript (`vitest`) unit and contract test suites |
+| `task test` | Run Python (`pytest` + Hypothesis, `>= 98%` coverage gate) and TypeScript (`vitest`) unit and contract test suites |
 | `task eval` | Run the 600-item Phase 1 golden dataset (`300 en`, `150 ar`, `150 pga`) and OWASP Agentic `ASI01`–`ASI10` red-team suite |
 
 ---
@@ -41,7 +44,7 @@ Only immutable snapshots with `status = 'PUBLISHED'` are served to taxpayers:
 4. Publish (with automated eval regression check): `POST /v1/knowledge-admin/snapshots/{version}/publish`
 5. **Emergency 1-Step Rollback:**
    ```bash
-   curl -X POST http://localhost:8000/v1/knowledge-admin/snapshots/rollback
+   curl -X POST http://127.0.0.1:8000/v1/knowledge-admin/snapshots/rollback
    ```
    Atomically restores the previous `PUBLISHED` snapshot version and marks the faulty release `ROLLED_BACK`.
 
@@ -49,5 +52,5 @@ Only immutable snapshots with `status = 'PUBLISHED'` are served to taxpayers:
 
 ## 4. Disaster Recovery (RPO ≤ 5 min, RTO ≤ 1 h) & Next.js 72-Hour Patching
 
-- **PostgreSQL 18 PITR:** CloudNativePG continuously archives WAL segments to S3-compatible storage; quarterly restore drills verify recovery within RTO ≤ 1 h and RPO ≤ 5 min.
-- **Scheduled Security Patching:** Subscribe to Next.js 16, FastAPI, Keycloak, and Linux kernel security advisories. Reviewed CVE patches bypass the 7-day dependency cooldown and must be deployed within 72 hours.
+- **PostgreSQL 18 PITR via Docker Compose (`postgres-wal-archiver`):** The `postgres-wal-archiver` service in `infra/compose/docker-compose.prod.yml` continuously ships WAL segments to S3-compatible storage (`s3://ssra-nca-backups/postgres18-wal`); quarterly restore drills verify recovery within RTO ≤ 1 h and RPO ≤ 5 min.
+- **Scheduled Security Patching:** Subscribe to Next.js 16, FastAPI, Keycloak, and Linux kernel security advisories. Reviewed CVE patches bypass the 7-day dependency cooldown and must be deployed within 72 hours via `docker compose pull && docker compose up -d --wait`.

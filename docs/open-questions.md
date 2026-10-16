@@ -11,7 +11,7 @@
 |---|---|---|---|---|---|
 | **OQ-001** | **e-Tax APIs:** endpoints, auth model, rate limits, sandbox, data dictionary, TIN format | Phase 2 | SSRA ICT & Domestic Tax | 🔴 Open | Define `ETaxPort` in `libs/ssra_adapters`; use deterministic mock adapter with synthetic data (`TIN ••••1234`); disable live T1/T3 e-Tax calls. |
 | **OQ-002** | **e-Customs platform and APIs:** declaration status, tariff data, HS code schedule | Phase 2 | SSRA Customs & ICT | 🔴 Open | Define `ECustomsPort`; mock adapter returns synthetic test declarations; public assistant answers only published general customs procedures (T0) and hands off specific declaration/tariff queries. |
-| **OQ-003** | **Hosting:** NCA data-centre capacity (CPU, GPU, storage, network), DR site, any approved regional cloud | Phase 0 (Sign-off) | SSRA ICT & NCA | 🔴 Open | Develop and test against portable Docker Compose (`task up`) and vendor-neutral Kubernetes (RKE2/k3s) Helm/OpenTofu manifests sized for modular CPU + single/dual GPU profiles. |
+| **OQ-003** | **Hosting:** NCA data-centre capacity (CPU, GPU, storage, network), DR site, any approved regional cloud | Phase 0 (Sign-off) | SSRA ICT & NCA | 🔴 Open | Standardize operational runbooks and deployments on hardened Docker Compose (`infra/compose/docker-compose.yml` + `infra/compose/docker-compose.prod.yml` with `read_only`, `cap_drop: ["ALL"]`, `no-new-privileges:true`, and `sovereign_internal_net`) sized for modular CPU + single/dual GPU profiles; Kubernetes deployment is decommissioned in operational runbooks. |
 | **OQ-004** | **AI providers:** approved external models, data classes allowed to leave the country, zero-retention contracts | Phase 1 | SSRA Management, Legal & SecOps | 🔴 Open | Default all model routing in `ai/routing/` to in-country self-hosted open-weight models (`vLLM`/`SGLang`); keep external provider plug-ins disabled by default behind `agentgateway`. |
 | **OQ-005** | **Identity:** civil-registry or national-ID verification, OTP delivery partners, SIM-swap signals, staff identity provider | Phase 2 | SSRA ICT, SecOps & Telcos | 🔴 Open | Use local Keycloak realm with mock OTP/SIM-swap provider in dev/staging; block production T1+ rollout until identity proofing is approved by SSRA SecOps. |
 | **OQ-006** | **Payments:** who may generate payment references, bank and mobile-money partners, Bank of South Sudan integration | Phase 2 | SSRA Finance, BoSS & ICT | 🔴 Open | Provide static, cited instructions for official e-Tax bank remittance only; keep `generate_payment_reference` feature-flagged off (`*` in catalog); never compute FX rates. |
@@ -48,7 +48,7 @@
 - **Specific Questions for SSRA ICT & NCA:**
   1. What CPU, RAM, NVMe storage, and GPU models/VRAM are available in the primary NCA cluster for `vLLM`/`SGLang` and embedding/reranking servers?
   2. Is a secondary site/zone available in-country for Disaster Recovery (RPO ≤ 5 min, RTO ≤ 1 h)?
-  3. What Kubernetes distribution (RKE2 vs. k3s) and storage classes (Ceph/Longhorn/MinIO) are standard in NCA's environment?
+  3. What Linux host OS, NVIDIA Container Toolkit version, and S3-compatible storage endpoints (Ceph/MinIO) are standard in NCA's Docker Compose host environment?
 
 ### OQ-004 — Approved External AI Providers & Cross-Border Data Policy
 - **Blocks:** Phase 1

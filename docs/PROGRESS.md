@@ -28,7 +28,7 @@
 ### Phase 0 — Foundations (`Gate 0` Complete)
 - [x] Architecture overview (`docs/architecture/overview.md` with C4 Levels 1–3 as text + Mermaid), Core Data Model (`docs/architecture/data-model.md`), Threat Model v1 (`docs/security/threat-model.md`), AI Governance (`docs/ai-governance/README.md`), Open Questions (`docs/open-questions.md` `OQ-001`–`OQ-012`), and all 15 ADRs (`ADR-001`–`ADR-015` in `docs/adr/`).
 - [x] Monorepo scaffold matching Section 16 (`apps/`, `packages/`, `services/`, `mcp-servers/`, `libs/`, `ai/`, `knowledge/`, `evals/`, `infra/`, `tools/`, `.devcontainer/`, `.github/workflows/ci.yml`).
-- [x] Supply-chain controls: 7-day dependency cooldown (`minimumReleaseAge: 10080`, `exclude-newer = "2026-10-09T23:59:59Z"`), hash-pinned lockfiles, 40-char SHA-pinned CI actions, Kyverno image-digest policy, and `gitleaks` secret scanning.
+- [x] Supply-chain & containerization controls: 7-day dependency cooldown (`minimumReleaseAge: 10080`, `exclude-newer = "2026-10-09T23:59:59Z"`), hash-pinned lockfiles, 40-char SHA-pinned CI actions, hardened Docker Compose (`infra/compose/docker-compose.yml` & `docker-compose.prod.yml` with `cap_drop: ["ALL"]`, `no-new-privileges:true`, `read_only: true`, and `sovereign_internal_net` `internal: true`; Kubernetes decommissioned in operational runbooks), and `gitleaks` secret scanning.
 - [x] Shared contracts (`packages/contracts/schemas/*.schema.json`) generating both TypeScript + Zod 4 and Python Pydantic v2 models via `task gen`.
 
 ### Phase 1 — Public Assistant (`Gate 1` Reference Implementation & 600-Item Eval Suite Complete)
