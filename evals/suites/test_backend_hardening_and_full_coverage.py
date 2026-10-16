@@ -1608,13 +1608,16 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
 
     from ssra_api.identity_link.application import (
         analyze_uploaded_document_use_case,
+        assess_document_for_human_review,
         classify_ssra_document,
+        draft_document_escalation_ticket,
         parse_currency_amount,
         validate_office_zip_archive,
     )
     from ssra_voice import (
         CallLobbyManager,
         VoiceWebSocketConcurrencyGuard,
+        build_chat_to_call_carryover,
         generate_officer_call_brief,
         validate_call_wrap_up,
     )
@@ -1767,6 +1770,117 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
         zf.writestr("word/document.xml", "<w:document/>")
     validate_office_zip_archive(clean_zip.getvalue(), "docx")
 
+    # HITL Document Uncertainty Assessment & Escalation Ticket Drafting (test_hitl_document_routing.py)
+    assert disc_res.hitl_assessment is not None
+    assert disc_res.hitl_assessment.requires_review is True
+    assert disc_res.hitl_assessment.suggested_action == "officer_review"
+    esc_ticket = draft_document_escalation_ticket(
+        disc_res, taxpayer_subject_ref="sub_amina_01", session_id="sess_01"
+    )
+    assert esc_ticket is not None
+    assert esc_ticket["status"] == "pending_review"
+    assert "Automatic ingestion uncertainty" in esc_ticket["reason"]
+
+    clean_inv = analyze_uploaded_document_use_case(
+        filename="clean_invoice.pdf",
+        text_content=(
+            "Tax Invoice for TIN 1002001234. "
+            "Subtotal: SSP 100,000 Sales Tax (18%): SSP 18,000 Total Payable: SSP 118,000"
+        ),
+        size_bytes=5000,
+        kind="pdf",
+    )
+    assert clean_inv.hitl_assessment is not None
+    assert clean_inv.hitl_assessment.requires_review is False
+    assert (
+        draft_document_escalation_ticket(
+            clean_inv, taxpayer_subject_ref="sub_amina_01", session_id="sess_01"
+        )
+        is None
+    )
+    low_ocr = assess_document_for_human_review(
+        doc_type=clean_inv.doc_type,
+        confidence=0.90,
+        fields={"tins": ["••••1234"]},
+        tax_reconciliation={"status": "verified"},
+        warnings=[],
+        ocr_mean_confidence=0.45,
+        min_ocr_confidence=0.70,
+    )
+    assert low_ocr.requires_review is True
+
+    # G122 Cross-Channel Chat-to-Call Carryover (test_call_carryover.py)
+    carry_owner = build_chat_to_call_carryover(
+        conversation_id="conv_paye_01",
+        owner_user_id="sub_amina_01",
+        owner_session_id=None,
+        caller_user_id="sub_amina_01",
+        topic_id="paye_filing",
+        topic_label="PAYE monthly filing",
+        tax_domain="paye",
+    )
+    assert carry_owner is not None
+    assert carry_owner.local_models_only is True
+    assert "Current task: PAYE monthly filing." in carry_owner.context
+    assert (
+        build_chat_to_call_carryover(
+            conversation_id="conv_paye_01",
+            owner_user_id="sub_amina_01",
+            owner_session_id=None,
+            caller_user_id="someone_else",
+        )
+        is None
+    )
+    assert (
+        build_chat_to_call_carryover(
+            conversation_id="../conversations",
+            owner_user_id="sub_amina_01",
+            owner_session_id=None,
+            caller_user_id="sub_amina_01",
+        )
+        is None
+    )
+    assert (
+        build_chat_to_call_carryover(
+            conversation_id="conv_paye_01",
+            owner_user_id="sub_amina_01",
+            owner_session_id=None,
+            caller_user_id="bad user id",
+        )
+        is None
+    )
+    assert (
+        build_chat_to_call_carryover(
+            conversation_id="conv_paye_01",
+            owner_user_id=None,
+            owner_session_id="sess_abc_123",
+            caller_session_id="bad session id",
+        )
+        is None
+    )
+    carry_anon = build_chat_to_call_carryover(
+        conversation_id="conv_anon_01",
+        owner_user_id=None,
+        owner_session_id="sess_abc_123",
+        caller_session_id="sess_abc_123",
+    )
+    assert carry_anon is not None
+
+    # Call Lobby disconnect recovery, transfer timeout callback & risk signals
+    lobby2 = CallLobbyManager()
+    lobby2.apply_event("call.started", {"call_id": "call_02"})
+    lobby2.apply_event("call.officer_disconnected", {"call_id": "call_02", "waiting_since": 100.0})
+    assert lobby2.calls["call_02"].status == "transferring"
+    assert lobby2.calls["call_02"].reason == "officer_disconnected"
+    lobby2.apply_event("call.transfer_timed_out", {"call_id": "call_02"})
+    assert lobby2.calls["call_02"].needs_callback is True
+    lobby2.apply_event(
+        "call.risk", {"call_id": "call_02", "level": "at_risk", "signals": ["distress_keyword"]}
+    )
+    assert lobby2.calls["call_02"].risk_level == "at_risk"
+    lobby2.apply_event("call.wrapped_up", {"call_id": "call_02"})
+    assert "call_02" not in lobby2.calls
+
     lobby = CallLobbyManager()
     lobby.apply_event("call.started", {"call_id": "call_01"})
     lobby.apply_event(
@@ -1786,8 +1900,9 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     lobby.apply_event("call.bridged", {"call_id": "call_01"})
     lobby.apply_event("call.on_hold", {"call_id": "call_01", "on": True})
     assert lobby.calls["call_01"].on_hold is True
-    lobby.apply_event("call.ended", {"call_id": "call_01"})
-    assert lobby.calls["call_01"].status == "ended"
+    ended_entry = lobby.apply_event("call.ended", {"call_id": "call_01"})
+    assert ended_entry.status == "ended"
+    assert "call_01" not in lobby.calls
 
     wrap_ok = validate_call_wrap_up(
         note="Resolved PAYE question for TIN 1002001234",

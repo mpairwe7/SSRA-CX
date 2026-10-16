@@ -7,6 +7,7 @@ import {
   buildAnalyticsDashboardView,
   buildAuditorTrailIntegrityView,
   buildCallBriefCardView,
+  buildCallConsoleBarView,
   buildEvaluationDashboardView,
   buildKnowledgeReleasePipelineView,
   buildOpsPageShell,
@@ -16,6 +17,7 @@ import {
   evaluateAuthorityStatusResponse,
   formatSafeTimestamp,
   isLiveOfficer,
+  partitionCallDeskQueueSections,
   plainSeconds,
   pointsHint,
   previousWindow,
@@ -337,6 +339,51 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
         notSaid: true,
       }).valid,
     ).toBe(true);
+
+    // 4-Section Call Desk Queue & CallConsoleBar
+    const lobbySample = [
+      {
+        call_id: "c_wait_norm",
+        status: "transferring" as const,
+        priority: "normal" as const,
+        started_at: 100,
+        waiting_since: 110,
+        claimed_by: "",
+      },
+      {
+        call_id: "c_wait_urg",
+        status: "transferring" as const,
+        priority: "urgent" as const,
+        started_at: 120,
+        waiting_since: 125,
+        claimed_by: "",
+      },
+      {
+        call_id: "c_ai_risk",
+        status: "ai" as const,
+        priority: "normal" as const,
+        started_at: 90,
+        waiting_since: null,
+        claimed_by: "",
+        risk_level: "at_risk" as const,
+      },
+    ];
+    const sections = partitionCallDeskQueueSections(lobbySample, null);
+    expect(sections.waiting[0]?.call_id).toBe("c_wait_urg");
+    expect(sections.ai[0]?.call_id).toBe("c_ai_risk");
+
+    const barView = buildCallConsoleBarView({
+      role: "ssra_staff",
+      calls: lobbySample,
+      myCallId: null,
+      availability: "available",
+      micReady: false,
+      soundEnabled: true,
+    });
+    expect(barView.waitingCount).toBe(2);
+    expect(barView.longestWaitingCallId).toBe("c_wait_norm");
+    expect(barView.micButtonLabel).toBe("Check mic");
+    expect(barView.micAttentionClass).toBe(true);
 
     // JIT Admin requires device posture + maker-checker approval
     expect(

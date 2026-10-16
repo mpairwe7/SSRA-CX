@@ -40,6 +40,13 @@ class DocumentPrecheckResult:
 
 
 @dataclass(frozen=True)
+class HitlDocumentAssessment:
+    requires_review: bool
+    suggested_action: str  # "auto_approve" | "officer_review"
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class DocumentAnalysisResult:
     document_id: str
     filename: str
@@ -53,3 +60,4 @@ class DocumentAnalysisResult:
     screenshot_guidance: dict[str, Any]
     grounding_passage: str
     warnings: list[str] = field(default_factory=list)
+    hitl_assessment: HitlDocumentAssessment | None = None

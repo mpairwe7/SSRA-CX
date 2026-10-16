@@ -306,3 +306,93 @@ export function buildAuditorTrailIntegrityView(data: AuditVerificationReport) {
     sealPausedReason: null,
   };
 }
+
+export type OfficerAvailability = "available" | "busy" | "away";
+
+export interface LobbyCallItem {
+  readonly call_id: string;
+  readonly status: "ai" | "transferring" | "bridged";
+  readonly priority: "urgent" | "high" | "normal" | "low";
+  readonly started_at: number;
+  readonly waiting_since: number | null;
+  readonly claimed_by: string;
+  readonly risk_level?: "none" | "watch" | "at_risk" | undefined;
+}
+
+const CALL_PRIORITY_RANK: Record<string, number> = {
+  urgent: 0,
+  high: 1,
+  normal: 2,
+  low: 3,
+};
+const CALL_RISK_RANK: Record<string, number> = {
+  at_risk: 0,
+  watch: 1,
+  none: 2,
+};
+
+/**
+ * Partition live calls into the 4 Call Desk sections (`useCallConsoleStore.ts` `queueSections`).
+ */
+export function partitionCallDeskQueueSections(
+  calls: readonly LobbyCallItem[],
+  myCallId: string | null,
+) {
+  const notMine = (c: LobbyCallItem) => c.call_id !== myCallId;
+  const waiting = calls
+    .filter((c) => notMine(c) && c.status === "transferring" && !c.claimed_by)
+    .sort(
+      (a, b) =>
+        (CALL_PRIORITY_RANK[a.priority] ?? 2) - (CALL_PRIORITY_RANK[b.priority] ?? 2) ||
+        (a.waiting_since ?? a.started_at) - (b.waiting_since ?? b.started_at),
+    );
+  const mine = calls.filter((c) => c.call_id === myCallId);
+  const withOfficers = calls.filter(
+    (c) =>
+      notMine(c) &&
+      (c.status === "bridged" || (c.status === "transferring" && Boolean(c.claimed_by))),
+  );
+  const ai = calls
+    .filter((c) => notMine(c) && c.status === "ai")
+    .sort(
+      (a, b) =>
+        (CALL_RISK_RANK[a.risk_level ?? "none"] ?? 2) -
+          (CALL_RISK_RANK[b.risk_level ?? "none"] ?? 2) || a.started_at - b.started_at,
+    );
+  return { waiting, mine, withOfficers, ai };
+}
+
+/**
+ * Top-of-page Call Console Bar (`CallConsoleBar.tsx`).
+ */
+export function buildCallConsoleBarView(params: {
+  readonly role: StaffRole;
+  readonly calls: readonly LobbyCallItem[];
+  readonly myCallId: string | null;
+  readonly availability: OfficerAvailability;
+  readonly micReady: boolean;
+  readonly soundEnabled: boolean;
+}) {
+  const canTake = isLiveOfficer(params.role);
+  const sections = partitionCallDeskQueueSections(params.calls, params.myCallId);
+  const longestWaiting = sections.waiting.reduce<LobbyCallItem | null>(
+    (oldest, c) =>
+      !oldest || (c.waiting_since ?? c.started_at) < (oldest.waiting_since ?? oldest.started_at)
+        ? c
+        : oldest,
+    null,
+  );
+  return {
+    regionRole: "region" as const,
+    ariaLabel: "Phone calls" as const,
+    canTake,
+    onCallBadgeVisible: canTake && params.myCallId !== null,
+    availabilityControlVisible: canTake && params.myCallId === null,
+    liveCount: params.calls.length,
+    waitingCount: sections.waiting.length,
+    longestWaitingCallId: longestWaiting?.call_id ?? null,
+    micButtonLabel: params.micReady ? ("Mic ready" as const) : ("Check mic" as const),
+    micAttentionClass: !params.micReady,
+    soundButtonLabel: params.soundEnabled ? ("Sound on" as const) : ("Sound off" as const),
+  };
+}
