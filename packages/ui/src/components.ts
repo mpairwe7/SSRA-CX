@@ -1,5 +1,5 @@
 /**
- * WCAG 2.2 AA & RTL-Aware Accessible UI Primitives (`packages/ui/src/components.ts` — Section 9.3).
+ * WCAG 2.2 AA & RTL-Aware Accessible UI Primitives, Officer Duty Hours & Roving Menu Navigation (`packages/ui/src/components.ts` — Section 9.3).
  */
 
 import type { LocaleCode } from "@ssra/contracts";
@@ -58,4 +58,89 @@ export function buildAccessibleOtpInputProps(locale: LocaleCode): AccessibleOtpI
     focusOutlineCss: SSRA_DESIGN_TOKENS.focusOutlineCss,
     pasteAllowed: true,
   };
+}
+
+export interface OfficerDutyHours {
+  readonly onDuty: boolean;
+  readonly hours: string;
+  readonly nextOnDuty: string | null;
+}
+
+export function formatNextShiftJuba(iso: string, locale: LocaleCode): string | null {
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat([locale, "en-SS", "en-GB"], {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone: "Africa/Juba",
+      timeZoneName: "short",
+    }).format(when);
+  } catch {
+    return null;
+  }
+}
+
+export function extractOfficerHours(meta: Record<string, unknown>): OfficerDutyHours | undefined {
+  const handoff = meta.handoff as Record<string, unknown> | null | undefined;
+  const raw = (meta.officer_hours ??
+    (handoff && typeof handoff === "object" ? handoff.officer_hours : undefined)) as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  if (!raw || typeof raw !== "object") return undefined;
+  const onDuty = raw.on_duty ?? raw.onDuty;
+  if (typeof onDuty !== "boolean" || typeof raw.hours !== "string") return undefined;
+  const next = raw.next_on_duty ?? raw.nextOnDuty;
+  return {
+    onDuty,
+    hours: raw.hours.slice(0, 64),
+    nextOnDuty: typeof next === "string" ? next : null,
+  };
+}
+
+export interface MenuKeyNavigationOutcome {
+  readonly nextIndex: number;
+  readonly closeAndRestoreFocus: boolean;
+  readonly handled: boolean;
+}
+
+/**
+ * WCAG 2.2 AA Account Rail & Language Menu keyboard navigation (`ArrowDown`, `ArrowUp`, `Home`, `End`, `Escape`).
+ */
+export function resolveMenuKeyNavigation(
+  key: string,
+  currentIndex: number,
+  itemCount: number,
+): MenuKeyNavigationOutcome {
+  if (itemCount <= 0) {
+    return { nextIndex: 0, closeAndRestoreFocus: key === "Escape", handled: key === "Escape" };
+  }
+  const safeIndex = Math.max(0, Math.min(currentIndex, itemCount - 1));
+  switch (key) {
+    case "ArrowDown":
+      return {
+        nextIndex: (safeIndex + 1) % itemCount,
+        closeAndRestoreFocus: false,
+        handled: true,
+      };
+    case "ArrowUp":
+      return {
+        nextIndex: (safeIndex - 1 + itemCount) % itemCount,
+        closeAndRestoreFocus: false,
+        handled: true,
+      };
+    case "Home":
+      return { nextIndex: 0, closeAndRestoreFocus: false, handled: true };
+    case "End":
+      return { nextIndex: itemCount - 1, closeAndRestoreFocus: false, handled: true };
+    case "Escape":
+      return { nextIndex: safeIndex, closeAndRestoreFocus: true, handled: true };
+    default:
+      return { nextIndex: safeIndex, closeAndRestoreFocus: false, handled: false };
+  }
 }

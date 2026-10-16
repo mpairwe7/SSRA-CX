@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildAccessibleOtpInputProps,
   computeJubaMonthlyFilingDeadline,
+  extractOfficerHours,
+  formatNextShiftJuba,
   getHtmlLayoutProps,
   getSouthSudanFiscalYear,
+  resolveMenuKeyNavigation,
   SSRA_DESIGN_TOKENS,
 } from "../src/index.js";
 
@@ -21,5 +24,29 @@ describe("@ssra/ui design tokens and RTL layout", () => {
     expect(computeJubaMonthlyFilingDeadline(2026, 9, 15).dueDateIso).toBe(
       "2026-10-15T23:59:59+02:00",
     );
+
+    const hours = extractOfficerHours({
+      handoff: {
+        officer_hours: {
+          on_duty: false,
+          hours: "08:00–17:00 CAT",
+          next_on_duty: "2026-10-19T06:00:00Z",
+        },
+      },
+    });
+    expect(hours?.onDuty).toBe(false);
+    expect(formatNextShiftJuba("invalid-date", "en")).toBeNull();
+    expect(formatNextShiftJuba("2026-10-19T06:00:00Z", "en")).toContain("08:00");
+
+    expect(resolveMenuKeyNavigation("ArrowDown", 2, 3)).toEqual({
+      nextIndex: 0,
+      closeAndRestoreFocus: false,
+      handled: true,
+    });
+    expect(resolveMenuKeyNavigation("Escape", 1, 3)).toEqual({
+      nextIndex: 1,
+      closeAndRestoreFocus: true,
+      handled: true,
+    });
   });
 });

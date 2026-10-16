@@ -285,7 +285,7 @@ class SSRAConversationRuntime:
             risk_tier=resp.tier,
             policy_decision=resp.policy_decision,
             prompt_version="2026.10.1",
-            model_route="ssra-sovereign/qwen2.5-14b-instruct",
+            model_route="ssra-sovereign/sunflower-qwen3.5-9b",
             knowledge_snapshot_version="2026.10.1",
             tool_calls=[
                 {

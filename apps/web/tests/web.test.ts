@@ -11,7 +11,7 @@ import {
 import { buildRuntimeStreamRequest } from "../src/app/api/chat/stream/route.js";
 import { validateClientUpload } from "../src/app/api/uploads/route.js";
 import { generatePwaManifest } from "../src/app/manifest.js";
-import { buildTaxpayerChatTurnView } from "../src/components/index.js";
+import { applyTaxpayerTurnMeta, buildTaxpayerChatTurnView } from "../src/components/index.js";
 import { createAltchaChallenge, verifyAltchaSolution } from "../src/lib/security/altcha.js";
 import { SharedValkeyCacheHandler } from "../src/lib/valkey-cache-handler.js";
 import { executeProxy } from "../src/proxy.js";
@@ -127,6 +127,29 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
       abstained: false,
     });
     expect(presented.isEstimate).toBe(true);
+
+    const updatedTurn = applyTaxpayerTurnMeta(
+      {
+        serverTurnId: null,
+        citations: [],
+        nextActions: [],
+        escalationRequired: false,
+      },
+      {
+        turn_id: "turn_01",
+        next_actions: ["Verify TIN", "Speak to an SSRA Officer"],
+        escalation_required: true,
+        officer_hours: {
+          on_duty: true,
+          hours: "08:00–17:00 CAT",
+          next_on_duty: null,
+        },
+      },
+    );
+    expect(updatedTurn.serverTurnId).toBe("turn_01");
+    expect(updatedTurn.nextActions).toEqual(["Verify TIN", "Speak to an SSRA Officer"]);
+    expect(updatedTurn.officerHours?.onDuty).toBe(true);
+    expect(updatedTurn.escalationRequired).toBe(true);
   });
 
   it("verifies self-hosted ALTCHA proof-of-work bot defence challenge", async () => {
