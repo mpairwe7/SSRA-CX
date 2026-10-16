@@ -263,7 +263,73 @@
       "language": "pga",
       "audience": "PUBLIC",
       "url": "https://cms.nra.gov.ss/uploads/Financial_Act_2024_2025_464925c180.pdf",
-      "content": "Fi gamarik ta SSRA, hisab ta gamarik bikun ala qima ta CIF wa tahwil ta gurush ajnabi le SSP bikun bi si'ir al-sarf al-rasmi ta Bank of South Sudan (BoSS) bas, wa lazim tasrih ta istirad min https://www.trade.eservices.gov.ss/."
+      "content": "Fi gamarik ta SSRA, hisab ta gamarik bikun ala qima ta CIF wa tahwil ta gurush ajnabi le SSP bikun bi si'ir al-sarf al-rasmi ta Bank of South Sudan (BoSS) bas, wa shanta ta musafir lihadd USD 500 ma fiha gamarik, wa lazim tasrih ta istirad min https://www.trade.eservices.gov.ss/."
+    },
+    {
+      "id": "chk_bpt_2024_2025_ar_01",
+      "doc_id": "doc_financial_act_2024_2025",
+      "doc_title": "القانون المالي 2024/2025 وتعميم هيئة إيرادات جنوب السودان رقم RSS/SSRA/J/002/CG/GEN/VOL. II/005",
+      "section_anchor": "Chapter-XII-Sec-66-69-Business-Profit-Tax",
+      "effective_from": "2024-12-02",
+      "language": "ar",
+      "audience": "PUBLIC",
+      "url": "https://cms.nra.gov.ss/uploads/Financial_Act_2024_2025_464925c180.pdf",
+      "content": "بموجب قانون الضرائب لعام 2009 والقانون المالي 2024/2025: (1) تُفرض ضريبة أرباح الأعمال (BPT) بنسبة ثابتة قدرها 30% على صافي الربح الخاضع للضريبة للشركات الصغيرة والمتوسطة والكبيرة؛ (2) تُفرض ضريبة مقدمة بنسبة 4% على البضائع المستوردة؛ (3) تُفرض ضريبة بنسبة 30% على دخل الاستثمار العقاري."
+    },
+    {
+      "id": "chk_bpt_2024_2025_pga_01",
+      "doc_id": "doc_financial_act_2024_2025",
+      "doc_title": "Financial Act 2024/2025 & SSRA Circular RSS/SSRA/J/002/CG/GEN/VOL. II/005 (Juba Arabic)",
+      "section_anchor": "Chapter-XII-Sec-66-69-Business-Profit-Tax",
+      "effective_from": "2024-12-02",
+      "language": "pga",
+      "audience": "PUBLIC",
+      "url": "https://cms.nra.gov.ss/uploads/Financial_Act_2024_2025_464925c180.pdf",
+      "content": "Bi mujib Qanun al-Mali 2024/2025: (1) Dariba ta arbah al-a'mal (BPT) hiya 30% ala safi al-ribih le sharikat saghira, mutawassita wa kabira; (2) Fi 4% dariba muqaddama ala bada'i mustawrada; (3) Dariba ta ijarat عقارية hiya 30%."
+    },
+    {
+      "id": "chk_faq_tin_and_confidentiality_ar_01",
+      "doc_id": "doc_ssra_official_faqs",
+      "doc_title": "الأسئلة الشائعة الرسمية لهيئة إيرادات جنوب السودان (SSRA) ولوائح قانون الضرائب",
+      "section_anchor": "Sec-4-FAQs-TIN-Validity-Confidentiality-And-Cancellation",
+      "effective_from": "2023-10-01",
+      "language": "ar",
+      "audience": "PUBLIC",
+      "url": "https://nra.gov.ss/individual/frequently-asked-questions",
+      "content": "وفقاً للأسئلة الشائعة الرسمية لهيئة إيرادات جنوب السودان (https://nra.gov.ss/individual/frequently-asked-questions): (1) الرقم التعريفي الضريبي (TIN) لا تنتهي صلاحيته ولا يجوز تسجيل رقمين ضريبيين لنفس المكلف؛ (2) يجب إبلاغ إدارة الضرائب بأي تغيير في الوضع القانوني خلال 15 يوماً؛ (3) المعلومات الضريبية سرية تماماً بموجب القانون."
+    },
+    {
+      "id": "chk_faq_tin_and_confidentiality_pga_01",
+      "doc_id": "doc_ssra_official_faqs",
+      "doc_title": "SSRA Official FAQs (Juba Arabic / العربي جوبا)",
+      "section_anchor": "Sec-4-FAQs-TIN-Validity-Confidentiality-And-Cancellation",
+      "effective_from": "2023-10-01",
+      "language": "pga",
+      "audience": "PUBLIC",
+      "url": "https://nra.gov.ss/individual/frequently-asked-questions",
+      "content": "Hasab FAQs rasmi ta SSRA (https://nra.gov.ss/individual/frequently-asked-questions): (1) TIN ma bikhlas salahiyatu abadan wa ma mumkin tasjil TIN itnin; (2) Ayi taghyir fi wada qanuni lazim taballigh SSRA khilal 15 yom; (3) Ma'lumat ta dariba sirri bil qanun."
+    },
+    {
+      "id": "chk_faq_penalties_extensions_installments_ar_01",
+      "doc_id": "doc_ssra_official_faqs",
+      "doc_title": "الأسئلة الشائعة الرسمية ولوائح قانون الضرائب بشأن الغرامات والتمديد والتقسيط",
+      "section_anchor": "Reg-1.21-1.22-1.36-1.40-Penalties-Extensions-And-Installments",
+      "effective_from": "2012-01-01",
+      "language": "ar",
+      "audience": "PUBLIC",
+      "url": "https://cms.nra.gov.ss/uploads/Regulations_2012_05491867ea.pdf",
+      "content": "بموجب قانون الضرائب لعام 2009 ولوائحه التنفيذية: (1) تُفرض غرامة تأخير شهرية بنسبة 5% على أصل الضريبة غير المسددة؛ (2) يمكن طلب تمديد تقديم الإقرار لمدة تصل إلى 2 شهر قبل تاريخ الاستحقاق؛ (3) يمكن طلب اتفاقية تقسيط مكتوبة لمدة أقصاها 6 أشهر مع دفعة مقدمة لا تقل عن 25%."
+    },
+    {
+      "id": "chk_faq_penalties_extensions_installments_pga_01",
+      "doc_id": "doc_ssra_official_faqs",
+      "doc_title": "SSRA Business FAQs & Tax Regulations on Penalties, Extensions & Installments (Juba Arabic)",
+      "section_anchor": "Reg-1.21-1.22-1.36-1.40-Penalties-Extensions-And-Installments",
+      "effective_from": "2012-01-01",
+      "language": "pga",
+      "audience": "PUBLIC",
+      "url": "https://cms.nra.gov.ss/uploads/Regulations_2012_05491867ea.pdf",
+      "content": "Bi mujib Qanun ta Dariba: (1) Gharama ta ta'khir hiya 5% fi shahar ala dariba al-ma dafa'uha; (2) Mumkin tatlub tamdid lihadd 2 shahar gabul yom al-istihqaq; (3) Mumkin tatlub taqsit maktub lihadd 6 shuhur ma'a dafa muqaddam 25%."
     },
     {
       "id": "chk_etax_tin_din_01",

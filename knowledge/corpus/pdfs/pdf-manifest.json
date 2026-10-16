@@ -13,7 +13,10 @@
       "local_path": "knowledge/corpus/pdfs/South_Sudan_Taxation_Act_2009_fc9418fd5d.pdf",
       "size_bytes": 217879,
       "sha256": "dc289d3ae7b969ba3ad9bdc6482a9e83bf0211d5a0d2d56760a60d412c28787b",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_4",
@@ -25,7 +28,10 @@
       "local_path": "knowledge/corpus/pdfs/NRA_e_Tax_Training_Manual_V_001_Registration_eae52f383f.pdf",
       "size_bytes": 3832806,
       "sha256": "0e4f6961bda470a670362a4b45b3338b05917e09219f7d6909bc06f799554a90",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "PROCEDURAL_MANUAL"
     },
     {
       "source_id": "cms_resource_5",
@@ -37,7 +43,10 @@
       "local_path": "knowledge/corpus/pdfs/NRA_e_Tax_Filing_Declaration_Manual_7425326530.pdf",
       "size_bytes": 3218239,
       "sha256": "6fd021d39b5a8592918868401b9a911c58c753cf087863cb02799f1481021758",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "PROCEDURAL_MANUAL"
     },
     {
       "source_id": "cms_resource_6",
@@ -49,7 +58,10 @@
       "local_path": "knowledge/corpus/pdfs/NRA_e_Tax_Invoices_Training_Manual_1_b05ff1324c.pdf",
       "size_bytes": 3207599,
       "sha256": "7f7c8b390a746ba03370ff3067f4daa5814a4bb647c30c5b8634aaa3eef39abc",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_7",
@@ -61,7 +73,10 @@
       "local_path": "knowledge/corpus/pdfs/Financial_Act_2016_2017_0_84f50e24a7.pdf",
       "size_bytes": 3676063,
       "sha256": "5fad61c34d297bf73476a59dcf95270382f4e79b18a277775db5b63cb5922fe5",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "HISTORICAL_SUPERSEDED"
     },
     {
       "source_id": "cms_resource_8",
@@ -73,7 +88,10 @@
       "local_path": "knowledge/corpus/pdfs/CUSTOM_ACT_2012_f340b570f0.pdf",
       "size_bytes": 275215,
       "sha256": "de4c3a9892590cad6208e5a09ad02ca4331c5a56e04dc20329b39d4168e939bd",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_9",
@@ -85,7 +103,10 @@
       "local_path": "knowledge/corpus/pdfs/Financial_Act_2017_2018_82c06b5491.pdf",
       "size_bytes": 1206852,
       "sha256": "3ea94e5ec07d8942f85664387b05cc9e3c259c3b8dc71e77c08fe5a6f77eb556",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "HISTORICAL_SUPERSEDED"
     },
     {
       "source_id": "cms_resource_10",
@@ -97,7 +118,10 @@
       "local_path": "knowledge/corpus/pdfs/TAXATION_ACT_2021_R_E_CONSOLIDATED_f4f9ed8876.pdf",
       "size_bytes": 643884,
       "sha256": "b245e3af4ae3c2479a7cc1931296f76f04ddde2d570b1557d601e02725a89705",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_11",
@@ -109,7 +133,10 @@
       "local_path": "knowledge/corpus/pdfs/Taxation_Amend_Act_2012_Signed_55a70989d4.pdf",
       "size_bytes": 741209,
       "sha256": "9f36383eb1882914c49b1e5978e7797e31cd2a32fc01b2c8386c95b287b5be71",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_12",
@@ -121,7 +148,10 @@
       "local_path": "knowledge/corpus/pdfs/Taxation_Act_2016_1_6191781e68.pdf",
       "size_bytes": 1595659,
       "sha256": "48585d592762d37f810aaa93598b1c4c4ad896c4d8d5352eb6f8e03f351532c2",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_13",
@@ -133,7 +163,10 @@
       "local_path": "knowledge/corpus/pdfs/F_Inance_Act_20212022_3b0694c45d.pdf",
       "size_bytes": 7816079,
       "sha256": "5f7385bda2d52ea4a3688a6fbf1c367d008b909e946c075d904d12ed185aa04f",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "HISTORICAL_SUPERSEDED"
     },
     {
       "source_id": "cms_resource_14",
@@ -145,7 +178,10 @@
       "local_path": "knowledge/corpus/pdfs/Custom_Declaration_Training_Manual_e6353c775d.pdf",
       "size_bytes": 3920191,
       "sha256": "df0e3e8e148cf7377f336e5ad7414a4101ca21a854d5269fa73826ca3b111cda",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "PROCEDURAL_MANUAL"
     },
     {
       "source_id": "cms_resource_15",
@@ -157,7 +193,10 @@
       "local_path": "knowledge/corpus/pdfs/FY_2019_2020_Financial_Act_2_b5659f5ed9.pdf",
       "size_bytes": 8071460,
       "sha256": "2cf6f717ef2ff61b4e09f45b9f16ca72d0ec95b3f21885dc586c91822478f4e9",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "HISTORICAL_SUPERSEDED"
     },
     {
       "source_id": "cms_resource_16",
@@ -169,7 +208,10 @@
       "local_path": "knowledge/corpus/pdfs/SS_MIN_OF_FINANCE_NORMA_1_2fb8714134.pdf",
       "size_bytes": 357829,
       "sha256": "94fd402e3627de746060b52b64d6c84fb45c1e6c83dec66b35a2ebe62b4e58eb",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "EXCLUDED_HR_PROCUREMENT"
     },
     {
       "source_id": "cms_resource_17",
@@ -181,7 +223,10 @@
       "local_path": "knowledge/corpus/pdfs/REQUEST_FOR_EOI_LETTER_424fc2b384.pdf",
       "size_bytes": 360225,
       "sha256": "b0153b76d26353b2d12d67758329559a6fe59844f881c28ddee4367e9bd40412",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "EXCLUDED_HR_PROCUREMENT"
     },
     {
       "source_id": "cms_resource_18",
@@ -193,7 +238,10 @@
       "local_path": "knowledge/corpus/pdfs/Advert_internal_Final_links_03d8234f0a.pdf",
       "size_bytes": 122584,
       "sha256": "b3a7da50fc88670b5d528c29e6b4efc09c6759df055178c3a6476c24e393e4ae",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "EXCLUDED_HR_PROCUREMENT"
     },
     {
       "source_id": "cms_resource_19",
@@ -205,7 +253,10 @@
       "local_path": "knowledge/corpus/pdfs/TENDER_NOTICE_1_2ebab15872.pdf",
       "size_bytes": 359752,
       "sha256": "d38e4323487f4a8c064d66c8c16af8e8fc3986e62c1985d645157c0f6c1da9d7",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "EXCLUDED_HR_PROCUREMENT"
     },
     {
       "source_id": "cms_resource_20",
@@ -217,7 +268,10 @@
       "local_path": "knowledge/corpus/pdfs/pdf1_ca236a713f.pdf",
       "size_bytes": 258376,
       "sha256": "c8e4c449aa33e09a48575df78720c546ac0ac0afe850e29a62123fce918a80e4",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "EXCLUDED_HR_PROCUREMENT"
     },
     {
       "source_id": "cms_resource_21",
@@ -229,7 +283,10 @@
       "local_path": "knowledge/corpus/pdfs/Job_Opennings_SSRA_with_Links_9120968c5f.pdf",
       "size_bytes": 585350,
       "sha256": "31e0d0f3253fbcbf96af06e80d2315a50b71faaa09df39605640aa547ad08704",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "EXCLUDED_HR_PROCUREMENT"
     },
     {
       "source_id": "cms_resource_22",
@@ -241,7 +298,10 @@
       "local_path": "knowledge/corpus/pdfs/FINANCIAL_Act_FY_2023_2024_MAIL_97b32cab38.pdf",
       "size_bytes": 3840633,
       "sha256": "ded23b09e0f5073492fa88474345ba8193b7f804e1aca7e1fb63758c39a1b443",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "HISTORICAL_SUPERSEDED"
     },
     {
       "source_id": "cms_resource_23",
@@ -253,7 +313,10 @@
       "local_path": "knowledge/corpus/pdfs/SSRA_ADVERT_26_05b7214a01.pdf",
       "size_bytes": 1080636,
       "sha256": "47d5708c3411fe9a2420c9bf953ff243515331b3ef8a7c96df2fd7bf21ef46a4",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "EXCLUDED_HR_PROCUREMENT"
     },
     {
       "source_id": "cms_resource_24",
@@ -265,7 +328,10 @@
       "local_path": "knowledge/corpus/pdfs/PUBLIC_NOTICE_95bab6ac94.pdf",
       "size_bytes": 9133350,
       "sha256": "abea2519c6ad468e64941cc6bc73f4c1e39f808a033bd5cba75752a1305950e8",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_25",
@@ -277,7 +343,10 @@
       "local_path": "knowledge/corpus/pdfs/Financial_Act_2024_2025_464925c180.pdf",
       "size_bytes": 68289536,
       "sha256": "f63a972f2293ee0888635f04e4a3602a1c005937bcb20d7294eaa272a0a34ac5",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_27",
@@ -289,7 +358,10 @@
       "local_path": "knowledge/corpus/pdfs/Operationalization_of_the_Financial_Act_2024_2025_53a1891f10.pdf",
       "size_bytes": 2317312,
       "sha256": "e7039d30ae0328808f85ebbcb3f97d0280b10896261048c87e24fd4cb637f8b1",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_28",
@@ -301,7 +373,10 @@
       "local_path": "knowledge/corpus/pdfs/Implementation_7d6f6cedcc.pdf",
       "size_bytes": 1280648,
       "sha256": "0bbd69adfe318db86f67799c9da59b01ba634b1be4a957c742095aa99ce2db95",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_29",
@@ -313,7 +388,10 @@
       "local_path": "knowledge/corpus/pdfs/Taxation_Amend_Act_2012_Signed_1_a2d0f0f962.pdf",
       "size_bytes": 741209,
       "sha256": "9f36383eb1882914c49b1e5978e7797e31cd2a32fc01b2c8386c95b287b5be71",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_30",
@@ -325,7 +403,10 @@
       "local_path": "knowledge/corpus/pdfs/CUSTOMS_SERVICE_ACT_2013_R_E_2022_68bd20069c.pdf",
       "size_bytes": 860277,
       "sha256": "329df72cb4a894ef5002086e8f8231aadbdf3ebf4760bb14ae266ae155f31658",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_31",
@@ -337,7 +418,10 @@
       "local_path": "knowledge/corpus/pdfs/NRA_SCHEME_OF_SERVICE_MANUAL_37ebe0f60e.pdf",
       "size_bytes": 2037028,
       "sha256": "5e03fcf60adb0f1d4dfb5a58cd18b0dede47780a606db13b92dcf612029f6cbb",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "GOVERNANCE_POLICY"
     },
     {
       "source_id": "cms_resource_32",
@@ -349,7 +433,10 @@
       "local_path": "knowledge/corpus/pdfs/FINAL_STAFF_CODE_OF_CONDUCT_AND_ETHICS_NRA_2022_87da2139b2.pdf",
       "size_bytes": 651305,
       "sha256": "9cf6229d7f1b8f73e91ff53a6207e1163a25542a70d213619a235f8f8c2cdb93",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "GOVERNANCE_POLICY"
     },
     {
       "source_id": "cms_resource_33",
@@ -361,7 +448,10 @@
       "local_path": "knowledge/corpus/pdfs/SSRA_ACT_2016_R_E_2024_v2_1_2b72639cb9.pdf",
       "size_bytes": 1610600,
       "sha256": "e317b08e7dcb468ca40810a71d7c9fa1fd5f87116d3e9bdf1b65db4eaf88815b",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_34",
@@ -373,7 +463,10 @@
       "local_path": "knowledge/corpus/pdfs/National_Revenue_Authority_Act_2016_1_8a33e290fd.pdf",
       "size_bytes": 6029316,
       "sha256": "3482b7f35b154668a2066118e3b7eb15e036f807fae65df3d2f4cfdff0dcbe40",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_35",
@@ -385,7 +478,10 @@
       "local_path": "knowledge/corpus/pdfs/Regulations_2012_05491867ea.pdf",
       "size_bytes": 500903,
       "sha256": "5ed28a7a8dce5d9b3eff9a1fb106514fba659f71a8a34ae300e440a0cc21de7f",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_36",
@@ -397,7 +493,10 @@
       "local_path": "knowledge/corpus/pdfs/NRA_Staff_Regulations_2022_Final_300ae6890e.pdf",
       "size_bytes": 1436463,
       "sha256": "9d4ef418e8d9ecea0423dab38099419754bfd95e8abb647d0462c06526e0c37d",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "GOVERNANCE_POLICY"
     },
     {
       "source_id": "cms_resource_37",
@@ -409,7 +508,10 @@
       "local_path": "knowledge/corpus/pdfs/SOUTH_SUDAN_REVENUE_AUTHORIRTY_ACT_2023_final_copy_677778ef23.pdf",
       "size_bytes": 836967,
       "sha256": "f66470d39df4e0c8e8ef53ed28555108d1c4db60b575c3b1d5b7a543618a7dfe",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_resource_38",
@@ -421,7 +523,10 @@
       "local_path": "knowledge/corpus/pdfs/SSRA_ICT_POLICY_2026_be9f982866.pdf",
       "size_bytes": 945921,
       "sha256": "c512b692327e2a17c27ec60a3344f6c0a1ac25228bb6884e109a33b925761ef7",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "GOVERNANCE_POLICY"
     },
     {
       "source_id": "cms_customs_resource_1",
@@ -433,7 +538,10 @@
       "local_path": "knowledge/corpus/pdfs/CUSTOM_ACT_2012_127f27a64f.pdf",
       "size_bytes": 275215,
       "sha256": "de4c3a9892590cad6208e5a09ad02ca4331c5a56e04dc20329b39d4168e939bd",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "STATUTORY_PRIMARY"
     },
     {
       "source_id": "cms_customs_resource_2",
@@ -445,7 +553,10 @@
       "local_path": "knowledge/corpus/pdfs/FINANCE_ACT_20212022_6cc3f803fb.pdf",
       "size_bytes": 7816079,
       "sha256": "5f7385bda2d52ea4a3688a6fbf1c367d008b909e946c075d904d12ed185aa04f",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "HISTORICAL_SUPERSEDED"
     },
     {
       "source_id": "cms_customs_resource_3",
@@ -457,7 +568,10 @@
       "local_path": "knowledge/corpus/pdfs/Operationalization_of_the_Financial_Act_2021_2022_771f70ae6e.pdf",
       "size_bytes": 2473242,
       "sha256": "fbfc183d8f8c62f57708d34d3001c561b82c302fbc7867582290c1e9230e78d1",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "HISTORICAL_SUPERSEDED"
     },
     {
       "source_id": "cms_customs_resource_4",
@@ -469,7 +583,10 @@
       "local_path": "knowledge/corpus/pdfs/PUBLIC_NOTICE_LETTER_34b83cb43f.pdf",
       "size_bytes": 320279,
       "sha256": "f276347a4cc8b817e8a824b265ed026ce00079566cfbbe8180e9d0f4ef42bf4a",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "SCANNED_IMAGE_OCR_REQUIRED",
+      "rag_eligibility": "HISTORICAL_SUPERSEDED"
     },
     {
       "source_id": "mofp_fy2024_25_execution_report",
@@ -481,7 +598,10 @@
       "local_path": "knowledge/corpus/pdfs/MoFP_2024_25_Execution_Report_v3.pdf",
       "size_bytes": 546651,
       "sha256": "05066b6df601c810f70e6717f6f57fe3010df810b1bd63334eb68264c96495bc",
-      "valid_pdf_header": true
+      "valid_pdf_header": true,
+      "active_js_or_launch_objects": false,
+      "extraction_mode": "NATIVE_TEXT_LAYER",
+      "rag_eligibility": "OFFICIAL_REPORT"
     }
   ]
 }

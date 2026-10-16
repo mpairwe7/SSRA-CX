@@ -1,9 +1,10 @@
 {
   "approval_state": "PUBLISHED",
   "approved_by": "SSRA Legal & Policy Directorate (Seed Baseline \u2014 Subject to OQ-009 Sign-off)",
-  "checksum_sha256": "20a9ea103467b5708ca5a90e3dd7face65ad045c03089d0061b8796097d382e6",
+  "attestation_hmac_sha256": "4adee9839a1f3af1e80aba3ddaf3c9ad0c411eed87c482434eef85684975bd46",
+  "checksum_sha256": "1958154a8c9a1e3fee81b8cad8972036411f10fb57f4ff4815764f9cba1e5f47",
   "counts": {
-    "chunks": 29,
+    "chunks": 35,
     "official_pdfs": 40,
     "sources": 16,
     "tax_facts": 57,
@@ -20,5 +21,6 @@
     "zne"
   ],
   "published_at": "2026-10-16T00:00:00Z",
+  "ragshield_verified_rate_mentions": 35,
   "snapshot_version": "2026.10.1"
 }

@@ -323,7 +323,7 @@ def test_remaining_mcp_catalog_tools_and_hybrid_retrieval_postprocessing() -> No
     assert sec["structuredContent"]["section"]["id"] == "chk_etax_tin_01"
 
     forms = kn.handle_call_tool(tool_name="list_forms", arguments={}, bearer_token=None)
-    assert len(forms["structuredContent"]["forms"]) == 3
+    assert len(forms["structuredContent"]["forms"]) == 4
 
     office = kn.handle_call_tool(
         tool_name="get_office_info",

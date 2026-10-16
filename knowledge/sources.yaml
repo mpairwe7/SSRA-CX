@@ -198,7 +198,7 @@ sources:
     effective_from: "2023-10-01"
     effective_to: null
     supersedes: null
-    languages: ["en"]
+    languages: ["en", "ar", "pga"]
     audience: "PUBLIC"
     approval_state: "PUBLISHED"
 

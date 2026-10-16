@@ -25,15 +25,38 @@ _SAFE_CONTEXT_PATTERNS: tuple[re.Pattern[str], ...] = (
     ),
     re.compile(r"\b[A-Z]+_[0-9A-Z_]+\b"),
     re.compile(r"••••\d{4}"),
-    re.compile(r"\+211(?:•••••••\d{2}|\b)"),
+    re.compile(r"\+211(?:\s*\d{9}|•••••••\d{2}|\b)"),
+    re.compile(r"\b918806493\b|\b912388318\b|\b919382390\b|\b917803637\b|\b921058043\b"),
     re.compile(r"\(\d{1,2}\)"),  # Parenthesized list bullets e.g. (1), (2), (3), (4)
     re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),
-    re.compile(r"\b(?:Part|Sec|Section|Act|FY)\s*[IVX0-9/-]+\b", flags=re.IGNORECASE),
+    re.compile(r"RSS/SSRA/[A-Z0-9/.\-\s]+VOL\.\s*II/\d+", flags=re.IGNORECASE),
+    re.compile(
+        r"\b(?:Parts?|Secs?|Sections?|Regulations?|Chapters?|Articles?|Orders?|Circulars?|Modules?|Slides?)"
+        r"\s*(?:No\.?\s*)?[0-9IVX]+(?:[.\-/][0-9A-Za-z()]+)*(?:\s*(?:to|and|,|-|–)\s*[0-9IVX]+(?:[.\-/][0-9A-Za-z()]+)*)*",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(r"\bHS\s*\d{2}\.\d{2}(?:\s*-\s*\d{2}\.\d{2})?\b", flags=re.IGNORECASE),
+    re.compile(r"\b\d+-digit\b", flags=re.IGNORECASE),
+    re.compile(r"\b10\+\s*persons\b", flags=re.IGNORECASE),
+    re.compile(
+        r"\b(?:Category|Stage|Step|Form)\s+[0-9A-Z]+\b",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(r"\b(?:2\s+consecutive\s+years|6\s+years|8\s+stages)\b", flags=re.IGNORECASE),
+    re.compile(r"\bSSP\s+1\.1\s+trillion\b|\b6%\s+Tax-to-GDP\b", flags=re.IGNORECASE),
+    re.compile(
+        r"\b\d{1,2}\s*(?:-\s*\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|"
+        r"September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+        r"(?:\s*-\s*\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))?"
+        r"(?:\s+20\d{2})?\b",
+        flags=re.IGNORECASE,
+    ),
     re.compile(r"\b20\d{2}/20\d{2}\b"),
     re.compile(
-        r"\b(?:Act,?\s+|Order\s+|January\s+|February\s+|March\s+|April\s+|May\s+|June\s+|"
+        r"\b(?:Act,?\s+|Order\s+|Regulations\s+|Ethics\s+|Policy\s+|by\s+|"
+        r"January\s+|February\s+|March\s+|April\s+|May\s+|June\s+|"
         r"July\s+|August\s+|September\s+|October\s+|November\s+|December\s+|"
-        r"أكتوبر\s+|مارس\s+|عام\s+|Maris\s+)20\d{2}\b",
+        r"أكتوبر\s+|مارس\s+|لعام\s+|عام\s+|Maris\s+)\(?20\d{2}\)?\b",
         flags=re.IGNORECASE,
     ),
     re.compile(r"UTC\+0?2:00", flags=re.IGNORECASE),

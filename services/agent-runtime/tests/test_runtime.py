@@ -10,6 +10,7 @@ from ssra_core import (
     ChannelName,
     Citation,
     IntentName,
+    LocaleCode,
     NumericClaim,
     NumericUnit,
     RiskTier,
@@ -281,3 +282,85 @@ def test_pgvector_hybrid_rrf_and_embedding_reranker_bakeoff() -> None:
     )
     assert bakeoff[0].mean_recall_at_k == 1.0
     assert bakeoff[0].meets_parity_gate is True
+
+
+def test_official_manuals_faqs_and_financial_act_2024_2025_end_to_end() -> None:
+    from datetime import date
+
+    from ssra_mcp_knowledge.adapters import KnowledgeCorpusAdapter
+
+    rt = SSRAConversationRuntime()
+    cases = [
+        (
+            LocaleCode.EN,
+            "What is the Business Profit Tax rate and advance BPT on imported goods?",
+            "Chapter-XII-Sec-66-69-Business-Profit-Tax",
+        ),
+        (
+            LocaleCode.EN,
+            "What are the excise tax rates on beer, cigarettes, and passenger cars?",
+            "Chapter-XV-Excise-Tax-Schedule",
+        ),
+        (
+            LocaleCode.EN,
+            "What is the penalty for late filing and can I apply for a filing extension or installment?",
+            "Reg-1.21-1.22-1.36-1.40-Penalties-Extensions-And-Installments",
+        ),
+        (
+            LocaleCode.EN,
+            "What are the depreciation rates on tangible property and quarterly advance tax dates?",
+            "Chapter-XII-Sec-74-84-Depreciation-And-Quarterly-Advance-Tax",
+        ),
+        (
+            LocaleCode.EN,
+            "How do I generate and verify a B2B e-invoice on eTax?",
+            "Slides-1-18-B2B-EInvoice-Generation-And-Validation",
+        ),
+        (
+            LocaleCode.EN,
+            "How do I submit a customs declaration on eCustoms and what are the declaration stages?",
+            "Slides-1-18-eCustoms-Declaration-And-8-Stages",
+        ),
+        (
+            LocaleCode.EN,
+            "Does my TIN expire and is tax information confidential?",
+            "Sec-4-FAQs-TIN-Validity-Confidentiality-And-Cancellation",
+        ),
+        (
+            LocaleCode.EN,
+            "What is the 8% NSIF pension deduction and who is exempt from Personal Income Tax?",
+            "Chapter-XI-PIT-Exemptions-And-8-Percent-NSIF-Deduction",
+        ),
+        (
+            LocaleCode.AR,
+            "ما هي نسبة ضريبة أرباح الأعمال (BPT) في القانون المالي؟",
+            "Chapter-XII-Sec-66-69-Business-Profit-Tax",
+        ),
+        (
+            LocaleCode.PGA,
+            "Dariba ta arbah al-a'mal (BPT) kam fi Qanun al-Mali?",
+            "Chapter-XII-Sec-66-69-Business-Profit-Tax",
+        ),
+    ]
+    for _idx, (loc, query, expected_anchor) in enumerate(cases):
+        ev = make_conversation_event(
+            query,
+            locale=loc,
+        )
+        resp = rt.run_turn(ev)
+        assert resp.answer.abstained is False, (
+            f"Unexpected abstention on '{query}': {resp.safety_flags}"
+        )
+        assert resp.safety_flags == []
+        assert resp.citations[0].section_anchor == expected_anchor
+        assert "[REDACTED_UNALLOWLISTED_URL]" not in resp.answer.segments[0].text
+
+    # Verify MemStrata (arXiv:2606.26511) temporal supersession filtering
+    adapter = KnowledgeCorpusAdapter()
+    superseded_chunk = {
+        "id": "chk_superseded_2023",
+        "doc_id": "doc_financial_act_2023_2024",
+        "effective_from": "2023-07-01",
+    }
+    assert adapter.is_temporally_valid(superseded_chunk, date(2024, 6, 1)) is True
+    assert adapter.is_temporally_valid(superseded_chunk, date(2026, 10, 16)) is False

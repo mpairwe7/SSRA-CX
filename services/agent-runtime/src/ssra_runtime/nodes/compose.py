@@ -327,14 +327,17 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
         )
         content_text = str(top["content"])
         numbers: list[NumericClaim] = []
-        if "15" in content_text:
-            numbers.append(
-                NumericClaim(
-                    value="15",
-                    unit=NumericUnit.DAY_OF_MONTH,
-                    source_ref="paye.filing.deadline_day",
-                )
-            )
+        for tf_art in artifacts:
+            if tf_art.tool == "get_tax_fact":
+                fact_obj = tf_art.structured_content.get("fact") or {}
+                if "value" in fact_obj and "unit" in fact_obj and "key" in fact_obj:
+                    numbers.append(
+                        NumericClaim(
+                            value=str(fact_obj["value"]),
+                            unit=NumericUnit(str(fact_obj["unit"])),
+                            source_ref=str(fact_obj["key"]),
+                        )
+                    )
         return {
             "citations": [cit],
             "answer": Answer(

@@ -34,7 +34,7 @@ MAX_STRING_FIELD_LEN = 2000
 
 def is_allowed_ssra_url(url: str) -> bool:
     try:
-        parsed = urlparse(url.rstrip(".,;)"))
+        parsed = urlparse(url.rstrip(".,;:)]"))
         host = (parsed.hostname or "").lower()
         return parsed.scheme == "https" and host in ALLOWED_SSRA_DOMAINS
     except Exception:
@@ -45,7 +45,7 @@ def scrub_untrusted_urls_and_cap_length(text: str, max_len: int = MAX_STRING_FIE
     def _check_url(match: re.Match[str]) -> str:
         raw_url = match.group(0)
         trailing = ""
-        while raw_url and raw_url[-1] in ".,;)":
+        while raw_url and raw_url[-1] in ".,;:)]":
             trailing = raw_url[-1] + trailing
             raw_url = raw_url[:-1]
         if is_allowed_ssra_url(raw_url):
