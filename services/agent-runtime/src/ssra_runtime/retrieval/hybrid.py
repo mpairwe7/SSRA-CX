@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from ssra_runtime.guardrails.grounding import detect_conflicting_chunks
 from ssra_runtime.retrieval.filters import filter_published_chunks
 from ssra_runtime.retrieval.rerank import rerank_chunks
 
@@ -24,4 +25,5 @@ def postprocess_retrieved_chunks(
         snapshot_version=snapshot_version,
         as_of=target_date,
     )
+    _ = detect_conflicting_chunks(filtered)
     return rerank_chunks(filtered, query=query, locale=locale, top_k=top_k)

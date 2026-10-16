@@ -54,13 +54,18 @@ from ssra_runtime import SSRAConversationRuntime
 from ssra_runtime.field_officer import FieldOfficerAssistRequest, execute_field_officer_assist
 from ssra_runtime.gateway_server import create_agentgateway_app
 from ssra_runtime.guardrails import (
+    detect_conflicting_chunks,
     validate_grounding,
     validate_neutrality_and_promises,
     verify_no_cross_subject_or_unmasked_pii,
 )
 from ssra_runtime.nodes.guards import detect_language, output_guard_node
 from ssra_runtime.nodes.policy_gate import evaluate_opa_policy, policy_gate_node
-from ssra_runtime.retrieval import filter_published_chunks, sanitize_fts_query_for_pg18
+from ssra_runtime.retrieval import (
+    filter_published_chunks,
+    rerank_chunks,
+    sanitize_fts_query_for_pg18,
+)
 from ssra_runtime.tools import GovernedMcpGatewayClient
 from ssra_security import (
     ConfirmationTokenManager,
@@ -79,7 +84,11 @@ from ssra_voice import (
     synthesize_tts_speech_envelope,
     validate_audio_pcm_expansion_budget,
 )
-from ssra_workers import KnowledgeReleaseJob, verify_knowledge_release_gate
+from ssra_workers import (
+    KnowledgeReleaseJob,
+    chunk_legal_document_by_structure,
+    verify_knowledge_release_gate,
+)
 
 
 def test_api_middleware_cve_2026_48710_host_header_and_idempotency_payload_binding() -> None:
@@ -1189,3 +1198,96 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
                 expected_azp="ssra-staff-console",
                 require_passkey=True,
             )
+
+    # 6. 8-Language detection, ClaimRAG-Law citation provenance, conflict detection & contextual legal chunking
+    assert detect_language("Wëu de ajul në bɛ̈ŋic", LocaleCode.EN) == LocaleCode.DIN
+    assert detect_language("Cuɔl yiööth diaal", LocaleCode.EN) == LocaleCode.NUS
+    assert detect_language("Kaser lɔŋɔt ko banki lo", LocaleCode.EN) == LocaleCode.BFA
+    assert detect_language("Tumosi marã dunduko", LocaleCode.EN) == LocaleCode.ZNE
+    assert detect_language("Cøøri Namba ocul jami", LocaleCode.EN) == LocaleCode.SHK
+    # Near-miss / precedence checks: Juba Arabic with shared words & English substrings
+    assert detect_language("Namba ta dariba fi SSRA", LocaleCode.EN) == LocaleCode.PGA
+    assert detect_language("Casual schedule for the department", LocaleCode.EN) == LocaleCode.EN
+
+    conflicts = detect_conflicting_chunks(
+        [
+            {
+                "id": "c1",
+                "section_anchor": "Sec-18",
+                "language": "en",
+                "effective_from": "2023-07-01",
+                "content": "Rate is 20%",
+            },
+            {
+                "id": "c2",
+                "section_anchor": "Sec-18",
+                "language": "en",
+                "effective_from": "2024-12-02",
+                "content": "Rate is 30%",
+            },
+        ]
+    )
+    assert len(conflicts) == 1
+
+    # Fabricated citation not present in turn tool_artifacts is rejected by validate_grounding
+    fabricated_cit = Citation(
+        id="chk_hallucinated_999",
+        snapshot_version="2026.10.1",
+        doc_title="Taxation Act 2009",
+        section_anchor="Sec-999",
+        effective_from="2009-01-01",
+    )
+    assert (
+        validate_grounding(
+            Answer(
+                segments=[AnswerSegment(text="Claim", citation_ids=["chk_hallucinated_999"])],
+                citations=[fabricated_cit],
+                abstained=False,
+            ),
+            tool_artifacts=[
+                {"results": [{"id": "chk_etax_tin_01", "section_anchor": "Part-I-Sec-1"}]}
+            ],
+        ).passed
+        is False
+    )
+    assert (
+        validate_grounding(
+            Answer(
+                segments=[AnswerSegment(text="   ", citation_ids=["chk_etax_tin_01"])],
+                citations=[
+                    Citation(
+                        id="chk_etax_tin_01",
+                        snapshot_version="2026.10.1",
+                        doc_title="Guide",
+                        section_anchor="Part-I-Sec-1",
+                        effective_from="2021-07-07",
+                    )
+                ],
+                abstained=False,
+            )
+        ).passed
+        is False
+    )
+
+    ranked_cross = rerank_chunks(
+        [
+            {
+                "id": "chk_bpt",
+                "doc_title": "Financial Act 2024/2025",
+                "section_anchor": "Sec-BPT",
+                "language": "en",
+                "content": "Business Profit Tax (BPT) rate is 30%.",
+            }
+        ],
+        query="Ajul de Rïöök de Ɣɔɔc",
+        locale="din",
+    )
+    assert ranked_cross[0]["id"] == "chk_bpt"
+
+    legal_chunks = chunk_legal_document_by_structure(
+        doc_id="doc_reg_2012",
+        doc_title="Tax Act 2009 Regulations",
+        raw_text="CHAPTER XII\nRegulation 1.74: Depreciation of Tangible Property\nBuildings are depreciated at 10%.",
+    )
+    assert legal_chunks[1].section_anchor == "Part-XII-Sec-1.74"
+    assert "Tax Act 2009 Regulations" in legal_chunks[1].contextual_header

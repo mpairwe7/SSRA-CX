@@ -25,7 +25,7 @@ export interface LocaleMessages {
   readonly verifyChannelCta: string;
 }
 
-export const MESSAGES: Record<"en" | "pga" | "ar", LocaleMessages> = {
+export const MESSAGES: Record<LocaleCode, LocaleMessages> = {
   en: {
     appTitle: "SSRA Assist — South Sudan Revenue Authority",
     assistantDisclosure:
@@ -56,14 +56,54 @@ export const MESSAGES: Record<"en" | "pga" | "ar", LocaleMessages> = {
     lowDataModeLabel: "وضع توفير البيانات (2G)",
     verifyChannelCta: "تحقق من الحسابات والقنوات الرسمية للهيئة",
   },
+  din: {
+    appTitle: "SSRA Assist — Akuma de Wëu de Paguot Thudän (SSRA)",
+    assistantDisclosure:
+      "Yin jam kekë kony de SSRA online. Yin lëu ba raan de luɔi de SSRA thiëëc në kaam ëbɛ̈n.",
+    cashFreeBanner:
+      "Löŋ de March 2026: Wëu de ajul kedhiɛ aa juac në https://etax.nra.gov.ss/ në bɛ̈ŋic. Duk wëu juac në cin tënë raan.",
+    handoffButton: "Jam kekë Raan de Luɔi de SSRA",
+    lowDataModeLabel: "2G Low-Data Text Mode (Thuɔŋjäŋ)",
+    verifyChannelCta: "Caar Namba tedä Bɛ̈ŋ de SSRA de Yic",
+  },
+  nus: {
+    appTitle: "SSRA Assist — Kuma Yiööth Paguot Thudän (SSRA)",
+    assistantDisclosure: "Ruacni kɛ luak SSRA online. Dëëri raan luɔi SSRA thiëc kä thaa ëbɛ̈n.",
+    cashFreeBanner:
+      "Löŋ March 2026: Cuɔl yiööth diaal kä https://etax.nra.gov.ss/ rɛy bɛ̈ŋ. Cuɛ yiööth cuɔl kä tet raan.",
+    handoffButton: "Ruacni kɛ Raan Luɔi SSRA",
+    lowDataModeLabel: "2G Low-Data Text Mode (Thok Naath)",
+    verifyChannelCta: "Caar Namba göör SSRA",
+  },
+  bfa: {
+    appTitle: "SSRA Assist — Kiko'jin na Silingi ta Südän Nakwacak (SSRA)",
+    assistantDisclosure: "Do kulya ko konyo lo SSRA online. Do bulö mörö ŋutu lo kita lo SSRA.",
+    cashFreeBanner:
+      "March 2026: Kaser lɔŋɔt tinan ko https://etax.nra.gov.ss/ ko banki. Buka tinan silingi ko könin.",
+    handoffButton: "Kulya ko Ŋutu lo SSRA",
+    lowDataModeLabel: "2G Low-Data Text Mode (Bari)",
+    verifyChannelCta: "Moju Namba lo SSRA",
+  },
+  zne: {
+    appTitle: "SSRA Assist — Basunungba Marã Rago Südän (SSRA)",
+    assistantDisclosure: "Mo nafura na undohe nga ga SSRA. Mo rengbe ka sana tipa boro sunge SSRA.",
+    cashFreeBanner:
+      "March 2026: Tumosi marã dunduko rogo https://etax.nra.gov.ss/ rogo banki. Ka mo fu nga marã ku be boro ya.",
+    handoffButton: "Fura na Boro Sunge SSRA",
+    lowDataModeLabel: "2G Low-Data Text Mode (Zande)",
+    verifyChannelCta: "Wisigi Namba ga SSRA",
+  },
+  shk: {
+    appTitle: "SSRA Assist — Koma Jami Piny Sudan (SSRA)",
+    assistantDisclosure: "Yïn kwop kï konyo SSRA online. Yïn lëu kwac ŋat tic SSRA.",
+    cashFreeBanner:
+      "March 2026: Cul jami bëëne yi https://etax.nra.gov.ss/ yi banki. Ba cul jami cin ŋat.",
+    handoffButton: "Kwop kï Ŋat Tic SSRA",
+    lowDataModeLabel: "2G Low-Data Text Mode (Dhøg Cøllø)",
+    verifyChannelCta: "Nɛn Namba SSRA",
+  },
 };
 
 export function getMessages(locale: LocaleCode): LocaleMessages {
-  if (locale === "ar") {
-    return MESSAGES.ar;
-  }
-  if (locale === "pga") {
-    return MESSAGES.pga;
-  }
-  return MESSAGES.en;
+  return MESSAGES[locale] ?? MESSAGES.en;
 }

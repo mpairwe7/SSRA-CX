@@ -1,6 +1,10 @@
 """Runtime guardrails package."""
 
-from ssra_runtime.guardrails.grounding import GroundingResult, validate_grounding
+from ssra_runtime.guardrails.grounding import (
+    GroundingResult,
+    detect_conflicting_chunks,
+    validate_grounding,
+)
 from ssra_runtime.guardrails.injection import InjectionCheckResult, check_prompt_injection
 from ssra_runtime.guardrails.neutrality import NeutralityResult, validate_neutrality_and_promises
 from ssra_runtime.guardrails.numeric_provenance import (
@@ -21,6 +25,7 @@ __all__ = [
     "NumericProvenanceResult",
     "PiiGuardResult",
     "check_prompt_injection",
+    "detect_conflicting_chunks",
     "mask_tin",
     "redact_pii",
     "validate_grounding",
