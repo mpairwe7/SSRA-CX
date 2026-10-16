@@ -100,8 +100,8 @@ class SovereignModelRouter:
                 )
 
         node_cfg = self._config.get("node_routes", {}).get(node_name, {})
-        primary = str(node_cfg.get("primary_model", "ssra-sovereign/qwen2.5-7b-instruct"))
-        secondary = str(node_cfg.get("secondary_model", "ssra-sovereign/llama-3.3-8b-instruct"))
+        primary = str(node_cfg.get("primary_model", "ssra-sovereign/sunflower-qwen3.5-9b"))
+        secondary = str(node_cfg.get("secondary_model", "ssra-sovereign/qwen3-8b"))
         max_tokens = int(node_cfg.get("max_tokens", 512))
         timeout_ms = int(node_cfg.get("timeout_ms", 2000))
         mode = _LADDER_MAP[self._level]
@@ -213,7 +213,7 @@ class VllmServingGuard:
     - Enforces `HF_HUB_OFFLINE=1` / `local_files_only=True` and `xgrammar` guided JSON decoding.
     """
 
-    def __init__(self, *, hf_home: str = "/var/cache/ssra/huggingface") -> None:
+    def __init__(self, *, hf_home: str = "/home/developer/huggingface_cache") -> None:
         self.hf_home = hf_home
 
     def build_guided_json_request(

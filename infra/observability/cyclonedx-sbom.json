@@ -206,10 +206,10 @@
           "task": "llm_fast_router"
         }
       },
-      "name": "Qwen/Qwen2.5-7B-Instruct",
-      "purl": "pkg:huggingface/Qwen/Qwen2.5-7B-Instruct@a09a35458c702b33eeacc393d103063234e8bc28",
+      "name": "Sunbird/Sunflower-Qwen3.5-9B",
+      "purl": "pkg:huggingface/Sunbird/Sunflower-Qwen3.5-9B@c56081c5024b1c11186a69898f5f6a7a2dabe454",
       "type": "machine-learning-model",
-      "version": "a09a35458c702b33eeacc393d103063234e8bc28"
+      "version": "c56081c5024b1c11186a69898f5f6a7a2dabe454"
     },
     {
       "modelCard": {
@@ -221,10 +221,10 @@
           "task": "llm_primary"
         }
       },
-      "name": "Qwen/Qwen2.5-14B-Instruct",
-      "purl": "pkg:huggingface/Qwen/Qwen2.5-14B-Instruct@cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8",
+      "name": "Sunbird/Sunflower-Qwen3.5-9B",
+      "purl": "pkg:huggingface/Sunbird/Sunflower-Qwen3.5-9B@c56081c5024b1c11186a69898f5f6a7a2dabe454",
       "type": "machine-learning-model",
-      "version": "cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8"
+      "version": "c56081c5024b1c11186a69898f5f6a7a2dabe454"
     },
     {
       "modelCard": {
@@ -236,8 +236,8 @@
           "task": "llm_secondary"
         }
       },
-      "name": "meta-llama/Llama-3.3-8B-Instruct",
-      "purl": "pkg:huggingface/meta-llama/Llama-3.3-8B-Instruct@0e9e39f249a16976918f6564b8830bc894c89659",
+      "name": "Qwen/Qwen3-8B",
+      "purl": "pkg:huggingface/Qwen/Qwen3-8B@0e9e39f249a16976918f6564b8830bc894c89659",
       "type": "machine-learning-model",
       "version": "0e9e39f249a16976918f6564b8830bc894c89659"
     },

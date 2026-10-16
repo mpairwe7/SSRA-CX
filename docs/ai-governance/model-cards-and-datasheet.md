@@ -8,16 +8,16 @@
 
 ## 1. Sovereign Model Cards
 
-### 1.1 Model Card 1: Fast Guard & Intent Router (`ssra-sovereign/qwen2.5-7b-instruct`)
+### 1.1 Model Card 1: Fast Guard & Intent Router (`ssra-sovereign/sunflower-qwen3.5-9b` / `Sunbird/Sunflower-Qwen3.5-9B`)
 - **Role in Graph:** Nodes 3 (`input_guard`) and 4 (`understand`).
-- **Hosting:** In-country NCA Kubernetes GPU pool via vLLM/SGLang (`ADR-007`).
+- **Hosting:** In-country NCA Docker Compose GPU host via vLLM (`ADR-007`, offline cache `/home/developer/huggingface_cache`, revision `c56081c5024b1c11186a69898f5f6a7a2dabe454`).
 - **Inputs & Outputs:** Receives Presidio-redacted user input; emits strictly validated `Intent` JSON Schema (`intent`, `slots`, `language`, `confidence`).
 - **Safety Constraint:** Never assigns risk tiers; risk tiers are resolved deterministically from `ai/policies/risk-tiers.yaml`.
 - **Target Latency:** p95 ≤ 300 ms.
 
-### 1.2 Model Card 2: Multilingual Grounded Composer (`ssra-sovereign/qwen2.5-14b-instruct`)
+### 1.2 Model Card 2: Multilingual Grounded Composer (`ssra-sovereign/sunflower-qwen3.5-9b` / `Sunbird/Sunflower-Qwen3.5-9B`)
 - **Role in Graph:** Node 8 (`compose`).
-- **Hosting:** In-country NCA GPU pool (secondary fallback: `ssra-sovereign/llama-3.3-8b-instruct`; CPU emergency fallback: `ssra-sovereign/qwen2.5-3b-cpu-gguf`).
+- **Hosting:** In-country NCA Docker Compose GPU host (secondary fallback: `ssra-sovereign/qwen3-8b`; CPU emergency fallback: `ssra-sovereign/qwen2.5-3b-cpu-gguf`).
 - **Inputs & Outputs:** Receives layered prompt `L0`–`L5` with spotlighted data-only delimiters (`<untrusted_retrieved_evidence>`, `<untrusted_tool_artifacts>`) and `ai/termbase/glossary.yaml`; emits structured `Answer` (`segments[]`, `citations[]`, `numbers[]`, `ui_component`).
 - **Safety Constraint:** Every output passes Node 9 (`output_guard`: `numeric_provenance` 100% gate, `grounding`, `pii`, `neutrality`) before reaching any user.
 
