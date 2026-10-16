@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   escapeHtmlStrict,
+  GENERATIVE_UI_STORYBOOK_FIXTURES,
   OfflineOutboxQueue,
   parseAguiSseStream,
   renderGenerativeUICard,
   resolveGenerativeUIComponent,
   validateMcpAppIframe,
   validateVoiceNoteSubmission,
+  verifyAllStorybookFixturesRenderAccessibly,
 } from "../src/index.js";
 
 describe("@ssra/chat-ui Generative UI Registry", () => {
@@ -151,5 +153,8 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
         recordingConsentGranted: true,
       }),
     ).toEqual({ accepted: true });
+
+    expect(GENERATIVE_UI_STORYBOOK_FIXTURES).toHaveLength(7);
+    expect(verifyAllStorybookFixturesRenderAccessibly()).toBe(true);
   });
 });

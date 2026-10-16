@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
+
 from fastapi import APIRouter, Header
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from ssra_core import McpErrorCode, SSRAError
 
@@ -104,6 +108,24 @@ async def create_conversation(
 @router.get("/inbox", response_model=list[ConversationResponse])
 async def list_inbox(office_code: str = "JUBA_HQ") -> list[ConversationResponse]:
     return [_to_response(c) for c in _repo.list_by_office(office_code)]
+
+
+@router.get("/inbox/stream")
+async def stream_inbox_events(office_code: str = "JUBA_HQ") -> StreamingResponse:
+    """Real-time SSE inbox feed for Phase 3 Staff Console (`apps/console` — Section 11)."""
+    items = [_to_response(c).model_dump(mode="json") for c in _repo.list_by_office(office_code)]
+
+    async def _gen() -> AsyncIterator[str]:
+        payload = json.dumps(
+            {
+                "type": "INBOX_SNAPSHOT",
+                "office_code": office_code,
+                "conversations": items,
+            }
+        )
+        yield f"event: inbox\ndata: {payload}\n\n"
+
+    return StreamingResponse(_gen(), media_type="text/event-stream")
 
 
 @router.post("/{conversation_id}/takeover", response_model=ConversationResponse)

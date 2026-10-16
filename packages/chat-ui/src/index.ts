@@ -122,4 +122,5 @@ export * from "./agui-stream.js";
 export * from "./components.js";
 export * from "./mcp-apps-sandbox.js";
 export * from "./offline-outbox.js";
+export * from "./storybook-catalog.js";
 export * from "./voice-notes.js";

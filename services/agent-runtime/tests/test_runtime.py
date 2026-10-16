@@ -240,3 +240,44 @@ def test_conversation_replay_forensic_reconstruction_endpoint() -> None:
     assert rec["knowledge_snapshot_version"] == "2026.10.1"
     assert rec["tool_calls"][0]["tool"] == "calculate_paye_estimate"
     assert len(rec["audit_event_hash"]) == 64
+
+
+def test_pgvector_hybrid_rrf_and_embedding_reranker_bakeoff() -> None:
+    from ssra_runtime.retrieval import (
+        PGVECTOR_ITERATIVE_SCAN_SQL,
+        build_pgvector_hybrid_rrf_sql,
+        evaluate_embedding_reranker_bakeoff,
+        reciprocal_rank_fusion,
+    )
+
+    assert "relaxed_order" in PGVECTOR_ITERATIVE_SCAN_SQL
+    sql = build_pgvector_hybrid_rrf_sql()
+    assert "ts_rank_cd" in sql and "embedding <=>" in sql
+
+    fused = reciprocal_rank_fusion(["chk_1", "chk_2"], ["chk_2", "chk_3"], top_k=2)
+    assert fused[0][0] == "chk_2"  # Appears in both lexical and dense top ranks
+
+    bakeoff = evaluate_embedding_reranker_bakeoff(
+        {
+            "Qwen3-Embedding + Qwen3-Reranker": [
+                {
+                    "locale": "en",
+                    "expected_chunk_id": "chk_1",
+                    "retrieved_chunk_ids": ["chk_1", "chk_2"],
+                },
+                {
+                    "locale": "ar",
+                    "expected_chunk_id": "chk_ar_1",
+                    "retrieved_chunk_ids": ["chk_ar_1", "chk_2"],
+                },
+                {
+                    "locale": "pga",
+                    "expected_chunk_id": "chk_pga_1",
+                    "retrieved_chunk_ids": ["chk_pga_1", "chk_3"],
+                },
+            ]
+        },
+        k=3,
+    )
+    assert bakeoff[0].mean_recall_at_k == 1.0
+    assert bakeoff[0].meets_parity_gate is True

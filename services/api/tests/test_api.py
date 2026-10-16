@@ -270,6 +270,41 @@ def test_phase4_regional_and_multilingual_insights() -> None:
     assert r_jit_ok.status_code == 200
     assert r_jit_ok.json()["granted"] is True
 
+    # Real-time inbox SSE stream & Tier T3 Maker-Checker approval + Postgres RLS context
+    r_inbox_stream = client.get("/v1/conversations/inbox/stream?office_code=JUBA_HQ")
+    assert r_inbox_stream.status_code == 200
+    assert "INBOX_SNAPSHOT" in r_inbox_stream.text
+
+    r_mc_self = client.post(
+        "/v1/cases/case_01/maker-checker",
+        json={
+            "maker_staff_id": "stf_01",
+            "checker_staff_id": "stf_01",
+            "action_type": "TCC_EXCEPTION_REVIEW",
+            "rationale": "Self approval test",
+        },
+    )
+    assert r_mc_self.status_code == 403
+
+    r_mc_ok = client.post(
+        "/v1/cases/case_01/maker-checker",
+        json={
+            "maker_staff_id": "stf_01",
+            "checker_staff_id": "stf_02",
+            "action_type": "TCC_EXCEPTION_REVIEW",
+            "rationale": "Verified e-Tax payment slip",
+        },
+    )
+    assert r_mc_ok.status_code == 200
+    assert r_mc_ok.json()["status"] == "MAKER_CHECKER_APPROVED"
+
+    from ssra_api.repositories import PostgresRlsSessionContext
+
+    rls_ctx = PostgresRlsSessionContext(
+        staff_id="stf_01", office_code="JUBA_HQ", staff_role="agent"
+    )
+    assert "JUBA_HQ" in rls_ctx.to_set_local_sql()[0]
+
 
 def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     client = TestClient(create_api_app())

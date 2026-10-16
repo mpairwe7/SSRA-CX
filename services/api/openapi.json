@@ -530,6 +530,73 @@
         "title": "KillSwitchResponse",
         "type": "object"
       },
+      "MakerCheckerApprovalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action_type": {
+            "minLength": 3,
+            "title": "Action Type",
+            "type": "string"
+          },
+          "checker_staff_id": {
+            "minLength": 3,
+            "title": "Checker Staff Id",
+            "type": "string"
+          },
+          "maker_staff_id": {
+            "minLength": 3,
+            "title": "Maker Staff Id",
+            "type": "string"
+          },
+          "rationale": {
+            "minLength": 5,
+            "title": "Rationale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "maker_staff_id",
+          "checker_staff_id",
+          "action_type",
+          "rationale"
+        ],
+        "title": "MakerCheckerApprovalRequest",
+        "type": "object"
+      },
+      "MakerCheckerApprovalResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "action_type": {
+            "title": "Action Type",
+            "type": "string"
+          },
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "checker_staff_id": {
+            "title": "Checker Staff Id",
+            "type": "string"
+          },
+          "maker_staff_id": {
+            "title": "Maker Staff Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "maker_staff_id",
+          "checker_staff_id",
+          "action_type",
+          "status"
+        ],
+        "title": "MakerCheckerApprovalResponse",
+        "type": "object"
+      },
       "PreferencesResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1451,6 +1518,58 @@
         ]
       }
     },
+    "/v1/cases/{case_id}/maker-checker": {
+      "post": {
+        "operationId": "approve_maker_checker_v1_cases__case_id__maker_checker_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MakerCheckerApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MakerCheckerApprovalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Maker Checker",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
     "/v1/consent": {
       "post": {
         "operationId": "update_consent_v1_consent_post",
@@ -1685,6 +1804,48 @@
           }
         },
         "summary": "List Inbox",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
+    "/v1/conversations/inbox/stream": {
+      "get": {
+        "description": "Real-time SSE inbox feed for Phase 3 Staff Console (`apps/console` \u2014 Section 11).",
+        "operationId": "stream_inbox_events_v1_conversations_inbox_stream_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "office_code",
+            "required": false,
+            "schema": {
+              "default": "JUBA_HQ",
+              "title": "Office Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream Inbox Events",
         "tags": [
           "conversations"
         ]
