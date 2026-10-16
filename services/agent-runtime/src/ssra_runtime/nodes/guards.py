@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ssra_core import Answer, AnswerSegment, HandoffTicket, LocaleCode, RiskTier
@@ -16,24 +17,27 @@ from ssra_runtime.guardrails import (
 )
 from ssra_runtime.state import ConversationGraphState
 
+_WORD_SPLIT_RE = re.compile(r"[^\s,.;:!?()\"']+")
+
+
+def _has_marker_hit(lower_text: str, words: set[str], markers: tuple[str, ...]) -> bool:
+    for m in markers:
+        if " " in m:
+            if m in lower_text:
+                return True
+        elif m in words:
+            return True
+    return False
+
 
 def detect_language(text: str, default_locale: LocaleCode = LocaleCode.EN) -> LocaleCode:
     # 1. Detect Arabic script (U+0600..U+06FF)
     if any("\u0600" <= ch <= "\u06ff" for ch in text):
         return LocaleCode.AR
     lower = text.lower()
-    # 2. Tier C Nilotic & Central Sudanic languages (Dinka, Nuer, Bari, Zande, Shilluk)
-    if any(m in lower for m in ("tënë", "wëu", "ajul", "bɛ̈ŋic", "paguot")):
-        return LocaleCode.DIN
-    if any(m in lower for m in ("yiööth", "juäärä", "cuɔl", "gɔ̱r", "thok naath")):
-        return LocaleCode.NUS
-    if any(m in lower for m in ("kaser", "lɔŋɔt", "banki lo", "kegga namba")):
-        return LocaleCode.BFA
-    if any(m in lower for m in ("marã", "tumosi", "dunduko", "rogo ssra")):
-        return LocaleCode.ZNE
-    if any(m in lower for m in ("cøøri", "ocul jami", "bëëne", "dhøg")):
-        return LocaleCode.SHK
-    # 3. Juba Arabic (pga) Latin-script markers & code-switching
+    words = set(_WORD_SPLIT_RE.findall(lower))
+
+    # 2. Juba Arabic (pga) Latin-script markers & code-switching (checked before Tier C)
     pga_markers = (
         "kif",
         "ta dariba",
@@ -47,8 +51,21 @@ def detect_language(text: str, default_locale: LocaleCode = LocaleCode.EN) -> Lo
         "tasjil",
         "shahada ta imtisal",
     )
-    if any(m in lower for m in pga_markers):
+    if _has_marker_hit(lower, words, pga_markers):
         return LocaleCode.PGA
+
+    # 3. Tier C Nilotic & Central Sudanic languages (whole-word / phrase matching)
+    if _has_marker_hit(lower, words, ("tënë", "wëu", "ajul", "bɛ̈ŋic", "paguot")):
+        return LocaleCode.DIN
+    if _has_marker_hit(lower, words, ("yiööth", "juäärä", "cuɔl", "gɔ̱r", "thok naath")):
+        return LocaleCode.NUS
+    if _has_marker_hit(lower, words, ("kaser", "lɔŋɔt", "banki lo", "kegga namba")):
+        return LocaleCode.BFA
+    if _has_marker_hit(lower, words, ("marã", "tumosi", "dunduko", "rogo ssra")):
+        return LocaleCode.ZNE
+    if _has_marker_hit(lower, words, ("cøøri", "ocul jami", "bëëne", "dhøg")):
+        return LocaleCode.SHK
+
     return default_locale
 
 

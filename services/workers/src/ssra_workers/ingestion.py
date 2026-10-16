@@ -7,7 +7,8 @@ import re
 from dataclasses import dataclass
 
 _PART_RE = re.compile(
-    r"^\s*(?:PART|CHAPTER|SCHEDULE)\s+([IVXLCDM0-9A-Z]+)\b[:\s-]*(.*)$", flags=re.IGNORECASE
+    r"^\s*(?:PART|CHAPTER|SCHEDULE)\s+([IVXLCDM]+|[0-9]+[A-Z]?)\b[:\s.-]*(.*)$",
+    flags=re.IGNORECASE,
 )
 _SECTION_RE = re.compile(
     r"^\s*(?:SECTION|SEC\.?|REGULATION|ARTICLE)\s+([0-9]+(?:\.[0-9]+)*(?:\([a-z0-9]+\))*[A-Z]?)\b[:\s-]*(.*)$",
@@ -48,9 +49,15 @@ def chunk_legal_document_by_structure(
         anchor = f"Part-{current_part}-Sec-{safe_sec}"
         ctx_header = f"[{doc_title} | {anchor} | Effective: {effective_from}]"
         digest = hashlib.sha256(f"{doc_id}:{anchor}:{body}".encode()).hexdigest()
+        slug = anchor.lower().replace("-", "_").replace(".", "_")
+        chunk_id = (
+            f"{doc_id}_{slug}_{digest[:8]}"
+            if ("." in current_sec or "-" in current_sec)
+            else f"{doc_id}_{slug}"
+        )
         chunks.append(
             LegalChunk(
-                chunk_id=f"{doc_id}_{anchor.lower().replace('-', '_').replace('.', '_')}",
+                chunk_id=chunk_id,
                 doc_id=doc_id,
                 part=current_part,
                 section=current_sec,

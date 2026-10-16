@@ -1205,6 +1205,9 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     assert detect_language("Kaser lɔŋɔt ko banki lo", LocaleCode.EN) == LocaleCode.BFA
     assert detect_language("Tumosi marã dunduko", LocaleCode.EN) == LocaleCode.ZNE
     assert detect_language("Cøøri Namba ocul jami", LocaleCode.EN) == LocaleCode.SHK
+    # Near-miss / precedence checks: Juba Arabic with shared words & English substrings
+    assert detect_language("Namba ta dariba fi SSRA", LocaleCode.EN) == LocaleCode.PGA
+    assert detect_language("Casual schedule for the department", LocaleCode.EN) == LocaleCode.EN
 
     conflicts = detect_conflicting_chunks(
         [

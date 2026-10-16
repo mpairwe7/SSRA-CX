@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ssra_core import expand_ssra_nra_synonyms
 from ssra_llm import load_termbase
 
+_TRAILING_PAREN_RE = re.compile(r"\s*\([^)]*\)\s*$")
+
 
 def expand_query_with_multilingual_termbase(query: str) -> str:
-    """Expand localized/Creole/Nilotic tax terms to canonical English statutory keywords via glossary.yaml."""
+    """Expand complete localized/Creole/Nilotic tax phrases to canonical English statutory keywords via glossary.yaml."""
     expanded = expand_ssra_nra_synonyms(query)
     lower_q = expanded.lower()
     tb = load_termbase()
@@ -20,15 +23,11 @@ def expand_query_with_multilingual_termbase(query: str) -> str:
         en_term = str(entry.get("en", ""))
         matched = False
         for loc_key in ("ar", "pga", "din", "nus", "bfa", "zne", "shk"):
-            loc_val = str(entry.get(loc_key, "")).lower()
-            # Match either the full localized phrase or distinct localized tokens (>= 4 chars)
-            tokens = [
-                t.strip("()/")
-                for t in loc_val.split()
-                if len(t.strip("()/")) >= 4
-                and t.strip("()/") not in ("ssra", "online", "bank", "sudan", "south")
-            ]
-            if (loc_val and loc_val in lower_q) or any(tok in lower_q for tok in tokens):
+            loc_val = str(entry.get(loc_key, "")).lower().strip()
+            bare_phrase = _TRAILING_PAREN_RE.sub("", loc_val).strip()
+            if (loc_val and loc_val in lower_q) or (
+                len(bare_phrase) >= 6 and bare_phrase in lower_q
+            ):
                 matched = True
                 break
         if matched and en_term and en_term.lower() not in lower_q:

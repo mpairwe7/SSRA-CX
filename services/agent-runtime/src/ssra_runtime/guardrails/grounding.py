@@ -73,32 +73,46 @@ def validate_grounding(
             reason="Citations are missing required doc_title, section_anchor, snapshot_version, or effective_from",
         )
 
-    # Verify citation existence against the current turn's retrieved chunks / tool artifacts
-    if tool_artifacts:
-        allowed_evidence_ids: set[str] = set(_DETERMINISTIC_TOOL_CITATION_IDS)
+    # Verify citation existence and non-contradiction against the current turn's retrieved chunks / tool artifacts
+    if tool_artifacts is not None:
+        artifact_chunk_ids: set[str] = set()
         allowed_anchors: set[str] = set()
         for art in tool_artifacts:
             results = art.get("results")
             if isinstance(results, list):
-                for r in results:
-                    if isinstance(r, dict):
-                        if "id" in r:
-                            allowed_evidence_ids.add(str(r["id"]))
-                        if "section_anchor" in r:
-                            allowed_anchors.add(str(r["section_anchor"]))
+                dict_results = [r for r in results if isinstance(r, dict)]
+                conflicts = detect_conflicting_chunks(dict_results)
+                if conflicts:
+                    return GroundingResult(
+                        passed=False,
+                        reason=conflicts[0],
+                    )
+                for r in dict_results:
+                    if "id" in r:
+                        artifact_chunk_ids.add(str(r["id"]))
+                    if "section_anchor" in r:
+                        allowed_anchors.add(str(r["section_anchor"]))
             sec = art.get("section")
             if isinstance(sec, dict):
                 if "id" in sec:
-                    allowed_evidence_ids.add(str(sec["id"]))
+                    artifact_chunk_ids.add(str(sec["id"]))
                 if "section_anchor" in sec:
                     allowed_anchors.add(str(sec["section_anchor"]))
 
+        allowed_evidence_ids = set(_DETERMINISTIC_TOOL_CITATION_IDS) | artifact_chunk_ids
         for cit in answer.citations:
-            if cit.id not in allowed_evidence_ids and cit.section_anchor not in allowed_anchors:
-                return GroundingResult(
-                    passed=False,
-                    reason=f"Citation '{cit.id}' ('{cit.section_anchor}') was not present in turn tool artifacts",
-                )
+            if artifact_chunk_ids:
+                if cit.id not in allowed_evidence_ids:
+                    return GroundingResult(
+                        passed=False,
+                        reason=f"Citation ID '{cit.id}' was not present in turn tool artifacts",
+                    )
+            else:
+                if cit.id not in allowed_evidence_ids and cit.section_anchor not in allowed_anchors:
+                    return GroundingResult(
+                        passed=False,
+                        reason=f"Citation '{cit.id}' ('{cit.section_anchor}') was not present in turn tool artifacts",
+                    )
 
     for seg in answer.segments:
         if not seg.text.strip():
