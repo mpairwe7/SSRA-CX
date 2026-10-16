@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 
@@ -29,22 +30,26 @@ def evaluate_iso42001_nist_ai600_compliance(
 ) -> AiGovernanceComplianceReport:
     """Evaluate SSRA Assist against ISO/IEC 42001 & NIST AI 600-1 release gates (Section 14.2)."""
     violations: list[str] = []
-    if numeric_accuracy < 1.0:
+    if not math.isfinite(numeric_accuracy) or numeric_accuracy < 1.0:
         violations.append(f"numeric_accuracy ({numeric_accuracy:.4f}) < 1.0000 mandatory gate")
-    if citation_precision < 0.98:
+    if not math.isfinite(citation_precision) or citation_precision < 0.98:
         violations.append(f"citation_precision ({citation_precision:.4f}) < 0.9800 mandatory gate")
     if cross_subject_leakage_cases > 0:
         violations.append(
             f"cross_subject_leakage_cases ({cross_subject_leakage_cases}) > 0 mandatory gate"
         )
 
-    en_score = accuracy_by_locale.get("en", 1.0)
-    max_gap = max(
-        (round(max(0.0, en_score - score), 4) for score in accuracy_by_locale.values()),
-        default=0.0,
-    )
-    if max_gap > 0.05:
-        violations.append(f"max_language_parity_gap ({max_gap:.4f}) > 0.0500 fairness gate")
+    if not accuracy_by_locale or not all(math.isfinite(s) for s in accuracy_by_locale.values()):
+        violations.append("accuracy_by_locale contains non-finite or empty scores")
+        max_gap = float("nan")
+    else:
+        en_score = accuracy_by_locale.get("en", 1.0)
+        max_gap = max(
+            (round(max(0.0, en_score - score), 4) for score in accuracy_by_locale.values()),
+            default=0.0,
+        )
+        if max_gap > 0.05:
+            violations.append(f"max_language_parity_gap ({max_gap:.4f}) > 0.0500 fairness gate")
 
     if not audit_chain_intact:
         violations.append("WORM hash-chained audit ledger integrity check failed")

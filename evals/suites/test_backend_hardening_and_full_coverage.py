@@ -1420,3 +1420,13 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     )
     assert gov_fail.compliant is False
     assert len(gov_fail.violations) == 6
+    gov_nan = evaluate_iso42001_nist_ai600_compliance(
+        numeric_accuracy=float("nan"),
+        citation_precision=float("nan"),
+        cross_subject_leakage_cases=0,
+        accuracy_by_locale={"en": float("nan")},
+        audit_chain_intact=True,
+        kill_switches_operational=True,
+    )
+    assert gov_nan.compliant is False
+    assert len(gov_nan.violations) == 3

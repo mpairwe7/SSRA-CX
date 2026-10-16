@@ -53,13 +53,14 @@ def build_sbom() -> dict[str, Any]:
         if not isinstance(cfg, dict):
             continue
         repo_id = cfg.get("repo_id")
+        revision = str(cfg.get("revision") or "unknown")
         if repo_id:
             components.append(
                 {
                     "type": "machine-learning-model",
                     "name": str(repo_id),
-                    "version": "2026.10.1",
-                    "purl": f"pkg:huggingface/{repo_id}@2026.10.1",
+                    "version": revision,
+                    "purl": f"pkg:huggingface/{repo_id}@{revision}",
                     "modelCard": {
                         "modelParameters": {
                             "approach": {"type": "supervised"},
@@ -70,14 +71,16 @@ def build_sbom() -> dict[str, Any]:
                 }
             )
         checkpoints = cfg.get("checkpoints_by_locale")
+        rev_map = cfg.get("revisions_by_checkpoint") or {}
         if isinstance(checkpoints, dict):
             for ck_repo in sorted(set(checkpoints.values())):
+                ck_rev = str(rev_map.get(ck_repo) or revision)
                 components.append(
                     {
                         "type": "machine-learning-model",
                         "name": str(ck_repo),
-                        "version": "2026.10.1",
-                        "purl": f"pkg:huggingface/{ck_repo}@2026.10.1",
+                        "version": ck_rev,
+                        "purl": f"pkg:huggingface/{ck_repo}@{ck_rev}",
                         "modelCard": {
                             "modelParameters": {
                                 "approach": {"type": "supervised"},

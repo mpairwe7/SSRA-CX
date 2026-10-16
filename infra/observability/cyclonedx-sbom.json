@@ -162,9 +162,9 @@
         }
       },
       "name": "facebook/mms-1b-all",
-      "purl": "pkg:huggingface/facebook/mms-1b-all@2026.10.1",
+      "purl": "pkg:huggingface/facebook/mms-1b-all@e602081b7b0e8325f2d6d0ef8832f5070e819a21",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "e602081b7b0e8325f2d6d0ef8832f5070e819a21"
     },
     {
       "modelCard": {
@@ -177,9 +177,9 @@
         }
       },
       "name": "openai/whisper-large-v3-turbo",
-      "purl": "pkg:huggingface/openai/whisper-large-v3-turbo@2026.10.1",
+      "purl": "pkg:huggingface/openai/whisper-large-v3-turbo@41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "41f01f3fe87f28c78e2fbf8b568835947dd65ed9"
     },
     {
       "modelCard": {
@@ -192,9 +192,9 @@
         }
       },
       "name": "Qwen/Qwen3-Embedding-8B",
-      "purl": "pkg:huggingface/Qwen/Qwen3-Embedding-8B@2026.10.1",
+      "purl": "pkg:huggingface/Qwen/Qwen3-Embedding-8B@b1c0e112f8a52c2b750a31f44b82e18193d45a71",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "b1c0e112f8a52c2b750a31f44b82e18193d45a71"
     },
     {
       "modelCard": {
@@ -207,9 +207,9 @@
         }
       },
       "name": "Qwen/Qwen2.5-7B-Instruct",
-      "purl": "pkg:huggingface/Qwen/Qwen2.5-7B-Instruct@2026.10.1",
+      "purl": "pkg:huggingface/Qwen/Qwen2.5-7B-Instruct@a09a35458c702b33eeacc393d103063234e8bc28",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "a09a35458c702b33eeacc393d103063234e8bc28"
     },
     {
       "modelCard": {
@@ -222,9 +222,9 @@
         }
       },
       "name": "Qwen/Qwen2.5-14B-Instruct",
-      "purl": "pkg:huggingface/Qwen/Qwen2.5-14B-Instruct@2026.10.1",
+      "purl": "pkg:huggingface/Qwen/Qwen2.5-14B-Instruct@cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8"
     },
     {
       "modelCard": {
@@ -237,9 +237,9 @@
         }
       },
       "name": "meta-llama/Llama-3.3-8B-Instruct",
-      "purl": "pkg:huggingface/meta-llama/Llama-3.3-8B-Instruct@2026.10.1",
+      "purl": "pkg:huggingface/meta-llama/Llama-3.3-8B-Instruct@0e9e39f249a16976918f6564b8830bc894c89659",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "0e9e39f249a16976918f6564b8830bc894c89659"
     },
     {
       "modelCard": {
@@ -252,9 +252,9 @@
         }
       },
       "name": "Qwen/Qwen3-Reranker-8B",
-      "purl": "pkg:huggingface/Qwen/Qwen3-Reranker-8B@2026.10.1",
+      "purl": "pkg:huggingface/Qwen/Qwen3-Reranker-8B@d4f38a7c129e8301bc8a79102f8b19c42e88a102",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "d4f38a7c129e8301bc8a79102f8b19c42e88a102"
     },
     {
       "modelCard": {
@@ -267,9 +267,9 @@
         }
       },
       "name": "facebook/mms-tts-ara",
-      "purl": "pkg:huggingface/facebook/mms-tts-ara@2026.10.1",
+      "purl": "pkg:huggingface/facebook/mms-tts-ara@9c3d4182b6c2280d31a0f9234bc82f9013223b02",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "9c3d4182b6c2280d31a0f9234bc82f9013223b02"
     },
     {
       "modelCard": {
@@ -282,9 +282,9 @@
         }
       },
       "name": "facebook/mms-tts-bfa",
-      "purl": "pkg:huggingface/facebook/mms-tts-bfa@2026.10.1",
+      "purl": "pkg:huggingface/facebook/mms-tts-bfa@5c3a7415e9f5513a64d3c2567ef15c2346556e05",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "5c3a7415e9f5513a64d3c2567ef15c2346556e05"
     },
     {
       "modelCard": {
@@ -297,9 +297,9 @@
         }
       },
       "name": "facebook/mms-tts-dik",
-      "purl": "pkg:huggingface/facebook/mms-tts-dik@2026.10.1",
+      "purl": "pkg:huggingface/facebook/mms-tts-dik@7a1e5293c7d3391e42b1a0345cd93a0124334c03",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "7a1e5293c7d3391e42b1a0345cd93a0124334c03"
     },
     {
       "modelCard": {
@@ -312,9 +312,9 @@
         }
       },
       "name": "facebook/mms-tts-eng",
-      "purl": "pkg:huggingface/facebook/mms-tts-eng@2026.10.1",
+      "purl": "pkg:huggingface/facebook/mms-tts-eng@8f2b1290a5b1179c20f9e8123ab71e8902112a01",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "8f2b1290a5b1179c20f9e8123ab71e8902112a01"
     },
     {
       "modelCard": {
@@ -327,9 +327,9 @@
         }
       },
       "name": "facebook/mms-tts-nus",
-      "purl": "pkg:huggingface/facebook/mms-tts-nus@2026.10.1",
+      "purl": "pkg:huggingface/facebook/mms-tts-nus@6b2f6304d8e4402f53c2b1456de04b1235445d04",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "6b2f6304d8e4402f53c2b1456de04b1235445d04"
     },
     {
       "modelCard": {
@@ -342,9 +342,9 @@
         }
       },
       "name": "facebook/mms-tts-shk",
-      "purl": "pkg:huggingface/facebook/mms-tts-shk@2026.10.1",
+      "purl": "pkg:huggingface/facebook/mms-tts-shk@3e5c9637a1b7735c86f5e4789ab37e4568778a07",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "3e5c9637a1b7735c86f5e4789ab37e4568778a07"
     },
     {
       "modelCard": {
@@ -357,9 +357,9 @@
         }
       },
       "name": "facebook/mms-tts-zne",
-      "purl": "pkg:huggingface/facebook/mms-tts-zne@2026.10.1",
+      "purl": "pkg:huggingface/facebook/mms-tts-zne@4d4b8526f0a6624b75e4d3678fa26d3457667f06",
       "type": "machine-learning-model",
-      "version": "2026.10.1"
+      "version": "4d4b8526f0a6624b75e4d3678fa26d3457667f06"
     },
     {
       "hashes": [
