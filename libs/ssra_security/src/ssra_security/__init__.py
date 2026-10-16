@@ -15,6 +15,10 @@ from ssra_security.auth import (
     compute_action_digest,
 )
 from ssra_security.encryption import OpenBaoTransitEncryptor
+from ssra_security.governance import (
+    AiGovernanceComplianceReport,
+    evaluate_iso42001_nist_ai600_compliance,
+)
 from ssra_security.keycloak import (
     ALLOWED_IDP_ALIASES,
     ALLOWED_WEBAUTHN_ALGORITHMS,
@@ -35,6 +39,7 @@ __all__ = [
     "ALLOWED_IDP_ALIASES",
     "ALLOWED_WEBAUTHN_ALGORITHMS",
     "GENESIS_HASH",
+    "AiGovernanceComplianceReport",
     "AuditEvent",
     "ConfirmationRecord",
     "ConfirmationTokenManager",
@@ -51,6 +56,7 @@ __all__ = [
     "compute_action_digest",
     "compute_audit_event_hash",
     "compute_canonical_digest",
+    "evaluate_iso42001_nist_ai600_compliance",
     "format_audit_event_as_cef",
     "format_audit_event_as_ocsf",
     "mask_tin",

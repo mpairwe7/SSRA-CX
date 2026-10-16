@@ -150,6 +150,227 @@
       "purl": "pkg:npm/zod@4.6.5",
       "type": "library",
       "version": "4.6.5"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "hf-transformers-offline",
+          "task": "asr_omnilingual"
+        }
+      },
+      "name": "facebook/mms-1b-all",
+      "purl": "pkg:huggingface/facebook/mms-1b-all@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "vllm-audio",
+          "task": "asr_whisper"
+        }
+      },
+      "name": "openai/whisper-large-v3-turbo",
+      "purl": "pkg:huggingface/openai/whisper-large-v3-turbo@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "vllm",
+          "task": "embedding_primary"
+        }
+      },
+      "name": "Qwen/Qwen3-Embedding-8B",
+      "purl": "pkg:huggingface/Qwen/Qwen3-Embedding-8B@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "vllm",
+          "task": "llm_fast_router"
+        }
+      },
+      "name": "Qwen/Qwen2.5-7B-Instruct",
+      "purl": "pkg:huggingface/Qwen/Qwen2.5-7B-Instruct@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "vllm",
+          "task": "llm_primary"
+        }
+      },
+      "name": "Qwen/Qwen2.5-14B-Instruct",
+      "purl": "pkg:huggingface/Qwen/Qwen2.5-14B-Instruct@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "vllm",
+          "task": "llm_secondary"
+        }
+      },
+      "name": "meta-llama/Llama-3.3-8B-Instruct",
+      "purl": "pkg:huggingface/meta-llama/Llama-3.3-8B-Instruct@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "vllm",
+          "task": "reranker_primary"
+        }
+      },
+      "name": "Qwen/Qwen3-Reranker-8B",
+      "purl": "pkg:huggingface/Qwen/Qwen3-Reranker-8B@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "hf-vits-offline",
+          "task": "tts_mms"
+        }
+      },
+      "name": "facebook/mms-tts-ara",
+      "purl": "pkg:huggingface/facebook/mms-tts-ara@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "hf-vits-offline",
+          "task": "tts_mms"
+        }
+      },
+      "name": "facebook/mms-tts-bfa",
+      "purl": "pkg:huggingface/facebook/mms-tts-bfa@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "hf-vits-offline",
+          "task": "tts_mms"
+        }
+      },
+      "name": "facebook/mms-tts-dik",
+      "purl": "pkg:huggingface/facebook/mms-tts-dik@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "hf-vits-offline",
+          "task": "tts_mms"
+        }
+      },
+      "name": "facebook/mms-tts-eng",
+      "purl": "pkg:huggingface/facebook/mms-tts-eng@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "hf-vits-offline",
+          "task": "tts_mms"
+        }
+      },
+      "name": "facebook/mms-tts-nus",
+      "purl": "pkg:huggingface/facebook/mms-tts-nus@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "hf-vits-offline",
+          "task": "tts_mms"
+        }
+      },
+      "name": "facebook/mms-tts-shk",
+      "purl": "pkg:huggingface/facebook/mms-tts-shk@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "hf-vits-offline",
+          "task": "tts_mms"
+        }
+      },
+      "name": "facebook/mms-tts-zne",
+      "purl": "pkg:huggingface/facebook/mms-tts-zne@2026.10.1",
+      "type": "machine-learning-model",
+      "version": "2026.10.1"
+    },
+    {
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "77c2c5ef4b747ecc446462378056986304ee01d7aed0c058d5eeafa48f4f51b6"
+        }
+      ],
+      "name": "ssra-knowledge-snapshot",
+      "type": "data",
+      "version": "2026.10.1"
     }
   ],
   "metadata": {
@@ -157,8 +378,18 @@
       "name": "ssra-cx",
       "type": "application",
       "version": "0.1.0"
-    }
+    },
+    "properties": [
+      {
+        "name": "ssra:ai_governance:standard",
+        "value": "ISO/IEC 42001:2023 & NIST AI 600-1"
+      },
+      {
+        "name": "ssra:sovereign_hosting",
+        "value": "NCA South Sudan (In-Country)"
+      }
+    ]
   },
-  "specVersion": "1.5",
+  "specVersion": "1.6",
   "version": 1
 }
