@@ -909,6 +909,22 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
         ).status_code
         == 404
     )
+    gw_tok = TokenExchangeService().mint_exchanged_token(
+        audience="mcp-knowledge",
+        auth_level=AuthLevel.ANONYMOUS,
+    )
+    assert (
+        gw_client2.post(
+            "/mcp",
+            json={"method": "tools/call", "params": {"name": "list_forms", "arguments": {}}},
+            headers={
+                "Mcp-Method": "tools/call",
+                "Mcp-Name": "knowledge",
+                "Authorization": f"Bearer {gw_tok}",
+            },
+        ).status_code
+        == 200
+    )
 
     # 4. Guardrails & Policy Gate branches
     assert detect_language("Kif ana a'mil tasjil ta dariba?", LocaleCode.EN) == LocaleCode.PGA

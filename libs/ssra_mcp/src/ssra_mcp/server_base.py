@@ -216,8 +216,16 @@ class StatelessMcpServer:
         """MCP 2026-07-28 Tasks extension with State-Handle Hijacking protection (Section 8.1 & 8.2)."""
         if method == "tasks/create":
             if len(self._tasks) >= MAX_MCP_TASKS:
-                oldest_tid = next(iter(self._tasks))
-                self._tasks.pop(oldest_tid, None)
+                reclaimable = [
+                    tid for tid, trec in self._tasks.items() if trec.get("status") != "RUNNING"
+                ]
+                if not reclaimable:
+                    raise SSRAError(
+                        McpErrorCode.RATE_LIMITED,
+                        f"Active MCP task capacity ({MAX_MCP_TASKS}) reached",
+                        status_code=429,
+                    )
+                self._tasks.pop(reclaimable[0], None)
             task_id = new_id("task")
             task_rec = {
                 "taskId": task_id,
@@ -378,9 +386,6 @@ class StatelessMcpServer:
         )
 
         if cache_key is not None:
-            if len(self._idempotent_cache) >= MAX_MCP_IDEMPOTENT_CACHE:
-                oldest_ck = next(iter(self._idempotent_cache))
-                self._idempotent_cache.pop(oldest_ck, None)
             self._idempotent_cache[cache_key] = response_envelope
 
         return response_envelope
@@ -411,6 +416,7 @@ class StatelessMcpServer:
                 "protocol": MCP_PROTOCOL_VERSION,
             }
 
+        @app.get(f"/.well-known/oauth-protected-resource/servers/{self.audience}")
         @app.get("/.well-known/oauth-protected-resource")
         async def oauth_protected_resource() -> dict[str, Any]:
             return self.get_protected_resource_metadata()
@@ -473,6 +479,7 @@ class StatelessMcpServer:
                             raw_tok,
                             expected_audience=self.audience,
                             required_tier=RiskTier.T0,
+                            expected_resource=f"https://mcp.ssra.gov.ss/servers/{self.audience}",
                         )
                         caller_sub = claims.sub or "ANONYMOUS"
                     return JSONResponse(
@@ -494,7 +501,7 @@ class StatelessMcpServer:
             except SSRAError as err:
                 err_headers: dict[str, str] = {}
                 if err.status_code in (401, 403):
-                    res_meta_url = f"https://mcp.ssra.gov.ss/servers/{self.server_name}/.well-known/oauth-protected-resource"
+                    res_meta_url = f"https://mcp.ssra.gov.ss/.well-known/oauth-protected-resource/servers/{self.audience}"
                     err_headers["WWW-Authenticate"] = (
                         f'Bearer realm="{self.audience}", '
                         f'resource="https://mcp.ssra.gov.ss/servers/{self.audience}", '
