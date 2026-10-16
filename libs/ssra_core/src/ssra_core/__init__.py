@@ -37,13 +37,20 @@ from ssra_core.errors import McpErrorCode, ProblemDetails, SSRAError
 from ssra_core.ids import new_id, new_uuid7
 from ssra_core.resilience import (
     ChannelBulkhead,
+    ChannelLatencySloEvaluation,
     CircuitState,
     UpstreamCircuitBreaker,
+    evaluate_channel_latency_slo,
     execute_with_idempotent_retry,
 )
 from ssra_core.settings import CoreSettings, configure_logging
 from ssra_core.synonyms import expand_ssra_nra_synonyms, normalise_authority_mentions
-from ssra_core.telemetry import GenAISpanAttributes, build_genai_span_attributes
+from ssra_core.telemetry import (
+    FinOpsBudgetDecision,
+    GenAISpanAttributes,
+    build_genai_span_attributes,
+    evaluate_finops_turn_budget,
+)
 
 __all__ = [
     "JUBA_TZ",
@@ -53,6 +60,7 @@ __all__ = [
     "AuthLevel",
     "ChannelBulkhead",
     "ChannelCapabilities",
+    "ChannelLatencySloEvaluation",
     "ChannelName",
     "CircuitState",
     "Citation",
@@ -60,6 +68,7 @@ __all__ = [
     "ConversationEvent",
     "ConversationEventData",
     "CoreSettings",
+    "FinOpsBudgetDecision",
     "GenAISpanAttributes",
     "GenerativeUIComponent",
     "GenerativeUIComponentName",
@@ -80,6 +89,8 @@ __all__ = [
     "build_genai_span_attributes",
     "compute_monthly_filing_deadline",
     "configure_logging",
+    "evaluate_channel_latency_slo",
+    "evaluate_finops_turn_budget",
     "execute_with_idempotent_retry",
     "expand_ssra_nra_synonyms",
     "fiscal_year_for_date",
