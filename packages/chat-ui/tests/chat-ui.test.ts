@@ -81,7 +81,19 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(parsed.lastEventId).toBe("evt_3");
     expect(parsed.accumulatedText).toBe("PAYE is due by day 15.");
 
-    const outbox = new OfflineOutboxQueue();
+    const outbox = new OfflineOutboxQueue(2);
+    expect(
+      outbox.enqueue({
+        id: "q_pii",
+        message: "My TIN is 1002001234",
+        locale: "en",
+        tier: "T0",
+        queuedAtIso: "2026-10-16T08:00:00Z",
+      }),
+    ).toEqual({
+      queued: false,
+      reason: "SECURITY_POLICY_PII_REJECTED_FROM_OFFLINE_QUEUE",
+    });
     expect(
       outbox.enqueue({
         id: "q_1",

@@ -40,7 +40,7 @@ export function renderGenerativeUICard(
       componentName: null,
       ariaRole: "status",
       dir,
-      safeHtml: `<div role="status" dir="${dir}" class="ssra-text-fallback">${safeText}</div>`,
+      safeHtml: `<div role="status" aria-live="polite" dir="${dir}" class="ssra-text-fallback">${safeText}</div>`,
     };
   }
 
@@ -56,7 +56,7 @@ export function renderGenerativeUICard(
         componentName: "BalanceCard",
         ariaRole: "region",
         dir,
-        safeHtml: `<section role="region" aria-label="SSRA e-Tax Balance" dir="${dir}" data-component="BalanceCard"><strong>TIN ${tin}</strong>: ${amt} SSP (${status}, as of ${asOf})</section>`,
+        safeHtml: `<section role="region" aria-label="SSRA e-Tax Balance" tabindex="0" data-focus-ring="wcag22" dir="${dir}" data-component="BalanceCard"><strong>TIN ${tin}</strong>: ${amt} SSP (${status}, as of ${asOf})</section>`,
       };
     }
     case "CalculatorForm": {
@@ -67,7 +67,7 @@ export function renderGenerativeUICard(
         componentName: "CalculatorForm",
         ariaRole: "region",
         dir,
-        safeHtml: `<section role="region" aria-label="SSRA Tax Estimate" dir="${dir}" data-component="CalculatorForm"><span class="badge-estimate">ESTIMATE ONLY</span> ${calcType}: ${tax} SSP</section>`,
+        safeHtml: `<section role="region" aria-label="SSRA Tax Estimate" tabindex="0" data-focus-ring="wcag22" dir="${dir}" data-component="CalculatorForm"><span class="badge-estimate">ESTIMATE ONLY</span> ${calcType}: ${tax} SSP</section>`,
       };
     }
     case "PaymentInstructionsCard": {
@@ -78,7 +78,7 @@ export function renderGenerativeUICard(
         componentName: "PaymentInstructionsCard",
         ariaRole: "region",
         dir,
-        safeHtml: `<section role="region" aria-label="Official Payment Verification" dir="${dir}" data-component="PaymentInstructionsCard"><strong>${status}</strong>: ${id} (https://etax.nra.gov.ss/)</section>`,
+        safeHtml: `<section role="region" aria-label="Official Payment Verification" tabindex="0" data-focus-ring="wcag22" dir="${dir}" data-component="PaymentInstructionsCard"><strong>${status}</strong>: ${id} (https://etax.nra.gov.ss/)</section>`,
       };
     }
     case "ConfirmActionSheet": {
@@ -89,7 +89,7 @@ export function renderGenerativeUICard(
         componentName: "ConfirmActionSheet",
         ariaRole: "region",
         dir,
-        safeHtml: `<section role="region" aria-label="Confirm Action" dir="${dir}" data-component="ConfirmActionSheet" data-tool="${tool}"><p>${summary}</p></section>`,
+        safeHtml: `<section role="region" aria-label="Confirm Action" tabindex="0" data-focus-ring="wcag22" dir="${dir}" data-component="ConfirmActionSheet" data-tool="${tool}"><p>${summary}</p></section>`,
       };
     }
     case "FilingStatusTimeline":
@@ -102,7 +102,7 @@ export function renderGenerativeUICard(
         componentName: name,
         ariaRole: "region",
         dir,
-        safeHtml: `<section role="region" aria-label="${name}" dir="${dir}" data-component="${name}">${safeFallback}</section>`,
+        safeHtml: `<section role="region" aria-label="${name}" tabindex="0" data-focus-ring="wcag22" dir="${dir}" data-component="${name}">${safeFallback}</section>`,
       };
     }
   }

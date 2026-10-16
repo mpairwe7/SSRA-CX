@@ -10,7 +10,9 @@ export const SSRA_DESIGN_TOKENS = {
     red: "#b42318",
     surface: "#f8fafc",
   },
-  minTouchTargetPx: 44, // WCAG 2.2 AA target size
+  minTouchTargetPx: 44, // WCAG 2.2 AA SC 2.5.8 / AAA SC 2.5.5 target size
+  focusOutlineCss: "2px solid #c99700", // WCAG 2.2 SC 2.4.11 / SC 2.4.13 focus appearance (>= 3:1)
+  focusOutlineOffsetPx: 2,
 } as const;
 
 export function getHtmlLayoutProps(locale: LocaleCode): {

@@ -14,6 +14,14 @@ export function buildHttpOnlySessionCookieHeader(sessionId: string, maxAgeSecond
   return `${BFF_SESSION_COOKIE_NAME}=${cleanId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}`;
 }
 
+export function buildSessionLogoutHeaders(): Record<string, string> {
+  return {
+    "Set-Cookie": `${BFF_SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`,
+    "Clear-Site-Data": '"cache", "cookies", "storage"',
+    "Cache-Control": "no-store",
+  };
+}
+
 export function validateBffCsrfMutation(input: {
   readonly method: string;
   readonly originHeader?: string;
@@ -24,6 +32,10 @@ export function validateBffCsrfMutation(input: {
   const m = input.method.toUpperCase();
   if (m === "GET" || m === "HEAD" || m === "OPTIONS") {
     return { valid: true };
+  }
+  // CVE-2026-27978: Explicitly reject 'null' origin from sandboxed iframes
+  if (input.originHeader && input.originHeader.trim().toLowerCase() === "null") {
+    return { valid: false, reason: "CSRF_NULL_ORIGIN_REJECTED" };
   }
   if (!input.originHeader || input.originHeader !== input.allowedOrigin) {
     return { valid: false, reason: "CSRF_ORIGIN_MISMATCH" };

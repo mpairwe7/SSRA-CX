@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAccessibleOtpInputProps,
   computeJubaMonthlyFilingDeadline,
   getHtmlLayoutProps,
   getSouthSudanFiscalYear,
@@ -7,8 +8,13 @@ import {
 } from "../src/index.js";
 
 describe("@ssra/ui design tokens and RTL layout", () => {
-  it("enforces WCAG 2.2 AA touch target minimum and Arabic RTL direction", () => {
+  it("enforces WCAG 2.2 AA touch target minimum, SC 3.3.8 OTP autofill, and Arabic RTL direction", () => {
     expect(SSRA_DESIGN_TOKENS.minTouchTargetPx).toBeGreaterThanOrEqual(44);
+    expect(SSRA_DESIGN_TOKENS.focusOutlineCss).toContain("2px solid");
+    const otpAr = buildAccessibleOtpInputProps("ar");
+    expect(otpAr.autoComplete).toBe("one-time-code");
+    expect(otpAr.dir).toBe("ltr");
+    expect(otpAr.pasteAllowed).toBe(true);
     expect(getHtmlLayoutProps("ar")).toEqual({ lang: "ar", dir: "rtl" });
     expect(getHtmlLayoutProps("en")).toEqual({ lang: "en", dir: "ltr" });
     expect(getSouthSudanFiscalYear({ year: 2026, month: 10, day: 16 })).toBe("2026/2027");
