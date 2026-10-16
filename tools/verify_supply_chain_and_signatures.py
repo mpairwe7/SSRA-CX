@@ -84,8 +84,29 @@ def main() -> None:
                 f"Runbook {rb_path.name} still contains decommissioned Kubernetes term '{forbidden}'"
             )
 
+    # 7. Verify Living Docs, ADR Catalog (ADR-001..ADR-016), Model Card & CycloneDX 1.6 ML-BOM Traceability
+    trace_skill = ROOT / ".agents" / "skills" / "living-docs-adr-runbooks-traceability" / "SKILL.md"
+    assert trace_skill.is_file(), "Missing living-docs-adr-runbooks-traceability skill"
+    adr_readme = (ROOT / "docs" / "adr" / "README.md").read_text(encoding="utf-8")
+    for adr_file in sorted((ROOT / "docs" / "adr").glob("00*.md")):
+        assert adr_file.name in adr_readme, (
+            f"Unindexed ADR '{adr_file.name}' missing from docs/adr/README.md"
+        )
+    primary_repo = (
+        routing.get("hf_cache", {}).get("models", {}).get("llm_primary", {}).get("repo_id", "")
+    )
+    model_cards_txt = (ROOT / "docs" / "ai-governance" / "model-cards-and-datasheet.md").read_text(
+        encoding="utf-8"
+    )
+    sbom_txt = (ROOT / "infra" / "observability" / "cyclonedx-sbom.json").read_text(
+        encoding="utf-8"
+    )
+    assert primary_repo and primary_repo in model_cards_txt and primary_repo in sbom_txt, (
+        f"Primary LLM '{primary_repo}' out of sync between model-routing.yaml, model-cards-and-datasheet.md, and cyclonedx-sbom.json"
+    )
+
     print(
-        "Supply-chain verification passed: 40-char SHA CI actions, 7-day cooldowns (pnpm & uv), contract SHA parity, Docker Compose hardening, and sovereign routing verified."
+        "Supply-chain & living-docs traceability verification passed: 40-char SHA CI actions, 7-day cooldowns, contract SHA parity, Docker Compose 2026, ADR catalog, and ML-BOM verified."
     )
 
 
