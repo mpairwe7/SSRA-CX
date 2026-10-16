@@ -6,10 +6,12 @@ import {
   buildAgentQueueWorkbench,
   buildAnalyticsDashboardView,
   buildAuditorTrailIntegrityView,
+  buildCallBriefCardView,
   buildEvaluationDashboardView,
   buildKnowledgeReleasePipelineView,
   buildOpsPageShell,
   buildOpsStatTile,
+  buildStaffDocumentInspectionViewerState,
   EVAL_METRIC_PLAIN_LABELS,
   evaluateAuthorityStatusResponse,
   formatSafeTimestamp,
@@ -26,6 +28,7 @@ import {
   ticketRef,
   toDelta,
   validateCopilotDraftApproval,
+  validateWrapUpFormSubmission,
   waitingFor,
   waitTone,
   watchesLiveQueue,
@@ -270,6 +273,70 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(alteredAudit.chipText).toBe("Record altered");
     expect(alteredAudit.sealButtonDisabled).toBe(true);
     expect(alteredAudit.explanation).toContain("Event #12 fails its check");
+
+    // Staff Document Inspection Viewer, Officer Call Brief Card & Wrap-Up Form
+    const viewer = buildStaffDocumentInspectionViewerState({
+      documentName: "assessment_scan.pdf",
+      pageCount: 3,
+      currentPage: 2,
+      zoomLevel: 125,
+      fields: [
+        {
+          id: "f1",
+          name: "TIN",
+          value: "••••1234",
+          confidence: 0.98,
+          source: "vector_glyph",
+          status: "auto_use",
+          page: 2,
+        },
+        {
+          id: "f2",
+          name: "Total Payable",
+          value: "SSP 150,000",
+          confidence: 0.62,
+          source: "ocr_inset",
+          status: "review_required",
+          page: 2,
+        },
+      ],
+    });
+    expect(viewer.pageBadge).toBe("Page 2 of 3");
+    expect(viewer.canvasScaleTransform).toBe("scale(1.25)");
+    expect(viewer.reviewRequiredCount).toBe(1);
+
+    const briefCard = buildCallBriefCardView({
+      brief: {
+        caller_goal: { text: "Unblock TIN ••••1234", turn_seqs: [1] },
+        ai_already_said: [],
+        still_open: [],
+        details_given: [],
+        sentiment: "frustrated",
+        suggested_opener: "Hello, let's resolve your TIN issue.",
+        turns_covered: 2,
+        model: "ssra-sovereign/sunflower-qwen3.5-9b",
+      },
+      loading: false,
+    });
+    expect(briefCard.mode).toBe("full");
+    expect(briefCard.moodLabel).toBe("Frustrated");
+
+    expect(
+      validateWrapUpFormSubmission({
+        note: "",
+        outcome: "resolved",
+        satisfaction: 5,
+        notSaid: false,
+      }).valid,
+    ).toBe(false);
+    expect(
+      validateWrapUpFormSubmission({
+        note: "Caller TIN question resolved",
+        outcome: "resolved",
+        satisfaction: null,
+        notSaid: true,
+      }).valid,
+    ).toBe(true);
 
     // JIT Admin requires device posture + maker-checker approval
     expect(

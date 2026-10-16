@@ -1,11 +1,14 @@
-"""API router for identity_link bounded context (Phase 2 OTP, Step-Up, SIM-swap & Document OCR Pre-Check)."""
+"""API router for identity_link bounded context (Phase 2 OTP, Step-Up, SIM-swap, OCR Pre-Check & Document/Screenshot Analysis)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
 from ssra_api.identity_link.application import (
+    analyze_uploaded_document_use_case,
     bind_tin_with_otp_use_case,
     precheck_uploaded_document_use_case,
 )
@@ -49,6 +52,32 @@ class DocumentPrecheckResponse(BaseModel):
     status: str
 
 
+class AnalyzeDocumentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    filename: str
+    text_content: str
+    size_bytes: int
+    kind: str = "pdf"
+
+
+class AnalyzeDocumentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: str
+    filename: str
+    kind: str
+    size_bytes: int
+    doc_type: str
+    confidence: float
+    matched_keywords: list[str]
+    fields: dict[str, list[str]]
+    tax_reconciliation: dict[str, Any]
+    screenshot_guidance: dict[str, Any]
+    grounding_passage: str
+    warnings: list[str]
+
+
 @router.post("/verify-otp", response_model=VerifyOtpResponse)
 async def verify_otp(body: VerifyOtpRequest) -> VerifyOtpResponse:
     subject_ref = "sub_taxpayer_deng_02" if body.tin.endswith("5678") else "sub_taxpayer_amina_01"
@@ -79,4 +108,28 @@ async def document_precheck(body: DocumentPrecheckRequest) -> DocumentPrecheckRe
         malware_scan_status=res.malware_scan_status,
         ocr_legible=res.ocr_legible,
         status=res.status,
+    )
+
+
+@router.post("/documents/analyze", response_model=AnalyzeDocumentResponse)
+async def analyze_document(body: AnalyzeDocumentRequest) -> AnalyzeDocumentResponse:
+    res = analyze_uploaded_document_use_case(
+        filename=body.filename,
+        text_content=body.text_content,
+        size_bytes=body.size_bytes,
+        kind=body.kind,
+    )
+    return AnalyzeDocumentResponse(
+        document_id=res.document_id,
+        filename=res.filename,
+        kind=res.kind,
+        size_bytes=res.size_bytes,
+        doc_type=res.doc_type.value,
+        confidence=res.confidence,
+        matched_keywords=res.matched_keywords,
+        fields=res.fields,
+        tax_reconciliation=res.tax_reconciliation,
+        screenshot_guidance=res.screenshot_guidance,
+        grounding_passage=res.grounding_passage,
+        warnings=res.warnings,
     )

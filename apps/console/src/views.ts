@@ -243,4 +243,5 @@ export function buildOpsPageShell(params: {
 }
 
 export * from "./dashboards.js";
+export * from "./document-inspection.js";
 export * from "./roles-and-audit.js";
