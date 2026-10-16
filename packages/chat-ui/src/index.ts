@@ -122,6 +122,7 @@ export * from "./agui-stream.js";
 export * from "./call-receptionist.js";
 export * from "./chat-workbench.js";
 export * from "./components.js";
+export * from "./document-analysis.js";
 export * from "./mcp-apps-sandbox.js";
 export * from "./offline-outbox.js";
 export * from "./reveal-queue.js";

@@ -1,6 +1,118 @@
 {
   "components": {
     "schemas": {
+      "AnalyzeDocumentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "kind": {
+            "default": "pdf",
+            "title": "Kind",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "text_content": {
+            "title": "Text Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "text_content",
+          "size_bytes"
+        ],
+        "title": "AnalyzeDocumentRequest",
+        "type": "object"
+      },
+      "AnalyzeDocumentResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "doc_type": {
+            "title": "Doc Type",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "fields": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Fields",
+            "type": "object"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "grounding_passage": {
+            "title": "Grounding Passage",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "matched_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Matched Keywords",
+            "type": "array"
+          },
+          "screenshot_guidance": {
+            "additionalProperties": true,
+            "title": "Screenshot Guidance",
+            "type": "object"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "tax_reconciliation": {
+            "additionalProperties": true,
+            "title": "Tax Reconciliation",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "document_id",
+          "filename",
+          "kind",
+          "size_bytes",
+          "doc_type",
+          "confidence",
+          "matched_keywords",
+          "fields",
+          "tax_reconciliation",
+          "screenshot_guidance",
+          "grounding_passage",
+          "warnings"
+        ],
+        "title": "AnalyzeDocumentResponse",
+        "type": "object"
+      },
       "ApproveSnapshotRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2085,6 +2197,47 @@
           }
         },
         "summary": "Document Precheck",
+        "tags": [
+          "identity_link"
+        ]
+      }
+    },
+    "/v1/identity-link/documents/analyze": {
+      "post": {
+        "operationId": "analyze_document_v1_identity_link_documents_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeDocumentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Analyze Document",
         "tags": [
           "identity_link"
         ]

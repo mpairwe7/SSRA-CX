@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   buildCallReceptionistScreen,
   buildChatComposerState,
+  buildDocumentInspectionModalView,
   buildFloatingChatHeader,
   cleanMarkdownForSpeech,
   computeCallOrbFrame,
   createRevealQueue,
   escapeHtmlStrict,
   evaluateCaptionScrollPin,
+  formatDocType,
   GENERATIVE_UI_STORYBOOK_FIXTURES,
   groupConversationsByRecency,
   joinDictated,
@@ -16,6 +18,7 @@ import {
   parseAguiSseStream,
   renderGenerativeUICard,
   resolveGenerativeUIComponent,
+  stripStepPrefix,
   validateMcpAppIframe,
   validateVoiceNoteSubmission,
   verifyAllStorybookFixturesRenderAccessibly,
@@ -304,5 +307,37 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
       evaluateCaptionScrollPin({ scrollHeight: 1000, scrollTop: 500, clientHeight: 300 })
         .showJumpToLatest,
     ).toBe(true);
+
+    // Document & Screenshot Inspection Modal
+    expect(stripStepPrefix("Step 1: Click Refresh")).toBe("Click Refresh");
+    expect(formatDocType("portal_screenshot", "pga")).toBe("Sura ta Mawqi SSRA e-Tax");
+    const modalView = buildDocumentInspectionModalView(
+      {
+        id: "doc_1",
+        name: "etax_500.png",
+        sizeBytes: 204_800,
+        docType: "portal_screenshot",
+        analysis: {
+          documentId: "doc_1",
+          filename: "etax_500.png",
+          kind: "image",
+          sizeBytes: 204_800,
+          docType: "portal_screenshot",
+          confidence: 0.95,
+          fields: { tins: ["••••1234"] },
+          taxReconciliation: { status: "discrepancy_detected", variance_ssp: 12000 },
+          screenshot_guidance: {
+            is_screenshot: true,
+            detected_portal: "SSRA National e-Tax Portal",
+            portal_url: "https://etax.nra.gov.ss/",
+            steps: ["Step 1: Wait 60 seconds and refresh"],
+          },
+        },
+      },
+      "en",
+    );
+    expect(modalView.isScreenshot).toBe(true);
+    expect(modalView.normalizedSteps).toEqual(["Wait 60 seconds and refresh"]);
+    expect(modalView.quickPrompts.length).toBeGreaterThanOrEqual(3);
   });
 });
