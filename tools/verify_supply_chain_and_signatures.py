@@ -21,6 +21,7 @@ _ACTION_SHA_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 
 
 def main() -> None:
+    """Verify CI action SHA pinning, 7-day cooldowns, contract SHA parity, and Docker Compose hardening."""
     # 1. Verify GitHub Actions 40-char SHA pinning (March 2026 LiteLLM/Trivy lesson)
     wf_dir = ROOT / ".github" / "workflows"
     for wf_path in sorted(wf_dir.glob("*.yml")):
@@ -63,8 +64,28 @@ def main() -> None:
         "Contract SHA-256 drift between Python (ssra_core) and TypeScript (@ssra/contracts)"
     )
 
+    # 6. Verify 2026 Docker Compose hardening & decommissioned Kubernetes in operational runbooks
+    base_compose = yaml.safe_load(
+        (ROOT / "infra" / "compose" / "docker-compose.yml").read_text(encoding="utf-8")
+    )
+    prod_compose = yaml.safe_load(
+        (ROOT / "infra" / "compose" / "docker-compose.prod.yml").read_text(encoding="utf-8")
+    )
+    assert (
+        base_compose.get("networks", {}).get("sovereign_internal_net", {}).get("internal") is True
+    ), "docker-compose.yml must define sovereign_internal_net with internal: true"
+    assert "vllm-sovereign" in prod_compose.get("services", {}), (
+        "docker-compose.prod.yml must define hardened vllm-sovereign service"
+    )
+    for rb_path in sorted((ROOT / "docs" / "runbooks").glob("*.md")):
+        rb_text = rb_path.read_text(encoding="utf-8")
+        for forbidden in ("kubectl", "kustomize", "infra/k8s", "CloudNativePG"):
+            assert forbidden not in rb_text, (
+                f"Runbook {rb_path.name} still contains decommissioned Kubernetes term '{forbidden}'"
+            )
+
     print(
-        "Supply-chain verification passed: 40-char SHA CI actions, 7-day cooldowns (pnpm & uv), contract SHA parity, and sovereign routing verified."
+        "Supply-chain verification passed: 40-char SHA CI actions, 7-day cooldowns (pnpm & uv), contract SHA parity, Docker Compose hardening, and sovereign routing verified."
     )
 
 

@@ -1,15 +1,33 @@
-# Local SSRA Assist Stack + Mock Upstreams (Section 15, 16, 18)
+# Hardened SSRA Assist Docker Compose Stack (Compose Specification 2026 — Section 15, 16, 18)
 name: ssra-cx
+
+x-hardened-defaults: &hardened-defaults
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  pids_limit: 256
+  restart: on-failure:5
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   postgres:
+    <<: *hardened-defaults
     image: pgvector/pgvector:pg18
     environment:
       POSTGRES_USER: ssra
-      POSTGRES_PASSWORD: ssra_local_dev_only
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ssra_cx
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql:rw
+    networks:
+      - sovereign_internal_net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ssra -d ssra_cx"]
       interval: 5s
@@ -17,17 +35,36 @@ services:
       retries: 10
 
   valkey:
+    <<: *hardened-defaults
     image: valkey/valkey:8.1-alpine
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+      - /data:rw,noexec,nosuid,size=128m
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    networks:
+      - sovereign_internal_net
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   nats:
+    <<: *hardened-defaults
     image: nats:2.11-alpine
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     command: ["-js"]
     ports:
-      - "4222:4222"
+      - "127.0.0.1:4222:4222"
+    networks:
+      - sovereign_internal_net
 
   keycloak:
+    <<: *hardened-defaults
     image: quay.io/keycloak/keycloak:26.4.11
     command: ["start-dev", "--import-realm"]
     environment:
@@ -36,26 +73,65 @@ services:
     volumes:
       - ../keycloak/ssra-realm.json:/opt/keycloak/data/import/ssra-realm.json:ro
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
+    networks:
+      - edge_net
+      - sovereign_internal_net
 
   api:
+    <<: *hardened-defaults
     build:
       context: ../..
       dockerfile: services/api/Dockerfile
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    networks:
+      - edge_net
+      - sovereign_internal_net
     depends_on:
-      - postgres
-      - valkey
-      - nats
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   agent-runtime:
+    <<: *hardened-defaults
     build:
       context: ../..
       dockerfile: services/agent-runtime/Dockerfile
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
+    # Principle 8: Attached only to internal network; zero direct outbound internet access
+    networks:
+      - sovereign_internal_net
     depends_on:
-      - api
-      - postgres
-      - valkey
+      api:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+networks:
+  edge_net:
+    driver: bridge
+  sovereign_internal_net:
+    driver: bridge
+    internal: true
+
+volumes:
+  pgdata:
+    driver: local
