@@ -1375,3 +1375,58 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     assert len(pga_ussd.screen_text) <= 182
     with pytest.raises(ValueError):
         render_ussd_screen(session_id="u_bad", ussd_input="", elapsed_seconds=-1)
+
+    # 8. Security, Privacy & ISO/IEC 42001 + NIST AI 600-1 AI Governance
+    from ssra_security import evaluate_iso42001_nist_ai600_compliance, redact_pii
+
+    ar_red = redact_pii(
+        "رقمي الضريبي ١٠٠٢٠٠١٢٣٤ وبريدي taxpayer@example.com وجوازي R12345678 بينما support@nra.gov.ss رسمي"
+    )
+    assert "••••1234" in ar_red.redacted_text
+    assert "[REDACTED_EMAIL]" in ar_red.redacted_text
+    assert "support@nra.gov.ss" in ar_red.redacted_text
+    assert "•••678" in ar_red.redacted_text
+    assert set(ar_red.pii_tags) >= {"SSRA_TIN", "EMAIL_ADDRESS", "PASSPORT_SS"}
+
+    enc_v1 = OpenBaoTransitEncryptor(master_key_material="key_v1", key_version=1)
+    ct_v1 = enc_v1.encrypt_field("TIN-1002001234")
+    enc_v2 = OpenBaoTransitEncryptor(
+        master_key_material="key_v2",
+        key_version=2,
+        previous_keys={1: "key_v1"},
+    )
+    ct_v2 = enc_v2.rewrap_ciphertext(ct_v1)
+    assert ct_v2.startswith("vault:v2:")
+    assert enc_v2.decrypt_field(ct_v2) == "TIN-1002001234"
+    with pytest.raises(SSRAError):
+        enc_v2.decrypt_field("vault:v99:YWJj")
+
+    gov_ok = evaluate_iso42001_nist_ai600_compliance(
+        numeric_accuracy=1.0,
+        citation_precision=1.0,
+        cross_subject_leakage_cases=0,
+        accuracy_by_locale={"en": 1.0, "pga": 1.0, "ar": 1.0},
+        audit_chain_intact=True,
+        kill_switches_operational=True,
+    )
+    assert gov_ok.compliant is True
+    gov_fail = evaluate_iso42001_nist_ai600_compliance(
+        numeric_accuracy=0.95,
+        citation_precision=0.90,
+        cross_subject_leakage_cases=1,
+        accuracy_by_locale={"en": 1.0, "pga": 0.80},
+        audit_chain_intact=False,
+        kill_switches_operational=False,
+    )
+    assert gov_fail.compliant is False
+    assert len(gov_fail.violations) == 6
+    gov_nan = evaluate_iso42001_nist_ai600_compliance(
+        numeric_accuracy=float("nan"),
+        citation_precision=float("nan"),
+        cross_subject_leakage_cases=0,
+        accuracy_by_locale={"en": float("nan")},
+        audit_chain_intact=True,
+        kill_switches_operational=True,
+    )
+    assert gov_nan.compliant is False
+    assert len(gov_nan.violations) == 3
