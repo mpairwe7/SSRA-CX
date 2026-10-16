@@ -1,0 +1,19 @@
+[project]
+name = "ssra-testing"
+version = "0.1.0"
+description = "Synthetic data factories and test fixtures for SSRA Assist (never real taxpayer data)"
+requires-python = ">=3.12,<3.16"
+dependencies = [
+    "pydantic==2.14.0",
+    "ssra-core",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ssra_testing"]
+
+[tool.uv.sources]
+ssra-core = { workspace = true }
