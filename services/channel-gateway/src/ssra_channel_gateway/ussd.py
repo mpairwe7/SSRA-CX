@@ -28,7 +28,10 @@ def render_ussd_screen(
     session_id: str,
     ussd_input: str,
     elapsed_seconds: int = 0,
+    locale: str = "en",
 ) -> UssdScreenResponse:
+    if elapsed_seconds < 0:
+        raise ValueError("elapsed_seconds must be non-negative")
     if elapsed_seconds > USSD_SESSION_TTL_SECONDS:
         msg = "END Session timed out. Dial short code again or visit https://etax.nra.gov.ss/"
         return UssdScreenResponse(
@@ -41,15 +44,26 @@ def render_ussd_screen(
     steps = [s for s in cleaned.split("*") if s]
 
     if not steps:
-        menu = (
-            "CON SSRA Official Menu:\n"
-            "1. TIN Registration\n"
-            "2. Cash-Free Bank Payment\n"
-            "3. PAYE Deadlines\n"
-            "4. Verify SSRA Sender\n"
-            "9. Send Details by SMS\n"
-            "0. Officer Callback"
-        )
+        if locale == "pga":
+            menu = (
+                "CON Qaima ta SSRA:\n"
+                "1. Tasjil TIN\n"
+                "2. Dafa bil Bank\n"
+                "3. Mawid PAYE\n"
+                "4. At'akkad min SSRA\n"
+                "9. Arsil bil SMS\n"
+                "0. Muwazaf SSRA"
+            )
+        else:
+            menu = (
+                "CON SSRA Official Menu:\n"
+                "1. TIN Registration\n"
+                "2. Cash-Free Bank Payment\n"
+                "3. PAYE Deadlines\n"
+                "4. Verify SSRA Sender\n"
+                "9. Send Details by SMS\n"
+                "0. Officer Callback"
+            )
         return UssdScreenResponse(
             session_id=session_id,
             response_type="CON",

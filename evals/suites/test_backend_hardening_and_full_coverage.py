@@ -1334,3 +1334,44 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     )
     assert legal_chunks[1].section_anchor == "Part-XII-Sec-1.74"
     assert "Tax Act 2009 Regulations" in legal_chunks[1].contextual_header
+
+    # 7. Channel specifications: 3GPP TS 23.038 GSM-7 Extended septets, WhatsApp interactive buttons/lists, & USSD PGA
+    from ssra_channel_gateway import (
+        WhatsAppListRow,
+        WhatsAppReplyButton,
+        render_ussd_screen,
+        validate_whatsapp_list_rows,
+        validate_whatsapp_reply_buttons,
+    )
+
+    ext_sms = compute_sms_segments("TIN [1234] €100")
+    assert ext_sms["encoding"] == "GSM-7"
+    assert ext_sms["septet_or_code_unit_count"] == 18  # '[', ']', '€' each count as 2 septets
+    backtick_sms = compute_sms_segments("Backtick ` forces UCS-2")
+    assert backtick_sms["encoding"] == "UCS-2"
+
+    btns = validate_whatsapp_reply_buttons([WhatsAppReplyButton(id="b1", title="Confirm TIN")])
+    assert len(btns) == 1
+    with pytest.raises(SSRAError):
+        validate_whatsapp_reply_buttons([])
+    with pytest.raises(SSRAError):
+        validate_whatsapp_reply_buttons(
+            [WhatsAppReplyButton(id="b1", title="x"), WhatsAppReplyButton(id="b1", title="y")]
+        )
+    with pytest.raises(SSRAError):
+        validate_whatsapp_reply_buttons([WhatsAppReplyButton(id="b1", title="T" * 25)])
+
+    rows = validate_whatsapp_list_rows([WhatsAppListRow(id="r1", title="TIN Registration")])
+    assert len(rows) == 1
+    with pytest.raises(SSRAError):
+        validate_whatsapp_list_rows([])
+    with pytest.raises(SSRAError):
+        validate_whatsapp_list_rows([WhatsAppListRow(id="r1", title="T" * 30)])
+    with pytest.raises(SSRAError):
+        validate_whatsapp_list_rows([WhatsAppListRow(id="r1", title="TIN", description="D" * 80)])
+
+    pga_ussd = render_ussd_screen(session_id="u_pga_1", ussd_input="", locale="pga")
+    assert pga_ussd.screen_text.startswith("CON Qaima ta SSRA")
+    assert len(pga_ussd.screen_text) <= 182
+    with pytest.raises(ValueError):
+        render_ussd_screen(session_id="u_bad", ussd_input="", elapsed_seconds=-1)
