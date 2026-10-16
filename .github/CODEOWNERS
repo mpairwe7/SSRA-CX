@@ -1,0 +1,8 @@
+# CODEOWNERS — Mandatory Change-Advisory Sign-Off (Sections 4, 6.3, 12.5, 15)
+*                               @ssra-org/platform-engineering
+/ai/policies/risk-tiers.yaml    @ssra-org/secops @ssra-org/principal-architect
+/ai/policies/                   @ssra-org/secops @ssra-org/principal-architect
+/ai/prompts/                    @ssra-org/ai-governance @ssra-org/legal-directorate
+/knowledge/                     @ssra-org/legal-directorate @ssra-org/domestic-tax
+/docs/adr/                      @ssra-org/principal-architect @ssra-org/technical-lead
+/docs/security/                 @ssra-org/secops

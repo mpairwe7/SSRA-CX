@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ssra.gov.ss/schemas/conversation-event.schema.json",
+  "title": "ConversationEvent",
+  "description": "Canonical CloudEvents 1.0 envelope for omnichannel SSRA Assist conversation events.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specversion", "id", "source", "type", "subject", "time", "datacontenttype", "data"],
+  "properties": {
+    "specversion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "UUIDv7 event identifier"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "urn:ssra:channel:web",
+        "urn:ssra:channel:whatsapp",
+        "urn:ssra:channel:sms",
+        "urn:ssra:channel:ussd",
+        "urn:ssra:channel:voice",
+        "urn:ssra:channel:console"
+      ]
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "ssra.conversation.message.v1",
+        "ssra.conversation.confirmation.v1",
+        "ssra.conversation.control.v1"
+      ]
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Conversation thread_id"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "datacontenttype": {
+      "type": "string",
+      "const": "application/json"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locale", "channel", "parts", "capabilities"],
+      "properties": {
+        "locale": {
+          "type": "string",
+          "enum": ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+        },
+        "channel": {
+          "type": "string",
+          "enum": ["web", "whatsapp", "sms", "ussd", "voice", "console"]
+        },
+        "parts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "value"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["text", "media_ref", "button_reply", "confirmation_token"]
+              },
+              "value": {
+                "type": "string"
+              },
+              "mime_type": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_len", "rich_ui", "buttons", "media", "latency_budget_ms", "async_only"],
+          "properties": {
+            "max_len": { "type": "integer", "minimum": 70 },
+            "rich_ui": { "type": "boolean" },
+            "buttons": { "type": "boolean" },
+            "media": { "type": "boolean" },
+            "latency_budget_ms": { "type": "integer", "minimum": 500 },
+            "async_only": { "type": "boolean" }
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    }
+  }
+}

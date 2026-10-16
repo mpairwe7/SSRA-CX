@@ -1,0 +1,16 @@
+{
+  "name": "SSRA Assist DevContainer",
+  "dockerComposeFile": ["../infra/compose/docker-compose.yml"],
+  "service": "api",
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "charliermarsh.ruff",
+        "detachhead.basedpyright",
+        "biomejs.biome",
+        "task.vscode-task"
+      ]
+    }
+  }
+}

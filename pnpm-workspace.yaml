@@ -1,0 +1,6 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Section 12.4: Enforce a dependency cooldown of at least 7 days (10080 minutes)
+minimumReleaseAge: 10080

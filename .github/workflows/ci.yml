@@ -1,0 +1,45 @@
+# Portable DevSecOps CI Pipeline (Section 12.4 & 15, ADR-015)
+# Supply-chain rule: Every GitHub Action is pinned by immutable 40-char commit SHA.
+
+name: ssra-cx-ci
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, Typecheck, Unit, Contract, Schema & Eval Slice
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js 24 LTS
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: "9.15.9"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@e92bafb6253dcd438e028bfc1fffb3e211b77185 # v6.0.1
+
+      - name: Install dependencies (frozen lockfiles + 7-day cooldown)
+        run: |
+          pnpm install --frozen-lockfile
+          uv sync --locked
+
+      - name: Run Taskfile lint, test, and eval gates
+        run: |
+          npx task gen
+          npx task lint
+          npx task test
+          npx task eval

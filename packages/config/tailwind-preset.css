@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ssra-navy: #0b2545;
+  --color-ssra-blue: #134074;
+  --color-ssra-gold: #c99700;
+  --color-ssra-green: #1b7f4c;
+  --color-ssra-red: #b42318;
+  --color-ssra-surface: #f8fafc;
+  --font-sans: "Noto Sans", system-ui, sans-serif;
+  --font-arabic: "Noto Naskh Arabic", "Noto Sans", system-ui, sans-serif;
+}

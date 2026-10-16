@@ -1,0 +1,16 @@
+{
+  "name": "@ssra/config",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "files": [
+    "tsconfig.base.json",
+    "biome.json",
+    "tailwind-preset.css"
+  ],
+  "scripts": {
+    "lint": "echo 'config package ok'",
+    "typecheck": "echo 'config package ok'",
+    "test": "echo 'config package ok'"
+  }
+}

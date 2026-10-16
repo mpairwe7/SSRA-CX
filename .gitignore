@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+*.egg-info/
+dist/
+build/
+
+# Node / TypeScript
+node_modules/
+.next/
+.turbo/
+out/
+coverage/
+*.tsbuildinfo
+
+# Environment & Secrets (NEVER commit secrets or real taxpayer data)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/settings.json
+
+# Local source prompt export files (canonical copy is committed at docs/00-master-prompt.md)
+SSRA Assist Master Build Prompt for an Agentic CX Platform.md
+SSRA Assist Master Build Prompt for an Agentic CX Platform.pdf

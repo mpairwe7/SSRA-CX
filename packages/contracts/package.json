@@ -1,0 +1,25 @@
+{
+  "name": "@ssra/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "biome check src tests schemas",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@ssra/config": "workspace:*",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "extends": "@ssra/config/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

@@ -1,0 +1,11 @@
+title = "SSRA Assist Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlist SHA-256 contract digests and prose phrase 'S3-compatible'"
+regexes = [
+  '''S3-compatible''',
+  '''[0-9a-f]{64}''',
+]

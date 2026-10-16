@@ -1,0 +1,63 @@
+version: "3"
+
+env:
+  PATH: "/home/developer/.nvm/versions/node/v24.16.0/bin:{{.ENV.PATH}}"
+  PYTHONUNBUFFERED: "1"
+  TZ: "UTC"
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  gen:
+    desc: Generate Pydantic v2, TypeScript, Zod 4 schemas, OpenAPI client, CycloneDX SBOM, and ingested corpus snapshot manifest
+    cmds:
+      - uv run python tools/codegen/generate_contracts.py
+      - uv run python tools/codegen/export_openapi.py
+      - uv run python tools/generate_sbom.py
+      - uv run python tools/ingest_public_corpus.py
+
+  lint:
+    desc: Run Ruff, basedpyright (strict), import-linter, JSON Schema validation, gitleaks, Biome, and TypeScript tsc
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+      - uv run basedpyright
+      - uv run lint-imports
+      - uv run python tools/validate_schemas.py
+      - uv run python tools/check_openapi_diff.py
+      - uv run python tools/verify_frontend_budgets_and_a11y.py
+      - uv run python tools/verify_supply_chain_and_signatures.py
+      - gitleaks detect --no-git
+      - pnpm run lint
+      - pnpm run typecheck
+
+  test:
+    desc: Run Python (pytest + Hypothesis), rules engine mutation testing, coverage gates (>=90% domain, >=80% overall), and TypeScript (Vitest) test suites
+    cmds:
+      - uv run pytest -q
+      - uv run python tools/verify_rules_mutations.py
+      - uv run python tools/check_coverage_gate.py
+      - pnpm run test
+
+  eval:
+    desc: Run SSRA Assist evaluation harness, generate evals/reports/, benchmark ASGI SLOs, and verify Phase Exit Gates 0-4
+    cmds:
+      - uv run pytest evals/suites evals/redteam -q
+      - uv run python tools/run_eval_report.py
+      - uv run python tools/benchmark_asgi.py
+      - uv run python tools/run_dr_restore_drill.py
+      - uv run python tools/verify_phase_gates.py
+
+  up:
+    desc: Bring up the local SSRA Assist stack via Docker Compose and run end-to-end health & AG-UI smoke verification
+    cmds:
+      - docker compose -f infra/compose/docker-compose.yml up -d --build
+      - uv run python tools/smoke_test_stack.py
+
+  down:
+    desc: Stop the local SSRA Assist Docker Compose stack
+    cmds:
+      - docker compose -f infra/compose/docker-compose.yml down --remove-orphans

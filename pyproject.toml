@@ -1,0 +1,181 @@
+[project]
+name = "ssra-cx-workspace"
+version = "0.1.0"
+description = "SSRA Assist — Sovereign Omnichannel Agentic CX Platform Python Workspace"
+readme = "README.md"
+requires-python = ">=3.12,<3.16"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "fastapi==0.139.2",
+    "pydantic==2.14.0",
+    "pydantic-settings==2.15.0",
+    "sqlalchemy==2.1.4",
+    "asyncpg==0.32.0",
+    "alembic==1.20.0",
+    "httpx==0.28.1",
+    "stamina==26.1.0",
+    "tenacity==9.2.1",
+    "structlog==26.1.0",
+    "orjson==3.13.0",
+    "uvicorn==0.54.0",
+    "langgraph==1.2.14",
+    "langgraph-checkpoint-postgres==3.1.2",
+    "temporalio==1.34.0",
+    "mcp==2.3.0",
+    "ag-ui-protocol==1.0.0",
+    "pyyaml==6.0.2",
+    "jsonschema==4.25.1",
+    "ssra-core",
+    "ssra-security",
+    "ssra-llm",
+    "ssra-mcp",
+    "ssra-rules",
+    "ssra-adapters",
+    "ssra-testing",
+    "ssra-api",
+    "ssra-runtime",
+    "ssra-channel-gateway",
+    "ssra-workers",
+    "ssra-voice",
+    "ssra-mcp-knowledge",
+    "ssra-mcp-tax-facts",
+    "ssra-mcp-official-channels",
+    "ssra-mcp-taxpayer",
+    "ssra-mcp-ledger",
+    "ssra-mcp-payments-info",
+    "ssra-mcp-tcc",
+    "ssra-mcp-customs",
+    "ssra-mcp-cases",
+    "ssra-mcp-appointments",
+    "ssra-mcp-notifications",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "anyio==4.10.0",
+    "hypothesis==6.168.5",
+    "ruff==0.17.0",
+    "basedpyright==1.40.2",
+    "import-linter==2.15",
+]
+
+[tool.uv]
+# Section 12.4: Mandatory 7-day dependency cooldown (verified on 2026-10-16 -> cutoff 2026-10-09)
+exclude-newer = "2026-10-09T23:59:59Z"
+
+[tool.uv.workspace]
+members = [
+    "libs/*",
+    "services/*",
+    "mcp-servers/*",
+]
+exclude = [
+    "mcp-servers/_template",
+]
+
+[tool.uv.sources]
+ssra-core = { workspace = true }
+ssra-security = { workspace = true }
+ssra-llm = { workspace = true }
+ssra-mcp = { workspace = true }
+ssra-rules = { workspace = true }
+ssra-adapters = { workspace = true }
+ssra-testing = { workspace = true }
+ssra-api = { workspace = true }
+ssra-runtime = { workspace = true }
+ssra-channel-gateway = { workspace = true }
+ssra-workers = { workspace = true }
+ssra-voice = { workspace = true }
+ssra-mcp-knowledge = { workspace = true }
+ssra-mcp-tax-facts = { workspace = true }
+ssra-mcp-official-channels = { workspace = true }
+ssra-mcp-taxpayer = { workspace = true }
+ssra-mcp-ledger = { workspace = true }
+ssra-mcp-payments-info = { workspace = true }
+ssra-mcp-tcc = { workspace = true }
+ssra-mcp-customs = { workspace = true }
+ssra-mcp-cases = { workspace = true }
+ssra-mcp-appointments = { workspace = true }
+ssra-mcp-notifications = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "S", "ASYNC", "RUF"]
+ignore = ["S101", "E501", "RUF001"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S105", "S106", "S107"]
+"evals/**" = ["S105", "S106", "S107"]
+"libs/ssra_testing/**" = ["S105", "S106", "S107"]
+"libs/ssra_mcp/**" = ["N815"]
+
+[tool.basedpyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.12"
+include = ["libs", "services", "mcp-servers", "evals", "tools"]
+exclude = ["**/node_modules", "**/.venv", "**/__pycache__"]
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+
+[tool.pytest.ini_options]
+testpaths = [
+    "libs",
+    "services",
+    "mcp-servers",
+]
+addopts = "-ra -q"
+
+[tool.importlinter]
+root_packages = ["ssra_api"]
+
+[[tool.importlinter.contracts]]
+name = "Modular monolith bounded contexts are independent"
+type = "independence"
+modules = [
+    "ssra_api.conversations",
+    "ssra_api.identity_link",
+    "ssra_api.cases",
+    "ssra_api.appointments",
+    "ssra_api.knowledge_admin",
+    "ssra_api.consent",
+    "ssra_api.analytics_api",
+    "ssra_api.admin",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain layers do not depend on API or infrastructure layers"
+type = "forbidden"
+source_modules = [
+    "ssra_api.conversations.domain",
+    "ssra_api.identity_link.domain",
+    "ssra_api.cases.domain",
+    "ssra_api.appointments.domain",
+    "ssra_api.knowledge_admin.domain",
+    "ssra_api.consent.domain",
+    "ssra_api.analytics_api.domain",
+    "ssra_api.admin.domain",
+]
+forbidden_modules = [
+    "ssra_api.conversations.api",
+    "ssra_api.conversations.infrastructure",
+    "ssra_api.identity_link.api",
+    "ssra_api.identity_link.infrastructure",
+    "ssra_api.cases.api",
+    "ssra_api.cases.infrastructure",
+    "ssra_api.appointments.api",
+    "ssra_api.appointments.infrastructure",
+    "ssra_api.knowledge_admin.api",
+    "ssra_api.knowledge_admin.infrastructure",
+    "ssra_api.consent.api",
+    "ssra_api.consent.infrastructure",
+    "ssra_api.analytics_api.api",
+    "ssra_api.analytics_api.infrastructure",
+    "ssra_api.admin.api",
+    "ssra_api.admin.infrastructure",
+]

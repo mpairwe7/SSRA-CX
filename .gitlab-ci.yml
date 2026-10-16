@@ -1,0 +1,23 @@
+# Portable Self-Hosted GitLab / Forgejo CI Pipeline (Section 15 & 16)
+stages:
+  - verify
+  - eval
+
+verify_code_and_contracts:
+  stage: verify
+  script:
+    - pnpm install --frozen-lockfile
+    - uv sync --locked
+    - task gen
+    - task lint
+    - task test
+
+run_eval_and_redteam_gates:
+  stage: eval
+  script:
+    - task eval
+  artifacts:
+    paths:
+      - evals/reports/latest-eval-report.json
+      - evals/reports/latest-eval-report.md
+      - infra/observability/cyclonedx-sbom.json

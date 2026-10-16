@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ssra.gov.ss/schemas/tax-fact.schema.json",
+  "title": "TaxFact",
+  "description": "Structured, versioned tax rate, threshold, deadline, penalty or fee record with legal citation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "key",
+    "value",
+    "unit",
+    "currency",
+    "applies_to",
+    "effective_from",
+    "legal_ref",
+    "approved_by",
+    "version"
+  ],
+  "properties": {
+    "key": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]+$"
+    },
+    "value": {
+      "type": "string",
+      "description": "Canonical decimal or integer string representation"
+    },
+    "unit": {
+      "type": "string",
+      "enum": ["PERCENT", "SSP", "USD", "DAY_OF_MONTH", "DAYS", "MONTHS", "YEAR"]
+    },
+    "currency": {
+      "type": "string",
+      "enum": ["SSP", "USD", "NONE"]
+    },
+    "applies_to": {
+      "type": "string",
+      "minLength": 1
+    },
+    "effective_from": {
+      "type": "string",
+      "format": "date"
+    },
+    "effective_to": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "legal_ref": {
+      "type": "string",
+      "minLength": 5
+    },
+    "approved_by": {
+      "type": "string",
+      "minLength": 2
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

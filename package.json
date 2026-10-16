@@ -1,0 +1,27 @@
+{
+  "name": "ssra-cx",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SSRA Assist — Sovereign Multilingual Omnichannel Agentic CX Platform for the South Sudan Revenue Authority",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "biome check apps packages && turbo run lint",
+    "format": "biome format --write apps packages",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@go-task/cli": "3.54.0",
+    "turbo": "2.11.7",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3",
+    "zod": "4.6.5"
+  }
+}
