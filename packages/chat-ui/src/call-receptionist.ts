@@ -155,7 +155,8 @@ export function buildCallReceptionistScreen(params: {
   const statusPillTone =
     params.status === "ai" || params.status === "officer"
       ? "active"
-      : params.status === "transferring" ||
+      : params.status === "connecting" ||
+          params.status === "transferring" ||
           params.status === "on_hold" ||
           params.status === "reconnecting"
         ? "transferring"

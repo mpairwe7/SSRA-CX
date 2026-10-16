@@ -40,9 +40,9 @@ export function signedInName(
   if (who.email) return who.email;
   const id = who.external_id ?? "";
   if (!id) return "your account";
-  const opaque = /^[a-z0-9-]+\|(.+)$/i.exec(id);
-  if (opaque?.[1]) {
-    const tail = opaque[1].slice(-6);
+  const pipeIdx = id.indexOf("|");
+  if (pipeIdx > 0 && pipeIdx < id.length - 1) {
+    const tail = id.slice(pipeIdx + 1).slice(-6);
     return `${roleLabel(who.role)} · …${tail}`;
   }
   return id;
@@ -281,7 +281,7 @@ export function buildAuditorTrailIntegrityView(data: AuditVerificationReport) {
     const explanation = first
       ? `Event #${first.seq} fails its check (${first.reason}). Everything from that event on cannot be relied on as evidence until the cause is found.`
       : sealBreak
-        ? `Events #${sealBreak.first_seq} to #${sealBreak.last_seq} no longer match their seal (${sealBreak.reason}). Every fingerprint in that range was recomputed to hide the change.`
+        ? `Events #${sealBreak.first_seq} to #${sealBreak.last_seq} no longer match their recorded seal (${sealBreak.reason}).`
         : "One or more events fail their check.";
     return {
       bannerRole: "alert" as const,

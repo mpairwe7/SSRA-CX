@@ -312,8 +312,9 @@ export function buildEvaluationDashboardView(params: {
   readonly staticFallbackMetrics: readonly EvalMetricItem[];
 }) {
   const isLive = Boolean(params.liveEvalMetrics && params.liveEvalMetrics.length > 0);
-  const activeMetrics = params.liveEvalMetrics ?? params.staticFallbackMetrics;
-  const allPass = activeMetrics.every((m) => m.passed);
+  const activeMetrics =
+    isLive && params.liveEvalMetrics ? params.liveEvalMetrics : params.staticFallbackMetrics;
+  const allPass = activeMetrics.length > 0 && activeMetrics.every((m) => m.passed);
   const shell = buildOpsPageShell({
     eyebrow: "Observe",
     title: "Answer evaluation",

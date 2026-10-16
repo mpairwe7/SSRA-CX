@@ -131,10 +131,11 @@ export function cleanMarkdownForSpeech(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/`([^`]+)`/g, "$1")
-    .replace(/\[(?:cit_|\d+|Sec-|Art-)[^\]]*\]/gi, "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\[(?:cit_|\d+|Sec-|Art-)[^\]]*\](?!\()/gi, "")
     .replace(/https?:\/\/\S+/g, "official SSRA portal")
-    .replace(/[*_~>#-]+/g, " ")
+    .replace(/^\s*[-*+]\s+/gm, " ")
+    .replace(/[*_~>#]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
