@@ -1,0 +1,25 @@
+# Architecture Decision Records (`docs/adr/`)
+
+Every architectural decision with a real reversal cost is recorded here before implementation. Per [`docs/00-master-prompt.md`](../00-master-prompt.md), each ADR documents **Context**, **Options Considered**, **Decision**, **Consequences**, and **Reversal Cost**.
+
+---
+
+## ADR Catalog (ADR-001 to ADR-015)
+
+| ID | Title | One-Line Problem Statement | Status | Reversal Cost |
+|---|---|---|---|---|
+| **[ADR-001](./0001-record-architecture-decisions.md)** | Record Architecture Decisions | How do we govern, document, and evaluate the reversal cost of architectural decisions across SSRA Assist? | Proposed (Drafted) | Low |
+| **[ADR-002](./0002-service-decomposition-and-modular-monolith.md)** | Service Decomposition & Modular Monolith | How do we partition backend responsibilities to balance operational simplicity for SSRA's local team with blast-radius isolation for AI and channels? | Proposed (Drafted) | Medium |
+| **[ADR-003](./0003-orchestration-langgraph-and-temporal.md)** | Dual Orchestration: LangGraph & Temporal | How do we separate low-latency, interruptible conversational control flow from long-running, durable background business processes? | Proposed (Drafted) | High |
+| **[ADR-004](./0004-mcp-2026-07-28-and-agentgateway-egress.md)** | Stateless MCP 2026-07-28 & `agentgateway` Single Egress | How do we expose domain tools and govern all model/tool traffic with zero-trust authorization, auditability, and horizontal scalability? | Proposed (Drafted) | High |
+| **[ADR-005](./0005-ag-ui-streaming-and-generative-ui-registry.md)** | AG-UI Streaming Protocol & Allow-Listed Generative UI Registry | How do we stream rich, interactive agent responses to low-bandwidth clients without exposing browsers to model-generated HTML/JS injection? | Proposed (Drafted) | Medium |
+| **[ADR-006](./0006-postgresql-18-pgvector-hybrid-retrieval.md)** | PostgreSQL 18 + pgvector 0.8+ Hybrid Retrieval | How do we store operational state, checkpoints, and multilingual legal embeddings in one sovereign database before introducing external search engines? | Proposed (Drafted) | Medium |
+| **[ADR-007](./0007-sovereign-model-hosting-and-tiered-routing.md)** | Sovereign Open-Weight Model Hosting & Tiered Routing | How do we run LLM inference in-country on NCA infrastructure with a deterministic degradation ladder and strictly gated external fallbacks? | Proposed (Drafted) | Medium |
+| **[ADR-008](./0008-risk-tiered-autonomy-subject-binding-and-opa.md)** | Risk-Tiered Autonomy (T0–T4), Subject Binding & OPA Policy Gate | How do we guarantee in code and policy that the assistant cannot leak cross-taxpayer data or execute unauthorized actions? | Proposed (Drafted) | High |
+| **[ADR-009](./0009-deterministic-tax-facts-registry-and-numeric-provenance.md)** | Deterministic Tax Facts Registry & Numeric Provenance Guard | How do we ensure 100% numeric accuracy on South Sudan tax rates, thresholds, deadlines, and calculations with zero hallucinated figures? | Proposed (Drafted) | High |
+| **[ADR-010](./0010-nextjs-16-typescript-7-turborepo-and-biome.md)** | Next.js 16.3.x, TypeScript 7, Turborepo & Biome Frontend Stack | How do we build and type-check two secure, low-bandwidth Next.js 16 applications sharing one RTL-ready design system? | Proposed (Drafted) | Medium |
+| **[ADR-011](./0011-low-bandwidth-taxpayer-pwa-and-service-worker.md)** | Low-Bandwidth Taxpayer PWA & Service Worker Strategy | How do we deliver an offline-capable, 2G-resilient PWA under Next.js 16 and Turbopack within a 150 KB gzip first-load budget? | Proposed (Drafted) | Low–Medium |
+| **[ADR-012](./0012-bff-authentication-keycloak-passkeys-and-sessions.md)** | BFF Authentication with Keycloak OIDC, Passkeys & Server Sessions | How do we authenticate taxpayers (OTP+TIN) and staff (WebAuthn passkeys) while keeping all OAuth tokens out of browser JavaScript? | Proposed (Drafted) | Medium |
+| **[ADR-013](./0013-python-314-315-fastapi-and-asgi-server.md)** | Python 3.14/3.15 Workspace, FastAPI 0.13x & ASGI Server Selection | How do we standardise the Python monorepo toolchain (`uv`, Ruff, basedpyright) and evaluate Uvicorn vs. Granian for container deployments? | Proposed (Drafted) | Low |
+| **[ADR-014](./0014-future-a2a-v1-interoperability-boundary.md)** | Future Agent-to-Agent (A2A v1.0) Interoperability Boundary | How do we reserve a governed boundary for future multi-agency collaboration with South Sudan's National eServices platform? | Proposed (Drafted) | Low |
+| **[ADR-015](./0015-supply-chain-hardening-and-sovereign-gitops.md)** | Supply-Chain Hardening (SLSA L3, 7-Day Cooldown) & Sovereign GitOps | How do we defend CI/CD, dependencies, and container images against 2026-class supply-chain compromises (such as the March 2026 LiteLLM/Trivy incident)? | Proposed (Drafted) | Medium |
