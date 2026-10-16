@@ -1,0 +1,38 @@
+# Sovereign Model Routing & 5-Step Degradation Ladder (Section 6.4 & 13)
+
+version: "2026.10.1"
+gateway_url: "http://localhost:8090"
+
+budgets:
+  max_tokens_per_turn: 2048
+  max_tool_calls_per_turn: 4
+  max_wall_time_ms: 8000
+
+node_routes:
+  input_guard:
+    tier: "fast_guard"
+    primary_model: "ssra-sovereign/qwen2.5-7b-instruct"
+    max_tokens: 256
+    timeout_ms: 1200
+  understand:
+    tier: "fast_router"
+    primary_model: "ssra-sovereign/qwen2.5-7b-instruct"
+    max_tokens: 512
+    timeout_ms: 1500
+  compose:
+    tier: "multilingual_composer"
+    primary_model: "ssra-sovereign/qwen2.5-14b-instruct"
+    secondary_model: "ssra-sovereign/llama-3.3-8b-instruct"
+    max_tokens: 1024
+    timeout_ms: 4500
+
+external_providers:
+  enabled: false  # Blocked by default until SSRA approves OQ-004 under Zero-Data-Retention
+  allowed_tiers: ["T0"]
+
+degradation_ladder:
+  1: "PRIMARY_SOVEREIGN_VLLM"
+  2: "SECONDARY_SOVEREIGN_VLLM"
+  3: "SELF_HOSTED_CPU_QUANTIZED"
+  4: "RETRIEVAL_ONLY_ANSWER_CARDS"
+  5: "STATIC_FAQ_PLUS_CALLBACK"

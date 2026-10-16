@@ -1,0 +1,23 @@
+{
+  "approval_state": "PUBLISHED",
+  "approved_by": "SSRA Legal & Policy Directorate (Seed Baseline \u2014 Pending OQ-009 Sign-off)",
+  "checksum_sha256": "0ea2b21eb59eae355c212e8e12fbe6c99930c0adadb095641807c1a85c7110bd",
+  "counts": {
+    "chunks": 17,
+    "sources": 5,
+    "tax_facts": 12,
+    "termbase_entries": 5
+  },
+  "locales_covered": [
+    "ar",
+    "bfa",
+    "din",
+    "en",
+    "nus",
+    "pga",
+    "shk",
+    "zne"
+  ],
+  "published_at": "2026-10-16T00:00:00Z",
+  "snapshot_version": "2026.10.1"
+}

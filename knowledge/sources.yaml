@@ -1,0 +1,73 @@
+# SSRA Assist Knowledge Sources Manifest (Section 7 & 16)
+# Note: Only public, SSRA-approved statutory instruments and guidance are listed here.
+# No confidential drafts or taxpayer records are ever committed to Git.
+
+snapshot_version: "2026.10.1"
+approved_by: "SSRA Legal & Policy Directorate (Seed Baseline — Pending OQ-009 Sign-off)"
+published_at: "2026-10-16T00:00:00Z"
+
+sources:
+  - id: "doc_ssra_act_2023"
+    title: "South Sudan Revenue Authority Act, 2016 (as amended October 2023)"
+    doc_type: "ACT"
+    issuer: "Transitional National Legislative Assembly / SSRA"
+    gazette_or_circular_ref: "SSRA Amendment Act 2023 (Renaming NRA to SSRA)"
+    url: "https://cms.nra.gov.ss/uploads/SOUTH_SUDAN_REVENUE_AUTHORIRTY_ACT_2023_final_copy_677778ef23.pdf"
+    effective_from: "2023-10-01"
+    effective_to: null
+    supersedes: "National Revenue Authority Act, 2016"
+    languages: ["en"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_taxation_act_2009"
+    title: "Taxation Act, 2009 (as amended by Annual Financial Acts)"
+    doc_type: "ACT"
+    issuer: "Republic of South Sudan / SSRA"
+    gazette_or_circular_ref: "Taxation Act 2009 Consolidated"
+    url: "https://etax.nra.gov.ss/"
+    effective_from: "2009-01-01"
+    effective_to: null
+    supersedes: null
+    languages: ["en", "ar", "pga"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_financial_act_2024_2025"
+    title: "Financial Act 2024/2025 & SSRA Implementation Circular"
+    doc_type: "FINANCIAL_ACT"
+    issuer: "Ministry of Finance and Planning / SSRA"
+    gazette_or_circular_ref: "Financial Act FY 2024/2025 Circular"
+    url: "https://etax.nra.gov.ss/"
+    effective_from: "2024-07-01"
+    effective_to: null
+    supersedes: "Financial Act 2023/2024"
+    languages: ["en", "ar", "pga"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_etax_cash_free_directive_2026"
+    title: "March 2026 Directive on Exclusive National e-Tax & Cash-Free Bank Collection"
+    doc_type: "CIRCULAR"
+    issuer: "South Sudan Revenue Authority (SSRA)"
+    gazette_or_circular_ref: "SSRA-DIR-2026-03-CASHFREE"
+    url: "https://etax.nra.gov.ss/"
+    effective_from: "2026-03-01"
+    effective_to: null
+    supersedes: null
+    languages: ["en", "ar", "pga"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"
+
+  - id: "doc_etax_registration_guide"
+    title: "SSRA e-Tax Portal Guide: TIN Registration, Filing, Payment & Tax Compliance Certificates (TCC)"
+    doc_type: "PROCEDURE"
+    issuer: "SSRA Domestic Tax Department"
+    gazette_or_circular_ref: "SSRA-ETAX-GUIDE-2026"
+    url: "https://etax.nra.gov.ss/"
+    effective_from: "2021-07-01"
+    effective_to: null
+    supersedes: null
+    languages: ["en", "ar", "pga"]
+    audience: "PUBLIC"
+    approval_state: "PUBLISHED"

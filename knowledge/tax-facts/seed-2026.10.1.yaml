@@ -1,0 +1,136 @@
+# Structured, Versioned Tax Facts Seed Registry (Section 7 & 17)
+# Governance Note: Confirm statutory schedule updates with SSRA Legal (OQ-009) before Phase 1 production launch.
+
+snapshot_version: "2026.10.1"
+facts:
+  - key: "paye.bracket.1.max_monthly_ssp"
+    value: "50000"
+    unit: "SSP"
+    currency: "SSP"
+    applies_to: "Resident individual monthly employment income exempt band"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "paye.bracket.1.rate_percent"
+    value: "0"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Monthly employment income up to paye.bracket.1.max_monthly_ssp"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "paye.bracket.2.max_monthly_ssp"
+    value: "150000"
+    unit: "SSP"
+    currency: "SSP"
+    applies_to: "Resident individual monthly employment income band 2 upper limit"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "paye.bracket.2.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Monthly employment income between bracket 1 and bracket 2"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "paye.bracket.3.max_monthly_ssp"
+    value: "300000"
+    unit: "SSP"
+    currency: "SSP"
+    applies_to: "Resident individual monthly employment income band 3 upper limit"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "paye.bracket.3.rate_percent"
+    value: "15"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Monthly employment income between bracket 2 and bracket 3"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "paye.bracket.4.rate_percent"
+    value: "20"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Monthly employment income exceeding paye.bracket.3.max_monthly_ssp"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IV (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "paye.filing.deadline_day"
+    value: "15"
+    unit: "DAY_OF_MONTH"
+    currency: "NONE"
+    applies_to: "Monthly PAYE return and remittance due day of following month (Africa/Juba)"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended, Part IV Section 18 (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "wht.goods_and_services.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Domestic withholding tax on contracted goods and services (standard estimate band)"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IX (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "wht.rent.rate_percent"
+    value: "10"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Withholding tax on rental payments (standard estimate band)"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IX (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "wht.technical_fees.rate_percent"
+    value: "15"
+    unit: "PERCENT"
+    currency: "NONE"
+    applies_to: "Withholding tax on technical, management, and professional fees (standard estimate band)"
+    effective_from: "2024-07-01"
+    effective_to: null
+    legal_ref: "Taxation Act 2009 as amended by Financial Act 2024/2025, Part IX (Subject to OQ-009 Legal Sign-off)"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"
+
+  - key: "fiscal.year.start_month"
+    value: "7"
+    unit: "MONTHS"
+    currency: "NONE"
+    applies_to: "South Sudan Fiscal Year starts 1 July and ends 30 June"
+    effective_from: "2016-01-01"
+    effective_to: null
+    legal_ref: "SSRA Act 2016 as amended 2023, Financial Administration provisions"
+    approved_by: "SSRA Legal Directorate (Seed 2026.10.1)"
+    version: "2026.10.1"

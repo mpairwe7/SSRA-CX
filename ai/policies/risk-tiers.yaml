@@ -1,0 +1,95 @@
+# Canonical Risk-Tier Assignments (Section 4 & 8.4)
+# Governance Rule: Only an SSRA-approved ADR can modify tier assignments in this file.
+
+version: "2026.10.1"
+owner: "SSRA SecOps & Principal Architect"
+
+tiers:
+  T0:
+    name: "Public information"
+    requires_auth: false
+    requires_confirmation: false
+    requires_step_up: false
+    human_only: false
+  T1:
+    name: "Personal read"
+    requires_auth: true
+    min_auth_level: "T1_TIN_BOUND"
+    requires_confirmation: false
+    requires_step_up: false
+    human_only: false
+  T2:
+    name: "Low-risk write"
+    requires_auth: true
+    min_auth_level: "T1_TIN_BOUND"
+    requires_confirmation: true
+    requires_idempotency_key: true
+    requires_step_up: false
+    human_only: false
+  T3:
+    name: "Consequential action"
+    requires_auth: true
+    min_auth_level: "T3_STEP_UP"
+    requires_confirmation: true
+    requires_idempotency_key: true
+    requires_step_up: true
+    human_only: false
+  T4:
+    name: "Human only"
+    requires_auth: false
+    requires_confirmation: false
+    requires_step_up: false
+    human_only: true
+
+intent_tiers:
+  knowledge_qa: "T0"
+  guided_tin_registration: "T0"
+  guided_filing_and_payment: "T0"
+  guided_tcc: "T0"
+  calculate_paye: "T0"
+  calculate_withholding: "T0"
+  verify_official_channel: "T0"
+  report_scam: "T2"
+  get_balance: "T1"
+  get_filing_status: "T1"
+  get_tcc_status: "T1"
+  book_appointment: "T2"
+  create_case: "T2"
+  request_waiver_or_dispute_t4: "T4"
+  human_handoff: "T0"
+  out_of_scope: "T0"
+
+tool_tiers:
+  knowledge.search_knowledge: "T0"
+  knowledge.get_section: "T0"
+  knowledge.list_forms: "T0"
+  knowledge.get_office_info: "T0"
+  tax-facts.get_tax_fact: "T0"
+  tax-facts.list_tax_facts: "T0"
+  tax-facts.calculate_paye_estimate: "T0"
+  tax-facts.calculate_withholding_estimate: "T0"
+  official-channels.verify_payment_account: "T0"
+  official-channels.verify_sender: "T0"
+  official-channels.report_scam: "T2"
+  taxpayer.verify_tin: "T1"
+  taxpayer.get_registration_status: "T1"
+  taxpayer.get_profile_masked: "T1"
+  ledger.get_filing_status: "T1"
+  ledger.list_assessments: "T1"
+  ledger.get_balance: "T1"
+  ledger.list_payments: "T1"
+  payments-info.list_payment_channels: "T0"
+  payments-info.get_payment_instructions: "T0"
+  payments-info.generate_payment_reference: "T3"
+  tcc.get_tcc_status: "T1"
+  tcc.request_tcc: "T3"
+  customs.lookup_tariff: "T0"
+  customs.estimate_duties: "T0"
+  customs.get_declaration_status: "T1"
+  cases.create_case: "T2"
+  cases.get_case_status: "T1"
+  cases.add_case_note: "T2"
+  appointments.list_slots: "T0"
+  appointments.book_appointment: "T2"
+  appointments.cancel_appointment: "T2"
+  notifications.send_template_message: "T2"

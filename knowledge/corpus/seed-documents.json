@@ -1,0 +1,192 @@
+{
+  "snapshot_version": "2026.10.1",
+  "chunks": [
+    {
+      "id": "chk_etax_tin_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "SSRA e-Tax Portal Guide: TIN Registration, Filing, Payment & Tax Compliance Certificates (TCC)",
+      "section_anchor": "Part-I-Sec-1-TIN-Registration",
+      "effective_from": "2021-07-01",
+      "language": "en",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Taxpayer Identification Number (TIN) registration for citizens, businesses, and NGOs is completed online via the official SSRA e-Tax portal (https://etax.nra.gov.ss/), which generates a downloadable TIN certificate. Businesses must first validate their registration through the Ministry of Justice eServices platform. Non-Governmental Organisations (NGOs) require a valid Ministry of Humanitarian Services registration number and an active South Sudan phone number (+211). Note: The National Revenue Authority (NRA) was renamed the South Sudan Revenue Authority (SSRA) by Parliament in October 2023; legacy NRA domain names such as etax.nra.gov.ss remain official."
+    },
+    {
+      "id": "chk_etax_cashfree_01",
+      "doc_id": "doc_etax_cash_free_directive_2026",
+      "doc_title": "March 2026 Directive on Exclusive National e-Tax & Cash-Free Bank Collection",
+      "section_anchor": "Sec-1-Cash-Free-Collection",
+      "effective_from": "2026-03-01",
+      "language": "en",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Under the March 2026 government directive, all non-oil government revenue administered by the South Sudan Revenue Authority (SSRA) is routed exclusively through the National e-Tax System (https://etax.nra.gov.ss/) and remitted to the Treasury Single Account (TSA) via designated commercial banks. Manual cash collection is strictly prohibited. Taxpayers must never pay cash or transfer funds to an individual collector's personal bank or mobile-money account."
+    },
+    {
+      "id": "chk_paye_filing_01",
+      "doc_id": "doc_taxation_act_2009",
+      "doc_title": "Taxation Act, 2009 (as amended by Annual Financial Acts)",
+      "section_anchor": "Part-IV-Sec-18-PAYE-Filing",
+      "effective_from": "2024-07-01",
+      "language": "en",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Employers in South Sudan must withhold Personal Income Tax / Pay-As-You-Earn (PAYE) from monthly employment income and file and remit the return through the e-Tax portal (https://etax.nra.gov.ss/) by day 15 of the following month (computed in Africa/Juba time, UTC+02:00)."
+    },
+    {
+      "id": "chk_tcc_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "SSRA e-Tax Portal Guide: TIN Registration, Filing, Payment & Tax Compliance Certificates (TCC)",
+      "section_anchor": "Part-III-Sec-4-TCC",
+      "effective_from": "2023-10-01",
+      "language": "en",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Tax Compliance Certificates (TCC) are issued exclusively through the SSRA National e-Tax System (https://etax.nra.gov.ss/) to taxpayers who have an active TIN, up-to-date tax filings, and no overdue undisputed tax liabilities. Manual paper TCCs outside e-Tax are invalid."
+    },
+    {
+      "id": "chk_customs_fx_01",
+      "doc_id": "doc_financial_act_2024_2025",
+      "doc_title": "Financial Act 2024/2025 & SSRA Implementation Circular",
+      "section_anchor": "Part-V-Sec-12-Customs-Valuation-FX",
+      "effective_from": "2024-07-01",
+      "language": "en",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Under the Customs Service Act 2013 and the Financial Act 2024/2025, foreign-currency customs values are converted into South Sudanese Pounds (SSP) strictly at the official exchange rate published by the Bank of South Sudan (BoSS). SSRA Assist never guesses or computes unofficial exchange rates."
+    },
+    {
+      "id": "chk_etax_tin_ar_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "دليل بوابة الضرائب الإلكترونية لهيئة إيرادات جنوب السودان (SSRA)",
+      "section_anchor": "Part-I-Sec-1-TIN-Registration",
+      "effective_from": "2021-07-01",
+      "language": "ar",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "يتم التسجيل للحصول على الرقم التعريفي الضريبي (TIN) للمواطنين والشركات والمنظمات غير الحكومية إلكترونياً عبر بوابة الضرائب الرسمية لهيئة إيرادات جنوب السودان (SSRA) على الرابط https://etax.nra.gov.ss/ مع إمكانية تنزيل شهادة الرقم الضريبي. يُمنع الدفع النقدي للأفراد وتُسدد جميع الضرائب عبر البنوك المعتمدة في نظام الضرائب الإلكتروني."
+    },
+    {
+      "id": "chk_tcc_ar_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "دليل بوابة الضرائب الإلكترونية لهيئة إيرادات جنوب السودان (SSRA)",
+      "section_anchor": "Part-III-Sec-4-TCC",
+      "effective_from": "2023-10-01",
+      "language": "ar",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "تُصدر شهادة الامتثال الضريبي (TCC) حصرياً عبر نظام الضرائب الإلكتروني الوطني لهيئة إيرادات جنوب السودان (https://etax.nra.gov.ss/) للمكلفين الذين لديهم رقم ضريبي نشط وإقرارات ضريبية محدثة ولا توجد عليهم التزامات ضريبية متأخرة."
+    },
+    {
+      "id": "chk_customs_fx_ar_01",
+      "doc_id": "doc_financial_act_2024_2025",
+      "doc_title": "القانون المالي 2024/2025 وتعميم هيئة إيرادات جنوب السودان",
+      "section_anchor": "Part-V-Sec-12-Customs-Valuation-FX",
+      "effective_from": "2024-07-01",
+      "language": "ar",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "بموجب قانون الجمارك لعام 2013 والقانون المالي 2024/2025، يتم تحويل القيم الجمركية بالعملات الأجنبية إلى الجنيه الجنوب سوداني (SSP) حصرياً وفق سعر الصرف الرسمي الصادر عن بنك جنوب السودان المركزي (BoSS)."
+    },
+    {
+      "id": "chk_etax_tin_pga_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "SSRA e-Tax Portal Guide (Juba Arabic / العربي جوبا)",
+      "section_anchor": "Part-I-Sec-1-TIN-Registration",
+      "effective_from": "2021-07-01",
+      "language": "pga",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Tasjil ta TIN (Taxpayer Identification Number) le muwatinin, sharikat wa NGOs bikun online fi mawgi rasmi ta SSRA (NRA) e-Tax: https://etax.nra.gov.ss/. Ma tedfa gurush cash le ayi zol; dafa ta dariba kullu bikun bil bank aabr e-Tax bas."
+    },
+    {
+      "id": "chk_tcc_pga_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "SSRA e-Tax Portal Guide (Juba Arabic / العربي جوبا)",
+      "section_anchor": "Part-III-Sec-4-TCC",
+      "effective_from": "2023-10-01",
+      "language": "pga",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Shahada ta Imtisal ta Dariba (TCC) betatla min nizam ta SSRA e-Tax (https://etax.nra.gov.ss/) bas le ayi mukallaf indu TIN shagal wa ma indu dariba muta'akhira."
+    },
+    {
+      "id": "chk_customs_fx_pga_01",
+      "doc_id": "doc_financial_act_2024_2025",
+      "doc_title": "Financial Act 2024/2025 & SSRA Circular (Juba Arabic)",
+      "section_anchor": "Part-V-Sec-12-Customs-Valuation-FX",
+      "effective_from": "2024-07-01",
+      "language": "pga",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Fi gamarik ta SSRA, tahwil ta gurush ajnabi le SSP bikun bi si'ir al-sarf al-rasmi ta Bank of South Sudan (BoSS) bas."
+    },
+    {
+      "id": "chk_etax_tin_din_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "SSRA e-Tax Portal Guide (Tier C Curated — Dinka / Thuɔŋjäŋ)",
+      "section_anchor": "Part-I-Sec-1-TIN-Registration",
+      "effective_from": "2021-07-01",
+      "language": "din",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Gät de Namba de Ajul Wëu (TIN) tënë bääny, luɔi de ɣɔɔc ku NGOs arot looi online në SSRA e-Tax (https://etax.nra.gov.ss/). Duk wëu juac në cin tënë raan; wëu de ajul kedhiɛ aa juac në bɛ̈ŋic në e-Tax."
+    },
+    {
+      "id": "chk_etax_tin_nus_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "SSRA e-Tax Portal Guide (Tier C Curated — Nuer / Thok Naath)",
+      "section_anchor": "Part-I-Sec-1-TIN-Registration",
+      "effective_from": "2021-07-01",
+      "language": "nus",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Gɔ̱r Namba Juäärä Yiööth (TIN) kä SSRA e-Tax online: https://etax.nra.gov.ss/. Cuɛ yiööth cuɔl kä tet raan; cuɔl yiööth diaal kä bɛ̈ŋ rɛy e-Tax."
+    },
+    {
+      "id": "chk_etax_tin_bfa_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "SSRA e-Tax Portal Guide (Tier C Curated — Bari)",
+      "section_anchor": "Part-I-Sec-1-TIN-Registration",
+      "effective_from": "2021-07-01",
+      "language": "bfa",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Kegga Namba lo Kaser (TIN) ko SSRA e-Tax online: https://etax.nra.gov.ss/. Kaser lɔŋɔt tinan ko banki lo e-Tax."
+    },
+    {
+      "id": "chk_etax_tin_zne_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "SSRA e-Tax Portal Guide (Tier C Curated — Zande)",
+      "section_anchor": "Part-I-Sec-1-TIN-Registration",
+      "effective_from": "2021-07-01",
+      "language": "zne",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Ke Namba Marã (TIN) rogo SSRA e-Tax online: https://etax.nra.gov.ss/. Tumosi marã dunduko rogo banki."
+    },
+    {
+      "id": "chk_etax_tin_shk_01",
+      "doc_id": "doc_etax_registration_guide",
+      "doc_title": "SSRA e-Tax Portal Guide (Tier C Curated — Shilluk / Dhøg Cøllø)",
+      "section_anchor": "Part-I-Sec-1-TIN-Registration",
+      "effective_from": "2021-07-01",
+      "language": "shk",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Cøøri Namba Ocul Jami (TIN) yi SSRA e-Tax online: https://etax.nra.gov.ss/. Cul jami bëëne yi banki."
+    },
+    {
+      "id": "chk_ssra_policy_etr_stamps_01",
+      "doc_id": "doc_ssra_act_2023",
+      "doc_title": "South Sudan Revenue Authority Act, 2016 (as amended October 2023) & Policy Direction",
+      "section_anchor": "Part-II-Sec-9-ETR-And-Digital-Tax-Stamps",
+      "effective_from": "2023-10-01",
+      "language": "en",
+      "audience": "PUBLIC",
+      "url": "https://etax.nra.gov.ss/",
+      "content": "Under the SSRA Act 2023 policy direction, registered businesses must use approved Electronic Tax Registers (ETRs) for invoicing and comply with SSRA revenue assurance measures including Digital Tax Stamps on excisable goods. All tax remittances flow through the National e-Tax System (https://etax.nra.gov.ss/) into the Treasury Single Account (TSA) integrated with Bank of South Sudan (BoSS) core banking and hosted in-country with the National Communication Authority (NCA)."
+    }
+  ]
+}
