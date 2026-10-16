@@ -10,6 +10,7 @@ Verifies:
 
 from __future__ import annotations
 
+import json
 import re
 import tomllib
 from pathlib import Path
@@ -92,17 +93,28 @@ def main() -> None:
         assert adr_file.name in adr_readme, (
             f"Unindexed ADR '{adr_file.name}' missing from docs/adr/README.md"
         )
-    primary_repo = (
-        routing.get("hf_cache", {}).get("models", {}).get("llm_primary", {}).get("repo_id", "")
-    )
+    try:
+        primary = routing["hf_cache"]["models"]["llm_primary"]
+        primary_repo = str(primary["repo_id"])
+        primary_rev = str(primary["revision"])
+    except (KeyError, TypeError) as exc:
+        raise AssertionError(
+            "model-routing.yaml is missing hf_cache.models.llm_primary.repo_id or revision"
+        ) from exc
     model_cards_txt = (ROOT / "docs" / "ai-governance" / "model-cards-and-datasheet.md").read_text(
         encoding="utf-8"
     )
-    sbom_txt = (ROOT / "infra" / "observability" / "cyclonedx-sbom.json").read_text(
-        encoding="utf-8"
+    sbom = json.loads(
+        (ROOT / "infra" / "observability" / "cyclonedx-sbom.json").read_text(encoding="utf-8")
     )
-    assert primary_repo and primary_repo in model_cards_txt and primary_repo in sbom_txt, (
-        f"Primary LLM '{primary_repo}' out of sync between model-routing.yaml, model-cards-and-datasheet.md, and cyclonedx-sbom.json"
+    sbom_ok = any(
+        comp.get("type") == "machine-learning-model"
+        and comp.get("name") == primary_repo
+        and comp.get("version") == primary_rev
+        for comp in sbom.get("components", [])
+    )
+    assert primary_repo in model_cards_txt and primary_rev in model_cards_txt and sbom_ok, (
+        f"Primary LLM '{primary_repo}@{primary_rev}' out of sync between model-routing.yaml, model-cards-and-datasheet.md, and cyclonedx-sbom.json"
     )
 
     print(

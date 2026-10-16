@@ -39,7 +39,7 @@ This file is the authoritative engineering and safety rulebook for all coding ag
 
 ## 4. Workflow, Codebase Navigation & Definition of Done
 
-- **Keep Living Docs, ADRs & Runbooks Current (`living-docs-adr-runbooks-traceability` & `keep-docs-current` skills):** Update `AGENTS.md`, `docs/PROGRESS.md`, `docs/adr/` (`ADR-001`–`ADR-016`), `docs/ai-governance/model-cards-and-datasheet.md`, `docs/open-questions.md`, and affected runbooks (`docs/runbooks/`) in the **same commit and PR** as any architectural, model, config, or code update, and run `task gen` + `task lint` (`tools/verify_supply_chain_and_signatures.py`) to enforce traceability.
+- **Keep Living Docs, ADRs & Runbooks Current (`living-docs-adr-runbooks-traceability` & `keep-docs-current` skills):** Update `AGENTS.md`, `docs/PROGRESS.md`, affected ADR(s) in `docs/adr/`, `docs/ai-governance/model-cards-and-datasheet.md`, `docs/open-questions.md`, and affected runbooks (`docs/runbooks/`) in the **same commit and PR** as any architectural, model, config, or code update, and run `task gen` + `task lint` (`tools/verify_supply_chain_and_signatures.py`) to enforce traceability.
 - **Codebase Knowledge Graph (`graphify`):** Once the repository scaffold is created, maintain and query `graphify-out/GRAPH_REPORT.md` before broad file exploration, using only SSRA-approved local/configured backends with zero secrets or PII.
 - **Commands:** Use `Taskfile.yml` as the single entry point:
   - `task up` — start local stack with mock upstreams
