@@ -1,0 +1,17 @@
+# Chaos Mesh Experiment: Simulate Upstream e-Tax Latency / Partition to Verify Degradation Ladder (Section 13)
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: simulate-etax-upstream-latency
+  namespace: ssra-cx
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces: ["ssra-cx"]
+    labelSelectors:
+      app.kubernetes.io/name: ssra-mcp-ledger
+  delay:
+    latency: "3500ms"
+    jitter: "500ms"
+  duration: "60s"

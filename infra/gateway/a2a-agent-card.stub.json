@@ -1,0 +1,24 @@
+{
+  "protocolVersion": "1.0.0",
+  "name": "ssra-assist",
+  "displayName": "South Sudan Revenue Authority (SSRA) Virtual Assistant",
+  "tenant": "gov.ss.ssra",
+  "enabled": false,
+  "note": "Section 8.5 & ADR-014: Stub Agent Card reserved for future National eServices single-window A2A v1.0 interoperability. Disabled in MVP.",
+  "endpoint": "https://assist.ssra.gov.ss/a2a/v1",
+  "authentication": {
+    "schemes": ["mtls", "oauth2_rfc8693", "jws_agent_card"]
+  },
+  "skills": [
+    {
+      "id": "verify_official_channel",
+      "tier": "T0",
+      "description": "Verify whether a payment channel, domain, or sender ID is officially registered with SSRA."
+    },
+    {
+      "id": "tax_procedure_guidance",
+      "tier": "T0",
+      "description": "Retrieve published SSRA TIN registration, filing, and TCC procedures with legal citations."
+    }
+  ]
+}

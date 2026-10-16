@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ssra-cx
+description: Helm chart for SSRA Assist on sovereign NCA Kubernetes (RKE2 / k3s)
+type: application
+version: 0.1.0
+appVersion: "2026.10.1"

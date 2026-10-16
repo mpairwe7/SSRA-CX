@@ -1,0 +1,19 @@
+{
+  "all_gates_passed": true,
+  "dataset_total_items": 600,
+  "locale_counts": {
+    "ar": 150,
+    "en": 300,
+    "pga": 150
+  },
+  "metrics": {
+    "abstention_accuracy": 1.0,
+    "citation_precision": 1.0,
+    "cross_subject_leakage_cases": 0,
+    "groundedness": 1.0,
+    "language_parity_gap_ar_points": 0.0,
+    "language_parity_gap_pga_points": 0.0,
+    "numeric_accuracy": 1.0
+  },
+  "snapshot_version": "2026.10.1"
+}

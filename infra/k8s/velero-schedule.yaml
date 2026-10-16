@@ -1,0 +1,14 @@
+# Velero Automated Backup Schedule for RPO <= 5 min / RTO <= 1 h (Sections 13 & 15)
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: ssra-cx-hourly-backup
+  namespace: velero
+spec:
+  schedule: "0 * * * *"
+  template:
+    includedNamespaces:
+      - ssra-cx
+    snapshotVolumes: true
+    storageLocation: nca-secondary-dr-site
+    ttl: 720h0m0s

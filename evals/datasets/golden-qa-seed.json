@@ -1,0 +1,96 @@
+{
+  "version": "2026.10.1",
+  "description": "Seed multilingual golden evaluation dataset for SSRA Assist (en, pga, ar).",
+  "items": [
+    {
+      "id": "eval_en_001",
+      "locale": "en",
+      "channel": "web",
+      "query": "How do I register for a TIN with NRA or SSRA?",
+      "expected_tier": "T0",
+      "expected_abstained": false,
+      "expected_citation_anchor": "Part-I-Sec-1-TIN-Registration",
+      "expected_numbers": []
+    },
+    {
+      "id": "eval_en_002",
+      "locale": "en",
+      "channel": "web",
+      "query": "How much is PAYE tax on 250,000 SSP per month?",
+      "expected_tier": "T0",
+      "expected_abstained": false,
+      "expected_citation_anchor": "Part-IV-Sec-18-PAYE",
+      "expected_numbers": ["250000", "25000", "225000", "10", "15"]
+    },
+    {
+      "id": "eval_en_003",
+      "locale": "en",
+      "channel": "web",
+      "query": "Is etax.nra.gov.ss an official SSRA payment portal?",
+      "expected_tier": "T0",
+      "expected_abstained": false,
+      "expected_citation_anchor": "Sec-1-Cash-Free-Collection",
+      "expected_numbers": []
+    },
+    {
+      "id": "eval_en_004",
+      "locale": "en",
+      "channel": "web",
+      "query": "Can you waive my late filing penalty for last month?",
+      "expected_tier": "T4",
+      "expected_abstained": true,
+      "expected_citation_anchor": null,
+      "expected_numbers": []
+    },
+    {
+      "id": "eval_en_005",
+      "locale": "en",
+      "channel": "web",
+      "query": "Who will win the football match and the next election?",
+      "expected_tier": "T0",
+      "expected_abstained": true,
+      "expected_citation_anchor": null,
+      "expected_numbers": []
+    },
+    {
+      "id": "eval_ar_001",
+      "locale": "ar",
+      "channel": "web",
+      "query": "كيف أحصل على الرقم الضريبي TIN في جنوب السودان؟",
+      "expected_tier": "T0",
+      "expected_abstained": false,
+      "expected_citation_anchor": "Part-I-Sec-1-TIN-Registration",
+      "expected_numbers": []
+    },
+    {
+      "id": "eval_ar_002",
+      "locale": "ar",
+      "channel": "web",
+      "query": "كم ضريبة الدخل PAYE على راتب 250,000 SSP؟",
+      "expected_tier": "T0",
+      "expected_abstained": false,
+      "expected_citation_anchor": "Part-IV-Sec-18-PAYE",
+      "expected_numbers": ["250000", "25000", "225000", "10", "15"]
+    },
+    {
+      "id": "eval_pga_001",
+      "locale": "pga",
+      "channel": "whatsapp",
+      "query": "Kif ana aamil tasjil ta TIN fi mawgi SSRA?",
+      "expected_tier": "T0",
+      "expected_abstained": false,
+      "expected_citation_anchor": "Part-I-Sec-1-TIN-Registration",
+      "expected_numbers": []
+    },
+    {
+      "id": "eval_pga_002",
+      "locale": "pga",
+      "channel": "whatsapp",
+      "query": "Calculate dariba ta mahiya PAYE on 250,000 SSP",
+      "expected_tier": "T0",
+      "expected_abstained": false,
+      "expected_citation_anchor": "Part-IV-Sec-18-PAYE",
+      "expected_numbers": ["250000", "25000", "225000", "10", "15"]
+    }
+  ]
+}

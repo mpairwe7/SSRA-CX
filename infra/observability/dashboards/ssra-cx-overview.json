@@ -1,0 +1,33 @@
+{
+  "title": "SSRA Assist — Omnichannel CX, AI Quality, Safety & SLO Overview",
+  "uid": "ssra-cx-overview-v1",
+  "timezone": "Africa/Juba",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Quality-Adjusted Containment Rate by Language (en, pga, ar, din, nus, bfa, zne, shk)",
+      "type": "timeseries"
+    },
+    {
+      "id": 2,
+      "title": "Numeric Provenance Gate (Target: 100%) & Cross-Subject Leakage (Target: 0)",
+      "type": "stat"
+    },
+    {
+      "id": 3,
+      "title": "Latency SLOs: Web TTFT p95 (<= 1.5s), Grounded QA p95 (<= 6s), USSD (<= 2s)",
+      "type": "timeseries"
+    },
+    {
+      "id": 4,
+      "title": "AI Gateway Daily Spend vs Cap (150 USD) & Per-Channel Token Attribution",
+      "type": "gauge"
+    },
+    {
+      "id": 5,
+      "title": "Upstream Health & Circuit Breaker State (e-Tax, e-Customs, BoSS)",
+      "type": "state-timeline"
+    }
+  ]
+}

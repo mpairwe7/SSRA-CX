@@ -1,0 +1,47 @@
+# agentgateway 1.x Configuration (Section 5, 8.1-8.3, ADR-004)
+# Single governed egress for LLM, stateless MCP 2026-07-28, and future A2A v1.0 traffic.
+
+apiVersion: agentgateway.dev/v1alpha1
+kind: GatewayConfig
+metadata:
+  name: ssra-agentgateway
+spec:
+  listen:
+    host: "0.0.0.0"
+    port: 8090
+    mtls:
+      enabledInCluster: true
+  spendLimits:
+    dailyUsdCap: 150.00
+    perConversationMaxTokens: 2048
+    perConversationMaxToolCalls: 4
+  policyEngine:
+    type: opa
+    policyPath: "../../ai/policies/policy_gate.rego"
+    riskTiersPath: "../../ai/policies/risk-tiers.yaml"
+  mcp:
+    protocolRevision: "2026-07-28"
+    stateless: true
+    routeHeaders:
+      methodHeader: "Mcp-Method"
+      nameHeader: "Mcp-Name"
+    oauth2TokenExchange:
+      issuer: "https://sso.ssra.gov.ss/realms/ssra"
+      rfc8693Enabled: true
+      passthroughProhibited: true
+    servers:
+      - name: knowledge
+        url: "http://mcp-knowledge:8101/mcp"
+        audience: "mcp-knowledge"
+      - name: tax-facts
+        url: "http://mcp-tax-facts:8102/mcp"
+        audience: "mcp-tax-facts"
+      - name: official-channels
+        url: "http://mcp-official-channels:8103/mcp"
+        audience: "mcp-official-channels"
+      - name: ledger
+        url: "http://mcp-ledger:8104/mcp"
+        audience: "mcp-ledger"
+  a2a:
+    enabled: false
+    agentCardStub: "./a2a-agent-card.stub.json"

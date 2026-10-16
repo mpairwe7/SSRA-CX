@@ -1,0 +1,43 @@
+# Section 14.3: OpenTelemetry Collector with tail-based sampling & PII redaction
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+  attributes/redact_pii:
+    actions:
+      - key: user.tin
+        action: delete
+      - key: user.phone
+        action: delete
+      - key: auth.otp
+        action: delete
+  tail_sampling:
+    decision_wait: 10s
+    policies:
+      - name: keep-errors-and-guardrail-triggers
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: baseline-sample
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 25
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: false
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [attributes/redact_pii, tail_sampling, batch]
+      exporters: [otlp/tempo]

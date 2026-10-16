@@ -1,0 +1,9 @@
+# Section 14.2 Phase 1 Launch Gates
+version: "2026.10.1"
+gates:
+  numeric_accuracy_min: 1.00
+  citation_precision_min: 0.95
+  groundedness_min: 0.95
+  correct_abstention_min: 0.95
+  cross_subject_leakage_max_cases: 0
+  language_parity_max_gap_points: 5.0

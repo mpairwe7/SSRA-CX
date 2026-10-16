@@ -1,0 +1,50 @@
+# Local SSRA Assist Stack + Mock Upstreams (Section 15, 16, 18)
+name: ssra-cx
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: ssra
+      POSTGRES_PASSWORD: ssra_local_dev_only
+      POSTGRES_DB: ssra_cx
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ssra -d ssra_cx"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    ports:
+      - "6379:6379"
+
+  nats:
+    image: nats:2.11-alpine
+    command: ["-js"]
+    ports:
+      - "4222:4222"
+
+  api:
+    build:
+      context: ../..
+      dockerfile: services/api/Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - valkey
+      - nats
+
+  agent-runtime:
+    build:
+      context: ../..
+      dockerfile: services/agent-runtime/Dockerfile
+    ports:
+      - "8001:8001"
+    depends_on:
+      - api
+      - postgres
+      - valkey
