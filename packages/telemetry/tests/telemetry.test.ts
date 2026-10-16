@@ -16,8 +16,17 @@ describe("@ssra/telemetry performance budget gates", () => {
       lcpMs: 3100,
       inpMs: 150,
       cls: 0.05,
+      webTtftP95Ms: 1950,
     });
     expect(bloated.passed).toBe(false);
-    expect(bloated.violations).toHaveLength(2);
+    expect(bloated.violations).toHaveLength(3);
+
+    const nanSample = checkPerformanceBudgets({
+      firstLoadJsGzipKb: Number.NaN,
+      lcpMs: 1000,
+      inpMs: 100,
+      cls: 0.01,
+    });
+    expect(nanSample.passed).toBe(false);
   });
 });

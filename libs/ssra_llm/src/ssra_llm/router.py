@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -133,10 +134,20 @@ class SovereignModelRouter:
 
 
 class AnonymousT0SemanticCache:
-    """Section 13: Semantic cache ONLY for anonymous T0 answers, keyed by knowledge snapshot & locale."""
+    """Section 13: Bounded LRU semantic cache ONLY for anonymous T0 answers, keyed by snapshot & locale."""
 
-    def __init__(self) -> None:
-        self._store: dict[str, Answer] = {}
+    def __init__(self, *, max_entries: int = 1024) -> None:
+        if max_entries <= 0:
+            raise ValueError("max_entries must be positive")
+        self._max_entries = max_entries
+        self._store: OrderedDict[str, Answer] = OrderedDict()
+        self.hits = 0
+        self.misses = 0
+
+    @property
+    def hit_ratio(self) -> float:
+        total = self.hits + self.misses
+        return round(self.hits / total, 4) if total > 0 else 0.0
 
     @staticmethod
     def _make_key(*, snapshot_version: str, locale: LocaleCode, query: str) -> str:
@@ -156,7 +167,13 @@ class AnonymousT0SemanticCache:
         if tier != RiskTier.T0 or auth_level != AuthLevel.ANONYMOUS:
             return None
         key = self._make_key(snapshot_version=snapshot_version, locale=locale, query=query)
-        return self._store.get(key)
+        found = self._store.get(key)
+        if found is None:
+            self.misses += 1
+            return None
+        self._store.move_to_end(key)
+        self.hits += 1
+        return found
 
     def put(
         self,
@@ -171,6 +188,10 @@ class AnonymousT0SemanticCache:
         if tier != RiskTier.T0 or auth_level != AuthLevel.ANONYMOUS or answer.abstained:
             return False
         key = self._make_key(snapshot_version=snapshot_version, locale=locale, query=query)
+        if key in self._store:
+            self._store.move_to_end(key)
+        elif len(self._store) >= self._max_entries:
+            self._store.popitem(last=False)
         self._store[key] = answer
         return True
 

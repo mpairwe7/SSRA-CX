@@ -1430,3 +1430,174 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     )
     assert gov_nan.compliant is False
     assert len(gov_nan.violations) == 3
+
+    # 9. Reliability, Performance & FinOps Cost Discipline (LRU T0 cache, HALF_OPEN cap, SLO burn-rate, FinOps)
+    from ssra_core import (
+        ChannelName,
+        UpstreamCircuitBreaker,
+        build_genai_span_attributes,
+        evaluate_channel_latency_slo,
+        evaluate_finops_turn_budget,
+        utc_now,
+    )
+    from ssra_llm import AnonymousT0SemanticCache
+
+    lru_cache = AnonymousT0SemanticCache(max_entries=2)
+    ans_sample = Answer(
+        segments=[AnswerSegment(text="Register on etax.nra.gov.ss", citation_ids=["cit_1"])],
+        citations=[
+            Citation(
+                id="cit_1",
+                snapshot_version="2026.10.1",
+                doc_title="SSRA Guide",
+                section_anchor="Sec-1",
+                effective_from="2021-07-01",
+            )
+        ],
+        numbers=[],
+        is_estimate=False,
+        abstained=False,
+    )
+    assert lru_cache.put(
+        snapshot_version="2026.10.1",
+        locale=LocaleCode.EN,
+        query="q1",
+        tier=RiskTier.T0,
+        auth_level=AuthLevel.ANONYMOUS,
+        answer=ans_sample,
+    )
+    assert lru_cache.put(
+        snapshot_version="2026.10.1",
+        locale=LocaleCode.EN,
+        query="q2",
+        tier=RiskTier.T0,
+        auth_level=AuthLevel.ANONYMOUS,
+        answer=ans_sample,
+    )
+    assert (
+        lru_cache.get(
+            snapshot_version="2026.10.1",
+            locale=LocaleCode.EN,
+            query="q1",
+            tier=RiskTier.T0,
+            auth_level=AuthLevel.ANONYMOUS,
+        )
+        is not None
+    )
+    assert lru_cache.put(
+        snapshot_version="2026.10.1",
+        locale=LocaleCode.EN,
+        query="q3",
+        tier=RiskTier.T0,
+        auth_level=AuthLevel.ANONYMOUS,
+        answer=ans_sample,
+    )
+    assert (
+        lru_cache.get(
+            snapshot_version="2026.10.1",
+            locale=LocaleCode.EN,
+            query="q2",
+            tier=RiskTier.T0,
+            auth_level=AuthLevel.ANONYMOUS,
+        )
+        is None
+    )
+    assert lru_cache.hit_ratio == 0.5
+    with pytest.raises(ValueError):
+        AnonymousT0SemanticCache(max_entries=0)
+
+    cb = UpstreamCircuitBreaker(
+        upstream_name="etax", failure_threshold=1, recovery_timeout_seconds=10
+    )
+    cb.record_failure(now=utc_now() - timedelta(seconds=20))
+    assert cb.state.value == "HALF_OPEN"
+    with pytest.raises(SSRAError) as exc_ho:
+        cb.call(lambda: cb.call(lambda: "second_probe"))
+    assert exc_ho.value.status_code == 503
+
+    slo_ok = evaluate_channel_latency_slo(
+        channel=ChannelName.WEB,
+        tier=RiskTier.T0,
+        p95_ttft_ms=900.0,
+        p95_total_ms=2800.0,
+    )
+    assert slo_ok.within_slo is True
+    assert slo_ok.recommended_degradation_level == 1
+
+    slo_burn = evaluate_channel_latency_slo(
+        channel=ChannelName.USSD,
+        tier=RiskTier.T0,
+        p95_ttft_ms=500.0,
+        p95_total_ms=2400.0,
+        fast_burn_rate_1h=15.0,
+    )
+    assert slo_burn.within_slo is False
+    assert slo_burn.recommended_degradation_level == 4
+
+    slo_nan = evaluate_channel_latency_slo(
+        channel=ChannelName.VOICE,
+        tier=RiskTier.T0,
+        p95_ttft_ms=float("nan"),
+        p95_total_ms=500.0,
+    )
+    assert slo_nan.within_slo is False
+
+    slo_voice_slow = evaluate_channel_latency_slo(
+        channel=ChannelName.VOICE,
+        tier=RiskTier.T0,
+        p95_ttft_ms=400.0,
+        p95_total_ms=1400.0,
+        slow_burn_rate_6h=7.5,
+    )
+    assert slo_voice_slow.within_slo is False
+    assert slo_voice_slow.recommended_degradation_level == 2
+
+    slo_web_breach = evaluate_channel_latency_slo(
+        channel=ChannelName.WEB,
+        tier=RiskTier.T2,
+        p95_ttft_ms=1800.0,
+        p95_total_ms=9500.0,
+    )
+    assert slo_web_breach.within_slo is False
+
+    lru_cache.put(
+        snapshot_version="2026.10.1",
+        locale=LocaleCode.EN,
+        query="q1",
+        tier=RiskTier.T0,
+        auth_level=AuthLevel.ANONYMOUS,
+        answer=ans_sample,
+    )
+
+    span_attrs = build_genai_span_attributes(
+        model="ssra-sovereign/qwen2.5-14b-instruct",
+        input_tokens=1000,
+        cached_input_tokens=800,
+        output_tokens=200,
+        ttft_ms=420.5,
+        sms_segments=2,
+        channel=ChannelName.SMS,
+        locale=LocaleCode.EN,
+        intent="paye_Pit_Guidance",
+        tier=RiskTier.T0,
+    )
+    otel_map = span_attrs.to_otel_dict()
+    assert otel_map["gen_ai.usage.cache_read_input_tokens"] == 800
+    assert otel_map["gen_ai.response.ttft_ms"] == 420.5
+
+    fin_normal = evaluate_finops_turn_budget(tier=RiskTier.T0, daily_budget_utilization=0.40)
+    assert fin_normal.action == "NORMAL"
+    fin_t0 = evaluate_finops_turn_budget(tier=RiskTier.T0, daily_budget_utilization=0.95)
+    assert fin_t0.action == "USE_T0_SEMANTIC_CACHE_OR_FAQ"
+    assert fin_t0.effective_max_tokens == 256
+    fin_t1 = evaluate_finops_turn_budget(tier=RiskTier.T1, daily_budget_utilization=0.95)
+    assert fin_t1.action == "DOWNGRADE_COMPOSITION_VERBOSITY"
+    fin_t3 = evaluate_finops_turn_budget(tier=RiskTier.T3, daily_budget_utilization=0.95)
+    assert fin_t3.action == "PRESERVE_SAFETY_VERIFIERS"
+    assert fin_t3.safety_verifiers_preserved is True
+    with pytest.raises(ValueError):
+        evaluate_finops_turn_budget(tier=RiskTier.T0, daily_budget_utilization=float("nan"))
+    with pytest.raises(ValueError):
+        evaluate_finops_turn_budget(
+            tier=RiskTier.T0, daily_budget_utilization=0.5, requested_max_tokens=0
+        )

@@ -16,6 +16,7 @@ export interface WebVitalsSample {
   readonly lcpMs: number;
   readonly inpMs: number;
   readonly cls: number;
+  readonly webTtftP95Ms?: number;
 }
 
 export function checkPerformanceBudgets(sample: WebVitalsSample): {
@@ -23,19 +24,39 @@ export function checkPerformanceBudgets(sample: WebVitalsSample): {
   readonly violations: string[];
 } {
   const violations: string[] = [];
-  if (sample.firstLoadJsGzipKb > PERFORMANCE_BUDGETS.maxFirstLoadJsGzipKb) {
+  if (
+    !Number.isFinite(sample.firstLoadJsGzipKb) ||
+    sample.firstLoadJsGzipKb < 0 ||
+    sample.firstLoadJsGzipKb > PERFORMANCE_BUDGETS.maxFirstLoadJsGzipKb
+  ) {
     violations.push(
       `firstLoadJsGzipKb ${sample.firstLoadJsGzipKb} > ${PERFORMANCE_BUDGETS.maxFirstLoadJsGzipKb}`,
     );
   }
-  if (sample.lcpMs > PERFORMANCE_BUDGETS.maxLcpMs) {
+  if (
+    !Number.isFinite(sample.lcpMs) ||
+    sample.lcpMs < 0 ||
+    sample.lcpMs > PERFORMANCE_BUDGETS.maxLcpMs
+  ) {
     violations.push(`lcpMs ${sample.lcpMs} > ${PERFORMANCE_BUDGETS.maxLcpMs}`);
   }
-  if (sample.inpMs > PERFORMANCE_BUDGETS.maxInpMs) {
+  if (
+    !Number.isFinite(sample.inpMs) ||
+    sample.inpMs < 0 ||
+    sample.inpMs > PERFORMANCE_BUDGETS.maxInpMs
+  ) {
     violations.push(`inpMs ${sample.inpMs} > ${PERFORMANCE_BUDGETS.maxInpMs}`);
   }
-  if (sample.cls > PERFORMANCE_BUDGETS.maxCls) {
+  if (!Number.isFinite(sample.cls) || sample.cls < 0 || sample.cls > PERFORMANCE_BUDGETS.maxCls) {
     violations.push(`cls ${sample.cls} > ${PERFORMANCE_BUDGETS.maxCls}`);
+  }
+  if (
+    sample.webTtftP95Ms !== undefined &&
+    (!Number.isFinite(sample.webTtftP95Ms) ||
+      sample.webTtftP95Ms < 0 ||
+      sample.webTtftP95Ms > PERFORMANCE_BUDGETS.maxWebTtftP95Ms)
+  ) {
+    violations.push(`webTtftP95Ms ${sample.webTtftP95Ms} > ${PERFORMANCE_BUDGETS.maxWebTtftP95Ms}`);
   }
   return {
     passed: violations.length === 0,
