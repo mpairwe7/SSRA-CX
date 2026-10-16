@@ -30,7 +30,24 @@ export interface ProxyDecision {
   readonly headers: Record<string, string>;
 }
 
-const VALID_HOST_PATTERN = /^[a-zA-Z0-9.[\]:-]+$/;
+const IPV6_HOST_PATTERN = /^\[[0-9a-fA-F:]+\](?::(\d{1,5}))?$/;
+const DNS_HOST_PATTERN =
+  /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.?(?::(\d{1,5}))?$/;
+
+function isValidHttpHostHeader(host: string): boolean {
+  const m = IPV6_HOST_PATTERN.exec(host) ?? DNS_HOST_PATTERN.exec(host);
+  if (!m) {
+    return false;
+  }
+  const portStr = m[1];
+  if (portStr !== undefined) {
+    const port = Number(portStr);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export function buildSecurityHeaders(nonce: string, strictConsole = false): Record<string, string> {
   const cspDirectives = [
@@ -106,8 +123,10 @@ export function executeProxy(req: ProxyRequestContext): ProxyDecision {
   if (req.hostHeader !== undefined) {
     const cleanHost = req.hostHeader.trim().toLowerCase();
     const allowlistFail =
-      req.allowedHosts && req.allowedHosts.length > 0 && !req.allowedHosts.includes(cleanHost);
-    if (!cleanHost || !VALID_HOST_PATTERN.test(cleanHost) || allowlistFail) {
+      req.allowedHosts &&
+      req.allowedHosts.length > 0 &&
+      !req.allowedHosts.some((host) => host.trim().toLowerCase() === cleanHost);
+    if (!cleanHost || !isValidHttpHostHeader(cleanHost) || allowlistFail) {
       return {
         status: 400,
         locale,

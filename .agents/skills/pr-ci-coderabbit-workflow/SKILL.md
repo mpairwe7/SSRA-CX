@@ -29,13 +29,17 @@ Never push commits directly to `main`. Every code, configuration, knowledge-base
 
 4. **Commit & push the feature branch (no auto-closing issue keywords per `no-issue-autoclose`):**
    - Use Conventional Commits with bare issue references `(#N)` only — never `fixes #N`, `closes #N`, or `resolves #N`.
+   - Re-authenticate immediately before `git push`:
    ```bash
+   ~/bin/gh auth switch --user mpairwe7
+   ~/bin/gh api user --jq .login
    git push -u origin <branch-name>
    ```
 
 5. **Open a Pull Request against `main`:**
    ```bash
    ~/bin/gh auth switch --user mpairwe7
+   ~/bin/gh api user --jq .login
    ~/bin/gh pr create --base main --head <branch-name> --title "<type>(<scope>): <summary> (#N)" --body "<detailed summary & test plan>"
    ```
 
@@ -43,19 +47,22 @@ Never push commits directly to `main`. Every code, configuration, knowledge-base
    ```bash
    ~/bin/gh pr checks <PR_NUMBER> --watch
    ```
-   - If any check fails, inspect logs with `~/bin/gh run view <RUN_ID> --log-failed`, fix the root cause on the feature branch, push the fix commit, and re-run `~/bin/gh pr checks <PR_NUMBER> --watch` until every check is green.
+   - If any check fails, inspect logs with `~/bin/gh run view <RUN_ID> --log-failed`, fix the root cause on the feature branch, re-authenticate as `mpairwe7`, push the fix commit, and re-run `~/bin/gh pr checks <PR_NUMBER> --watch` until every check is green.
 
 7. **Inspect & Resolve All CodeRabbit (`coderabbitai[bot]`) and Reviewer Comments:**
    ```bash
+   ~/bin/gh auth switch --user mpairwe7
+   ~/bin/gh api user --jq .login
    ~/bin/gh api repos/mpairwe7/SSRA-CX/pulls/<PR_NUMBER>/comments
    ~/bin/gh api repos/mpairwe7/SSRA-CX/pulls/<PR_NUMBER>/reviews
    ~/bin/gh api repos/mpairwe7/SSRA-CX/issues/<PR_NUMBER>/comments
    ```
-   - Address every actionable CodeRabbit or human review comment in a follow-up commit on the feature branch, reply to the review thread explaining the fix, and wait for CI + CodeRabbit re-verification.
+   - Address every actionable CodeRabbit or human review comment in a follow-up commit on the feature branch, re-authenticate (`~/bin/gh auth switch --user mpairwe7 && ~/bin/gh api user --jq .login`) immediately before pushing or replying to review threads, and wait for CI + CodeRabbit re-verification.
 
 8. **Merge Only When CI is 100% Green & Sync `main`:**
    ```bash
    ~/bin/gh auth switch --user mpairwe7
+   ~/bin/gh api user --jq .login
    ~/bin/gh pr merge <PR_NUMBER> --squash --delete-branch
    git checkout main && git pull --ff-only origin main
    ```

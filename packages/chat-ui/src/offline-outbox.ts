@@ -3,7 +3,8 @@
  *
  * Security Invariants:
  * 1. Only anonymous `T0` public questions may be queued in the offline outbox on shared devices.
- * 2. Any `T1`–`T4` personal query or message containing a 9–12 digit TIN is rejected from client storage.
+ * 2. Any `T1`–`T4` personal query or message containing a 9–12 digit TIN (including separated or
+ *    Arabic-Indic numerals) is rejected from client storage.
  * 3. Bounded capacity (`maxItems = 25`) prevents unbounded memory/storage growth.
  */
 
@@ -17,13 +18,24 @@ export interface QueuedOutboxMessage {
   readonly queuedAtIso: string;
 }
 
-const UNMASKED_TIN_PATTERN = /\b\d{9,12}\b/;
+const UNMASKED_TIN_PATTERN = /\d{9,12}/;
+
+function containsUnmaskedTin(message: string): boolean {
+  const normalized = message
+    .normalize("NFKC")
+    .replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[\s\-.]/g, "");
+  return UNMASKED_TIN_PATTERN.test(normalized);
+}
 
 export class OfflineOutboxQueue {
   private readonly items: QueuedOutboxMessage[] = [];
   private readonly maxItems: number;
 
   public constructor(maxItems = 25) {
+    if (!Number.isInteger(maxItems) || maxItems < 1) {
+      throw new RangeError("maxItems must be a positive integer");
+    }
     this.maxItems = maxItems;
   }
 
@@ -37,7 +49,7 @@ export class OfflineOutboxQueue {
         reason: "SECURITY_POLICY_T0_ONLY_OFFLINE_QUEUE",
       };
     }
-    if (UNMASKED_TIN_PATTERN.test(item.message)) {
+    if (containsUnmaskedTin(item.message)) {
       return {
         queued: false,
         reason: "SECURITY_POLICY_PII_REJECTED_FROM_OFFLINE_QUEUE",

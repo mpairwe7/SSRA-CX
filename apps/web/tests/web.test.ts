@@ -5,6 +5,7 @@ import { renderPublicStatusBanner } from "../src/app/[locale]/(public)/status.js
 import {
   buildHttpOnlySessionCookieHeader,
   buildSessionLogoutHeaders,
+  dispatchServiceWorkerLogoutPurge,
   validateBffCsrfMutation,
 } from "../src/app/api/auth/session/route.js";
 import { buildRuntimeStreamRequest } from "../src/app/api/chat/stream/route.js";
@@ -64,7 +65,21 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
         csrfHeaderToken: "tok1",
       }),
     ).toEqual({ valid: false, reason: "CSRF_NULL_ORIGIN_REJECTED" });
-    expect(buildSessionLogoutHeaders()["Clear-Site-Data"]).toContain('"cache"');
+    const logout = buildSessionLogoutHeaders();
+    expect(logout["Set-Cookie"]).toContain("Max-Age=0");
+    expect(logout["Clear-Site-Data"]).toBe('"cache", "cookies", "storage"');
+    expect(logout["Cache-Control"]).toBe("no-store");
+    const posted: Array<{ readonly type: string }> = [];
+    expect(
+      dispatchServiceWorkerLogoutPurge({
+        serviceWorker: {
+          controller: {
+            postMessage: (m) => posted.push(m),
+          },
+        },
+      }),
+    ).toBe(true);
+    expect(posted).toEqual([{ type: "SSRA_LOGOUT_PURGE" }]);
   });
 
   it("blocks unauthenticated access to /[locale]/account routes", () => {

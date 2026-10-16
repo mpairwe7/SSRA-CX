@@ -22,6 +22,21 @@ export function buildSessionLogoutHeaders(): Record<string, string> {
   };
 }
 
+export function dispatchServiceWorkerLogoutPurge(target?: {
+  readonly serviceWorker?: {
+    readonly controller?: {
+      postMessage: (msg: { readonly type: "SSRA_LOGOUT_PURGE" }) => void;
+    } | null;
+  };
+}): boolean {
+  const ctrl = target?.serviceWorker?.controller;
+  if (!ctrl) {
+    return false;
+  }
+  ctrl.postMessage({ type: "SSRA_LOGOUT_PURGE" });
+  return true;
+}
+
 export function validateBffCsrfMutation(input: {
   readonly method: string;
   readonly originHeader?: string;

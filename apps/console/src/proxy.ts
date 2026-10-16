@@ -33,15 +33,14 @@ export function authorizeConsoleAccess(session: ConsoleSession | null): {
   if (!session.passkeyVerified) {
     return { allowed: false, reason: "WEBAUTHN_PASSKEY_REQUIRED" };
   }
-  // CVE-2026-27978: Explicitly reject 'null' origin from sandboxed contexts
-  if (session.originHeader !== undefined) {
-    const cleanOrigin = session.originHeader.trim();
-    if (
-      cleanOrigin.toLowerCase() === "null" ||
-      (session.allowedOrigin && cleanOrigin !== session.allowedOrigin)
-    ) {
-      return { allowed: false, reason: "NULL_OR_UNTRUSTED_ORIGIN" };
-    }
+  // CVE-2026-27978: Explicitly reject 'null' or missing/mismatched origin from sandboxed contexts
+  if (session.originHeader === undefined || !session.allowedOrigin) {
+    return { allowed: false, reason: "NULL_OR_UNTRUSTED_ORIGIN" };
+  }
+
+  const cleanOrigin = session.originHeader.trim();
+  if (cleanOrigin.toLowerCase() === "null" || cleanOrigin !== session.allowedOrigin) {
+    return { allowed: false, reason: "NULL_OR_UNTRUSTED_ORIGIN" };
   }
   // Short session idle timeout (900 seconds = 15 minutes per ADR-012)
   if (session.idleAgeSeconds > 900) {
