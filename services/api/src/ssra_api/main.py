@@ -29,7 +29,8 @@ def create_api_app() -> FastAPI:
     @app.exception_handler(SSRAError)
     async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:
         traceparent = request.headers.get("traceparent")
-        problem = exc.to_problem_details(instance=str(request.url.path), trace_id=traceparent)
+        raw_path = str(request.scope.get("path", "/"))
+        problem = exc.to_problem_details(instance=raw_path, trace_id=traceparent)
         return JSONResponse(
             status_code=exc.status_code,
             content=problem.model_dump(mode="json"),

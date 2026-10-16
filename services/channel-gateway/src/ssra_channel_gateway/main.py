@@ -87,8 +87,13 @@ def create_channel_gateway_app(
 
     @app.exception_handler(SSRAError)
     async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:
-        problem = exc.to_problem_details(instance=str(request.url.path))
-        return JSONResponse(status_code=exc.status_code, content=problem.model_dump(mode="json"))
+        raw_path = str(request.scope.get("path", "/"))
+        problem = exc.to_problem_details(instance=raw_path)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=problem.model_dump(mode="json"),
+            media_type="application/problem+json",
+        )
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:

@@ -123,10 +123,10 @@ def main() -> None:
     dom_pct = (dom_hit / max(1, dom_total)) * 100.0
     ov_pct = (ov_hit / max(1, ov_total)) * 100.0
 
-    assert dom_pct >= 90.0, f"Domain layer coverage {dom_pct:.1f}% < 90.0% gate"
-    assert ov_pct >= 80.0, f"Overall Python coverage {ov_pct:.1f}% < 80.0% gate"
+    assert dom_pct >= 98.0, f"Domain layer coverage {dom_pct:.1f}% < 98.0% gate"
+    assert ov_pct >= 98.0, f"Overall Python coverage {ov_pct:.1f}% < 98.0% gate"
     print(
-        f"Coverage gates passed: domain={dom_pct:.1f}% (>= 90.0%), overall={ov_pct:.1f}% (>= 80.0%)."
+        f"Coverage gates passed: domain={dom_pct:.1f}% (>= 98.0%), overall={ov_pct:.1f}% (>= 98.0%)."
     )
 
 

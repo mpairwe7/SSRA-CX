@@ -21,6 +21,17 @@ PGVECTOR_ITERATIVE_SCAN_SQL = (
 )
 
 
+def sanitize_fts_query_for_pg18(
+    query: str,
+    *,
+    max_lexeme_chars: int = 64,
+    max_query_chars: int = 512,
+) -> str:
+    """Bound FTS lexeme and query lengths per PostgreSQL 18.6 CVE-2026-14662 hardening."""
+    tokens = [tok[:max_lexeme_chars] for tok in query.replace("\x00", " ").split() if tok]
+    return " ".join(tokens)[:max_query_chars]
+
+
 def build_pgvector_hybrid_rrf_sql() -> str:
     """Return parameterized SQL for hybrid FTS + pgvector 0.8.7 HNSW MATERIALIZED CTE retrieval."""
     return """

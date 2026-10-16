@@ -66,6 +66,9 @@ class SovereignModelRouter:
             raise ValueError("degradation_level must be in 1..5")
         self._level = level
 
+    def set_external_providers_enabled(self, enabled: bool) -> None:
+        self._config["external_providers"] = {"enabled": enabled}
+
     def select_route(
         self,
         *,
