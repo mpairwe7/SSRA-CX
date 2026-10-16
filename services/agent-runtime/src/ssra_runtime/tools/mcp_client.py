@@ -60,14 +60,28 @@ class GovernedMcpGatewayClient:
             srv.token_service = self.token_service
             srv.confirmation_manager = self.confirmation_manager
 
-        # Pin tool description SHA-256 hashes & scan for MCP03:2025 tool poisoning at startup (Section 8.3 & ASI02/ASI04)
+        # Pin tool description SHA-256 hashes & scan for MCP03:2025 tool poisoning and shadowing at startup (Section 8.3 & ASI02/ASI04)
         self._pinned_description_hashes: dict[str, str] = {}
+        self.verify_no_cross_server_tool_shadowing()
         for srv_name, srv in self._servers.items():
             for tool_name, tool in srv.tools.items():
                 self.scan_tool_metadata_for_poisoning(
                     srv_name, tool_name, tool.description, tool.input_schema
                 )
                 self._pinned_description_hashes[f"{srv_name}.{tool_name}"] = tool.description_sha256
+
+    def verify_no_cross_server_tool_shadowing(self) -> None:
+        """Prevent duplicate tool names or cross-server tool shadowing across the 11 MCP servers (CVE-2026-30856 / MCP03)."""
+        seen_tools: dict[str, str] = {}
+        for srv_name, srv in self._servers.items():
+            for tool_name in srv.tools:
+                if tool_name in seen_tools:
+                    raise SSRAError(
+                        McpErrorCode.NOT_AUTHORIZED,
+                        f"Cross-server tool name collision/shadowing detected: '{tool_name}' on both '{seen_tools[tool_name]}' and '{srv_name}' (CVE-2026-30856)",
+                        status_code=403,
+                    )
+                seen_tools[tool_name] = srv_name
 
     @staticmethod
     def scan_tool_metadata_for_poisoning(

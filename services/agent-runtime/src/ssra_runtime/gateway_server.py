@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from ssra_core import AuthLevel, McpErrorCode, SSRAError
+from ssra_mcp import MCP_PROTOCOL_VERSION, validate_mcp_transport_headers
 
 from ssra_runtime.tools import GovernedMcpGatewayClient
 
@@ -33,6 +34,16 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
             "daily_spend_usd": state["daily_spend_usd"],
             "daily_usd_cap": daily_usd_cap,
             "pinned_tools_count": len(gateway.pinned_description_hashes),
+        }
+
+    @app.get("/.well-known/oauth-protected-resource")
+    async def oauth_protected_resource() -> dict[str, Any]:
+        return {
+            "resource": "https://mcp.ssra.gov.ss/gateway",
+            "authorization_servers": ["https://sso.ssra.gov.ss/realms/ssra"],
+            "scopes_supported": [f"mcp:{s}:invoke" for s in sorted(gateway.servers)],
+            "bearer_methods_supported": ["header"],
+            "mcp_protocol_version": MCP_PROTOCOL_VERSION,
         }
 
     @app.post("/v1/spend/record")
@@ -65,6 +76,10 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
         traceparent: str | None = Header(default=None, alias="traceparent"),
     ) -> JSONResponse:
         try:
+            validate_mcp_transport_headers(
+                request.headers.get("host"),
+                request.headers.get("origin"),
+            )
             if state["daily_spend_usd"] >= daily_usd_cap:
                 raise SSRAError(
                     McpErrorCode.RATE_LIMITED,

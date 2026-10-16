@@ -364,9 +364,28 @@ def test_mcp_server_base_and_all_11_servers_branches() -> None:
     with pytest.raises(SSRAError):
         srv.handle_call_tool(tool_name="bad_output_op", arguments={}, bearer_token=None)
 
-    # Test StatelessMcpServer ASGI HTTP app routes
+    # Test StatelessMcpServer ASGI HTTP app routes (including RFC 9728 & DNS rebinding guards)
     mcp_client = TestClient(srv.create_fastapi_app())
     assert mcp_client.get("/healthz").status_code == 200
+    r_prm = mcp_client.get("/.well-known/oauth-protected-resource")
+    assert r_prm.status_code == 200
+    assert r_prm.json()["mcp_protocol_version"] == "2026-07-28"
+    assert (
+        mcp_client.post(
+            "/mcp",
+            json={"method": "tools/list", "params": {}},
+            headers={"Host": "evil.rebind.example.com"},
+        ).status_code
+        == 403
+    )
+    assert (
+        mcp_client.post(
+            "/mcp",
+            json={"method": "tools/list", "params": {}},
+            headers={"Origin": "null"},
+        ).status_code
+        == 403
+    )
     assert (
         mcp_client.post(
             "/mcp",
@@ -754,6 +773,13 @@ def test_knowledge_adapter_ports_and_security_primitives_branches() -> None:
             expected_audience="urn:ssra:mcp:wrong",
             required_tier=RiskTier.T1,
         )
+    with pytest.raises(SSRAError):
+        tx.verify_exchanged_token(
+            valid_t1_tok,
+            expected_audience="urn:ssra:mcp:ledger",
+            required_tier=RiskTier.T1,
+            expected_resource="https://mcp.ssra.gov.ss/servers/wrong-resource",
+        )
     exp_tok = tx.mint_exchanged_token(
         audience="urn:ssra:mcp:ledger",
         auth_level=AuthLevel.T1_TIN_BOUND,
@@ -861,9 +887,10 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     )
     assert "Field Compliance Checklist" in fo_check.cited_guidance
 
-    # 3. Gateway server routes (/healthz, /v1/spend/record, spend cap, validation errors)
+    # 3. Gateway server routes (/healthz, /.well-known/oauth-protected-resource, /v1/spend/record, spend cap, validation errors)
     gw_client = TestClient(create_agentgateway_app(daily_usd_cap=0.002))
     assert gw_client.get("/healthz").status_code == 200
+    assert gw_client.get("/.well-known/oauth-protected-resource").status_code == 200
     r_spend = gw_client.post("/v1/spend/record", json={"cost_usd": 0.002})
     assert r_spend.status_code == 200
     r_cap = gw_client.post(

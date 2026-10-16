@@ -17,6 +17,7 @@ from ssra_mcp.server_base import (
     StatelessMcpServer,
     ToolAnnotations,
     ToolContext,
+    validate_mcp_transport_headers,
 )
 
 __all__ = [
@@ -33,5 +34,6 @@ __all__ = [
     "is_allowed_ssra_url",
     "sanitise_structured_output",
     "scrub_untrusted_urls_and_cap_length",
+    "validate_mcp_transport_headers",
     "wrap_tool_result_as_untrusted_data",
 ]
