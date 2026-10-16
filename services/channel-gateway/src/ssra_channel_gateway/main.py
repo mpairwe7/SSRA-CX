@@ -20,30 +20,41 @@ from ssra_testing import make_conversation_event
 
 from ssra_channel_gateway.ussd import render_ussd_screen
 
+# 3GPP TS 23.038 / GSM 03.38 Basic (1 septet) and Extended (2 septets via 0x1B escape) character sets
+_GSM7_BASIC_CHARS: frozenset[str] = frozenset(
+    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ !\"#¤%&'()*+,-./0123456789:;<=>?"
+    "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
+)
+_GSM7_EXTENDED_CHARS: frozenset[str] = frozenset("^{}\\[~]|€\f")
+MAX_SEEN_MESSAGE_IDS = 4096
+
 
 def compute_sms_segments(text: str) -> dict[str, int | str]:
-    """Compute SMS encoding (GSM-7 vs UCS-2) and segment count (Section 11: Arabic uses UCS-2 at 70 chars/segment)."""
-    is_ascii_gsm7 = all(ord(ch) < 128 for ch in text)
-    if is_ascii_gsm7:
+    """Compute SMS encoding (3GPP TS 23.038 GSM-7 + Extended vs UCS-2) and segment count (Section 11)."""
+    is_gsm7 = all(ch in _GSM7_BASIC_CHARS or ch in _GSM7_EXTENDED_CHARS for ch in text)
+    if is_gsm7:
         encoding = "GSM-7"
         single_limit = 160
         concat_limit = 153
+        unit_count = sum(2 if ch in _GSM7_EXTENDED_CHARS else 1 for ch in text)
     else:
         encoding = "UCS-2"
         single_limit = 70
         concat_limit = 67
+        unit_count = len(text)
 
-    length = len(text)
-    if length == 0:
+    char_length = len(text)
+    if unit_count == 0:
         segments = 0
-    elif length <= single_limit:
+    elif unit_count <= single_limit:
         segments = 1
     else:
-        segments = math.ceil(length / concat_limit)
+        segments = math.ceil(unit_count / concat_limit)
 
     return {
         "encoding": encoding,
-        "char_count": length,
+        "char_count": char_length,
+        "septet_or_code_unit_count": unit_count,
         "segments": segments,
         "per_segment_limit": single_limit,
     }
@@ -79,10 +90,11 @@ def create_channel_gateway_app(
     webhook_secret: str | None = None,
     *,
     max_requests_per_sender: int = 25,
+    require_signature: bool = False,
 ) -> FastAPI:
     active_secret = webhook_secret or "ssra-dev-webhook-key"
     app = FastAPI(title="SSRA Assist Channel Gateway", version="0.1.0")
-    seen_message_ids: set[str] = set()
+    seen_message_ids: dict[str, None] = {}
     sender_counts: dict[str, int] = {}
 
     @app.exception_handler(SSRAError)
@@ -105,12 +117,12 @@ def create_channel_gateway_app(
         x_hub_signature_256: str | None = Header(default=None, alias="X-Hub-Signature-256"),
     ) -> dict[str, object]:
         raw_bytes = await request.body()
-        if x_hub_signature_256 is not None and not verify_webhook_hmac(
+        if (require_signature or x_hub_signature_256 is not None) and not verify_webhook_hmac(
             raw_bytes, x_hub_signature_256, active_secret
         ):
             raise SSRAError(
                 McpErrorCode.NOT_AUTHORIZED,
-                "Invalid webhook HMAC signature",
+                "Invalid or missing webhook HMAC signature",
                 status_code=401,
             )
 
@@ -126,7 +138,10 @@ def create_channel_gateway_app(
                 status_code=429,
             )
         sender_counts[body.sender_ref] = current_count + 1
-        seen_message_ids.add(body.message_id)
+        if len(seen_message_ids) >= MAX_SEEN_MESSAGE_IDS:
+            oldest_mid = next(iter(seen_message_ids))
+            seen_message_ids.pop(oldest_mid, None)
+        seen_message_ids[body.message_id] = None
 
         max_len = (
             182

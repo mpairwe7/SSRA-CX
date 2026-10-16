@@ -23,8 +23,12 @@ from ssra_channel_gateway.ussd import USSD_MAX_CHARS, UssdScreenResponse, render
 from ssra_channel_gateway.whatsapp import (
     ANTI_IMPERSONATION_VERIFICATION_FOOTER,
     APPROVED_OUTBOUND_TEMPLATES,
+    WhatsAppListRow,
     WhatsAppOutboundDispatch,
+    WhatsAppReplyButton,
     prepare_whatsapp_outbound_message,
+    validate_whatsapp_list_rows,
+    validate_whatsapp_reply_buttons,
 )
 
 __all__ = [
@@ -42,12 +46,16 @@ __all__ = [
     "VoiceIvrChannelAdapter",
     "WebPwaChannelAdapter",
     "WhatsAppChannelAdapter",
+    "WhatsAppListRow",
     "WhatsAppOutboundDispatch",
+    "WhatsAppReplyButton",
     "app",
     "compute_sms_segments",
     "create_channel_gateway_app",
     "get_channel_port",
     "prepare_whatsapp_outbound_message",
     "render_ussd_screen",
+    "validate_whatsapp_list_rows",
+    "validate_whatsapp_reply_buttons",
     "verify_webhook_hmac",
 ]

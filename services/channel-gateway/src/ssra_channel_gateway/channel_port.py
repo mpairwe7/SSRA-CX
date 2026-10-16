@@ -125,7 +125,9 @@ class UssdChannelAdapter:
     )
 
     def format_outbound(self, answer: Answer) -> dict[str, Any]:
-        text = " ".join(s.text for s in answer.segments)[:USSD_MAX_CHARS]
+        raw = " ".join(s.text for s in answer.segments).strip()
+        framed = raw if raw.startswith(("CON ", "END ")) else f"END {raw}"
+        text = framed[:USSD_MAX_CHARS]
         return {
             "channel": self.channel.value,
             "transport": "ussd-sync",
