@@ -12,6 +12,7 @@ import {
   formatDocType,
   GENERATIVE_UI_STORYBOOK_FIXTURES,
   groupConversationsByRecency,
+  isCspSafeImagePreviewDataUrl,
   joinDictated,
   nextRevealIndex,
   OfflineOutboxQueue,
@@ -339,5 +340,7 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(modalView.isScreenshot).toBe(true);
     expect(modalView.normalizedSteps).toEqual(["Wait 60 seconds and refresh"]);
     expect(modalView.quickPrompts.length).toBeGreaterThanOrEqual(3);
+    expect(isCspSafeImagePreviewDataUrl("data:image/jpeg;base64,/9j/4AAQSkZJRg==")).toBe(true);
+    expect(isCspSafeImagePreviewDataUrl("blob:https://assist.ssra.gov.ss/123")).toBe(false);
   });
 });

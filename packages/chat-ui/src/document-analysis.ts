@@ -14,6 +14,18 @@ import type { LocaleCode } from "@ssra/contracts";
 export const MAX_ATTACHMENTS_PER_TURN = 3;
 export const MAX_ATTACHMENT_BYTES = 40 * 1024 * 1024;
 export const ATTACHMENT_ACCEPT = ".pdf,.docx,.xlsx,.csv,.txt,image/*";
+export const THUMBNAIL_EDGE_PX = 56;
+
+const SAFE_DATA_IMAGE_RE = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+
+/**
+ * Enforce CSP `img-src 'self' data:` safety: attachment chip thumbnails must use
+ * `data:image/{jpeg,png,webp};base64,...` — never `blob:` URLs (which break under strict CSP).
+ */
+export function isCspSafeImagePreviewDataUrl(candidate: string | undefined | null): boolean {
+  if (!candidate) return false;
+  return SAFE_DATA_IMAGE_RE.test(candidate);
+}
 
 export interface DocumentTaxReconciliation {
   readonly status:

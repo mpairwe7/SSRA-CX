@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -304,6 +305,9 @@ class LobbyCallEntry:
     claimed_by: str = ""
     claimed_name: str = ""
     on_hold: bool = False
+    needs_callback: bool = False
+    risk_level: Literal["none", "watch", "at_risk"] = "none"
+    risk_signals: list[str] = field(default_factory=list)
     dismissed: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -338,15 +342,97 @@ class CallLobbyManager:
         elif event_type == "call.claimed":
             entry.claimed_by = str(data.get("officer_id", ""))
             entry.claimed_name = str(data.get("officer_name", ""))
+        elif event_type == "call.officer_disconnected":
+            entry.status = "transferring"
+            entry.waiting_since = float(data.get("waiting_since", 1.0))
+            entry.reason = "officer_disconnected"
+            entry.claimed_by = ""
+            entry.claimed_name = ""
+        elif event_type == "call.transfer_timed_out":
+            entry.status = "ai"
+            entry.waiting_since = None
+            entry.needs_callback = True
+            entry.claimed_by = ""
+            entry.claimed_name = ""
+        elif event_type == "call.risk":
+            lvl = str(data.get("level", "none"))
+            entry.risk_level = (
+                "at_risk" if lvl == "at_risk" else "watch" if lvl == "watch" else "none"
+            )
+            entry.risk_signals = [str(s) for s in (data.get("signals") or [])]
         elif event_type == "call.bridged":
             entry.status = "bridged"
             entry.waiting_since = None
         elif event_type == "call.on_hold":
             entry.on_hold = bool(data.get("on", False))
-        elif event_type == "call.ended":
+        elif event_type in {"call.ended", "call.wrapped_up"}:
             entry.status = "ended"
+            self.calls.pop(call_id, None)
+            return entry
         self.calls[call_id] = entry
         return entry
+
+
+_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{3,64}$")
+MAX_CARRYOVER_CONTEXT_CHARS = 240
+
+
+@dataclass(frozen=True)
+class ChatToCallCarryover:
+    conversation_id: str
+    topic_id: str
+    topic_label: str
+    tax_domain: str
+    context: str
+    local_models_only: bool = True
+
+
+def build_chat_to_call_carryover(
+    *,
+    conversation_id: str,
+    owner_user_id: str | None,
+    owner_session_id: str | None,
+    caller_user_id: str | None = None,
+    caller_session_id: str | None = None,
+    topic_id: str = "general_tax",
+    topic_label: str = "General tax inquiry",
+    tax_domain: str = "domestic_tax",
+) -> ChatToCallCarryover | None:
+    """G122 Cross-Channel Chat-to-Call Carryover (`test_call_carryover.py`):
+
+    1. Rejects malformed IDs (`../conversations`, spaces).
+    2. A `conversation_id` alone unlocks nothing: caller must match `owner_user_id` or `owner_session_id`.
+    3. Emits ONLY a coarse English task account (<= 240 chars) — never the taxpayer's verbatim words.
+    4. Forces `local_models_only = True` on all voice call turns.
+    """
+    if not _SAFE_ID_RE.match(conversation_id):
+        return None
+    if caller_user_id and not _SAFE_ID_RE.match(caller_user_id):
+        return None
+    if caller_session_id and not _SAFE_ID_RE.match(caller_session_id):
+        return None
+
+    user_matched = bool(owner_user_id and caller_user_id and owner_user_id == caller_user_id)
+    session_matched = bool(
+        not owner_user_id
+        and owner_session_id
+        and caller_session_id
+        and owner_session_id == caller_session_id
+    )
+    if not (user_matched or session_matched):
+        return None
+
+    coarse = f"Current task: {topic_label}. Tax domains discussed: {tax_domain}."[
+        :MAX_CARRYOVER_CONTEXT_CHARS
+    ]
+    return ChatToCallCarryover(
+        conversation_id=conversation_id,
+        topic_id=topic_id,
+        topic_label=topic_label,
+        tax_domain=tax_domain,
+        context=coarse,
+        local_models_only=True,
+    )
 
 
 def validate_call_wrap_up(
@@ -391,17 +477,20 @@ def validate_call_wrap_up(
 
 __all__ = [
     "ASR_MODEL_BY_LOCALE",
+    "MAX_CARRYOVER_CONTEXT_CHARS",
     "MAX_COMPRESSED_AUDIO_BYTES",
     "MAX_DECODED_PCM_BYTES",
     "MAX_VOICE_WER_GATE",
     "TTS_MODEL_BY_LOCALE",
     "BriefClaim",
     "CallLobbyManager",
+    "ChatToCallCarryover",
     "HfVoiceModelDescriptor",
     "LobbyCallEntry",
     "OfficerCallBrief",
     "VoiceSessionDecision",
     "VoiceWebSocketConcurrencyGuard",
+    "build_chat_to_call_carryover",
     "generate_officer_call_brief",
     "is_voice_language_approved",
     "resolve_hf_voice_model_cache",
