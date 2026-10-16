@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ssra_core import new_id, utc_now
+from ssra_security import redact_pii
 
 from ssra_api.conversations.domain import ConversationEntity, StaffCopilotDraft
 
@@ -39,9 +40,10 @@ def staff_handback_to_ai_use_case(entity: ConversationEntity) -> ConversationEnt
 def generate_copilot_draft_use_case(
     *, conversation_id: str, taxpayer_question: str
 ) -> StaffCopilotDraft:
+    redacted_q = redact_pii(taxpayer_question).redacted_text
     return StaffCopilotDraft(
         conversation_id=conversation_id,
-        summary=f"Taxpayer inquiry regarding: {taxpayer_question[:120]}",
+        summary=f"Taxpayer inquiry regarding: {redacted_q[:120]}",
         cited_reply_draft=(
             "Per the SSRA e-Tax Portal Guide (Part-I-Sec-1-TIN-Registration) and March 2026 "
             "Cash-Free Directive (Sec-1-Cash-Free-Collection), all registration, filing, and "

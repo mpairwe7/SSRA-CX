@@ -128,7 +128,14 @@ def test_phase3_knowledge_release_6_step_workflow_and_one_step_rollback() -> Non
     assert r2.status_code == 200
     assert r2.json()["status"] == "LEGAL_REVIEW"
 
-    # Step 3: Legal approval
+    # Maker-checker check: draft author cannot self-approve their own snapshot
+    r_self_approve = client.post(
+        "/v1/knowledge-admin/snapshots/2026.11.0/approve",
+        json={"legal_approver": "policy_author_default"},
+    )
+    assert r_self_approve.status_code == 403
+
+    # Step 3: Legal approval by independent counsel
     r3 = client.post(
         "/v1/knowledge-admin/snapshots/2026.11.0/approve",
         json={"legal_approver": "SSRA Chief Legal Counsel"},

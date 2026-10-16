@@ -7,6 +7,7 @@ import hmac
 import math
 
 from fastapi import FastAPI, Header, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 from ssra_core import (
     ChannelName,
@@ -74,10 +75,20 @@ class UssdSessionRequest(BaseModel):
     elapsed_seconds: int = 0
 
 
-def create_channel_gateway_app(webhook_secret: str | None = None) -> FastAPI:
+def create_channel_gateway_app(
+    webhook_secret: str | None = None,
+    *,
+    max_requests_per_sender: int = 25,
+) -> FastAPI:
     active_secret = webhook_secret or "ssra-dev-webhook-key"
     app = FastAPI(title="SSRA Assist Channel Gateway", version="0.1.0")
     seen_message_ids: set[str] = set()
+    sender_counts: dict[str, int] = {}
+
+    @app.exception_handler(SSRAError)
+    async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:
+        problem = exc.to_problem_details(instance=str(request.url.path))
+        return JSONResponse(status_code=exc.status_code, content=problem.model_dump(mode="json"))
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
@@ -101,6 +112,15 @@ def create_channel_gateway_app(webhook_secret: str | None = None) -> FastAPI:
         body = InboundChannelWebhook.model_validate_json(raw_bytes)
         if body.message_id in seen_message_ids:
             return {"status": "deduplicated_drop", "message_id": body.message_id}
+
+        current_count = sender_counts.get(body.sender_ref, 0)
+        if current_count >= max_requests_per_sender:
+            raise SSRAError(
+                McpErrorCode.RATE_LIMITED,
+                f"Per-sender rate limit ({max_requests_per_sender}) exceeded for '{body.sender_ref}'",
+                status_code=429,
+            )
+        sender_counts[body.sender_ref] = current_count + 1
         seen_message_ids.add(body.message_id)
 
         max_len = (

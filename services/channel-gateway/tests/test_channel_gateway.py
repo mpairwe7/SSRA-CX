@@ -63,6 +63,34 @@ def test_webhook_hmac_verification_and_deduplication() -> None:
     assert r2.status_code == 200
     assert r2.json()["status"] == "deduplicated_drop"
 
+    # Per-sender rate limiting blocks floods with 429 RATE_LIMITED
+    limited_client = TestClient(
+        create_channel_gateway_app(webhook_secret=secret, max_requests_per_sender=1)
+    )
+    p1 = {**payload, "message_id": "wamid.101"}
+    raw1 = json.dumps(p1).encode("utf-8")
+    sig1 = "sha256=" + hmac.new(secret.encode("utf-8"), raw1, hashlib.sha256).hexdigest()
+    assert (
+        limited_client.post(
+            "/v1/webhooks/inbound",
+            content=raw1,
+            headers={"X-Hub-Signature-256": sig1},
+        ).status_code
+        == 200
+    )
+
+    p2 = {**payload, "message_id": "wamid.102"}
+    raw2 = json.dumps(p2).encode("utf-8")
+    sig2 = "sha256=" + hmac.new(secret.encode("utf-8"), raw2, hashlib.sha256).hexdigest()
+    assert (
+        limited_client.post(
+            "/v1/webhooks/inbound",
+            content=raw2,
+            headers={"X-Hub-Signature-256": sig2},
+        ).status_code
+        == 429
+    )
+
 
 def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> None:
     client = TestClient(create_channel_gateway_app())

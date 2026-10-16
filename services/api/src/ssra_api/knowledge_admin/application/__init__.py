@@ -28,13 +28,20 @@ class KnowledgeReleaseWorkflowEngine:
     def get_active(self) -> KnowledgeSnapshotEntity:
         return self._snapshots[self._active_version]
 
-    def create_draft(self, *, version: str, content_digest_input: str) -> KnowledgeSnapshotEntity:
+    def create_draft(
+        self,
+        *,
+        version: str,
+        content_digest_input: str,
+        created_by: str = "policy_author_default",
+    ) -> KnowledgeSnapshotEntity:
         checksum = hashlib.sha256(content_digest_input.encode("utf-8")).hexdigest()
         snap = KnowledgeSnapshotEntity(
             version=version,
             status="DRAFT",
             approved_by="PENDING_LEGAL_REVIEW",
             checksum=checksum,
+            created_by=created_by,
         )
         self._snapshots[version] = snap
         return snap
@@ -58,6 +65,12 @@ class KnowledgeReleaseWorkflowEngine:
                 McpErrorCode.VALIDATION_FAILED,
                 f"Snapshot {version} must be in LEGAL_REVIEW state before approval",
                 status_code=400,
+            )
+        if legal_approver.strip() == snap.created_by.strip():
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "Maker-checker violation: legal_approver must differ from draft author (created_by)",
+                status_code=403,
             )
         updated = replace(snap, status="APPROVED", approved_by=legal_approver)
         self._snapshots[version] = updated
