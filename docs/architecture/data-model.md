@@ -180,7 +180,8 @@ erDiagram
 
 ### 3.8 `tax_facts`
 - The **sole** permitted source of statutory tax rates, thresholds, deadlines, penalties, and fees.
-- Unique constraint on `(key, version, effective_from)`.
+- Unique constraint on `(key, version, effective_from)` plus PostgreSQL 18 temporal non-overlap constraint (`UNIQUE (key, version, daterange(effective_from, COALESCE(effective_to, 'infinity'::date), '[)')) WITHOUT OVERLAPS`) so two active `TaxFact` rows for the same key and snapshot can never have overlapping effective date ranges.
+- Vector retrieval in `knowledge_chunks` uses `pgvector` 0.8.7 iterative HNSW scans (`SET LOCAL hnsw.iterative_scan = 'relaxed_order'; SET LOCAL hnsw.max_scan_tuples = 20000; SET LOCAL hnsw.scan_mem_multiplier = 2;`) inside a `MATERIALIZED` CTE re-ordered by exact cosine distance (`ORDER BY distance + 0`).
 
 ### 3.9 `audit_events` (Append-Only, Hash-Chained, Partitioned Monthly)
 - Includes model version, prompt version, and `KnowledgeSnapshot` version inside the canonical `digest` payload.

@@ -86,11 +86,40 @@ def _format_decimal(amount: Decimal) -> str:
 
 
 class TaxFactsRegistry:
-    """Loads and queries versioned TaxFact records with effective-date filtering."""
+    """Loads and queries versioned TaxFact records with effective-date & non-overlap validation."""
 
     def __init__(self, facts: list[TaxFactContract], snapshot_version: str = "2026.10.1") -> None:
+        self._verify_no_overlapping_effective_ranges(facts)
         self._facts = tuple(facts)
         self._snapshot_version = snapshot_version
+
+    @staticmethod
+    def _verify_no_overlapping_effective_ranges(facts: list[TaxFactContract]) -> None:
+        """Enforce PostgreSQL 18 WITHOUT OVERLAPS temporal invariant in application memory."""
+        by_key: dict[tuple[str, str], list[TaxFactContract]] = {}
+        for f in facts:
+            if f.effective_to is not None and f.effective_to < f.effective_from:
+                raise SSRAError(
+                    McpErrorCode.VALIDATION_FAILED,
+                    f"TaxFact '{f.key}' has effective_to ({f.effective_to}) < effective_from ({f.effective_from})",
+                    status_code=400,
+                )
+            by_key.setdefault((f.key, f.version), []).append(f)
+
+        max_date = date(9999, 12, 31)
+        for (key, ver), group in by_key.items():
+            ordered = sorted(group, key=lambda x: x.effective_from)
+            for idx in range(len(ordered) - 1):
+                cur = ordered[idx]
+                nxt = ordered[idx + 1]
+                cur_end = cur.effective_to or max_date
+                if cur_end >= nxt.effective_from:
+                    raise SSRAError(
+                        McpErrorCode.VALIDATION_FAILED,
+                        f"Overlapping effective date range for TaxFact '{key}' (version {ver}): "
+                        f"[{cur.effective_from}..{cur_end}] overlaps [{nxt.effective_from}..{nxt.effective_to}]",
+                        status_code=400,
+                    )
 
     @classmethod
     def from_yaml_file(cls, path: Path | None = None) -> TaxFactsRegistry:

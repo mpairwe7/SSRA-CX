@@ -166,3 +166,9 @@ def test_siem_ocsf_cef_export_and_inter_model_handoff_validator() -> None:
     with pytest.raises(SSRAError) as inj_exc:
         validate_inter_model_handoff(injected_intent)
     assert inj_exc.value.code == McpErrorCode.VALIDATION_FAILED
+
+    # Unicode Bidi override characters (\u202e RLO) are stripped and tagged in redact_pii
+    bidi_res = redact_pii("TIN \u202e1002001234")
+    assert "\u202e" not in bidi_res.redacted_text
+    assert "UNICODE_BIDI_OR_ZW_STRIPPED" in bidi_res.pii_tags
+    assert "••••1234" in bidi_res.redacted_text

@@ -15,12 +15,14 @@ from ssra_security.audit import compute_canonical_digest
 
 
 class SubjectTokenClaims(BaseModel):
-    """Audience-bound OAuth 2.1 / RFC 8693 exchanged token claims verified by MCP servers."""
+    """Audience- & RFC 8707 Resource-bound OAuth 2.1 / RFC 8693 exchanged token claims verified by MCP servers."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    jti: str = "jti_default"
     iss: str = "https://sso.ssra.gov.ss/realms/ssra"
     aud: str
+    resource: str = "https://mcp.ssra.gov.ss"  # RFC 8707 Resource Indicator
     sub: str | None = None  # Opaque subject_ref for T1+
     caller_workload: str = "ssra-agent-runtime"
     auth_level: AuthLevel = AuthLevel.ANONYMOUS
@@ -159,12 +161,15 @@ class TokenExchangeService:
         audience: str,
         auth_level: AuthLevel,
         subject_ref: str | None = None,
+        resource: str | None = None,
         step_up_verified_at: datetime | None = None,
         ttl_seconds: int = 60,
     ) -> str:
         now = utc_now()
         claims = SubjectTokenClaims(
+            jti=new_id("jti"),
             aud=audience,
+            resource=resource or f"https://mcp.ssra.gov.ss/servers/{audience}",
             sub=subject_ref,
             auth_level=auth_level,
             step_up_verified_at=step_up_verified_at,

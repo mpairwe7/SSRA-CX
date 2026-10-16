@@ -53,8 +53,18 @@ def main() -> None:
         "External AI providers must remain disabled by default until OQ-004 is approved"
     )
 
+    # 5. Verify bidirectional SCHEMA_BUNDLE_SHA256 parity between Python and TypeScript contracts
+    from ssra_core import SCHEMA_BUNDLE_SHA256
+
+    ts_contracts = (ROOT / "packages" / "contracts" / "src" / "index.ts").read_text(
+        encoding="utf-8"
+    )
+    assert f'"{SCHEMA_BUNDLE_SHA256}"' in ts_contracts, (
+        "Contract SHA-256 drift between Python (ssra_core) and TypeScript (@ssra/contracts)"
+    )
+
     print(
-        "Supply-chain verification passed: 40-char SHA CI actions, 7-day cooldowns (pnpm & uv), and sovereign routing verified."
+        "Supply-chain verification passed: 40-char SHA CI actions, 7-day cooldowns (pnpm & uv), contract SHA parity, and sovereign routing verified."
     )
 
 

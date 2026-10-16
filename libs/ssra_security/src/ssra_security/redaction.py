@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
+
+# Strip Unicode Bidirectional Override characters (U+202A..U+202E, U+2066..U+2069) and Zero-Width chars
+_BIDI_AND_ZW_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
 
 # South Sudan TIN: 9 to 12 digits (optionally prefixed by TIN- or NRA-/SSRA-)
 _TIN_RE = re.compile(r"\b(?:(?:TIN|NRA|SSRA)[-\s]?)?(\d{5,8})(\d{4})\b", flags=re.IGNORECASE)
@@ -32,9 +36,11 @@ def mask_tin(raw_tin: str) -> str:
 
 
 def redact_pii(text: str) -> RedactionResult:
-    """Redact South Sudan TINs, +211 phone numbers, and OTPs before logging or external egress."""
+    """Redact South Sudan TINs, +211 phone numbers, and OTPs after stripping Bidi/zero-width spoof chars."""
     tags: list[str] = []
-    out = text
+    if _BIDI_AND_ZW_RE.search(text):
+        tags.append("UNICODE_BIDI_OR_ZW_STRIPPED")
+    out = _BIDI_AND_ZW_RE.sub("", unicodedata.normalize("NFKC", text))
 
     def _replace_otp(match: re.Match[str]) -> str:
         tags.append("OTP_SECRET")
