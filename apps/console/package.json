@@ -1,0 +1,25 @@
+{
+  "name": "@ssra/console",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "lint": "biome check src tests",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ssra/api-client": "workspace:*",
+    "@ssra/chat-ui": "workspace:*",
+    "@ssra/contracts": "workspace:*",
+    "@ssra/i18n": "workspace:*",
+    "@ssra/ui": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@ssra/config": "workspace:*",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}

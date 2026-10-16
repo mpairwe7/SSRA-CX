@@ -1,0 +1,26 @@
+{
+  "name": "@ssra/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "biome check src tests",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ssra/contracts": "workspace:*",
+    "@ssra/i18n": "workspace:*"
+  },
+  "devDependencies": {
+    "@ssra/config": "workspace:*",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}

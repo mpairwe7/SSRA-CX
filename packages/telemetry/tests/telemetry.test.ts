@@ -1,0 +1,23 @@
+import { describe, expect, it } from "vitest";
+import { checkPerformanceBudgets } from "../src/index.js";
+
+describe("@ssra/telemetry performance budget gates", () => {
+  it("enforces Section 9.5 low-end Android & 150 KB gzip JS budgets", () => {
+    const ok = checkPerformanceBudgets({
+      firstLoadJsGzipKb: 112,
+      lcpMs: 1850,
+      inpMs: 120,
+      cls: 0.03,
+    });
+    expect(ok.passed).toBe(true);
+
+    const bloated = checkPerformanceBudgets({
+      firstLoadJsGzipKb: 180,
+      lcpMs: 3100,
+      inpMs: 150,
+      cls: 0.05,
+    });
+    expect(bloated.passed).toBe(false);
+    expect(bloated.violations).toHaveLength(2);
+  });
+});
