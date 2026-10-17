@@ -161,10 +161,10 @@
           "task": "asr_omnilingual"
         }
       },
-      "name": "facebook/mms-1b-all",
-      "purl": "pkg:huggingface/facebook/mms-1b-all@e602081b7b0e8325f2d6d0ef8832f5070e819a21",
+      "name": "Sunbird/SunflowerASR-51-african-languages",
+      "purl": "pkg:huggingface/Sunbird/SunflowerASR-51-african-languages@4583c9dd251c422a4325fb0a0a509a3828097be2",
       "type": "machine-learning-model",
-      "version": "e602081b7b0e8325f2d6d0ef8832f5070e819a21"
+      "version": "4583c9dd251c422a4325fb0a0a509a3828097be2"
     },
     {
       "modelCard": {
@@ -360,6 +360,21 @@
       "purl": "pkg:huggingface/facebook/mms-tts-zne@4d4b8526f0a6624b75e4d3678fa26d3457667f06",
       "type": "machine-learning-model",
       "version": "4d4b8526f0a6624b75e4d3678fa26d3457667f06"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "hf-transformers-offline",
+          "task": "tts_orpheus_multilingual"
+        }
+      },
+      "name": "Sunbird/orpheus-3b-tts-multilingual",
+      "purl": "pkg:huggingface/Sunbird/orpheus-3b-tts-multilingual@c44496fdfa162c4ecd15c846fcbcac15bba28951",
+      "type": "machine-learning-model",
+      "version": "c44496fdfa162c4ecd15c846fcbcac15bba28951"
     },
     {
       "hashes": [
