@@ -1939,12 +1939,14 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     assert ws_multi.rekey_slot("anon::192.0.2.2", "sub_amina_01", pool="call") is False
     ws_multi.release("sub_amina_01", pool="call")
     ws_multi.release("sub_amina_01", pool="call")
+    ws_multi.release("sub_amina_01", pool="call")  # no-op when count is already 0
     assert is_ws_origin_allowed(None, {"https://assist.ssra.gov.ss"}) is False
     assert (
         is_ws_origin_allowed("https://assist.ssra.gov.ss", {"https://assist.ssra.gov.ss"}) is True
     )
 
-    assert looks_like_valid_audio_bytes(b"RIFF" + b"\x00" * 64) is True
+    assert looks_like_valid_audio_bytes(b"RIFF\x00\x00\x00\x00WAVE" + b"\x00" * 64) is True
+    assert looks_like_valid_audio_bytes(b"RIFF\x00\x00\x00\x00WEBP" + b"\x00" * 64) is False
     assert looks_like_valid_audio_bytes(b"<html>rate limited</html>" + b" " * 64) is False
     assert looks_like_valid_audio_bytes(b"RIFF") is False
 
@@ -1964,12 +1966,19 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
                 error="TTS down",
             )
         return TtsCachedAudio(
-            audio=b"RIFF" + b"\x00" * 64,
+            audio=b"RIFF\x00\x00\x00\x00WAVE" + b"\x00" * 64,
             backend="orpheus",
             voice=voice,
             language=language,
             latency_ms=120.0,
         )
+
+    assert (
+        tts_cache.get_or_synthesize(
+            "Unsupported", language="xx", voice=None, synthesizer=_fake_synth
+        ).error
+        is not None
+    )
 
     c1 = tts_cache.get_or_synthesize(
         "Welcome to SSRA", language="en", voice=None, synthesizer=_fake_synth

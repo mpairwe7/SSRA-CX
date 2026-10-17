@@ -226,7 +226,9 @@ class VoiceWebSocketConcurrencyGuard:
             return False
         if old_user_key == new_user_key:
             return True
-        cap = authenticated_per_user_cap or self.per_user_cap
+        cap = (
+            self.per_user_cap if authenticated_per_user_cap is None else authenticated_per_user_cap
+        )
         new_count = pool_users.get(new_user_key, 0)
         if new_count >= cap:
             return False
@@ -240,6 +242,8 @@ class VoiceWebSocketConcurrencyGuard:
     def release(self, user_key: str, *, pool: str = "voice") -> None:
         pool_users = self._by_pool_user.setdefault(pool, {})
         current = pool_users.get(user_key, 0)
+        if current <= 0:
+            return
         if current <= 1:
             pool_users.pop(user_key, None)
         else:
@@ -644,12 +648,14 @@ def build_voice_consent_audit_entry(
 
 def looks_like_valid_audio_bytes(data: bytes) -> bool:
     """Verify binary audio container headers (`TestAudioSniff` in `test_voice_robustness.py`):
-    Accepts WAV (`RIFF`), Ogg/Opus (`OggS`), MP3 (`ID3` / `\\xff\\xfb` / `\\xff\\xf3`), or FLAC (`fLaC`) >= 32 bytes;
-    rejects HTML error pages (`<html>rate limited</html>`) or truncated headers (`b"RIFF"`).
+    Accepts WAV (`RIFF....WAVE`), Ogg/Opus (`OggS`), MP3 (`ID3` / `\\xff\\xfb` / `\\xff\\xf3`), or FLAC (`fLaC`) >= 32 bytes;
+    rejects HTML error pages (`<html>rate limited</html>`), RIFF/WEBP images, or truncated headers (`b"RIFF"`).
     """
     if len(data) < 32:
         return False
-    return data.startswith((b"RIFF", b"OggS", b"ID3", b"\xff\xfb", b"\xff\xf3", b"fLaC"))
+    return (data.startswith(b"RIFF") and data[8:12] == b"WAVE") or data.startswith(
+        (b"OggS", b"ID3", b"\xff\xfb", b"\xff\xf3", b"fLaC")
+    )
 
 
 @dataclass(frozen=True)
@@ -685,7 +691,16 @@ class TtsPhraseCache:
         voice: str | None,
         synthesizer: Any,
     ) -> TtsCachedAudio:
-        resolved_voice = resolve_tts_voice(language, voice) or "ssra_eng_0001"
+        resolved_voice = resolve_tts_voice(language, voice)
+        if resolved_voice is None:
+            return TtsCachedAudio(
+                audio=b"",
+                backend="error",
+                voice="",
+                language=language,
+                latency_ms=0.0,
+                error=f"Unsupported TTS locale '{language}'",
+            )
         key = self._make_key(text, language=language, voice=resolved_voice)
         cached = self._store.get(key)
         if cached is not None:
