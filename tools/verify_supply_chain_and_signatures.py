@@ -10,6 +10,7 @@ Verifies:
 
 from __future__ import annotations
 
+import json
 import re
 import tomllib
 from pathlib import Path
@@ -84,8 +85,40 @@ def main() -> None:
                 f"Runbook {rb_path.name} still contains decommissioned Kubernetes term '{forbidden}'"
             )
 
+    # 7. Verify Living Docs, ADR Catalog (ADR-001..ADR-016), Model Card & CycloneDX 1.6 ML-BOM Traceability
+    trace_skill = ROOT / ".agents" / "skills" / "living-docs-adr-runbooks-traceability" / "SKILL.md"
+    assert trace_skill.is_file(), "Missing living-docs-adr-runbooks-traceability skill"
+    adr_readme = (ROOT / "docs" / "adr" / "README.md").read_text(encoding="utf-8")
+    for adr_file in sorted((ROOT / "docs" / "adr").glob("00*.md")):
+        assert adr_file.name in adr_readme, (
+            f"Unindexed ADR '{adr_file.name}' missing from docs/adr/README.md"
+        )
+    try:
+        primary = routing["hf_cache"]["models"]["llm_primary"]
+        primary_repo = str(primary["repo_id"])
+        primary_rev = str(primary["revision"])
+    except (KeyError, TypeError) as exc:
+        raise AssertionError(
+            "model-routing.yaml is missing hf_cache.models.llm_primary.repo_id or revision"
+        ) from exc
+    model_cards_txt = (ROOT / "docs" / "ai-governance" / "model-cards-and-datasheet.md").read_text(
+        encoding="utf-8"
+    )
+    sbom = json.loads(
+        (ROOT / "infra" / "observability" / "cyclonedx-sbom.json").read_text(encoding="utf-8")
+    )
+    sbom_ok = any(
+        comp.get("type") == "machine-learning-model"
+        and comp.get("name") == primary_repo
+        and comp.get("version") == primary_rev
+        for comp in sbom.get("components", [])
+    )
+    assert primary_repo in model_cards_txt and primary_rev in model_cards_txt and sbom_ok, (
+        f"Primary LLM '{primary_repo}@{primary_rev}' out of sync between model-routing.yaml, model-cards-and-datasheet.md, and cyclonedx-sbom.json"
+    )
+
     print(
-        "Supply-chain verification passed: 40-char SHA CI actions, 7-day cooldowns (pnpm & uv), contract SHA parity, Docker Compose hardening, and sovereign routing verified."
+        "Supply-chain & living-docs traceability verification passed: 40-char SHA CI actions, 7-day cooldowns, contract SHA parity, Docker Compose 2026, ADR catalog, and ML-BOM verified."
     )
 
 

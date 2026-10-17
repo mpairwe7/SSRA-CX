@@ -16,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def verify_all_gates() -> dict[str, bool]:
-    # Gate 0: ADRs 0001..0015, C4 architecture, threat model, data model, AG-UI hello-world
+    # Gate 0: ADRs 0001..0016+, C4 architecture, threat model, data model, AG-UI hello-world
     adr_files = sorted((ROOT / "docs" / "adr").glob("00*.md"))
-    assert len(adr_files) == 15, f"Expected 15 ADRs, found {len(adr_files)}"
+    assert len(adr_files) >= 16, f"Expected >= 16 ADRs, found {len(adr_files)}"
     assert (ROOT / "docs" / "architecture" / "overview.md").exists()
     assert (ROOT / "docs" / "architecture" / "data-model.md").exists()
     assert (ROOT / "docs" / "security" / "threat-model.md").exists()
