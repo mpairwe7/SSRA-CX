@@ -1618,12 +1618,17 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
         TTS_DEFAULT_VOICE,
         TTS_VOICE_CATALOG,
         CallLobbyManager,
+        TtsCachedAudio,
+        TtsPhraseCache,
         VADConfig,
         VoiceStreamSession,
         VoiceWebSocketConcurrencyGuard,
         build_chat_to_call_carryover,
         build_voice_consent_audit_entry,
         generate_officer_call_brief,
+        is_ws_origin_allowed,
+        looks_like_valid_audio_bytes,
+        resolve_mt_and_tts_turn_plan,
         resolve_tts_voice,
         validate_call_wrap_up,
     )
@@ -1920,6 +1925,107 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     assert v_audit["audio_sha256"] is not None
     with pytest.raises(ValueError):
         build_voice_consent_audit_entry(event_type="invalid_evt", session_id="vs_01")
+
+    # Voice Robustness: Multi-pool WS slot rekeying, Origin check, Audio Sniff, TTS Phrase Cache & Honest MT Degradation
+    ws_multi = VoiceWebSocketConcurrencyGuard(per_user_cap=2, global_cap=3)
+    assert ws_multi.rekey_slot("missing_user", "sub_amina_01", pool="call") is False
+    assert ws_multi.try_acquire("anon::192.0.2.1", pool="call") == (True, None)
+    assert ws_multi.try_acquire("anon::192.0.2.1", pool="call") == (True, None)
+    assert ws_multi.rekey_slot("anon::192.0.2.1", "anon::192.0.2.1", pool="call") is True
+    assert ws_multi.rekey_slot("anon::192.0.2.1", "sub_amina_01", pool="call") is True
+    assert ws_multi.rekey_slot("anon::192.0.2.1", "sub_amina_01", pool="call") is True
+    assert ws_multi.active_count("call") == 2
+    assert ws_multi.try_acquire("anon::192.0.2.2", pool="call") == (True, None)
+    assert ws_multi.rekey_slot("anon::192.0.2.2", "sub_amina_01", pool="call") is False
+    ws_multi.release("sub_amina_01", pool="call")
+    ws_multi.release("sub_amina_01", pool="call")
+    ws_multi.release("sub_amina_01", pool="call")  # no-op when count is already 0
+    assert is_ws_origin_allowed(None, {"https://assist.ssra.gov.ss"}) is False
+    assert (
+        is_ws_origin_allowed("https://assist.ssra.gov.ss", {"https://assist.ssra.gov.ss"}) is True
+    )
+
+    assert looks_like_valid_audio_bytes(b"RIFF\x00\x00\x00\x00WAVE" + b"\x00" * 64) is True
+    assert looks_like_valid_audio_bytes(b"RIFF\x00\x00\x00\x00WEBP" + b"\x00" * 64) is False
+    assert looks_like_valid_audio_bytes(b"<html>rate limited</html>" + b" " * 64) is False
+    assert looks_like_valid_audio_bytes(b"RIFF") is False
+
+    tts_cache = TtsPhraseCache(max_entries=2)
+    synth_calls = 0
+
+    def _fake_synth(txt: str, *, language: str, voice: str) -> TtsCachedAudio:
+        nonlocal synth_calls
+        synth_calls += 1
+        if txt == "FAIL":
+            return TtsCachedAudio(
+                audio=b"",
+                backend="error",
+                voice=voice,
+                language=language,
+                latency_ms=0.0,
+                error="TTS down",
+            )
+        return TtsCachedAudio(
+            audio=b"RIFF\x00\x00\x00\x00WAVE" + b"\x00" * 64,
+            backend="orpheus",
+            voice=voice,
+            language=language,
+            latency_ms=120.0,
+        )
+
+    assert (
+        tts_cache.get_or_synthesize(
+            "Unsupported", language="xx", voice=None, synthesizer=_fake_synth
+        ).error
+        is not None
+    )
+
+    c1 = tts_cache.get_or_synthesize(
+        "Welcome to SSRA", language="en", voice=None, synthesizer=_fake_synth
+    )
+    c2 = tts_cache.get_or_synthesize(
+        "Welcome to SSRA", language="en", voice=None, synthesizer=_fake_synth
+    )
+    assert synth_calls == 1
+    assert c1.backend == "orpheus"
+    assert c2.backend == "orpheus+cache"
+    assert c2.latency_ms == 0.0
+    tts_cache.get_or_synthesize("Phrase 2", language="en", voice=None, synthesizer=_fake_synth)
+    tts_cache.get_or_synthesize("Phrase 3", language="en", voice=None, synthesizer=_fake_synth)
+    tts_cache.get_or_synthesize("FAIL", language="en", voice=None, synthesizer=_fake_synth)
+    tts_cache.get_or_synthesize("FAIL", language="en", voice=None, synthesizer=_fake_synth)
+    assert synth_calls == 5
+
+    mt_en = resolve_mt_and_tts_turn_plan(
+        source_locale="en",
+        original_transcript="How do I register?",
+        inbound_translated_en=None,
+        english_reply_text="Register on etax.nra.gov.ss",
+        outbound_translated_text=None,
+    )
+    assert mt_en["mt_degraded"] == []
+
+    mt_in_fail = resolve_mt_and_tts_turn_plan(
+        source_locale="pga",
+        original_transcript="Kif ana a'mil TIN?",
+        inbound_translated_en=None,
+        english_reply_text="Register on etax.nra.gov.ss",
+        outbound_translated_text=None,
+    )
+    assert mt_in_fail["llm_locale"] == "pga"
+    assert mt_in_fail["reply_language"] == "en"
+    assert mt_in_fail["tts_voice"] == "ssra_eng_0001"
+    assert mt_in_fail["mt_degraded"] == ["pga-en", "en-pga"]
+    mt_ok = resolve_mt_and_tts_turn_plan(
+        source_locale="pga",
+        original_transcript="Kif ana a'mil TIN?",
+        inbound_translated_en="How do I register for a TIN?",
+        english_reply_text="Register on etax.nra.gov.ss",
+        outbound_translated_text="A'mil tasjil fi etax.nra.gov.ss",
+    )
+    assert mt_ok["llm_locale"] == "en"
+    assert mt_ok["reply_language"] == "pga"
+    assert mt_ok["tts_voice"] == "ssra_pga_0001"
 
     lobby = CallLobbyManager()
     lobby.apply_event("call.started", {"call_id": "call_01"})

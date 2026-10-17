@@ -350,9 +350,11 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
 
     // EndOfTurnDetector, Vocal Acoustic Profile, Earcons & WCAG 2.2 SC 1.4.2 NarrationBar
     const silentSamples = new Float32Array(256);
+    silentSamples[0] = Number.NaN;
     expect(levelDbfs(silentSamples)).toBe(-100);
     expect(isVocalAcousticProfile(silentSamples)).toBe(true);
     const eot = new EndOfTurnDetector({ silenceMs: 800, minSpeechMs: 200, noSpeechMs: 4000 });
+    expect(eot.push(Number.NaN, Number.NaN)).toBeNull();
     expect(eot.push(-65, 0)).toBeNull();
     expect(eot.push(-65, 350)).toBeNull(); // room floor calibrated
     expect(eot.push(-25, 450)).toBeNull(); // burst starts
