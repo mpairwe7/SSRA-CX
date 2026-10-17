@@ -1,0 +1,19 @@
+# CIS Docker Benchmark v1.7 / NIST SP 800-190: Never copy VCS, virtualenvs, node_modules, or local secrets into image layers
+.git
+.github
+.venv
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.turbo
+**/__pycache__
+**/*.pyc
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/coverage
+.env
+.env.*
+*.pem
+*.key

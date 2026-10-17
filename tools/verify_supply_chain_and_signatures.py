@@ -117,8 +117,48 @@ def main() -> None:
         f"Primary LLM '{primary_repo}@{primary_rev}' out of sync between model-routing.yaml, model-cards-and-datasheet.md, and cyclonedx-sbom.json"
     )
 
+    # 8. Verify CIS Docker Benchmark v1.7 Non-Root Dockerfiles, .dockerignore, Seccomp, Gateway 11-MCP Catalog & OTel memory_limiter
+    assert (ROOT / ".dockerignore").is_file(), "Missing .dockerignore"
+    for df_rel in (
+        "services/api/Dockerfile",
+        "services/agent-runtime/Dockerfile",
+        "apps/web/Dockerfile",
+        "apps/console/Dockerfile",
+    ):
+        df_txt = (ROOT / df_rel).read_text(encoding="utf-8")
+        assert "USER 10001:10001" in df_txt, (
+            f"Dockerfile {df_rel} must run as non-root USER 10001:10001"
+        )
+
+    assert (ROOT / "infra" / "policies" / "seccomp-sovereign-default.json").is_file(), (
+        "Missing infra/policies/seccomp-sovereign-default.json"
+    )
+    assert not (ROOT / "infra" / "k8s").exists() and not (ROOT / "infra" / "helm").exists(), (
+        "Decommissioned Kubernetes directories infra/k8s and infra/helm must not exist"
+    )
+
+    gw_routes = yaml.safe_load(
+        (ROOT / "infra" / "gateway" / "routes.yaml").read_text(encoding="utf-8")
+    )
+    mcp_servers = gw_routes.get("spec", {}).get("mcp", {}).get("servers", [])
+    assert len(mcp_servers) == 11, (
+        f"Expected 11 MCP servers in routes.yaml, found {len(mcp_servers)}"
+    )
+    assert (
+        gw_routes.get("spec", {}).get("spendLimits", {}).get("perConversationMaxToolCalls") == 16
+    ), "routes.yaml perConversationMaxToolCalls must equal 16"
+
+    otel_cfg = yaml.safe_load(
+        (ROOT / "infra" / "observability" / "otel-collector-config.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert "memory_limiter" in otel_cfg.get("processors", {}), (
+        "otel-collector-config.yaml must configure memory_limiter processor"
+    )
+
     print(
-        "Supply-chain & living-docs traceability verification passed: 40-char SHA CI actions, 7-day cooldowns, contract SHA parity, Docker Compose 2026, ADR catalog, and ML-BOM verified."
+        "Supply-chain, infra & living-docs traceability verification passed: 40-char SHA CI actions, 7-day cooldowns, contract SHA parity, non-root Dockerfiles, Seccomp, OTel memory_limiter, 11-server gateway, ADR catalog, and ML-BOM verified."
     )
 
 

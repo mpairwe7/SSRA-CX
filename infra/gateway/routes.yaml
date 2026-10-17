@@ -1,5 +1,5 @@
-# agentgateway 1.x Configuration (Section 5, 8.1-8.3, ADR-004)
-# Single governed egress for LLM, stateless MCP 2026-07-28, and future A2A v1.0 traffic.
+# agentgateway 1.x Configuration (Section 5, 8.1-8.3, ADR-004, RFC 9728 & RFC 8707)
+# Single governed egress for LLM, stateless MCP 2026-07-28 (all 11 servers), and future A2A v1.0 traffic.
 
 apiVersion: agentgateway.dev/v1alpha1
 kind: GatewayConfig
@@ -7,14 +7,14 @@ metadata:
   name: ssra-agentgateway
 spec:
   listen:
-    host: "0.0.0.0"
+    host: "127.0.0.1"
     port: 8090
     mtls:
       enabledInCluster: true
   spendLimits:
     dailyUsdCap: 150.00
     perConversationMaxTokens: 2048
-    perConversationMaxToolCalls: 4
+    perConversationMaxToolCalls: 16
   policyEngine:
     type: opa
     policyPath: "../../ai/policies/policy_gate.rego"
@@ -28,6 +28,8 @@ spec:
     oauth2TokenExchange:
       issuer: "https://sso.ssra.gov.ss/realms/ssra"
       rfc8693Enabled: true
+      rfc8707ResourceIndicatorRequired: true
+      rfc9728MetadataPath: "/.well-known/oauth-protected-resource/gateway"
       passthroughProhibited: true
     servers:
       - name: knowledge
@@ -39,9 +41,30 @@ spec:
       - name: official-channels
         url: "http://mcp-official-channels:8103/mcp"
         audience: "mcp-official-channels"
+      - name: taxpayer
+        url: "http://mcp-taxpayer:8104/mcp"
+        audience: "mcp-taxpayer"
       - name: ledger
-        url: "http://mcp-ledger:8104/mcp"
+        url: "http://mcp-ledger:8105/mcp"
         audience: "mcp-ledger"
+      - name: payments-info
+        url: "http://mcp-payments-info:8106/mcp"
+        audience: "mcp-payments-info"
+      - name: tcc
+        url: "http://mcp-tcc:8107/mcp"
+        audience: "mcp-tcc"
+      - name: customs
+        url: "http://mcp-customs:8108/mcp"
+        audience: "mcp-customs"
+      - name: cases
+        url: "http://mcp-cases:8109/mcp"
+        audience: "mcp-cases"
+      - name: appointments
+        url: "http://mcp-appointments:8110/mcp"
+        audience: "mcp-appointments"
+      - name: notifications
+        url: "http://mcp-notifications:8111/mcp"
+        audience: "mcp-notifications"
   a2a:
     enabled: false
     agentCardStub: "./a2a-agent-card.stub.json"
