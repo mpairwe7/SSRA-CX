@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -189,29 +190,73 @@ def route_voice_turn(
 
 
 class VoiceWebSocketConcurrencyGuard:
-    """P1-9 Voice WebSocket Concurrency Cap (`voice_ws_v2.py` pattern): per-user (3) & global (64)."""
+    """P1-9 Multi-Pool Voice/Call/Chat WebSocket Concurrency Cap & Slot Rekeying (`test_voice_ws_hardening.py`)."""
 
     def __init__(self, *, per_user_cap: int = 3, global_cap: int = 64) -> None:
         self.per_user_cap = max(1, per_user_cap)
         self.global_cap = max(1, global_cap)
-        self._by_user: dict[str, int] = {}
-        self._total = 0
+        self._by_pool_user: dict[str, dict[str, int]] = {}
+        self._total_by_pool: dict[str, int] = {}
 
-    def try_acquire(self, user_key: str) -> tuple[bool, int | None]:
-        current = self._by_user.get(user_key, 0)
-        if current >= self.per_user_cap or self._total >= self.global_cap:
+    def active_count(self, pool: str = "voice") -> int:
+        return self._total_by_pool.get(pool, 0)
+
+    def try_acquire(self, user_key: str, *, pool: str = "voice") -> tuple[bool, int | None]:
+        pool_users = self._by_pool_user.setdefault(pool, {})
+        current = pool_users.get(user_key, 0)
+        total = self._total_by_pool.get(pool, 0)
+        if current >= self.per_user_cap or total >= self.global_cap:
             return False, 1013
-        self._by_user[user_key] = current + 1
-        self._total += 1
+        pool_users[user_key] = current + 1
+        self._total_by_pool[pool] = total + 1
         return True, None
 
-    def release(self, user_key: str) -> None:
-        current = self._by_user.get(user_key, 0)
-        if current <= 1:
-            self._by_user.pop(user_key, None)
+    def rekey_slot(
+        self,
+        old_user_key: str,
+        new_user_key: str,
+        *,
+        pool: str = "voice",
+        authenticated_per_user_cap: int | None = None,
+    ) -> bool:
+        """Atomically rekey an anonymous slot (`anon::ip`) to an authenticated `user_id` without changing pool total."""
+        pool_users = self._by_pool_user.setdefault(pool, {})
+        old_count = pool_users.get(old_user_key, 0)
+        if old_count <= 0:
+            return False
+        if old_user_key == new_user_key:
+            return True
+        cap = authenticated_per_user_cap or self.per_user_cap
+        new_count = pool_users.get(new_user_key, 0)
+        if new_count >= cap:
+            return False
+        if old_count == 1:
+            pool_users.pop(old_user_key, None)
         else:
-            self._by_user[user_key] = current - 1
-        self._total = max(0, self._total - 1)
+            pool_users[old_user_key] = old_count - 1
+        pool_users[new_user_key] = new_count + 1
+        return True
+
+    def release(self, user_key: str, *, pool: str = "voice") -> None:
+        pool_users = self._by_pool_user.setdefault(pool, {})
+        current = pool_users.get(user_key, 0)
+        if current <= 1:
+            pool_users.pop(user_key, None)
+        else:
+            pool_users[user_key] = current - 1
+        self._total_by_pool[pool] = max(0, self._total_by_pool.get(pool, 0) - 1)
+
+
+def is_ws_origin_allowed(
+    origin: str | None,
+    allowed_origins: set[str] | frozenset[str],
+    *,
+    require_origin: bool = True,
+) -> bool:
+    """Validate WebSocket `Origin` header (`test_voice_ws_hardening.py` & `CVE-2026-27978`)."""
+    if not origin or origin.strip().lower() == "null":
+        return not require_origin
+    return origin.strip() in allowed_origins
 
 
 @dataclass(frozen=True)
@@ -597,6 +642,120 @@ def build_voice_consent_audit_entry(
     }
 
 
+def looks_like_valid_audio_bytes(data: bytes) -> bool:
+    """Verify binary audio container headers (`TestAudioSniff` in `test_voice_robustness.py`):
+    Accepts WAV (`RIFF`), Ogg/Opus (`OggS`), MP3 (`ID3` / `\\xff\\xfb` / `\\xff\\xf3`), or FLAC (`fLaC`) >= 32 bytes;
+    rejects HTML error pages (`<html>rate limited</html>`) or truncated headers (`b"RIFF"`).
+    """
+    if len(data) < 32:
+        return False
+    return data.startswith((b"RIFF", b"OggS", b"ID3", b"\xff\xfb", b"\xff\xf3", b"fLaC"))
+
+
+@dataclass(frozen=True)
+class TtsCachedAudio:
+    audio: bytes
+    backend: str
+    voice: str
+    language: str
+    latency_ms: float
+    error: str | None = None
+
+
+class TtsPhraseCache:
+    """Bounded LRU TTS Phrase Cache (`TestTtsPhraseCache` in `test_voice_robustness.py`):
+    Serves repeated phrases with `backend='<engine>+cache'` and `latency_ms=0.0`, and never caches failures.
+    """
+
+    def __init__(self, *, max_entries: int = 256) -> None:
+        self.max_entries = max(1, max_entries)
+        self._store: OrderedDict[str, TtsCachedAudio] = OrderedDict()
+
+    @staticmethod
+    def _make_key(text: str, *, language: str, voice: str) -> str:
+        norm = " ".join(text.strip().lower().split())
+        digest = hashlib.sha256(f"{language}:{voice}:{norm}".encode()).hexdigest()
+        return f"tts:{language}:{voice}:{digest}"
+
+    def get_or_synthesize(
+        self,
+        text: str,
+        *,
+        language: str,
+        voice: str | None,
+        synthesizer: Any,
+    ) -> TtsCachedAudio:
+        resolved_voice = resolve_tts_voice(language, voice) or "ssra_eng_0001"
+        key = self._make_key(text, language=language, voice=resolved_voice)
+        cached = self._store.get(key)
+        if cached is not None:
+            self._store.move_to_end(key)
+            return TtsCachedAudio(
+                audio=cached.audio,
+                backend=f"{cached.backend}+cache",
+                voice=cached.voice,
+                language=cached.language,
+                latency_ms=0.0,
+            )
+        fresh: TtsCachedAudio = synthesizer(text, language=language, voice=resolved_voice)
+        if not fresh.error and looks_like_valid_audio_bytes(fresh.audio):
+            if len(self._store) >= self.max_entries:
+                self._store.popitem(last=False)
+            self._store[key] = fresh
+        return fresh
+
+
+def resolve_mt_and_tts_turn_plan(
+    *,
+    source_locale: str,
+    original_transcript: str,
+    inbound_translated_en: str | None,
+    english_reply_text: str,
+    outbound_translated_text: str | None,
+    requested_voice: str | None = None,
+) -> dict[str, Any]:
+    """Honest MT Degradation & Language-Matched Voice Selection (`TestMtDegradation` in `test_voice_robustness.py`):
+    1. If inbound MT (`source_locale -> en`) fails, pass `original_transcript` labeled with `source_locale` (never mislabeled as `en`).
+    2. If outbound MT (`en -> source_locale`) fails, speak `english_reply_text` using the `en` TTS voice (`ssra_eng_0001`), never mangling English with a local-language voice.
+    """
+    src = source_locale.strip().lower()
+    mt_degraded: list[str] = []
+
+    if src == "en":
+        llm_locale = "en"
+        llm_message = original_transcript
+    elif inbound_translated_en and inbound_translated_en.strip():
+        llm_locale = "en"
+        llm_message = inbound_translated_en.strip()
+    else:
+        mt_degraded.append(f"{src}-en")
+        llm_locale = src
+        llm_message = original_transcript
+
+    if src == "en":
+        reply_language = "en"
+        spoken_text = english_reply_text
+    elif outbound_translated_text and outbound_translated_text.strip():
+        reply_language = src
+        spoken_text = outbound_translated_text.strip()
+    else:
+        mt_degraded.append(f"en-{src}")
+        reply_language = "en"
+        spoken_text = english_reply_text
+
+    tts_voice = resolve_tts_voice(
+        reply_language, requested_voice if reply_language == src else None
+    )
+    return {
+        "llm_locale": llm_locale,
+        "llm_message": llm_message,
+        "reply_language": reply_language,
+        "spoken_text": spoken_text,
+        "tts_voice": tts_voice,
+        "mt_degraded": mt_degraded,
+    }
+
+
 def validate_call_wrap_up(
     *,
     note: str,
@@ -653,6 +812,8 @@ __all__ = [
     "HfVoiceModelDescriptor",
     "LobbyCallEntry",
     "OfficerCallBrief",
+    "TtsCachedAudio",
+    "TtsPhraseCache",
     "VADConfig",
     "VoiceRetentionPolicy",
     "VoiceSessionDecision",
@@ -662,7 +823,10 @@ __all__ = [
     "build_voice_consent_audit_entry",
     "generate_officer_call_brief",
     "is_voice_language_approved",
+    "is_ws_origin_allowed",
+    "looks_like_valid_audio_bytes",
     "resolve_hf_voice_model_cache",
+    "resolve_mt_and_tts_turn_plan",
     "resolve_tts_voice",
     "route_voice_turn",
     "split_tts_sentences",

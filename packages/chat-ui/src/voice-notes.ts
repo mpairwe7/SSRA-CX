@@ -77,11 +77,15 @@ const MAX_FRAME_MS = 250;
 
 export function levelDbfs(samples: Float32Array): number {
   let sum = 0;
+  let validCount = 0;
   for (let i = 0; i < samples.length; i++) {
     const v = samples[i] ?? 0;
-    sum += v * v;
+    if (Number.isFinite(v)) {
+      sum += v * v;
+      validCount++;
+    }
   }
-  const rms = samples.length ? Math.sqrt(sum / samples.length) : 0;
+  const rms = validCount > 0 ? Math.sqrt(sum / validCount) : 0;
   return rms > 0 ? Math.max(SILENT_DBFS, 20 * Math.log10(rms)) : SILENT_DBFS;
 }
 
@@ -136,11 +140,12 @@ export class EndOfTurnDetector {
   }
 
   push(db: number, now: number): TurnEvent | null {
-    if (this.finished) return null;
+    if (this.finished || !Number.isFinite(now)) return null;
     this.startedAt ??= now;
     const frameMs = Math.min(MAX_FRAME_MS, Math.max(0, now - (this.lastAt ?? now)));
     this.lastAt = now;
-    const level = Math.max(SILENT_DBFS, db);
+    const safeDb = Number.isFinite(db) ? db : SILENT_DBFS;
+    const level = Math.max(SILENT_DBFS, safeDb);
     const floor = this.speaking ? this.speechFloor : this.floor(now, level);
     const onset = Math.max(floor + ONSET_DB, MIN_SPEECH_DBFS);
     const sounding = level >= onset - HOLD_DB;
