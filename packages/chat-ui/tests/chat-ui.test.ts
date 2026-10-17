@@ -1,19 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
+  AUDIO_SIGNIFIER_SPECS,
   buildCallReceptionistScreen,
   buildChatComposerState,
   buildDocumentInspectionModalView,
   buildFloatingChatHeader,
+  buildNarrationBarView,
   cleanMarkdownForSpeech,
   computeCallOrbFrame,
   createRevealQueue,
+  EndOfTurnDetector,
   escapeHtmlStrict,
   evaluateCaptionScrollPin,
   formatDocType,
   GENERATIVE_UI_STORYBOOK_FIXTURES,
   groupConversationsByRecency,
   isCspSafeImagePreviewDataUrl,
+  isVocalAcousticProfile,
   joinDictated,
+  levelDbfs,
   nextRevealIndex,
   OfflineOutboxQueue,
   parseAguiSseStream,
@@ -342,5 +347,41 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(modalView.quickPrompts.length).toBeGreaterThanOrEqual(3);
     expect(isCspSafeImagePreviewDataUrl("data:image/jpeg;base64,/9j/4AAQSkZJRg==")).toBe(true);
     expect(isCspSafeImagePreviewDataUrl("blob:https://assist.ssra.gov.ss/123")).toBe(false);
+
+    // EndOfTurnDetector, Vocal Acoustic Profile, Earcons & WCAG 2.2 SC 1.4.2 NarrationBar
+    const silentSamples = new Float32Array(256);
+    expect(levelDbfs(silentSamples)).toBe(-100);
+    expect(isVocalAcousticProfile(silentSamples)).toBe(true);
+    const eot = new EndOfTurnDetector({ silenceMs: 800, minSpeechMs: 200, noSpeechMs: 4000 });
+    expect(eot.push(-65, 0)).toBeNull();
+    expect(eot.push(-65, 350)).toBeNull(); // room floor calibrated
+    expect(eot.push(-25, 450)).toBeNull(); // burst starts
+    expect(eot.push(-25, 650)).toBe("speech"); // 200ms speech reached
+    expect(eot.hasSpeech).toBe(true);
+    expect(eot.push(-70, 1500)).toBe("end"); // >800ms silence after speech
+
+    expect(AUDIO_SIGNIFIER_SPECS.micStart.startHz).toBe(440);
+    expect(AUDIO_SIGNIFIER_SPECS.micStart.endHz).toBe(880);
+
+    const narBar = buildNarrationBarView({
+      active: true,
+      loading: false,
+      paused: false,
+      failed: false,
+      sentence: "PAYE is due by the 15th of the following month.",
+    });
+    expect(narBar.mode).toBe("playing");
+    expect(narBar.stopKeyShortcut).toBe("Escape");
+    expect(narBar.sentenceAriaHidden).toBe(true);
+
+    const narFailed = buildNarrationBarView({
+      active: false,
+      loading: false,
+      paused: false,
+      failed: true,
+      sentence: null,
+    });
+    expect(narFailed.mode).toBe("failed");
+    expect(narFailed.showRetry).toBe(true);
   });
 });

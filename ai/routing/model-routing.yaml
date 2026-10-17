@@ -46,10 +46,15 @@ hf_cache:
       engine: "vllm-audio"
       locales: ["en", "ar"]
     asr_omnilingual:
-      repo_id: "facebook/mms-1b-all"
-      revision: "e602081b7b0e8325f2d6d0ef8832f5070e819a21"
+      repo_id: "Sunbird/SunflowerASR-51-african-languages"
+      revision: "4583c9dd251c422a4325fb0a0a509a3828097be2"
       engine: "hf-transformers-offline"
       locales: ["pga", "din", "nus", "bfa", "zne", "shk"]
+    tts_orpheus_multilingual:
+      repo_id: "Sunbird/orpheus-3b-tts-multilingual"
+      revision: "c44496fdfa162c4ecd15c846fcbcac15bba28951"
+      engine: "hf-transformers-offline"
+      locales: ["en", "ar", "pga", "din", "nus", "bfa", "zne", "shk"]
     tts_mms:
       engine: "hf-vits-offline"
       checkpoints_by_locale:

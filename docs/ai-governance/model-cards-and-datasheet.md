@@ -24,9 +24,10 @@
 ### 1.3 Model Card 3: Multilingual Embedding & Reranker (`BGE-M3` / `Qwen3-Embedding` + `Qwen3-Reranker`)
 - **Role:** Hybrid lexical + dense vector retrieval (`pgvector` 0.8+ HNSW iterative scans) and cross-encoder reranking across English (`en`), Arabic (`ar`), Juba Arabic (`pga`), and Tier C national languages (`din`, `nus`, `bfa`, `zne`, `shk`).
 
-### 1.4 Model Card 4: Speech Pipeline (`Whisper-large-v3-turbo` & `Meta Omnilingual ASR`)
-- **Role:** Phase 4 Voice/IVR (`services/voice`).
-- **Launch Gate:** A language is enabled on Voice/IVR only when its measured Word Error Rate (WER) on SSRA test sets is `<= 0.12` (`MAX_VOICE_WER_GATE`). Exceeding the gate triggers an immediate warm transfer to an SSRA officer.
+### 1.4 Model Card 4: Speech Pipeline (`Whisper-large-v3-turbo`, `Sunbird/SunflowerASR-51-african-languages` & `Sunbird/orpheus-3b-tts-multilingual`)
+- **Role:** Phase 4 Voice/IVR & Streaming Speech (`services/voice` & `packages/chat-ui/src/voice-notes.ts`).
+- **Hosting:** Offline HuggingFace cache `/home/developer/huggingface_cache` (`Sunbird/SunflowerASR-51-african-languages` @ `4583c9dd251c422a4325fb0a0a509a3828097be2`, `Sunbird/orpheus-3b-tts-multilingual` @ `c44496fdfa162c4ecd15c846fcbcac15bba28951`, and `facebook/mms-tts-*` VITS checkpoints).
+- **Launch Gate & Controls:** A language is enabled on Voice/IVR only when its measured Word Error Rate (WER) on SSRA test sets is `<= 0.12` (`MAX_VOICE_WER_GATE`). Includes locale-scoped speaker catalog resolution (`resolve_tts_voice`), sentence-chunked TTS + barge-in cancellation (`VoiceStreamSession`), adaptive room-floor end-of-turn detection (`EndOfTurnDetector`), WCAG 2.2 SC 1.4.2 `NarrationBar` (`buildNarrationBarView`), and privacy-preserving SHA-256 voice consent auditing (`build_voice_consent_audit_entry`, `store_raw_audio=False`).
 
 ---
 

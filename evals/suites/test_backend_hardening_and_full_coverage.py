@@ -1615,10 +1615,16 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
         validate_office_zip_archive,
     )
     from ssra_voice import (
+        TTS_DEFAULT_VOICE,
+        TTS_VOICE_CATALOG,
         CallLobbyManager,
+        VADConfig,
+        VoiceStreamSession,
         VoiceWebSocketConcurrencyGuard,
         build_chat_to_call_carryover,
+        build_voice_consent_audit_entry,
         generate_officer_call_brief,
+        resolve_tts_voice,
         validate_call_wrap_up,
     )
 
@@ -1880,6 +1886,40 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     assert lobby2.calls["call_02"].risk_level == "at_risk"
     lobby2.apply_event("call.wrapped_up", {"call_id": "call_02"})
     assert "call_02" not in lobby2.calls
+
+    # Speech & Voice Interaction Flows: TTS Voice Catalog, Streaming VAD/Barge-In, & Voice Consent Audit
+    for loc, default_tag in TTS_DEFAULT_VOICE.items():
+        assert TTS_VOICE_CATALOG[loc][0] == default_tag
+        assert resolve_tts_voice(loc, None) == default_tag
+        assert resolve_tts_voice(loc, TTS_VOICE_CATALOG[loc][1]) == TTS_VOICE_CATALOG[loc][1]
+    assert resolve_tts_voice("pga", "ssra_din_0001") == "ssra_pga_0001"
+    assert resolve_tts_voice("pga", "en-US-AriaNeural") == "ssra_pga_0001"
+    assert resolve_tts_voice("xx", None) is None
+
+    v_sess = VoiceStreamSession(
+        session_id="vs_01",
+        locale=LocaleCode.PGA,
+        vad=VADConfig.from_sensitivity("high"),
+    )
+    assert v_sess.record_partial_transcript("Ana") is None
+    assert v_sess.record_partial_transcript("Ana azu namba ta dariba") == "Ana azu namba ta"
+    tts_chunks = v_sess.stream_tts_sentences(
+        "First sentence. Second sentence.", voice="ssra_pga_0002"
+    )
+    assert len(tts_chunks) == 2
+    assert tts_chunks[0]["voice"] == "ssra_pga_0002"
+    v_sess.trigger_barge_in()
+    assert v_sess.stream_tts_sentences("Cancelled sentence.") == []
+
+    v_audit = build_voice_consent_audit_entry(
+        event_type="recording_start",
+        session_id="vs_01",
+        audio_bytes=b"pcm_sample",
+    )
+    assert v_audit["raw_audio_stored"] is False
+    assert v_audit["audio_sha256"] is not None
+    with pytest.raises(ValueError):
+        build_voice_consent_audit_entry(event_type="invalid_evt", session_id="vs_01")
 
     lobby = CallLobbyManager()
     lobby.apply_event("call.started", {"call_id": "call_01"})

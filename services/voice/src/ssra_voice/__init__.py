@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -118,12 +119,15 @@ def synthesize_tts_speech_envelope(
     *,
     text: str,
     locale: LocaleCode,
+    voice: str | None = None,
     hf_home: str = "/home/developer/huggingface_cache",
 ) -> dict[str, Any]:
-    """Build deterministic offline HuggingFace MMS-TTS VITS synthesis envelope."""
+    """Build deterministic offline HuggingFace MMS-TTS / Orpheus synthesis envelope with locale-validated speaker tag."""
     desc = resolve_hf_voice_model_cache(locale, hf_home=hf_home)
+    resolved_voice = resolve_tts_voice(locale.value, voice)
     return {
         "tts_model": desc.tts_repo_id,
+        "voice": resolved_voice,
         "locale": locale.value,
         "hf_cache_dir": desc.hf_cache_dir,
         "local_files_only": desc.local_files_only,
@@ -435,6 +439,164 @@ def build_chat_to_call_carryover(
     )
 
 
+# Per-locale TTS Speaker Catalog (`test_sunbird_voice_selection.py` pattern):
+# Every default speaker is first in its own locale catalog, and every tag is unique & locale-scoped.
+TTS_VOICE_CATALOG: dict[str, tuple[str, ...]] = {
+    "en": ("ssra_eng_0001", "ssra_eng_0002"),
+    "ar": ("ssra_ara_0001", "ssra_ara_0002"),
+    "pga": ("ssra_pga_0001", "ssra_pga_0002"),
+    "din": ("ssra_din_0001", "ssra_din_0002"),
+    "nus": ("ssra_nus_0001", "ssra_nus_0002"),
+    "bfa": ("ssra_bfa_0001", "ssra_bfa_0002"),
+    "zne": ("ssra_zne_0001", "ssra_zne_0002"),
+    "shk": ("ssra_shk_0001", "ssra_shk_0002"),
+}
+TTS_DEFAULT_VOICE: dict[str, str] = {loc: tags[0] for loc, tags in TTS_VOICE_CATALOG.items()}
+
+
+def resolve_tts_voice(locale: str, requested_voice: str | None = None) -> str | None:
+    """Resolve a locale-scoped TTS speaker tag (`test_sunbird_voice_selection.py`):
+    - Returns `None` for unknown locales (`"xx"`).
+    - Replaces `None`, empty strings, foreign backend names (`en-US-AriaNeural`), or tags
+      belonging to another locale with `TTS_DEFAULT_VOICE[locale]`.
+    """
+    loc = (locale or "").strip().lower()
+    catalog = TTS_VOICE_CATALOG.get(loc)
+    if not catalog:
+        return None
+    if requested_voice and requested_voice in catalog:
+        return requested_voice
+    return TTS_DEFAULT_VOICE[loc]
+
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+@dataclass(frozen=True)
+class VADConfig:
+    """Energy-based Voice Activity Detection thresholds (`voice_stream.py`)."""
+
+    energy_threshold: float = 0.015
+    silence_duration_ms: int = 600
+    min_speech_duration_ms: int = 250
+    max_utterance_s: float = 30.0
+    sample_rate: int = 16_000
+
+    @classmethod
+    def from_sensitivity(cls, sensitivity: str = "medium", sample_rate: int = 16_000) -> VADConfig:
+        presets = {
+            "low": cls(energy_threshold=0.025, silence_duration_ms=800, sample_rate=sample_rate),
+            "medium": cls(energy_threshold=0.015, silence_duration_ms=600, sample_rate=sample_rate),
+            "high": cls(energy_threshold=0.008, silence_duration_ms=400, sample_rate=sample_rate),
+        }
+        return presets.get(sensitivity.lower(), presets["medium"])
+
+
+def split_tts_sentences(text: str) -> list[str]:
+    """Split reply text into sentence chunks for sub-second time-to-first-audio."""
+    cleaned = text.strip()
+    if not cleaned:
+        return []
+    return [s.strip() for s in _SENTENCE_SPLIT_RE.split(cleaned) if s.strip()]
+
+
+class VoiceStreamSession:
+    """V2 Streaming Voice Session (`voice_stream_v2.py`): sentence-chunked TTS, barge-in & speculative prefetch."""
+
+    def __init__(
+        self, *, session_id: str, locale: LocaleCode, vad: VADConfig | None = None
+    ) -> None:
+        self.session_id = session_id
+        self.locale = locale
+        self.vad = vad or VADConfig.from_sensitivity("medium")
+        self.barge_in_cancelled = False
+        self.speculative_prefetches: list[str] = []
+
+    def trigger_barge_in(self) -> None:
+        self.barge_in_cancelled = True
+
+    def record_partial_transcript(self, partial_text: str) -> str | None:
+        words = [w for w in partial_text.strip().split() if w]
+        if len(words) >= 3:
+            stable_prefix = " ".join(words[:4])
+            self.speculative_prefetches.append(stable_prefix)
+            return stable_prefix
+        return None
+
+    def stream_tts_sentences(self, text: str, *, voice: str | None = None) -> list[dict[str, Any]]:
+        chunks: list[dict[str, Any]] = []
+        for idx, sentence in enumerate(split_tts_sentences(text)):
+            if self.barge_in_cancelled:
+                break
+            env = synthesize_tts_speech_envelope(text=sentence, locale=self.locale, voice=voice)
+            env["sentence_index"] = idx
+            env["sentence_text"] = sentence
+            chunks.append(env)
+        return chunks
+
+
+VOICE_EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        "recording_start",
+        "recording_end",
+        "transcript_stored",
+        "audio_deleted",
+        "consent_checked",
+        "consent_denied",
+        "retention_cleanup",
+        "session_start",
+        "session_end",
+        "barge_in",
+        "call_started",
+        "call_transferred",
+        "officer_joined",
+        "call_ended",
+        "staff_viewed_call",
+        "staff_viewed_brief",
+        "staff_viewed_caller_history",
+        "staff_listened_call",
+        "officer_claimed",
+        "officer_released",
+        "officer_ended_call",
+        "officer_hold_on",
+        "officer_hold_off",
+        "officer_transferred",
+        "officer_wrapup_saved",
+        "officer_callback_done",
+    }
+)
+
+
+@dataclass(frozen=True)
+class VoiceRetentionPolicy:
+    raw_audio_ttl_hours: int = 24
+    transcript_ttl_days: int = 90
+    analytics_ttl_days: int = 365
+    store_raw_audio: bool = False
+
+
+def build_voice_consent_audit_entry(
+    *,
+    event_type: str,
+    session_id: str,
+    audio_bytes: bytes = b"",
+    policy: VoiceRetentionPolicy | None = None,
+) -> dict[str, Any]:
+    """Record a privacy-preserving voice audit entry (`voice_consent.py`):
+    Raw audio is never stored by default — only its SHA-256 hash is logged.
+    """
+    if event_type not in VOICE_EVENT_TYPES:
+        raise ValueError(f"Unsupported voice audit event_type '{event_type}'")
+    active_policy = policy or VoiceRetentionPolicy()
+    return {
+        "event_type": event_type,
+        "session_id": session_id,
+        "audio_sha256": hashlib.sha256(audio_bytes).hexdigest() if audio_bytes else None,
+        "raw_audio_stored": active_policy.store_raw_audio,
+        "transcript_ttl_days": active_policy.transcript_ttl_days,
+    }
+
+
 def validate_call_wrap_up(
     *,
     note: str,
@@ -481,20 +643,29 @@ __all__ = [
     "MAX_COMPRESSED_AUDIO_BYTES",
     "MAX_DECODED_PCM_BYTES",
     "MAX_VOICE_WER_GATE",
+    "TTS_DEFAULT_VOICE",
     "TTS_MODEL_BY_LOCALE",
+    "TTS_VOICE_CATALOG",
+    "VOICE_EVENT_TYPES",
     "BriefClaim",
     "CallLobbyManager",
     "ChatToCallCarryover",
     "HfVoiceModelDescriptor",
     "LobbyCallEntry",
     "OfficerCallBrief",
+    "VADConfig",
+    "VoiceRetentionPolicy",
     "VoiceSessionDecision",
+    "VoiceStreamSession",
     "VoiceWebSocketConcurrencyGuard",
     "build_chat_to_call_carryover",
+    "build_voice_consent_audit_entry",
     "generate_officer_call_brief",
     "is_voice_language_approved",
     "resolve_hf_voice_model_cache",
+    "resolve_tts_voice",
     "route_voice_turn",
+    "split_tts_sentences",
     "synthesize_tts_speech_envelope",
     "validate_audio_pcm_expansion_budget",
     "validate_call_wrap_up",
