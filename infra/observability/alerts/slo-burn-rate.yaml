@@ -1,31 +1,32 @@
-# Prometheus / Mimir Multi-Window SLO Burn-Rate Alerts (Section 13 & 14.3)
-apiVersion: monitoring.coreos.com/v1
-kind: PrometheusRule
-metadata:
-  name: ssra-cx-slo-burn-rate-alerts
-  namespace: ssra-cx
-spec:
-  groups:
-    - name: ssra-cx.slo.rules
-      rules:
-        - alert: SSRAAvailabilityFastBurn
-          expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > (14.4 * 0.001)
-          for: 2m
-          labels:
-            severity: critical
-          annotations:
-            summary: "SSRA Assist 99.9% availability error budget burning > 14.4x"
-        - alert: SSRANumericProvenanceTrigger
-          expr: increase(ssra_guardrail_triggers_total{guard="numeric_provenance"}[5m]) > 0
-          for: 0m
-          labels:
-            severity: high
-          annotations:
-            summary: "numeric_provenance guard blocked an unverified numeric claim"
-        - alert: SSRACrossSubjectLeakageAttempt
-          expr: increase(ssra_guardrail_triggers_total{guard="cross_subject_pii"}[5m]) > 0
-          for: 0m
-          labels:
-            severity: critical
-          annotations:
-            summary: "Cross-subject TIN or PII guard triggered — immediate SecOps review"
+# Prometheus / Mimir Multi-Window Multi-Burn-Rate SLO Alerts (Section 13 & 14.3)
+groups:
+  - name: ssra-cx.slo.rules
+    rules:
+      - alert: SSRAAvailabilityFastBurn
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > (14.4 * 0.001) and sum(rate(http_requests_total{status=~"5.."}[1h])) / sum(rate(http_requests_total[1h])) > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SSRA Assist 99.9% availability error budget burning > 14.4x (1h/5m multi-window)"
+      - alert: SSRAAvailabilitySlowBurn
+        expr: sum(rate(http_requests_total{status=~"5.."}[30m])) / sum(rate(http_requests_total[30m])) > (6.0 * 0.001) and sum(rate(http_requests_total{status=~"5.."}[6h])) / sum(rate(http_requests_total[6h])) > (6.0 * 0.001)
+        for: 15m
+        labels:
+          severity: high
+        annotations:
+          summary: "SSRA Assist 99.9% availability error budget burning > 6.0x (6h/30m multi-window)"
+      - alert: SSRANumericProvenanceTrigger
+        expr: increase(ssra_guardrail_triggers_total{guard="numeric_provenance"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: high
+        annotations:
+          summary: "numeric_provenance guard blocked an unverified numeric claim"
+      - alert: SSRACrossSubjectLeakageAttempt
+        expr: increase(ssra_guardrail_triggers_total{guard="cross_subject_pii"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cross-subject TIN or PII guard triggered — immediate SecOps review"
