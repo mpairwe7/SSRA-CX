@@ -60,20 +60,37 @@ export function waitingFor(createdAt: number, nowMs = Date.now()): string {
   return h ? `${d}d ${h}h` : `${d}d`;
 }
 
+export const SLA_THRESHOLDS_BY_PRIORITY: Readonly<
+  Record<
+    TicketQueueItem["priority"],
+    { readonly warnSeconds: number; readonly breachSeconds: number }
+  >
+> = {
+  urgent: { warnSeconds: 3600, breachSeconds: 2 * 3600 },
+  high: { warnSeconds: 2 * 3600, breachSeconds: 4 * 3600 },
+  normal: { warnSeconds: SLA_WARN_SECONDS, breachSeconds: SLA_BREACH_SECONDS },
+  low: { warnSeconds: 12 * 3600, breachSeconds: 48 * 3600 },
+};
+
+/**
+ * Compute SLA wait tone (`ok`, `warn`, `breach`) from ticket age and priority thresholds.
+ */
 export function waitTone(
   createdAt: number,
   firstResponseAt?: number | null,
   replyAt?: number | null,
   nowMs = Date.now(),
   status: TicketQueueItem["status"] = "open",
+  priority: TicketQueueItem["priority"] = "normal",
 ): WaitTone {
   if (status === "resolved" || status === "wontfix") {
     return "ok";
   }
   const lastTouch = firstResponseAt ? replyAt || firstResponseAt : null;
   const age = lastTouch ? Math.max(0, nowMs / 1000 - lastTouch) : waitingSeconds(createdAt, nowMs);
-  if (age >= SLA_BREACH_SECONDS) return "breach";
-  if (age >= SLA_WARN_SECONDS) return "warn";
+  const thresholds = SLA_THRESHOLDS_BY_PRIORITY[priority] ?? SLA_THRESHOLDS_BY_PRIORITY.normal;
+  if (age >= thresholds.breachSeconds) return "breach";
+  if (age >= thresholds.warnSeconds) return "warn";
   return "ok";
 }
 
@@ -109,15 +126,30 @@ export function buildAgentQueueWorkbench(params: {
   readonly nowMs?: number | undefined;
 }) {
   const nowMs = params.nowMs ?? Date.now();
-  let rows = sortQueue(params.tickets);
-  if (params.view.mine) {
-    rows = rows.filter((t) => t.assignee === params.officerHandle);
-  }
   const openedId = params.view.ticket;
-  const activeId = openedId ?? rows[0]?.id ?? null;
+  let rows = sortQueue(params.tickets);
+  if (params.view.status === "resolved") {
+    rows = rows.filter(
+      (t) => t.status === "resolved" || t.status === "wontfix" || t.id === openedId,
+    );
+  } else if (params.view.mine) {
+    rows = rows.filter(
+      (t) =>
+        (t.assignee === params.officerHandle &&
+          t.status !== "resolved" &&
+          t.status !== "wontfix") ||
+        t.id === openedId,
+    );
+  } else {
+    rows = rows.filter((t) => t.status === "open" || t.status === "assigned" || t.id === openedId);
+  }
+  const activeId =
+    openedId && rows.some((r) => r.id === openedId) ? openedId : (rows[0]?.id ?? null);
   const urgentCount = rows.filter((t) => t.priority === "urgent").length;
   const breachingCount = rows.filter(
-    (t) => waitTone(t.created_at, t.first_response_at, t.reply_at, nowMs, t.status) === "breach",
+    (t) =>
+      waitTone(t.created_at, t.first_response_at, t.reply_at, nowMs, t.status, t.priority) ===
+      "breach",
   ).length;
 
   return {
@@ -138,6 +170,51 @@ export function buildAgentQueueWorkbench(params: {
       ticket: claimId,
     }),
   };
+}
+
+export interface AgentQueueHotkeyAction {
+  readonly handled: boolean;
+  readonly action: "none" | "select_ticket" | "assign_to_me" | "focus_reply";
+  readonly targetTicketId: string | null;
+}
+
+/**
+ * Resolve keyboard-first triage shortcuts (`j`, `k`, `a`, `r`) for the Staff Queue Workbench,
+ * ignoring keystrokes while the officer is typing inside a text input or textarea.
+ */
+export function resolveAgentQueueHotkey(params: {
+  readonly key: string;
+  readonly rows: readonly TicketQueueItem[];
+  readonly activeId: string | null;
+  readonly isTypingInInput?: boolean | undefined;
+}): AgentQueueHotkeyAction {
+  if (params.isTypingInInput || params.rows.length === 0) {
+    return { handled: false, action: "none", targetTicketId: params.activeId };
+  }
+  const currentIdx = Math.max(
+    0,
+    params.rows.findIndex((r) => r.id === params.activeId),
+  );
+  const activeTicket = params.rows[currentIdx] ?? params.rows[0];
+  if (!activeTicket) {
+    return { handled: false, action: "none", targetTicketId: null };
+  }
+  switch (params.key) {
+    case "j": {
+      const next = params.rows[Math.min(params.rows.length - 1, currentIdx + 1)] ?? activeTicket;
+      return { handled: true, action: "select_ticket", targetTicketId: next.id };
+    }
+    case "k": {
+      const prev = params.rows[Math.max(0, currentIdx - 1)] ?? activeTicket;
+      return { handled: true, action: "select_ticket", targetTicketId: prev.id };
+    }
+    case "a":
+      return { handled: true, action: "assign_to_me", targetTicketId: activeTicket.id };
+    case "r":
+      return { handled: true, action: "focus_reply", targetTicketId: activeTicket.id };
+    default:
+      return { handled: false, action: "none", targetTicketId: activeTicket.id };
+  }
 }
 
 export function pointsHint(

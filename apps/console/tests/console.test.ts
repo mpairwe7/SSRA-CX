@@ -18,9 +18,12 @@ import {
   buildEvaluationDashboardView,
   buildForensicReplayTimelineView,
   buildKnowledgeReleasePipelineView,
+  buildMakerCheckerCardView,
   buildOpsPageShell,
   buildOpsStatTile,
   buildStaffDocumentInspectionViewerState,
+  buildStaffReplyComposerPreview,
+  buildTakeoverHandbackBannerView,
   EVAL_METRIC_PLAIN_LABELS,
   evaluateAuditorQaRubricSubmission,
   evaluateAuthorityStatusResponse,
@@ -31,7 +34,9 @@ import {
   pointsHint,
   previousWindow,
   QUANTILE_PLAIN_LABELS,
+  resolveAgentQueueHotkey,
   resolveCallWorkspaceState,
+  resolveExtractedFieldReview,
   signedInName,
   splitMeasureParts,
   staffDestinationsFor,
@@ -442,6 +447,120 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     });
     expect(validEvidence.exportAllowed).toBe(true);
 
+    // Staff Dashboard UI/UX: Queue filtering, hotkeys, priority SLA, Copilot safety, Takeover/Handback, Maker-Checker & RTL Composer
+    const resolvedWb = buildAgentQueueWorkbench({
+      tickets: [
+        { id: "t_open", status: "open", priority: "urgent", created_at: nowSec - 8000 },
+        { id: "t_done", status: "resolved", priority: "normal", created_at: nowSec - 9000 },
+      ],
+      view: { status: "resolved", mine: false, ticket: null },
+      officerHandle: "officer_juba_1",
+      nowMs: nowSec * 1000,
+    });
+    expect(resolvedWb.rows.map((r) => r.id)).toEqual(["t_done"]);
+    expect(waitTone(nowSec - 7500, null, null, nowSec * 1000, "open", "urgent")).toBe("breach");
+
+    expect(
+      resolveAgentQueueHotkey({
+        key: "j",
+        rows: wb.rows,
+        activeId: "t_urg",
+        isTypingInInput: false,
+      }),
+    ).toEqual({
+      handled: true,
+      action: "select_ticket",
+      targetTicketId: "t_norm",
+    });
+    expect(
+      resolveAgentQueueHotkey({
+        key: "a",
+        rows: wb.rows,
+        activeId: "t_urg",
+        isTypingInInput: true,
+      }).handled,
+    ).toBe(false);
+
+    expect(
+      validateCopilotDraftApproval(session, {
+        conversationId: "conv_1",
+        staffId: "stf_01",
+        decision: "EDIT_AND_SEND",
+        citationsIncluded: ["Sec-1"],
+        replyText: "Do not worry, your penalty is waived today.",
+      }),
+    ).toEqual({
+      valid: false,
+      error: "PROHIBITED_PROMISE_OR_CASH_SOLICITATION_BLOCKED",
+    });
+    expect(
+      validateCopilotDraftApproval(session, {
+        conversationId: "conv_1",
+        staffId: "stf_01",
+        decision: "EDIT_AND_SEND",
+        citationsIncluded: ["Sec-1"],
+        replyText: "Your TIN 1002001234 is active.",
+      }),
+    ).toEqual({
+      valid: false,
+      error: "UNMASKED_TIN_IN_OUTBOUND_REPLY_BLOCKED",
+    });
+
+    const takeoverBanner = buildTakeoverHandbackBannerView({
+      role: "ssra_staff",
+      currentStaffId: "stf_01",
+      status: "STAFF_TAKEOVER",
+      assignedStaffId: "stf_01",
+      channel: "whatsapp",
+      hoursSinceLastTaxpayerMessage: 30,
+    });
+    expect(takeoverBanner.canHandback).toBe(true);
+    expect(takeoverBanner.requiresTemplateForOutbound).toBe(true);
+
+    const mcSelf = buildMakerCheckerCardView({
+      caseId: "case_01",
+      actionType: "TCC_OVERRIDE",
+      makerStaffId: "stf_01",
+      currentStaffId: "stf_01",
+      role: "ssra_staff",
+      rationale: "Verified bank receipt",
+    });
+    expect(mcSelf.canApprove).toBe(false);
+
+    const mcOk = buildMakerCheckerCardView({
+      caseId: "case_01",
+      actionType: "TCC_OVERRIDE",
+      makerStaffId: "stf_01",
+      currentStaffId: "stf_02",
+      role: "ssra_staff",
+      rationale: "Verified bank receipt",
+    });
+    expect(mcOk.canApprove).toBe(true);
+
+    const resolvedField = resolveExtractedFieldReview(
+      {
+        id: "f2",
+        name: "Total Payable",
+        value: "SSP 150,000",
+        confidence: 0.62,
+        source: "ocr_inset",
+        status: "review_required",
+        page: 2,
+      },
+      "override_value",
+      "SSP 180,000",
+    );
+    expect(resolvedField.status).toBe("auto_use");
+    expect(resolvedField.value).toBe("SSP 180,000");
+
+    const arPreview = buildStaffReplyComposerPreview({
+      draftText: "يرجى الدفع عبر البوابة الرسمية https://etax.nra.gov.ss/",
+      locale: "ar",
+    });
+    expect(arPreview.dir).toBe("rtl");
+    expect(arPreview.hasOfficialPortalLink).toBe(true);
+    expect(arPreview.estimatedSmsSegments).toBe(1);
+
     // Staff Document Inspection Viewer, Officer Call Brief Card & Wrap-Up Form
     const viewer = buildStaffDocumentInspectionViewerState({
       documentName: "assessment_scan.pdf",
@@ -472,6 +591,7 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(viewer.pageBadge).toBe("Page 2 of 3");
     expect(viewer.canvasScaleTransform).toBe("scale(1.25)");
     expect(viewer.reviewRequiredCount).toBe(1);
+    expect(viewer.canCompleteDocumentReview).toBe(false);
 
     const briefCard = buildCallBriefCardView({
       brief: {

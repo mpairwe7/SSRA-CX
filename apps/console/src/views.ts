@@ -8,32 +8,68 @@
  * - NIST AI RMF MEASURE 2.6 (Evaluation Evidence Provenance)
  */
 
-import { authorizeConsoleAccess, type ConsoleSession, KNOWLEDGE_RELEASE_STEPS } from "./proxy.js";
+import {
+  authorizeConsoleAccess,
+  type ConsoleSession,
+  isReadOnlyAuditorRole,
+  KNOWLEDGE_RELEASE_STEPS,
+} from "./proxy.js";
 
 export type TelemetryProvenance = "LIVE_TELEMETRY" | "CI_VERIFIED_TARGET" | "ILLUSTRATIVE_FALLBACK";
 
 export type TelemetryScope = "WINDOW_SCOPED" | "REPLICA_LIFETIME";
+
+const PROHIBITED_STAFF_REPLY_PATTERN =
+  /\b(?:waive\s+(?:your\s+)?penalty|penalty\s+is\s+waived|pay\s+cash\s+to|send\s+money\s+to\s+my\s+personal)\b/i;
+const UNMASKED_TIN_IN_REPLY_PATTERN = /\b\d{9,12}\b/;
 
 export interface CopilotDraftReviewAction {
   readonly conversationId: string;
   readonly staffId: string;
   readonly decision: "APPROVE_AND_SEND" | "EDIT_AND_SEND" | "REJECT_AND_WRITE_MANUAL";
   readonly citationsIncluded: readonly string[];
+  readonly replyText?: string | undefined;
 }
 
+/**
+ * Validate a Staff Copilot reply approval or manual edit before sending to a taxpayer,
+ * enforcing passkey auth, read-only auditor exclusion, Principle 1 citations, and T4/cash-free safety rules.
+ */
 export function validateCopilotDraftApproval(
   session: ConsoleSession | null,
   action: CopilotDraftReviewAction,
 ): { readonly valid: boolean; readonly error?: string } {
   const auth = authorizeConsoleAccess(session);
-  if (!auth.allowed) {
+  if (!auth.allowed || !session) {
     return { valid: false, error: auth.reason ?? "UNAUTHORIZED" };
+  }
+  if (isReadOnlyAuditorRole(session.role)) {
+    return { valid: false, error: "AUDITOR_READ_ONLY_CANNOT_SEND_TAXPAYER_REPLY" };
   }
   if (action.decision === "APPROVE_AND_SEND" && action.citationsIncluded.length === 0) {
     return {
       valid: false,
       error: "PRINCIPLE_1_GROUNDED_OR_SILENT_CITATIONS_REQUIRED",
     };
+  }
+  if (action.decision === "EDIT_AND_SEND" || action.decision === "REJECT_AND_WRITE_MANUAL") {
+    if (action.replyText !== undefined && !action.replyText.trim()) {
+      return { valid: false, error: "EMPTY_MANUAL_OR_EDITED_REPLY" };
+    }
+  }
+  if (action.replyText) {
+    if (PROHIBITED_STAFF_REPLY_PATTERN.test(action.replyText)) {
+      return {
+        valid: false,
+        error: "PROHIBITED_PROMISE_OR_CASH_SOLICITATION_BLOCKED",
+      };
+    }
+    if (UNMASKED_TIN_IN_REPLY_PATTERN.test(action.replyText)) {
+      return {
+        valid: false,
+        error: "UNMASKED_TIN_IN_OUTBOUND_REPLY_BLOCKED",
+      };
+    }
   }
   return { valid: true };
 }
@@ -246,3 +282,4 @@ export * from "./auditor-workbench.js";
 export * from "./dashboards.js";
 export * from "./document-inspection.js";
 export * from "./roles-and-audit.js";
+export * from "./staff-workbench.js";

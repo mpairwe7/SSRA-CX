@@ -26,6 +26,10 @@ export interface ExtractedDocumentField {
   readonly bbox?: BoundingBox | undefined;
 }
 
+/**
+ * Build the visual state for the Staff Document Inspection Viewer (`DocumentInspectionViewer.tsx`),
+ * including page clamping, zoom scaling, and whether all `review_required` fields have been resolved.
+ */
 export function buildStaffDocumentInspectionViewerState(params: {
   readonly documentName: string;
   readonly pageCount: number;
@@ -51,6 +55,28 @@ export function buildStaffDocumentInspectionViewerState(params: {
     pageFields,
     reviewRequiredCount,
     autoUseCount,
+    canCompleteDocumentReview: reviewRequiredCount === 0,
+  };
+}
+
+/**
+ * Resolve an officer's HITL decision (`confirm_extracted` or `override_value`) on a flagged OCR field.
+ */
+export function resolveExtractedFieldReview(
+  field: ExtractedDocumentField,
+  decision: "confirm_extracted" | "override_value",
+  correctedValue?: string,
+): ExtractedDocumentField {
+  const nextVal =
+    decision === "override_value" && correctedValue && correctedValue.trim().length > 0
+      ? correctedValue.trim()
+      : field.value;
+  return {
+    ...field,
+    value: nextVal,
+    source: decision === "override_value" ? "manual" : field.source,
+    status: "auto_use",
+    confidence: 1.0,
   };
 }
 
