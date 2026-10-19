@@ -13,6 +13,10 @@ services:
       - "archive_mode=on"
       - "-c"
       - "archive_command=cp %p /var/lib/postgresql/wal_archive/%f"
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - pgdata:/var/lib/postgresql:rw
       - wal_archive:/var/lib/postgresql/wal_archive:rw
@@ -23,7 +27,7 @@ services:
           memory: 8G
 
   postgres-wal-archiver:
-    image: pgvector/pgvector:pg18
+    image: pgvector/pgvector:pg18@sha256:4b6a6b8f28d2c6a92f99603f03923eb086c25780289fb0a756f5eb93f4c8551f
     profiles: ["prod", "dr"]
     command:
       - "pg_receivewal"
@@ -52,6 +56,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
     logging:
       driver: json-file
       options:
@@ -59,7 +68,7 @@ services:
         max-file: "5"
 
   vllm-sovereign:
-    image: vllm/vllm-openai:v0.26.0
+    image: vllm/vllm-openai:v0.26.0@sha256:32e7226d272852735948f506253b6f750317c91097d72801941279c958173688
     profiles: ["prod", "gpu"]
     command:
       - "--model"
@@ -72,7 +81,7 @@ services:
     user: "1000:1000"
     read_only: true
     tmpfs:
-      - /tmp:rw,nosuid,size=2G
+      - /tmp:rw,noexec,nosuid,size=2G
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -107,6 +116,9 @@ services:
         max-file: "5"
 
   api:
+    secrets:
+      - postgres_password
+      - openbao_transit_key
     deploy:
       resources:
         limits:
@@ -126,6 +138,9 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
       - /opt/keycloak/data/tmp:rw,noexec,nosuid,size=64m
+    secrets:
+      - postgres_password
+      - keycloak_admin_password
     environment:
       KC_HOSTNAME: ${KC_HOSTNAME:-https://sso.ssra.gov.ss}
       KC_HOSTNAME_STRICT: "true"
@@ -141,7 +156,16 @@ services:
           cpus: "2.0"
           memory: 2G
 
+  agentgateway:
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
   agent-runtime:
+    secrets:
+      - openbao_transit_key
     deploy:
       resources:
         limits:
@@ -168,6 +192,14 @@ services:
         limits:
           cpus: "1.0"
           memory: 1G
+
+secrets:
+  postgres_password:
+    file: ${SSRA_POSTGRES_PASSWORD_FILE:-/run/ssra-secrets/postgres_password}
+  keycloak_admin_password:
+    file: ${SSRA_KEYCLOAK_ADMIN_PASSWORD_FILE:-/run/ssra-secrets/keycloak_admin_password}
+  openbao_transit_key:
+    file: ${SSRA_OPENBAO_TRANSIT_KEY_FILE:-/run/ssra-secrets/openbao_transit_key}
 
 volumes:
   wal_archive:

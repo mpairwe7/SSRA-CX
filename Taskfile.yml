@@ -12,12 +12,12 @@ tasks:
       - task --list
 
   gen:
-    desc: Generate Pydantic v2, TypeScript, Zod 4 schemas, OpenAPI client, CycloneDX SBOM, and ingested corpus snapshot manifest
+    desc: Generate Pydantic v2, TypeScript, Zod 4 schemas, OpenAPI client, ingested corpus snapshot manifest, CycloneDX SBOM, and SLSA v1.0 provenance
     cmds:
       - uv run python tools/codegen/generate_contracts.py
       - uv run python tools/codegen/export_openapi.py
-      - uv run python tools/generate_sbom.py
       - uv run python tools/ingest_public_corpus.py
+      - uv run python tools/generate_sbom.py
 
   lint:
     desc: Run Ruff, basedpyright (strict), import-linter, JSON Schema validation, gitleaks, Biome, and TypeScript tsc

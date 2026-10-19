@@ -82,9 +82,34 @@ def main() -> None:
     assert "ports" not in base_compose.get("services", {}).get("agent-runtime", {}), (
         "agent-runtime on sovereign_internal_net must not publish host ports"
     )
+    assert "agentgateway" in base_compose.get("services", {}), (
+        "docker-compose.yml must define governed agentgateway service on sovereign_internal_net"
+    )
+    assert (
+        base_compose.get("services", {})
+        .get("api", {})
+        .get("depends_on", {})
+        .get("nats", {})
+        .get("condition")
+        == "service_healthy"
+    ), "api.depends_on.nats must require service_healthy"
     assert "vllm-sovereign" in prod_compose.get("services", {}), (
         "docker-compose.prod.yml must define hardened vllm-sovereign service"
     )
+    assert "secrets" in prod_compose, (
+        "docker-compose.prod.yml must define top-level file-based secrets"
+    )
+    _digest_re = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
+    for comp_name, comp_doc in (
+        ("docker-compose.yml", base_compose),
+        ("docker-compose.prod.yml", prod_compose),
+    ):
+        for s_name, s_cfg in comp_doc.get("services", {}).items():
+            img = s_cfg.get("image")
+            if img:
+                assert _digest_re.match(str(img)), (
+                    f"Unpinned image '{img}' in {comp_name} service '{s_name}'; must include @sha256:<64-hex>"
+                )
     for rb_path in sorted((ROOT / "docs" / "runbooks").glob("*.md")):
         rb_text = rb_path.read_text(encoding="utf-8")
         for forbidden in ("kubectl", "kustomize", "infra/k8s", "CloudNativePG"):
@@ -122,6 +147,12 @@ def main() -> None:
     )
     assert primary_repo in model_cards_txt and primary_rev in model_cards_txt and sbom_ok, (
         f"Primary LLM '{primary_repo}@{primary_rev}' out of sync between model-routing.yaml, model-cards-and-datasheet.md, and cyclonedx-sbom.json"
+    )
+    slsa_path = ROOT / "infra" / "observability" / "slsa-provenance-v1.json"
+    assert slsa_path.is_file(), "Missing SLSA v1.0 provenance statement (slsa-provenance-v1.json)"
+    slsa_doc = json.loads(slsa_path.read_text(encoding="utf-8"))
+    assert slsa_doc.get("predicateType") == "https://slsa.dev/provenance/v1", (
+        "slsa-provenance-v1.json must declare SLSA v1.0 predicateType"
     )
 
     # 8. Verify CIS Docker Benchmark v1.7 Non-Root Dockerfiles, .dockerignore, Seccomp, Gateway 11-MCP Catalog & OTel memory_limiter

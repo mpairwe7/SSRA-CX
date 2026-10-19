@@ -4,7 +4,13 @@
 
 import { renderGenerativeUICard } from "@ssra/chat-ui";
 import type { Answer, Citation, LocaleCode } from "@ssra/contracts";
-import { buildOfficialHeaderBanner, extractOfficerHours, type OfficerDutyHours } from "@ssra/ui";
+import {
+  buildOfficialHeaderBanner,
+  type ColorMode,
+  extractOfficerHours,
+  type OfficerDutyHours,
+  resolveSurfaceDesignContext,
+} from "@ssra/ui";
 
 export interface TaxpayerTurnState {
   readonly serverTurnId: string | null;
@@ -14,8 +20,14 @@ export interface TaxpayerTurnState {
   readonly escalationRequired: boolean;
 }
 
-export function buildTaxpayerChatTurnView(answer: Answer, locale: LocaleCode, lowDataMode = false) {
+export function buildTaxpayerChatTurnView(
+  answer: Answer,
+  locale: LocaleCode,
+  lowDataMode = false,
+  mode: ColorMode = "light",
+) {
   const header = buildOfficialHeaderBanner(locale);
+  const designContext = resolveSurfaceDesignContext({ locale, mode, lowDataMode });
   const fullText = answer.segments.map((s) => s.text).join(" ");
   const card = renderGenerativeUICard(answer.ui_component, fullText, {
     locale,
@@ -23,6 +35,7 @@ export function buildTaxpayerChatTurnView(answer: Answer, locale: LocaleCode, lo
   });
   return {
     header,
+    designContext,
     card,
     citations: answer.citations,
     isEstimate: answer.is_estimate,
