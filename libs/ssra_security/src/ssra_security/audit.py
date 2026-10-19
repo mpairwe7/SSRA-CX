@@ -13,6 +13,17 @@ from ssra_core import new_id, utc_now
 GENESIS_HASH = "0" * 64
 
 
+def _sanitise_audit_field(raw: str) -> str:
+    """Escape pipe delimiters and strip CR/LF/NUL control characters to prevent hash-chain delimiter collisions."""
+    return (
+        raw.replace("\x00", "")
+        .replace("\r", " ")
+        .replace("\n", " ")
+        .replace("\\", "\\\\")
+        .replace("|", "\\|")
+    )
+
+
 def compute_canonical_digest(payload: dict[str, Any]) -> str:
     """Compute deterministic SHA-256 hex digest of any JSON-serialisable dict."""
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode(
@@ -46,16 +57,17 @@ def compute_audit_event_hash(
     digest: str,
     at_iso: str,
 ) -> str:
+    """Compute the SHA-256 hash chain link over canonicalized, delimiter-escaped audit event fields."""
     material = "|".join(
         [
-            prev_hash,
-            event_id,
-            actor,
-            on_behalf_of or "",
-            action,
-            resource,
-            digest,
-            at_iso,
+            _sanitise_audit_field(prev_hash),
+            _sanitise_audit_field(event_id),
+            _sanitise_audit_field(actor),
+            _sanitise_audit_field(on_behalf_of or ""),
+            _sanitise_audit_field(action),
+            _sanitise_audit_field(resource),
+            _sanitise_audit_field(digest),
+            _sanitise_audit_field(at_iso),
         ]
     )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
@@ -65,16 +77,20 @@ class HashChainedAuditLedger:
     """Append-only, hash-chained audit ledger with cryptographic integrity verification."""
 
     def __init__(self) -> None:
+        """Initialise an empty append-only hash-chained audit ledger."""
         self._events: list[AuditEvent] = []
 
     @property
     def events(self) -> tuple[AuditEvent, ...]:
+        """Return an immutable tuple of recorded audit events."""
         return tuple(self._events)
 
     def replace_event_for_testing(self, index: int, event: AuditEvent) -> None:
+        """Replace an event at index strictly for tamper-detection unit tests."""
         self._events[index] = event
 
     def restore_events(self, events: list[AuditEvent]) -> None:
+        """Restore a list of audit events during DR restore drills."""
         self._events = list(events)
 
     def append(
@@ -87,26 +103,31 @@ class HashChainedAuditLedger:
         on_behalf_of: str | None = None,
         at: datetime | None = None,
     ) -> AuditEvent:
+        """Append a new cryptographically hash-chained AuditEvent to the ledger."""
         prev_hash = self._events[-1].hash if self._events else GENESIS_HASH
         event_id = new_id("aud")
         timestamp = at or utc_now()
         digest = compute_canonical_digest(payload)
+        safe_actor = _sanitise_audit_field(actor)
+        safe_obo = _sanitise_audit_field(on_behalf_of) if on_behalf_of is not None else None
+        safe_action = _sanitise_audit_field(action)
+        safe_resource = _sanitise_audit_field(resource)
         event_hash = compute_audit_event_hash(
             prev_hash=prev_hash,
             event_id=event_id,
-            actor=actor,
-            on_behalf_of=on_behalf_of,
-            action=action,
-            resource=resource,
+            actor=safe_actor,
+            on_behalf_of=safe_obo,
+            action=safe_action,
+            resource=safe_resource,
             digest=digest,
             at_iso=timestamp.isoformat(),
         )
         event = AuditEvent(
             id=event_id,
-            actor=actor,
-            on_behalf_of=on_behalf_of,
-            action=action,
-            resource=resource,
+            actor=safe_actor,
+            on_behalf_of=safe_obo,
+            action=safe_action,
+            resource=safe_resource,
             digest=digest,
             prev_hash=prev_hash,
             hash=event_hash,
@@ -116,6 +137,7 @@ class HashChainedAuditLedger:
         return event
 
     def verify_integrity(self) -> bool:
+        """Verify the unbroken SHA-256 hash chain from GENESIS_HASH through the latest event."""
         expected_prev = GENESIS_HASH
         for ev in self._events:
             if ev.prev_hash != expected_prev:

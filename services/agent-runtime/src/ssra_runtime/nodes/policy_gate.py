@@ -17,8 +17,12 @@ def evaluate_opa_policy(
     auth_level: AuthLevel,
     subject_ref: str | None,
     intent_name: IntentName | None,
+    rate_limited: bool = False,
 ) -> PolicyDecision:
     """Deterministic Python evaluation matching ai/policies/policy_gate.rego."""
+    if rate_limited:
+        return "DENY"
+
     if tier == RiskTier.T4 or intent_name == IntentName.HUMAN_HANDOFF:
         return "HANDOFF"
 
@@ -42,6 +46,7 @@ def evaluate_opa_policy(
 
 
 def policy_gate_node(state: ConversationGraphState) -> dict[str, Any]:
+    """Evaluate OPA risk-tier policy and select the specialist subgraph."""
     if state.get("policy_decision") == "DENY":
         return {"policy_decision": "DENY", "selected_subgraph": "handoff"}
 

@@ -13,6 +13,17 @@ _UNMASKED_PASSPORT_RE = re.compile(
     r"(?<![A-Za-z0-9_])[RP][0-9]{7,8}(?![A-Za-z0-9_])",
     flags=re.IGNORECASE,
 )
+_OFFICIAL_HELPDESK_NUMBERS_RE = re.compile(
+    r"\+211\s*(?:918806493|912388318|919382390|917803637|921058043)\b"
+)
+_UNMASKED_PHONE_SS_RE = re.compile(
+    r"(?:\+211[\s-]?(?:9[0-9])[\s-]?[0-9]{3}[\s-]?[0-9]{4}\b|\b09[12578][\s-]?[0-9]{3}[\s-]?[0-9]{4}\b)"
+)
+_LEAKED_SECRET_RE = re.compile(
+    r"(?:\bBearer\s+[A-Za-z0-9._~+/=-]{12,}\b|"
+    r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|"
+    r"\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,})\b)"
+)
 
 
 def _normalise_unicode_digits(text: str) -> str:
@@ -37,14 +48,25 @@ def verify_no_cross_subject_or_unmasked_pii(
     *,
     allowed_masked_tin: str | None = None,
 ) -> PiiGuardResult:
-    """Verify model output contains zero unmasked TINs, National IDs, or cross-subject masked TINs."""
+    """Verify model output contains zero unmasked TINs, National IDs, personal +211 phones, secrets, or cross-subject masked TINs."""
     normalised = _normalise_unicode_digits(text)
-    if _UNMASKED_TIN_RE.search(normalised):
+    scrubbed_helpdesk = _OFFICIAL_HELPDESK_NUMBERS_RE.sub("", normalised)
+    if _LEAKED_SECRET_RE.search(scrubbed_helpdesk):
+        return PiiGuardResult(
+            passed=False,
+            reason="Output contains a leaked Bearer/JWT token or API secret (MCP01:2025)",
+        )
+    if _UNMASKED_PHONE_SS_RE.search(scrubbed_helpdesk):
+        return PiiGuardResult(
+            passed=False,
+            reason="Output contains an unmasked personal +211 South Sudan phone number",
+        )
+    if _UNMASKED_TIN_RE.search(scrubbed_helpdesk):
         return PiiGuardResult(
             passed=False,
             reason="Output contains an unmasked 9-12 digit TIN identifier",
         )
-    if _UNMASKED_PASSPORT_RE.search(normalised):
+    if _UNMASKED_PASSPORT_RE.search(scrubbed_helpdesk):
         return PiiGuardResult(
             passed=False,
             reason="Output contains an unmasked South Sudan National ID or Passport number",

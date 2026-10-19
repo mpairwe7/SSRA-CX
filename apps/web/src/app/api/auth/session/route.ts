@@ -37,6 +37,17 @@ export function dispatchServiceWorkerLogoutPurge(target?: {
   return true;
 }
 
+function timingSafeTokenMatch(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 export function validateBffCsrfMutation(input: {
   readonly method: string;
   readonly originHeader?: string;
@@ -58,7 +69,7 @@ export function validateBffCsrfMutation(input: {
   if (
     !input.csrfCookieToken ||
     !input.csrfHeaderToken ||
-    input.csrfCookieToken !== input.csrfHeaderToken
+    !timingSafeTokenMatch(input.csrfCookieToken, input.csrfHeaderToken)
   ) {
     return { valid: false, reason: "CSRF_TOKEN_MISMATCH" };
   }

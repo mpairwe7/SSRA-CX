@@ -30,6 +30,7 @@ class SubjectTokenClaims(BaseModel):
     caller_workload: str = "ssra-agent-runtime"
     auth_level: AuthLevel = AuthLevel.ANONYMOUS
     step_up_verified_at: datetime | None = None
+    cnf_jkt: str | None = None  # RFC 9449 DPoP JWK SHA-256 thumbprint binding (ASVS 5.0 V10.3.5 L3)
     exp: datetime
 
 
@@ -221,11 +222,13 @@ class ConfirmationTokenManager:
 
 
 class TokenExchangeService:
-    """RFC 8693 OAuth 2.1 Token Exchange helper used by agentgateway and MCP servers."""
+    """RFC 8693 OAuth 2.1 Token Exchange & RFC 9449 DPoP thumbprint helper used by agentgateway and MCP servers."""
 
     def __init__(self, signing_secret: str | None = None) -> None:
+        """Initialise the token exchange service with an HMAC signing secret and JTI replay cache."""
         raw_secret = signing_secret or "ssra-dev-hmac-key"
         self._secret = raw_secret.encode("utf-8")
+        self._consumed_jtis: dict[str, datetime] = {}
 
     def mint_exchanged_token(
         self,
@@ -237,9 +240,10 @@ class TokenExchangeService:
         scope: str | None = None,
         caller_workload: str = "ssra-agent-runtime",
         step_up_verified_at: datetime | None = None,
+        cnf_jkt: str | None = None,
         ttl_seconds: int = 60,
     ) -> str:
-        """Mint an RFC 8693 audience-, resource-, and least-privilege-scope-bound JWT."""
+        """Mint an RFC 8693 audience-, resource-, least-privilege-scope-, and optional RFC 9449 DPoP-bound JWT."""
         now = utc_now()
         srv = audience.removeprefix("mcp-")
         if scope is not None:
@@ -264,6 +268,7 @@ class TokenExchangeService:
             caller_workload=caller_workload,
             auth_level=auth_level,
             step_up_verified_at=resolved_step_up,
+            cnf_jkt=cnf_jkt,
             exp=now + timedelta(seconds=ttl_seconds),
         )
         payload_json = claims.model_dump_json()
@@ -277,8 +282,10 @@ class TokenExchangeService:
         expected_audience: str,
         required_tier: RiskTier,
         expected_resource: str | None = None,
+        expected_dpop_jkt: str | None = None,
+        enforce_single_use_jti: bool = False,
     ) -> SubjectTokenClaims:
-        """Verify RFC 8693 token signature, audience, RFC 8707 resource, scope, and T3 step-up freshness."""
+        """Verify RFC 8693 token signature, audience, RFC 8707 resource, scope, RFC 9449 DPoP thumbprint, and T3 step-up freshness."""
         if "." not in token:
             raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Malformed bearer token", status_code=401)
         payload_json, sig = token.rsplit(".", 1)
@@ -302,6 +309,33 @@ class TokenExchangeService:
             )
         if utc_now() > claims.exp:
             raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Bearer token expired", status_code=401)
+
+        if expected_dpop_jkt is not None or claims.cnf_jkt is not None:
+            if (
+                not claims.cnf_jkt
+                or not expected_dpop_jkt
+                or not hmac.compare_digest(claims.cnf_jkt, expected_dpop_jkt)
+            ):
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "RFC 9449 DPoP sender-constrained cnf.jkt thumbprint mismatch (ASVS 5.0 V10.3.5)",
+                    status_code=401,
+                )
+
+        if enforce_single_use_jti:
+            now_dt = utc_now()
+            self._consumed_jtis = {
+                k: exp_dt for k, exp_dt in self._consumed_jtis.items() if now_dt <= exp_dt
+            }
+            if claims.jti in self._consumed_jtis:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    f"Single-use exchanged token jti '{claims.jti}' replay blocked",
+                    status_code=401,
+                )
+            if len(self._consumed_jtis) >= MAX_CONFIRMATION_RECORDS:
+                self._consumed_jtis.pop(next(iter(self._consumed_jtis)), None)
+            self._consumed_jtis[claims.jti] = claims.exp
 
         if required_tier in (RiskTier.T1, RiskTier.T2, RiskTier.T3):
             if not claims.sub or claims.auth_level not in (

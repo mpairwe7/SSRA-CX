@@ -123,9 +123,35 @@ class KeycloakOidcSecurityService:
         expected_issuer: str = "https://sso.ssra.gov.ss/realms/ssra",
         allowed_idp_aliases: frozenset[str] = ALLOWED_IDP_ALIASES,
     ) -> None:
+        """Initialise the Keycloak OIDC security service with JTI replay and WebAuthn signCount trackers."""
         self.expected_issuer = expected_issuer
         self.allowed_idp_aliases = allowed_idp_aliases
         self._consumed_jtis: dict[str, datetime] = {}
+        self._webauthn_sign_counts: dict[str, int] = {}
+
+    def verify_webauthn_sign_count(
+        self,
+        credential_id: str,
+        new_sign_count: int,
+        *,
+        user_verified: bool = True,
+    ) -> int:
+        """Enforce W3C WebAuthn Level 3 (§7.2) user verification (uv) and monotonic signCount clone detection."""
+        if not user_verified:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "WebAuthn passkey assertion requires user_verified=True (uv flag)",
+                status_code=403,
+            )
+        prev = self._webauthn_sign_counts.get(credential_id)
+        if prev is not None and (new_sign_count <= prev and (prev > 0 or new_sign_count > 0)):
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"WebAuthn passkey clone or replay detected for credential '{credential_id}' (signCount {new_sign_count} <= {prev})",
+                status_code=403,
+            )
+        self._webauthn_sign_counts[credential_id] = max(0, new_sign_count)
+        return self._webauthn_sign_counts[credential_id]
 
     @staticmethod
     def compute_pkce_s256_challenge(code_verifier: str) -> str:

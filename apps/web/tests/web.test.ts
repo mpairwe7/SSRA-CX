@@ -15,7 +15,11 @@ import {
 import { validateClientUpload } from "../src/app/api/uploads/route.js";
 import { generatePwaManifest } from "../src/app/manifest.js";
 import { applyTaxpayerTurnMeta, buildTaxpayerChatTurnView } from "../src/components/index.js";
-import { createAltchaChallenge, verifyAltchaSolution } from "../src/lib/security/altcha.js";
+import {
+  consumeAltchaSolution,
+  createAltchaChallenge,
+  verifyAltchaSolution,
+} from "../src/lib/security/altcha.js";
 import { SharedValkeyCacheHandler } from "../src/lib/valkey-cache-handler.js";
 import { executeProxy } from "../src/proxy.js";
 
@@ -187,8 +191,12 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
   });
 
   it("verifies self-hosted ALTCHA proof-of-work bot defence challenge", async () => {
-    const challenge = await createAltchaChallenge(42, "salt_ssra_1", "secret_key");
+    const challenge = await createAltchaChallenge(42, "salt_ssra_1", "secret_key", 5000, 2_000_000);
+    expect(challenge.salt.endsWith("&")).toBe(true);
     await expect(createAltchaChallenge(9000, "salt_ssra_1", "secret_key", 5000)).rejects.toThrow(
+      RangeError,
+    );
+    await expect(createAltchaChallenge(42, "bad:salt", "secret_key", 5000)).rejects.toThrow(
       RangeError,
     );
     const valid = await verifyAltchaSolution(
@@ -197,8 +205,44 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
         number: 42,
       },
       "secret_key",
+      5000,
+      1_500_000,
     );
     expect(valid).toBe(true);
+
+    // Expired challenge rejected
+    const expired = await verifyAltchaSolution(
+      {
+        ...challenge,
+        number: 42,
+      },
+      "secret_key",
+      5000,
+      2_500_000,
+    );
+    expect(expired).toBe(false);
+
+    // Single-use replay consumption (CVE-2025-68113)
+    const firstConsume = await consumeAltchaSolution(
+      {
+        ...challenge,
+        number: 42,
+      },
+      "secret_key",
+      5000,
+      1_500_000,
+    );
+    expect(firstConsume).toBe(true);
+    const replayConsume = await consumeAltchaSolution(
+      {
+        ...challenge,
+        number: 42,
+      },
+      "secret_key",
+      5000,
+      1_500_000,
+    );
+    expect(replayConsume).toBe(false);
 
     const postRes = await streamChatPost(
       new Request("https://assist.ssra.gov.ss/api/chat/stream", {

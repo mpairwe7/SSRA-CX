@@ -30,7 +30,14 @@ decision := "ALLOW" if {
 
 decision := "STEP_UP" if {
     input.tier in {"T1", "T2"}
+    not input.rate_limited
     not input.auth_level in {"T1_TIN_BOUND", "T3_STEP_UP", "STAFF_PASSKEY"}
+}
+
+decision := "STEP_UP" if {
+    input.tier in {"T1", "T2"}
+    not input.rate_limited
+    input.subject_ref == null
 }
 
 # Tier T3 requires fresh step-up authentication
@@ -43,5 +50,12 @@ decision := "ALLOW" if {
 
 decision := "STEP_UP" if {
     input.tier == "T3"
+    not input.rate_limited
     input.auth_level != "T3_STEP_UP"
+}
+
+decision := "STEP_UP" if {
+    input.tier == "T3"
+    not input.rate_limited
+    input.subject_ref == null
 }
