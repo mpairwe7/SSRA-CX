@@ -7,6 +7,7 @@ import {
   getHtmlLayoutProps,
   getSouthSudanFiscalYear,
   resolveMenuKeyNavigation,
+  resolveSurfaceDesignContext,
   SSRA_DESIGN_TOKENS,
   shouldEnableLowDataMode,
 } from "../src/index.js";
@@ -54,5 +55,22 @@ describe("@ssra/ui design tokens and RTL layout", () => {
     expect(shouldEnableLowDataMode({ downlink: 0.3 })).toBe(true);
     expect(shouldEnableLowDataMode({ effectiveType: "4g", downlink: 10 })).toBe(false);
     expect(shouldEnableLowDataMode({ effectiveType: "4g" }, true)).toBe(true);
+
+    const arDark = resolveSurfaceDesignContext({
+      locale: "ar",
+      mode: "dark",
+      lowDataMode: true,
+    });
+    expect(arDark.dir).toBe("rtl");
+    expect(arDark.theme.mode).toBe("dark");
+    expect(arDark.lineHeight).toBe(1.68);
+    expect(arDark.fontVariantNumeric).toBe("tabular-nums");
+    expect(arDark.transitionDurationMs).toBe(0);
+    expect(arDark.suppressDecorativeIcons).toBe(true);
+
+    const enLight = resolveSurfaceDesignContext({ locale: "en", mode: "light" });
+    expect(enLight.dir).toBe("ltr");
+    expect(enLight.theme.mode).toBe("light");
+    expect(enLight.transitionDurationMs).toBe(120);
   });
 });
