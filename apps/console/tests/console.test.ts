@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateJitAdminElevation } from "../src/jit-admin.js";
+import { buildJitElevationBannerView, evaluateJitAdminElevation } from "../src/jit-admin.js";
 import {
   authorizeConsoleAccess,
   authorizeConsoleRoute,
@@ -17,12 +17,15 @@ import {
   buildCallConsoleBarView,
   buildEvaluationDashboardView,
   buildForensicReplayTimelineView,
+  buildKillSwitchControlPlaneView,
+  buildKnowledgeReleaseGovernanceView,
   buildKnowledgeReleasePipelineView,
   buildMakerCheckerCardView,
   buildOpsPageShell,
   buildOpsStatTile,
   buildStaffDocumentInspectionViewerState,
   buildStaffReplyComposerPreview,
+  buildSystemConnectorsHealthView,
   buildTakeoverHandbackBannerView,
   EVAL_METRIC_PLAIN_LABELS,
   evaluateAuditorQaRubricSubmission,
@@ -43,6 +46,7 @@ import {
   staffLandingPath,
   ticketRef,
   toDelta,
+  validateAdminAnswerOverride,
   validateCopilotDraftApproval,
   validateWrapUpFormSubmission,
   waitingFor,
@@ -592,6 +596,99 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(viewer.canvasScaleTransform).toBe("scale(1.25)");
     expect(viewer.reviewRequiredCount).toBe(1);
     expect(viewer.canCompleteDocumentReview).toBe(false);
+
+    // Admin Dashboard UI/UX: JIT countdown, 5-Step Degradation Ladder, Knowledge Release Governance, Connectors & Overrides
+    expect(
+      evaluateJitAdminElevation({
+        requesterStaffId: "stf_01",
+        approverStaffId: "stf_02",
+        passkeyVerified: true,
+        devicePosture: {
+          deviceId: "dev_1",
+          diskEncrypted: true,
+          edrActive: true,
+          osPatchCurrent: true,
+        },
+        durationMinutes: 30,
+        reason: "no",
+      }),
+    ).toEqual({ granted: false, reason: "JIT_REASON_TOO_SHORT" });
+
+    const jitBanner = buildJitElevationBannerView({
+      grantedAtMs: 1_000_000,
+      durationMinutes: 30,
+      nowMs: 1_000_000 + 28 * 60_000,
+    });
+    expect(jitBanner.state).toBe("EXPIRING_SOON");
+    expect(jitBanner.mutationsUnlocked).toBe(true);
+
+    const jitExpired = buildJitElevationBannerView({
+      grantedAtMs: 1_000_000,
+      durationMinutes: 30,
+      nowMs: 1_000_000 + 35 * 60_000,
+    });
+    expect(jitExpired.state).toBe("EXPIRED");
+    expect(jitExpired.mutationsUnlocked).toBe(false);
+
+    const ksLocked = buildKillSwitchControlPlaneView({
+      role: "ssra_admin",
+      jitActive: false,
+      degradationLevel: 4,
+      disabledTools: ["ledger.get_balance"],
+      disabledChannels: ["voice"],
+    });
+    expect(ksLocked.canApplyMutation).toBe(false);
+    expect(ksLocked.llmGenerationActive).toBe(false);
+    expect(ksLocked.deterministicCalculatorsActive).toBe(true);
+
+    const krSelfApprove = buildKnowledgeReleaseGovernanceView({
+      version: "2026.11.0",
+      status: "LEGAL_REVIEW",
+      draftAuthorId: "stf_admin_1",
+      currentStaffId: "stf_admin_1",
+      role: "ssra_admin",
+      evalRegressionPassed: true,
+    });
+    expect(krSelfApprove.canApproveLegal).toBe(false);
+
+    const krRollback = buildKnowledgeReleaseGovernanceView({
+      version: "2026.11.0",
+      status: "APPROVED",
+      draftAuthorId: "stf_author_1",
+      currentStaffId: "stf_admin_2",
+      role: "ssra_admin",
+      evalRegressionPassed: false,
+    });
+    expect(krRollback.autoRollbackTriggered).toBe(true);
+    expect(krRollback.status).toBe("ROLLED_BACK");
+
+    const connHealth = buildSystemConnectorsHealthView({
+      etaxCircuit: "CLOSED",
+      ecustomsCircuit: "CLOSED",
+      bossCircuit: "CLOSED",
+    });
+    expect(connHealth.allHealthy).toBe(true);
+    expect(connHealth.connectors).toHaveLength(3);
+
+    expect(
+      validateAdminAnswerOverride({
+        role: "ssra_admin",
+        questionPattern: "How do I pay tax?",
+        overrideAnswerText: "Pay via https://etax.nra.gov.ss/ into designated banks.",
+        sectionAnchor: "",
+      }),
+    ).toEqual({
+      valid: false,
+      error: "PRINCIPLE_1_SECTION_ANCHOR_CITATION_REQUIRED",
+    });
+    expect(
+      validateAdminAnswerOverride({
+        role: "ssra_admin",
+        questionPattern: "How do I pay tax?",
+        overrideAnswerText: "Pay via https://etax.nra.gov.ss/ into designated banks.",
+        sectionAnchor: "Sec-1-Cash-Free-Collection",
+      }).valid,
+    ).toBe(true);
 
     const briefCard = buildCallBriefCardView({
       brief: {

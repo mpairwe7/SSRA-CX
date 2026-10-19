@@ -278,6 +278,7 @@ export function buildOpsPageShell(params: {
   };
 }
 
+export * from "./admin-workbench.js";
 export * from "./auditor-workbench.js";
 export * from "./dashboards.js";
 export * from "./document-inspection.js";
