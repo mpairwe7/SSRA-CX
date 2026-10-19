@@ -32,7 +32,8 @@ We adopt the **Next.js 16 BFF Session Pattern** using `openid-client@6.8.8` (wit
    - The browser receives only an opaque, cryptographically signed session ID in a `__Host-ssra_session` cookie (`httpOnly`, `Secure`, `SameSite=Lax`, `Path=/`).
    - OAuth 2.1 access tokens, refresh tokens, and verified `subject_ref` claims live exclusively in Valkey (encrypted at rest and scoped with short TTLs: 15 min idle for `apps/console`, 30 min idle for authenticated `apps/web`).
 2. **Staff Console (`apps/console`) — ASVS L3 & Passkeys:**
-   - Enforces Keycloak OIDC login with mandatory WebAuthn passkey authentication (`phr` / FIDO2 resident keys) and RBAC role claims (`agent`, `supervisor`, `qa`, `legal_approver`, `secops`, `admin`).
+   - Enforces Keycloak 26.4.11 OIDC login with mandatory WebAuthn passkey authentication (`phr` / FIDO2 resident keys, `ES256`/`EdDSA`), `acr.loa.map` step-up levels (`urn:ssra:acr:otp-t1` -> 1, `urn:ssra:acr:t3-step-up` -> 3, `urn:ssra:acr:passkey` -> 3), and RBAC role claims (`agent`, `supervisor`, `qa`, `legal_approver`, `secops`, `admin`).
+   - Deploys via a multi-stage Quarkus pre-built image (`infra/keycloak/Dockerfile`: `kc.sh build --db=postgres --health-enabled=true --metrics-enabled=true --features=passkeys,token-exchange-standard:v2` + `start --optimized --import-realm` as non-root `USER 10001:10001`) with dedicated management health/metrics probes on port `9000` (`/health/ready`), `KC_PROXY_HEADERS=xforwarded`, and Standard Token Exchange V2 (`token.exchange.standard.enabled=true`) across `ssra-web-bff`, `ssra-staff-console`, `ssra-agentgateway`, and all 11 `mcp-*` resource clients (`infra/keycloak/ssra-realm.json`).
 3. **Taxpayer Web (`apps/web`) — Progressive Identity Proofing:**
    - Starts anonymous (`T0`).
    - Elevates to `T1`/`T2` via deterministic OTP + TIN verification (`identity_link` service + Keycloak custom authenticator), binding an opaque `subject_ref` to the BFF session.

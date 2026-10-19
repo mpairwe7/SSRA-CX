@@ -24,8 +24,10 @@ from ssra_security.governance import (
 from ssra_security.keycloak import (
     ALLOWED_IDP_ALIASES,
     ALLOWED_WEBAUTHN_ALGORITHMS,
+    REQUIRED_KEYCLOAK_CLIENTS,
     KeycloakOidcClaims,
     KeycloakOidcSecurityService,
+    validate_keycloak_realm_export,
 )
 from ssra_security.redaction import RedactionResult, mask_tin, redact_pii
 from ssra_security.siem import (
@@ -41,6 +43,7 @@ __all__ = [
     "ALLOWED_IDP_ALIASES",
     "ALLOWED_WEBAUTHN_ALGORITHMS",
     "GENESIS_HASH",
+    "REQUIRED_KEYCLOAK_CLIENTS",
     "AiGovernanceComplianceReport",
     "AuditEvent",
     "ConfirmationRecord",
@@ -65,5 +68,6 @@ __all__ = [
     "mask_tin",
     "redact_pii",
     "validate_inter_model_handoff",
+    "validate_keycloak_realm_export",
     "verify_mcp_scope_sufficiency",
 ]

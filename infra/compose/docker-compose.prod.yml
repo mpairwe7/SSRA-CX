@@ -113,6 +113,34 @@ services:
           cpus: "2.0"
           memory: 2G
 
+  keycloak:
+    build:
+      context: ../..
+      dockerfile: infra/keycloak/Dockerfile
+    command:
+      - "start"
+      - "--optimized"
+      - "--import-realm"
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /opt/keycloak/data/tmp:rw,noexec,nosuid,size=64m
+    environment:
+      KC_HOSTNAME: ${KC_HOSTNAME:-https://sso.ssra.gov.ss}
+      KC_HOSTNAME_STRICT: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_FEATURES: passkeys,token-exchange-standard:v2
+      JAVA_OPTS_KC_HEAP: "1024m"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
   agent-runtime:
     deploy:
       resources:

@@ -125,6 +125,7 @@ def main() -> None:
         "services/channel-gateway/Dockerfile",
         "services/workers/Dockerfile",
         "services/voice/Dockerfile",
+        "infra/keycloak/Dockerfile",
         "apps/web/Dockerfile",
         "apps/console/Dockerfile",
     ):
@@ -133,6 +134,20 @@ def main() -> None:
             f"Dockerfile {df_rel} must run as non-root USER 10001:10001"
         )
         assert "HEALTHCHECK" in df_txt, f"Dockerfile {df_rel} must define a HEALTHCHECK"
+
+    kc_df_txt = (ROOT / "infra" / "keycloak" / "Dockerfile").read_text(encoding="utf-8")
+    assert "kc.sh build" in kc_df_txt and "--optimized" in kc_df_txt, (
+        "infra/keycloak/Dockerfile must pre-build Quarkus image with kc.sh build and start --optimized"
+    )
+    assert "keycloak" in prod_compose.get("services", {}), (
+        "docker-compose.prod.yml must define hardened keycloak production overlay"
+    )
+    kc_realm = json.loads(
+        (ROOT / "infra" / "keycloak" / "ssra-realm.json").read_text(encoding="utf-8")
+    )
+    from ssra_security import validate_keycloak_realm_export
+
+    assert validate_keycloak_realm_export(kc_realm) is True
 
     assert (ROOT / "infra" / "policies" / "seccomp-sovereign-default.json").is_file(), (
         "Missing infra/policies/seccomp-sovereign-default.json"

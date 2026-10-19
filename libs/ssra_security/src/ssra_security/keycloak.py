@@ -14,13 +14,82 @@ import base64
 import hashlib
 import hmac
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from ssra_core import McpErrorCode, SSRAError, utc_now
 
 ALLOWED_WEBAUTHN_ALGORITHMS: frozenset[str] = frozenset({"ES256", "EdDSA", "-7", "-8"})
 ALLOWED_IDP_ALIASES: frozenset[str] = frozenset({"ssra-national-idp", "keycloak-local"})
+REQUIRED_KEYCLOAK_CLIENTS: frozenset[str] = frozenset(
+    {
+        "ssra-web-bff",
+        "ssra-staff-console",
+        "ssra-agentgateway",
+        "mcp-knowledge",
+        "mcp-tax-facts",
+        "mcp-official-channels",
+        "mcp-taxpayer",
+        "mcp-ledger",
+        "mcp-payments-info",
+        "mcp-tcc",
+        "mcp-customs",
+        "mcp-cases",
+        "mcp-appointments",
+        "mcp-notifications",
+    }
+)
+
+
+def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
+    """Verify October 2026 Keycloak 26.x realm security, passkey, and RFC 8693 V2 token-exchange invariants."""
+    if realm_data.get("realm") != "ssra" or realm_data.get("sslRequired") != "all":
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "Keycloak realm must be 'ssra' with sslRequired='all'",
+            status_code=400,
+        )
+    if (
+        realm_data.get("revokeRefreshToken") is not True
+        or realm_data.get("refreshTokenMaxReuse") != 0
+        or realm_data.get("bruteForceProtected") is not True
+    ):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "Keycloak realm must enforce refresh-token rotation (maxReuse=0) and bruteForceProtected=True",
+            status_code=400,
+        )
+    algs = set(realm_data.get("webAuthnPolicySignatureAlgorithms", []))
+    if not algs or not algs.issubset(ALLOWED_WEBAUTHN_ALGORITHMS):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "Keycloak WebAuthn policy must restrict algorithms to ES256 and EdDSA",
+            status_code=400,
+        )
+    clients = realm_data.get("clients", [])
+    client_map = {str(c.get("clientId")): c for c in clients if isinstance(c, dict)}
+    missing = REQUIRED_KEYCLOAK_CLIENTS - set(client_map)
+    if missing:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"Keycloak realm missing required OAuth 2.1 clients: {sorted(missing)}",
+            status_code=400,
+        )
+    for cid in REQUIRED_KEYCLOAK_CLIENTS:
+        c = client_map[cid]
+        attrs = c.get("attributes", {})
+        if (
+            c.get("publicClient") is not False
+            or c.get("directAccessGrantsEnabled") is not False
+            or attrs.get("pkce.code.challenge.method") != "S256"
+            or attrs.get("token.exchange.standard.enabled") != "true"
+        ):
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Keycloak client '{cid}' must be confidential, forbid direct grants, enforce PKCE S256, and enable standard token exchange V2",
+                status_code=400,
+            )
+    return True
 
 
 class KeycloakOidcClaims(BaseModel):
