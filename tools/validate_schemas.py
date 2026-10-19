@@ -4,17 +4,20 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import jsonschema
 from ssra_core import RiskTier
-from ssra_mcp import JSON_SCHEMA_2020_12
+from ssra_mcp import JSON_SCHEMA_2020_12, MCP_PROTOCOL_VERSION
 from ssra_runtime.tools import GovernedMcpGatewayClient
 
 ROOT = Path(__file__).resolve().parents[1]
+_RFC9110_TOKEN_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 
 
 def main() -> None:
+    """Validate canonical JSON Schemas and all 11 Stateless MCP 2026-07-28 servers and tools."""
     # 1. Validate all JSON Schemas in packages/contracts/schemas/
     schema_dir = ROOT / "packages" / "contracts" / "schemas"
     schema_files = sorted(schema_dir.glob("*.schema.json"))
@@ -26,14 +29,44 @@ def main() -> None:
         )
         jsonschema.Draft202012Validator.check_schema(raw)
 
-    # 2. Validate every registered MCP tool across all 11 servers
+    # 2. Validate every registered MCP server and tool across all 11 servers
     gateway = GovernedMcpGatewayClient()
     total_tools = 0
     for srv_name, srv in gateway.servers.items():
+        discover = srv.handle_server_discover()
+        assert discover["resultType"] == "complete", (
+            f"{srv_name} server/discover missing resultType"
+        )
+        assert MCP_PROTOCOL_VERSION in discover["supportedProtocolVersions"]
+
+        listing = srv.handle_list_tools()
+        assert listing["resultType"] == "complete", f"{srv_name} tools/list missing resultType"
+        assert listing["cacheScope"] == "private", f"{srv_name} tools/list missing cacheScope"
+        listed_names = [t["name"] for t in listing["tools"]]
+        assert listed_names == sorted(listed_names), (
+            f"{srv_name} tools/list must return deterministic sorted order"
+        )
+
         for tool_name, tool in srv.tools.items():
             assert tool.tier != RiskTier.T4, f"Forbidden T4 tool: {srv_name}.{tool_name}"
             assert tool.input_schema.get("$schema") == JSON_SCHEMA_2020_12
             assert tool.output_schema.get("$schema") == JSON_SCHEMA_2020_12
+            assert tool.input_schema.get("additionalProperties") is False, (
+                f"{srv_name}.{tool_name} input_schema must set additionalProperties: False"
+            )
+            assert tool.output_schema.get("additionalProperties") is False, (
+                f"{srv_name}.{tool_name} output_schema must set additionalProperties: False"
+            )
+            req_out = set(tool.output_schema.get("required", []))
+            assert {"record_id", "as_of"}.issubset(req_out), (
+                f"{srv_name}.{tool_name} output_schema must require 'record_id' and 'as_of'"
+            )
+            for prop_spec in tool.input_schema.get("properties", {}).values():
+                if isinstance(prop_spec, dict) and "x-mcp-header" in prop_spec:
+                    hdr_tok = str(prop_spec["x-mcp-header"])
+                    assert _RFC9110_TOKEN_RE.match(hdr_tok), (
+                        f"Invalid x-mcp-header token '{hdr_tok}' on {srv_name}.{tool_name}"
+                    )
             jsonschema.Draft202012Validator.check_schema(tool.input_schema)
             jsonschema.Draft202012Validator.check_schema(tool.output_schema)
             total_tools += 1

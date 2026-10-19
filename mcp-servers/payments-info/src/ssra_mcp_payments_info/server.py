@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from ssra_core import McpErrorCode, RiskTier, SSRAError, juba_today, new_id
@@ -19,6 +20,7 @@ from ssra_mcp import (
 def create_payments_info_mcp_server(
     *, enable_t3_payment_ref: bool | None = None
 ) -> StatelessMcpServer:
+    """Create the stateless MCP 2026-07-28 server for SSRA payments-info and feature-flagged T3 references."""
     t3_enabled = (
         enable_t3_payment_ref
         if enable_t3_payment_ref is not None
@@ -47,6 +49,7 @@ def create_payments_info_mcp_server(
     }
 
     def _list_channels(_args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
+        """List official SSRA cash-free bank remittance channels via e-Tax."""
         return {
             "portal_url": "https://etax.nra.gov.ss/",
             "directive_ref": "SSRA March 2026 Exclusive e-Tax & Cash-Free Bank Collection Directive",
@@ -62,6 +65,7 @@ def create_payments_info_mcp_server(
         }
 
     def _instructions(_args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
+        """Return step-by-step instructions for remitting taxes via e-Tax into designated TSA banks."""
         return {
             "portal_url": "https://etax.nra.gov.ss/",
             "directive_ref": "SSRA March 2026 Exclusive e-Tax & Cash-Free Bank Collection Directive",
@@ -75,6 +79,7 @@ def create_payments_info_mcp_server(
         }
 
     def _generate_payment_ref(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        """Generate a feature-flagged Tier T3 e-Tax bank payment reference slip after validating amount_ssp."""
         if not t3_enabled:
             raise SSRAError(
                 McpErrorCode.UPSTREAM_UNAVAILABLE,
@@ -82,11 +87,26 @@ def create_payments_info_mcp_server(
                 status_code=503,
             )
         sub = require_subject_ref(ctx)
+        raw_amt = str(args["amount_ssp"]).replace(",", "").strip()
+        try:
+            amt_dec = Decimal(raw_amt)
+        except InvalidOperation as exc:
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                "amount_ssp must be a valid positive decimal SSP amount",
+                status_code=400,
+            ) from exc
+        if not amt_dec.is_finite() or amt_dec <= Decimal("0"):
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                "amount_ssp must be a finite positive amount in SSP",
+                status_code=400,
+            )
         ref_id = new_id("prn")
         return {
             "payment_reference": ref_id,
             "tax_type": str(args["tax_type"]),
-            "amount_ssp": str(args["amount_ssp"]),
+            "amount_ssp": str(amt_dec),
             "portal_url": "https://etax.nra.gov.ss/",
             "record_id": f"etax:prn:{sub}:{ref_id}",
             "as_of": juba_today().isoformat(),

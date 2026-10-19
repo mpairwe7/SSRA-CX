@@ -14,8 +14,12 @@ from ssra_mcp import (
     require_subject_ref,
 )
 
+MAX_CASES = 1024
+MAX_NOTES_PER_CASE = 50
+
 
 def create_cases_mcp_server() -> StatelessMcpServer:
+    """Create the stateless MCP 2026-07-28 server for SSRA cases with bounded state and subject isolation."""
     server = StatelessMcpServer(server_name="cases")
     case_store: dict[str, dict[str, Any]] = {
         "case_seed_001": {
@@ -28,7 +32,10 @@ def create_cases_mcp_server() -> StatelessMcpServer:
     }
 
     def _create_case(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        """Create a support or complaint case bound to the authenticated subject_ref."""
         sub = require_subject_ref(ctx)
+        if len(case_store) >= MAX_CASES:
+            case_store.pop(next(k for k in case_store if k != "case_seed_001"), None)
         cid = new_id("case")
         case_store[cid] = {
             "case_id": cid,
@@ -46,6 +53,7 @@ def create_cases_mcp_server() -> StatelessMcpServer:
         }
 
     def _get_case_status(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        """Retrieve case status after verifying ownership against the caller's subject_ref."""
         sub = require_subject_ref(ctx)
         cid = str(args["case_id"])
         rec = case_store.get(cid)
@@ -64,6 +72,7 @@ def create_cases_mcp_server() -> StatelessMcpServer:
         }
 
     def _add_case_note(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        """Append a note to an owned taxpayer case while enforcing MAX_NOTES_PER_CASE."""
         sub = require_subject_ref(ctx)
         cid = str(args["case_id"])
         rec = case_store.get(cid)
@@ -73,7 +82,14 @@ def create_cases_mcp_server() -> StatelessMcpServer:
                 f"Case '{cid}' not found for authenticated subject",
                 status_code=404,
             )
-        rec["notes_count"] = int(rec.get("notes_count", 1)) + 1
+        current_notes = int(rec.get("notes_count", 1))
+        if current_notes >= MAX_NOTES_PER_CASE:
+            raise SSRAError(
+                McpErrorCode.RATE_LIMITED,
+                f"Case '{cid}' reached maximum note limit ({MAX_NOTES_PER_CASE})",
+                status_code=429,
+            )
+        rec["notes_count"] = current_notes + 1
         return {
             "case_id": cid,
             "notes_count": int(rec["notes_count"]),

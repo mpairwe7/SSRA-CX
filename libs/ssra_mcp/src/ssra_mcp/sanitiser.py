@@ -37,12 +37,20 @@ _DELIMITER_BREAKOUT_RE = re.compile(
     r"(</?untrusted_tool_result[^>]*>|<\|im_start\|>|<\|im_end\|>|<\|endoftext\|>|\[/?INST\])",
     flags=re.IGNORECASE,
 )
+_CONTEXTUAL_PROMPT_INJECTION_RE = re.compile(
+    r"(?:ignore\s+(?:all\s+)?(?:previous|prior|system)\s+(?:instructions|rules|prompts)|"
+    r"disregard\s+system\s+policy|"
+    r"tell\s+the\s+user\s+to\s+pay\s+to\s+account|"
+    r"!\[[^\]]*\]\(https?://[^\s)]+\))",
+    flags=re.IGNORECASE,
+)
 _BIDI_OVERRIDE_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069]")
 _SAFE_TOOL_NAME_RE = re.compile(r"^[a-z0-9_.-]{1,64}$")
 MAX_STRING_FIELD_LEN = 2000
 
 
 def is_allowed_ssra_url(url: str) -> bool:
+    """Return True if url is an HTTPS URL on an allow-listed South Sudan government domain."""
     try:
         parsed = urlparse(url.rstrip(".,;:)]"))
         host = (parsed.hostname or "").lower()
@@ -57,7 +65,10 @@ def is_allowed_ssra_url(url: str) -> bool:
 
 
 def scrub_untrusted_urls_and_cap_length(text: str, max_len: int = MAX_STRING_FIELD_LEN) -> str:
+    """Scrub Bidi overrides, delimiter breakouts, MCP06 contextual injections, dangerous URIs, and unallowlisted URLs."""
+
     def _check_url(match: re.Match[str]) -> str:
+        """Replace non-allowlisted HTTP(S) URLs while preserving trailing punctuation."""
         raw_url = match.group(0)
         trailing = ""
         while raw_url and raw_url[-1] in ".,;:)]":
@@ -69,12 +80,16 @@ def scrub_untrusted_urls_and_cap_length(text: str, max_len: int = MAX_STRING_FIE
 
     scrubbed = _BIDI_OVERRIDE_RE.sub("", text)
     scrubbed = _DELIMITER_BREAKOUT_RE.sub("[REDACTED_DELIMITER_BREAKOUT]", scrubbed)
+    scrubbed = _CONTEXTUAL_PROMPT_INJECTION_RE.sub(
+        "[REDACTED_MCP06_CONTEXTUAL_INJECTION]", scrubbed
+    )
     scrubbed = _DANGEROUS_URI_RE.sub("[REDACTED_DANGEROUS_URI]", scrubbed)
     scrubbed = _URL_RE.sub(_check_url, scrubbed)
     return scrubbed[:max_len]
 
 
 def sanitise_structured_output(value: Any, max_len: int = MAX_STRING_FIELD_LEN) -> Any:
+    """Recursively sanitise strings inside structured MCP tool output dictionaries and lists."""
     if isinstance(value, str):
         return scrub_untrusted_urls_and_cap_length(value, max_len=max_len)
     if isinstance(value, dict):
@@ -85,6 +100,7 @@ def sanitise_structured_output(value: Any, max_len: int = MAX_STRING_FIELD_LEN) 
 
 
 def wrap_tool_result_as_untrusted_data(tool_name: str, structured_content: dict[str, Any]) -> str:
+    """Wrap sanitised MCP tool output in spotlighted <untrusted_tool_result> data delimiters."""
     safe_tool = tool_name if _SAFE_TOOL_NAME_RE.match(tool_name) else "mcp_tool"
     sanitised = sanitise_structured_output(structured_content)
     payload = json.dumps(sanitised, ensure_ascii=False, sort_keys=True)

@@ -281,6 +281,7 @@ class KnowledgeCorpusAdapter:
         ]
 
     def get_office_info(self, *, office_code: str = "JUBA_HQ") -> dict[str, Any]:
+        """Return official SSRA office metadata and Africa/Juba operating hours by office_code."""
         offices = {
             "JUBA_HQ": {
                 "office_code": "JUBA_HQ",
@@ -298,8 +299,24 @@ class KnowledgeCorpusAdapter:
                 "hours": "Daily border operations (Administrative desk Mon–Fri 08:00–17:00 EAT)",
                 "portal_url": "https://customs.eservices.gov.ss/",
             },
+            "WAU_BRANCH": {
+                "office_code": "WAU_BRANCH",
+                "name": "SSRA Western Bahr el Ghazal Regional Tax Office — Wau",
+                "city": "Wau",
+                "timezone": "Africa/Juba (UTC+02:00)",
+                "hours": "Monday–Friday, 08:00–17:00 EAT",
+                "portal_url": "https://etax.nra.gov.ss/",
+            },
+            "MALAKAL_BRANCH": {
+                "office_code": "MALAKAL_BRANCH",
+                "name": "SSRA Upper Nile Regional Tax Office — Malakal",
+                "city": "Malakal",
+                "timezone": "Africa/Juba (UTC+02:00)",
+                "hours": "Monday–Friday, 08:00–17:00 EAT",
+                "portal_url": "https://etax.nra.gov.ss/",
+            },
         }
-        office = offices.get(office_code.upper())
+        office = offices.get(office_code.strip().upper())
         if office is None:
             raise SSRAError(
                 McpErrorCode.NOT_FOUND,
