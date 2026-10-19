@@ -90,7 +90,6 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
   it("parses resumable AG-UI SSE streams and enforces T0-only offline outbox policy", () => {
     const sampleSse = [
       'id: evt_1\nevent: agui\ndata: {"type":"RUN_STARTED","threadId":"thr_1"}',
-      "id: evt_corrupt\nevent: agui\ndata: {truncated-json-on-2g",
       'id: evt_2\nevent: agui\ndata: {"type":"TEXT_MESSAGE_CONTENT","delta":"PAYE is due by day 15."}',
       'id: evt_3\nevent: agui\ndata: {"type":"RUN_FINISHED","threadId":"thr_1"}',
       "",
@@ -100,6 +99,17 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(parsed.events).toHaveLength(2);
     expect(parsed.lastEventId).toBe("evt_3");
     expect(parsed.accumulatedText).toBe("PAYE is due by day 15.");
+    expect(parsed.corrupted).toBe(false);
+
+    // Corrupt frame stops advancing lastEventId before the gap
+    const corruptSse = [
+      'id: evt_1\nevent: agui\ndata: {"type":"RUN_STARTED","threadId":"thr_1"}',
+      "id: evt_corrupt\nevent: agui\ndata: {truncated-json-on-2g",
+      'id: evt_3\nevent: agui\ndata: {"type":"RUN_FINISHED","threadId":"thr_1"}',
+    ].join("\n\n");
+    const parsedCorrupt = parseAguiSseStream(corruptSse);
+    expect(parsedCorrupt.corrupted).toBe(true);
+    expect(parsedCorrupt.lastEventId).toBe("evt_1");
 
     const whtCard = renderGenerativeUICard(
       {
@@ -118,6 +128,20 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(whtCard.mode).toBe("component");
     expect(whtCard.safeHtml).toContain("WHT: 50000 SSP");
 
+    // Reject contradictory PAYE + WHT tax props
+    const mixedCalc = renderGenerativeUICard(
+      {
+        name: "CalculatorForm",
+        props: {
+          estimated_tax_ssp: "100",
+          withholding_tax_ssp: "20",
+          is_estimate: true,
+        },
+      },
+      "Fallback",
+    );
+    expect(mixedCalc.mode).toBe("text_fallback");
+
     const timelineCard = renderGenerativeUICard(
       {
         name: "FilingStatusTimeline",
@@ -131,7 +155,7 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
       "Filing timeline",
     );
     expect(timelineCard.mode).toBe("component");
-    expect(timelineCard.safeHtml).toContain("Period 2026-09");
+    expect(timelineCard.safeHtml).toContain("Period 2026-09, as of 2026-10-20");
 
     const outbox = new OfflineOutboxQueue(2);
     expect(() => new OfflineOutboxQueue(0)).toThrow(RangeError);
@@ -140,6 +164,18 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
         id: "q_natid",
         message: "My National ID is R12345678",
         locale: "en",
+        tier: "T0",
+        queuedAtIso: "2026-10-16T08:00:00Z",
+      }),
+    ).toEqual({
+      queued: false,
+      reason: "SECURITY_POLICY_PII_REJECTED_FROM_OFFLINE_QUEUE",
+    });
+    expect(
+      outbox.enqueue({
+        id: "q_natid_ar",
+        message: "My National ID is R١٢٣٤٥٦٧٨",
+        locale: "ar",
         tier: "T0",
         queuedAtIso: "2026-10-16T08:00:00Z",
       }),

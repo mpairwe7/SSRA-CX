@@ -8,7 +8,10 @@ import {
   dispatchServiceWorkerLogoutPurge,
   validateBffCsrfMutation,
 } from "../src/app/api/auth/session/route.js";
-import { buildRuntimeStreamRequest } from "../src/app/api/chat/stream/route.js";
+import {
+  buildRuntimeStreamRequest,
+  POST as streamChatPost,
+} from "../src/app/api/chat/stream/route.js";
 import { validateClientUpload } from "../src/app/api/uploads/route.js";
 import { generatePwaManifest } from "../src/app/manifest.js";
 import { applyTaxpayerTurnMeta, buildTaxpayerChatTurnView } from "../src/components/index.js";
@@ -38,13 +41,27 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
     expect(decision.headers["x-nonce"]).toBe("nonce_test_123");
     expect(decision.headers["Cache-Control"]).toBe("private, no-cache, no-store, must-revalidate");
 
-    // 8-locale ROADMAP_LOCALES negotiation in proxy.ts (including Tier C din/nus/bfa/zne/shk)
+    // 8-locale ROADMAP_LOCALES negotiation in proxy.ts (including Tier C & RFC 9110 q-value weighting)
     expect(
       executeProxy({
         pathname: "/din/chat",
         nonce: "n_din",
       }).locale,
     ).toBe("din");
+    expect(
+      executeProxy({
+        pathname: "/",
+        acceptLanguage: "en-US,en;q=0.9,din;q=0.1",
+        nonce: "n_q",
+      }).locale,
+    ).toBe("en");
+    expect(
+      executeProxy({
+        pathname: "/",
+        acceptLanguage: "din;q=0,pga;q=0.8,en;q=0.5",
+        nonce: "n_q0",
+      }).locale,
+    ).toBe("pga");
 
     // CVE-2026-27979: Block untrusted next-resume header
     expect(
@@ -171,6 +188,9 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
 
   it("verifies self-hosted ALTCHA proof-of-work bot defence challenge", async () => {
     const challenge = await createAltchaChallenge(42, "salt_ssra_1", "secret_key");
+    await expect(createAltchaChallenge(9000, "salt_ssra_1", "secret_key", 5000)).rejects.toThrow(
+      RangeError,
+    );
     const valid = await verifyAltchaSolution(
       {
         ...challenge,
@@ -179,6 +199,29 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
       "secret_key",
     );
     expect(valid).toBe(true);
+
+    const postRes = await streamChatPost(
+      new Request("https://assist.ssra.gov.ss/api/chat/stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Last-Event-ID": "thr_1:ev:1",
+        },
+        body: JSON.stringify({
+          message: "What is BPT?",
+          locale: "en",
+          confirmationToken: "cfm_1",
+          idempotencyKey: "idem_1",
+        }),
+      }),
+      async (_url, init) =>
+        new Response(String(init?.body ?? ""), {
+          status: 200,
+          headers: init?.headers as Record<string, string>,
+        }),
+    );
+    expect(postRes.status).toBe(200);
+    expect(postRes.headers.get("Last-Event-ID")).toBe("thr_1:ev:1");
 
     const wrong = await verifyAltchaSolution(
       {

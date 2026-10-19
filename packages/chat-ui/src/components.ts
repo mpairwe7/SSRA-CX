@@ -6,6 +6,9 @@
 import type { LocaleCode } from "@ssra/contracts";
 import { resolveGenerativeUIComponent } from "./index.js";
 
+/**
+ * Escape HTML special characters (`&`, `<`, `>`, `"`, `'`) to block XSS injection.
+ */
 export function escapeHtmlStrict(raw: string): string {
   return raw
     .replaceAll("&", "&amp;")
@@ -23,6 +26,9 @@ export interface RenderedChatCard {
   readonly safeHtml: string;
 }
 
+/**
+ * Render an allow-listed Generative UI card as WCAG 2.2 AA accessible, HTML-escaped semantic markup.
+ */
 export function renderGenerativeUICard(
   candidate: { readonly name?: unknown; readonly props?: unknown } | null | undefined,
   fallbackText: string,
@@ -60,10 +66,10 @@ export function renderGenerativeUICard(
       };
     }
     case "CalculatorForm": {
-      const calcType = escapeHtmlStrict(
-        String(p.withholding_tax_ssp ? "WHT" : (p.calculator_type ?? "PAYE")),
-      );
-      const tax = escapeHtmlStrict(String(p.estimated_tax_ssp ?? p.withholding_tax_ssp ?? "0"));
+      const isWht = p.calculator_type === "WHT" || p.withholding_tax_ssp !== undefined;
+      const calcType = isWht ? "WHT" : "PAYE";
+      const rawTax = isWht ? (p.withholding_tax_ssp ?? "0") : (p.estimated_tax_ssp ?? "0");
+      const tax = escapeHtmlStrict(String(rawTax));
       return {
         mode: "component",
         componentName: "CalculatorForm",
@@ -98,12 +104,16 @@ export function renderGenerativeUICard(
       const tin = escapeHtmlStrict(String(p.tin_masked));
       const status = escapeHtmlStrict(String(p.filing_status));
       const period = escapeHtmlStrict(String(p.last_filed_period));
+      const asOfSuffix =
+        typeof p.as_of === "string" && p.as_of.length > 0
+          ? `, as of ${escapeHtmlStrict(p.as_of)}`
+          : "";
       return {
         mode: "component",
         componentName: "FilingStatusTimeline",
         ariaRole: "region",
         dir,
-        safeHtml: `<section role="region" aria-label="FilingStatusTimeline" dir="${dir}" data-component="FilingStatusTimeline"><strong>TIN ${tin}</strong>: ${status} (Period ${period})</section>`,
+        safeHtml: `<section role="region" aria-label="FilingStatusTimeline" dir="${dir}" data-component="FilingStatusTimeline"><strong>TIN ${tin}</strong>: ${status} (Period ${period}${asOfSuffix})</section>`,
       };
     }
     case "CitationList":

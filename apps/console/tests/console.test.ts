@@ -3,6 +3,7 @@ import { evaluateJitAdminElevation } from "../src/jit-admin.js";
 import {
   authorizeConsoleAccess,
   authorizeConsoleRoute,
+  executeConsoleProxy,
   KNOWLEDGE_RELEASE_STEPS,
 } from "../src/proxy.js";
 import {
@@ -121,6 +122,20 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(
       authorizeConsoleRoute({ ...session, role: "admin" }, "/admin/kill-switches").allowed,
     ).toBe(true);
+    expect(executeConsoleProxy({ session: null, pathname: "/admin/kill-switches" }).status).toBe(
+      401,
+    );
+    expect(executeConsoleProxy({ session, pathname: "/admin/kill-switches" })).toEqual({
+      status: 403,
+      allowed: false,
+      reason: "INSUFFICIENT_ROLE_ADMIN_REQUIRED",
+    });
+    expect(
+      executeConsoleProxy({
+        session: { ...session, role: "admin" },
+        pathname: "/admin/kill-switches",
+      }),
+    ).toEqual({ status: 200, allowed: true });
 
     const pipeline = buildKnowledgeReleasePipelineView(3);
     expect(pipeline[3]?.state).toBe("ACTIVE");

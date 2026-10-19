@@ -14,6 +14,9 @@ const MAX_COMPRESSED_UPLOAD_BYTES = 2 * 1024 * 1024; // 2 MB low-bandwidth cap o
 const FORBIDDEN_FILENAME_PATTERN =
   /(?:\.\.|[/\\]|\.(?:exe|bat|cmd|sh|js|mjs|cjs|html|htm|svg|php|py)$)/i;
 
+/**
+ * Validate client upload MIME type, 2 MB low-bandwidth size cap, and safe filename grammar.
+ */
 export function validateClientUpload(input: {
   readonly mimeType: string;
   readonly sizeBytes: number;

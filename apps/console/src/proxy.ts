@@ -23,6 +23,9 @@ export interface ConsoleSession {
   readonly allowedOrigin?: string;
 }
 
+/**
+ * Authorize baseline Staff Console access (WebAuthn passkey, origin match, and 15-min idle timeout).
+ */
 export function authorizeConsoleAccess(session: ConsoleSession | null): {
   readonly allowed: boolean;
   readonly reason?: string;
@@ -49,6 +52,9 @@ export function authorizeConsoleAccess(session: ConsoleSession | null): {
   return { allowed: true };
 }
 
+/**
+ * Authorize route-specific Staff Console access by role (`admin`, `secops`, `legal_approver`, `agent`).
+ */
 export function authorizeConsoleRoute(
   session: ConsoleSession | null,
   pathname: string,
@@ -68,4 +74,27 @@ export function authorizeConsoleRoute(
     }
   }
   return { allowed: true };
+}
+
+/**
+ * Execute request-level Next.js 16 console proxy enforcing passkey, origin, idle timeout, and route RBAC.
+ */
+export function executeConsoleProxy(input: {
+  readonly session: ConsoleSession | null;
+  readonly pathname: string;
+}): {
+  readonly status: 200 | 401 | 403;
+  readonly allowed: boolean;
+  readonly reason?: string;
+} {
+  const decision = authorizeConsoleRoute(input.session, input.pathname);
+  if (!decision.allowed) {
+    const status = decision.reason === "MISSING_SESSION" ? 401 : 403;
+    return {
+      status,
+      allowed: false,
+      ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+    };
+  }
+  return { status: 200, allowed: true };
 }

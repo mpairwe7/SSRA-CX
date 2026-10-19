@@ -18,6 +18,10 @@ export interface ParsedAguiSseEvent {
   readonly payload: Record<string, unknown>;
 }
 
+/**
+ * Parse an AG-UI Server-Sent Events (SSE) stream with resumable `afterEventId` cursor and corruption detection.
+ * Stops advancing the resume cursor at the first corrupt/truncated frame so no event gap is skipped.
+ */
 export function parseAguiSseStream(
   rawSseBody: string,
   options?: { readonly afterEventId?: string },
@@ -25,9 +29,11 @@ export function parseAguiSseStream(
   readonly events: ParsedAguiSseEvent[];
   readonly lastEventId: string | null;
   readonly accumulatedText: string;
+  readonly corrupted: boolean;
 } {
   const blocks = rawSseBody.split("\n\n").filter((b) => b.trim().length > 0);
   const allEvents: ParsedAguiSseEvent[] = [];
+  let corrupted = false;
 
   for (const block of blocks) {
     let id = "";
@@ -47,7 +53,9 @@ export function parseAguiSseStream(
       const type = parsed.type as AguiEventType;
       allEvents.push({ id, type, payload: parsed });
     } catch {
-      // Skip malformed/truncated SSE JSON frame on unstable 2G links
+      // Stop before advancing lastEventId past a corrupt or truncated SSE frame so callers can resume from the last valid event
+      corrupted = true;
+      break;
     }
   }
 
@@ -70,5 +78,6 @@ export function parseAguiSseStream(
     events,
     lastEventId,
     accumulatedText,
+    corrupted,
   };
 }
