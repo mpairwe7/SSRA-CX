@@ -169,4 +169,18 @@ UPGRADE_SQL: tuple[str, ...] = (
         PRIMARY KEY (id, at)
     ) PARTITION BY RANGE (at);
     """,
+    # 11. outbox_events (Transactional CloudEvents 1.0 outbox to NATS JetStream)
+    """
+    CREATE TABLE IF NOT EXISTS outbox_events (
+        id VARCHAR(64) PRIMARY KEY DEFAULT ('outbox_' || uuidv7()::text),
+        source VARCHAR(128) NOT NULL,
+        event_type VARCHAR(128) NOT NULL,
+        subject VARCHAR(128) NOT NULL,
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        published_to_nats SMALLINT NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+    );
+    CREATE INDEX IF NOT EXISTS idx_outbox_events_unpublished
+        ON outbox_events (published_to_nats, created_at);
+    """,
 )

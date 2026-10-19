@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Header, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from ssra_core import (
     AuthLevel,
     ChannelName,
     LocaleCode,
+    McpErrorCode,
     SSRAError,
+    ensure_w3c_traceparent,
 )
 from ssra_testing import make_conversation_event
 
@@ -49,11 +52,31 @@ def create_runtime_app() -> FastAPI:
     @app.exception_handler(SSRAError)
     async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:
         raw_path = str(request.scope.get("path", "/"))
-        problem = exc.to_problem_details(instance=raw_path)
+        tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
+        problem = exc.to_problem_details(instance=raw_path, trace_id=tp)
         return JSONResponse(
             status_code=exc.status_code,
             content=problem.model_dump(mode="json"),
             media_type="application/problem+json",
+            headers={"traceparent": tp},
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        raw_path = str(request.scope.get("path", "/"))
+        tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
+        err = SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"Runtime request validation failed ({len(exc.errors())} error(s))",
+            status_code=422,
+        )
+        return JSONResponse(
+            status_code=422,
+            content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(mode="json"),
+            media_type="application/problem+json",
+            headers={"traceparent": tp},
         )
 
     @app.get("/healthz")
@@ -92,7 +115,10 @@ def create_runtime_app() -> FastAPI:
         )
 
     @app.post("/v1/agui/stream")
-    async def agui_stream(body: AguiStreamRequest) -> StreamingResponse:
+    async def agui_stream(
+        body: AguiStreamRequest,
+        last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+    ) -> StreamingResponse:
         event = make_conversation_event(
             body.message,
             locale=body.locale,
@@ -108,7 +134,7 @@ def create_runtime_app() -> FastAPI:
             idempotency_key=body.idempotency_key,
         )
         return StreamingResponse(
-            stream_agui_events(turn),
+            stream_agui_events(turn, last_event_id=last_event_id),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache, no-transform",

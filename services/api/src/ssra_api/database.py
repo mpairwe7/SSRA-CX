@@ -159,6 +159,20 @@ class AuditEventORM(Base):
     )
 
 
+class OutboxEventORM(Base):
+    __tablename__ = "outbox_events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source: Mapped[str] = mapped_column(String(128), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    subject: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    published_to_nats: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 POSTGRES18_RLS_AND_WORM_DDL: tuple[str, ...] = (
     "ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;",
     (
@@ -169,6 +183,12 @@ POSTGRES18_RLS_AND_WORM_DDL: tuple[str, ...] = (
     "ALTER TABLE cases ENABLE ROW LEVEL SECURITY;",
     (
         "CREATE POLICY staff_office_isolation_cases ON cases "
+        "USING (office_code = current_setting('ssra.staff_office_code', true) "
+        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops'));"
+    ),
+    "ALTER TABLE handoffs ENABLE ROW LEVEL SECURITY;",
+    (
+        "CREATE POLICY staff_office_isolation_handoffs ON handoffs "
         "USING (office_code = current_setting('ssra.staff_office_code', true) "
         "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops'));"
     ),

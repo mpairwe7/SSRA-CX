@@ -27,6 +27,16 @@ def verify_knowledge_release_gate(job: KnowledgeReleaseJob) -> str:
     return f"PUBLISHED:{job.snapshot_version}"
 
 
+def get_worker_health_status() -> dict[str, object]:
+    """Health & readiness probe for SSRA Temporal background workers."""
+    return {
+        "status": "ok",
+        "service": "ssra-workers",
+        "task_queues": ["knowledge_release", "case_sla_timers", "reminder_campaigns"],
+        "sla_priorities": sorted(SLA_HOURS_BY_PRIORITY),
+    }
+
+
 __all__ = [
     "SLA_HOURS_BY_PRIORITY",
     "CampaignDispatchSummary",
@@ -36,6 +46,7 @@ __all__ = [
     "ReminderCandidate",
     "chunk_legal_document_by_structure",
     "evaluate_case_sla",
+    "get_worker_health_status",
     "run_consent_checked_filing_reminder_campaign",
     "verify_knowledge_release_gate",
 ]

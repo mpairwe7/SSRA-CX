@@ -78,3 +78,11 @@ def test_knowledge_release_gate_and_sla_escalation() -> None:
     )
     assert summary.dispatched_subjects == ("sub_opted_in",)
     assert set(summary.skipped_no_consent_subjects) == {"sub_stopped", "sub_no_consent"}
+
+    from ssra_voice.__main__ import main as voice_main
+    from ssra_workers import get_worker_health_status
+    from ssra_workers.__main__ import main as workers_main
+
+    assert get_worker_health_status()["status"] == "ok"
+    assert workers_main() == 0
+    assert voice_main() == 0

@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 from ssra_core import Intent, IntentName, LocaleCode, RiskTier
+from ssra_security import validate_inter_model_handoff
 
 from ssra_runtime.state import ConversationGraphState
 
@@ -176,6 +177,18 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
             language=locale,
             confidence=0.97,
         )
+    if any(
+        w in lower
+        for w in ("open a support case", "create a support case", "open a case", "create a case")
+    ):
+        slots["case_type"] = "INQUIRY"
+        slots["summary"] = text[:200]
+        return Intent(
+            intent=IntentName.CREATE_CASE,
+            slots=slots,
+            language=locale,
+            confidence=0.97,
+        )
 
     # 8. Guided journeys & Knowledge Q&A (T0)
     if any(w in lower for w in ("tin", "register", "رقم الضريبي", "الرقم الضريبي", "tasjil")):
@@ -218,7 +231,7 @@ def understand_node(state: ConversationGraphState) -> dict[str, Any]:
 
     text = state.get("redacted_user_text") or state.get("raw_user_text", "")
     locale = state.get("locale", LocaleCode.EN)
-    intent_obj = classify_intent_deterministic(text, locale)
+    intent_obj = validate_inter_model_handoff(classify_intent_deterministic(text, locale))
 
     # Risk tier NEVER comes from the model; it comes deterministically from risk-tiers.yaml
     tier = _INTENT_TIERS.get(intent_obj.intent.value, RiskTier.T0)

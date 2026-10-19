@@ -18,7 +18,9 @@ import re
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict
+from ssra_core import ensure_w3c_traceparent
 
 MAX_REQUEST_BODY_BYTES = 1_048_576
 MAX_IDEMPOTENCY_ENTRIES = 2048
@@ -28,6 +30,8 @@ _SECURITY_HEADERS: dict[str, str] = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
 }
 
 
@@ -77,13 +81,26 @@ def _problem_response(
 def install_api_conventions_middleware(app: FastAPI) -> None:
     idempotency_cache: dict[str, tuple[str, int, bytes, str]] = {}
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(request: Request, exc: RequestValidationError) -> Response:
+        raw_path = str(request.scope.get("path", "/"))
+        traceparent = ensure_w3c_traceparent(request.headers.get("traceparent"))
+        return _problem_response(
+            status_code=422,
+            code="VALIDATION_FAILED",
+            title="Request Validation Failed",
+            detail=f"Invalid request parameters ({len(exc.errors())} validation error(s)).",
+            instance=raw_path,
+            traceparent=traceparent,
+        )
+
     @app.middleware("http")
     async def api_conventions_middleware(
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         raw_path = str(request.scope.get("path", "/"))
-        traceparent = request.headers.get("traceparent") or generate_w3c_traceparent()
+        traceparent = ensure_w3c_traceparent(request.headers.get("traceparent"))
 
         # 1. Validate Host header per RFC 9112 §3.2 (CVE-2026-48710 & CVE-2026-54282)
         host_header = request.headers.get("host", "localhost")

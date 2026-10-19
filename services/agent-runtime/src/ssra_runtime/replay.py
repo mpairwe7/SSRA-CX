@@ -39,6 +39,9 @@ class ReconstructedTurnRecord(BaseModel):
     audit_event_hash: str
 
 
+MAX_REPLAY_THREADS = 2048
+
+
 class ConversationReplayStore:
     """Stores immutable turn reconstruction records and verifies replay determinism."""
 
@@ -68,6 +71,9 @@ class ConversationReplayStore:
         safety_flags: list[str],
         audit_event_hash: str,
     ) -> ReconstructedTurnRecord:
+        if thread_id not in self._by_thread and len(self._by_thread) >= MAX_REPLAY_THREADS:
+            oldest_tid = next(iter(self._by_thread))
+            self._by_thread.pop(oldest_tid, None)
         history = self._by_thread.setdefault(thread_id, [])
         rec = ReconstructedTurnRecord(
             turn_index=len(history) + 1,

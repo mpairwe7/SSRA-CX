@@ -5,6 +5,7 @@ from __future__ import annotations
 from ssra_security import HashChainedAuditLedger
 
 from ssra_api.admin.domain import KillSwitchState
+from ssra_api.outbox import get_outbox_store
 
 _current_state = KillSwitchState(
     degradation_level=1,
@@ -36,6 +37,16 @@ def update_kill_switch_state(
         action="admin.kill_switch.update",
         resource="ssra://admin/kill-switches",
         payload={
+            "degradation_level": degradation_level,
+            "disabled_tools": disabled_tools,
+            "disabled_channels": disabled_channels,
+        },
+    )
+    get_outbox_store().stage_domain_event(
+        context_name="admin",
+        event_type="ssra.admin.kill_switch.updated.v1",
+        subject="kill-switches",
+        data={
             "degradation_level": degradation_level,
             "disabled_tools": disabled_tools,
             "disabled_channels": disabled_channels,

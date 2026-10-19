@@ -9,8 +9,9 @@ from ssra_api.outbox import TransactionalOutboxStore
 
 
 def test_api_health_and_database_ddl_invariants() -> None:
-    assert len(Base.metadata.tables) == 10
+    assert len(Base.metadata.tables) == 11
     assert any("ENABLE ROW LEVEL SECURITY" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
+    assert any("staff_office_isolation_handoffs" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
     assert any("forbid_audit_events_mutation" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
 
     outbox = TransactionalOutboxStore()
@@ -325,6 +326,19 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
 
     r_get2 = client.get("/v1/analytics/summary", headers={"If-None-Match": etag})
     assert r_get2.status_code == 304
+    assert "Strict-Transport-Security" in r_get1.headers
+    assert "Permissions-Policy" in r_get1.headers
+
+    # RFC 9457 Problem Details on RequestValidationError (422)
+    r_val = client.post("/v1/analytics/feedback", json={"conversation_id": "c1", "csat": 99})
+    assert r_val.status_code == 422
+    assert r_val.headers["content-type"].startswith("application/problem+json")
+    assert r_val.json()["code"] == "VALIDATION_FAILED"
+
+    # Transactional Outbox staged events from mutations
+    from ssra_api.outbox import get_outbox_store
+
+    assert len(get_outbox_store().staged_events) >= 1
 
     # 2. POST with same Idempotency-Key returns identical cached response
     r_post1 = client.post(

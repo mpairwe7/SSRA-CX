@@ -125,6 +125,28 @@ services:
       valkey:
         condition: service_healthy
 
+  channel-gateway:
+    <<: *hardened-defaults
+    build:
+      context: ../..
+      dockerfile: services/channel-gateway/Dockerfile
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    ports:
+      - "127.0.0.1:8002:8002"
+    networks:
+      - edge_net
+      - sovereign_internal_net
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 networks:
   edge_net:
     driver: bridge

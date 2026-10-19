@@ -254,7 +254,75 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             ),
         }
 
-    # 6. Confirmed T2 write actions (`report_scam` or `book_appointment`)
+    # 5b. Authenticated T1 Filing Status (`FilingStatusTimeline`) & TCC Status
+    filing_art = next((a for a in artifacts if a.tool == "get_filing_status"), None)
+    if filing_art is not None:
+        sc = filing_art.structured_content
+        tin_masked = str(sc["tin_masked"])
+        as_of = str(sc["as_of"])
+        cit = Citation(
+            id="cit_etax_filing",
+            snapshot_version="2026.10.1",
+            doc_title="SSRA National e-Tax Filing Record",
+            section_anchor=f"Filing-{tin_masked}",
+            effective_from=as_of,
+            url="https://etax.nra.gov.ss/",
+        )
+        text = (
+            f"For TIN {tin_masked}, your e-Tax filing status is {sc['filing_status']} "
+            f"(Last filed period: {sc['last_filed_period']}) as of {as_of} via https://etax.nra.gov.ss/."
+        )
+        return {
+            "citations": [cit],
+            "answer": Answer(
+                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
+                citations=[cit],
+                numbers=[],
+                ui_component=GenerativeUIComponent(
+                    name=GenerativeUIComponentName.FILING_STATUS_TIMELINE,
+                    props={
+                        "tin_masked": tin_masked,
+                        "filing_status": sc["filing_status"],
+                        "last_filed_period": sc["last_filed_period"],
+                        "as_of": as_of,
+                    },
+                )
+                if capabilities.rich_ui
+                else None,
+                is_estimate=False,
+                abstained=False,
+            ),
+        }
+
+    tcc_art = next((a for a in artifacts if a.tool == "get_tcc_status"), None)
+    if tcc_art is not None:
+        sc = tcc_art.structured_content
+        tin_masked = str(sc["tin_masked"])
+        as_of = str(sc["as_of"])
+        cit = Citation(
+            id="cit_etax_tcc",
+            snapshot_version="2026.10.1",
+            doc_title="SSRA National e-Tax TCC Registry",
+            section_anchor=f"TCC-{tin_masked}",
+            effective_from=as_of,
+            url="https://etax.nra.gov.ss/",
+        )
+        text = (
+            f"For TIN {tin_masked}, your electronic Tax Compliance Certificate (TCC) status on "
+            f"https://etax.nra.gov.ss/ is {sc['tcc_status']} (Expiry: {sc.get('tcc_expiry_date') or 'N/A'})."
+        )
+        return {
+            "citations": [cit],
+            "answer": Answer(
+                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
+                citations=[cit],
+                numbers=[],
+                is_estimate=False,
+                abstained=False,
+            ),
+        }
+
+    # 6. Confirmed T2 write actions (`report_scam`, `book_appointment`, or `create_case`)
     scam_art = next((a for a in artifacts if a.tool == "report_scam"), None)
     if scam_art is not None:
         sc = scam_art.structured_content
@@ -290,7 +358,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             snapshot_version="2026.10.1",
             doc_title="SSRA Taxpayer Scheduling Service",
             section_anchor="Sec-Appointments",
-            effective_from="2026-10-16",
+            effective_from=str(sc.get("as_of", "2026-03-01")),
             url="https://etax.nra.gov.ss/",
         )
         return {
@@ -301,6 +369,36 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
                         text=(
                             f"Appointment {sc['appointment_id']} at office {sc['office_code']} "
                             f"is {sc['status']}."
+                        ),
+                        citation_ids=[cit.id],
+                    )
+                ],
+                citations=[cit],
+                numbers=[],
+                is_estimate=False,
+                abstained=False,
+            ),
+        }
+
+    case_art = next((a for a in artifacts if a.tool == "create_case"), None)
+    if case_art is not None:
+        sc = case_art.structured_content
+        cit = Citation(
+            id="cit_case_confirm",
+            snapshot_version="2026.10.1",
+            doc_title="SSRA Taxpayer Case Service",
+            section_anchor="Sec-Cases",
+            effective_from=str(sc.get("as_of", "2026-03-01")),
+            url="https://etax.nra.gov.ss/",
+        )
+        return {
+            "citations": [cit],
+            "answer": Answer(
+                segments=[
+                    AnswerSegment(
+                        text=(
+                            f"Support case {sc['case_id']} ({sc['case_type']}) has been opened "
+                            f"with status {sc['status']}."
                         ),
                         citation_ids=[cit.id],
                     )

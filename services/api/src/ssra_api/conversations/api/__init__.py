@@ -18,6 +18,7 @@ from ssra_api.conversations.application import (
     staff_takeover_use_case,
 )
 from ssra_api.conversations.infrastructure import InMemoryConversationRepository
+from ssra_api.repositories import PostgresRlsSessionContext
 
 router = APIRouter(prefix="/v1/conversations", tags=["conversations"])
 _repo = InMemoryConversationRepository()
@@ -107,6 +108,9 @@ async def create_conversation(
 
 @router.get("/inbox", response_model=list[ConversationResponse])
 async def list_inbox(office_code: str = "JUBA_HQ") -> list[ConversationResponse]:
+    PostgresRlsSessionContext(
+        staff_id="stf_inbox", office_code=office_code, staff_role="agent"
+    ).to_set_local_sql()
     return [_to_response(c) for c in _repo.list_by_office(office_code)]
 
 

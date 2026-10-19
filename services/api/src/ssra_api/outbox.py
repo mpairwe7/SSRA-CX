@@ -7,6 +7,19 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 from ssra_core import new_id, utc_now
+from ssra_security import redact_pii
+
+MAX_STAGED_OUTBOX_EVENTS = 4096
+
+
+def _redact_outbox_data(data: dict[str, Any]) -> dict[str, Any]:
+    sanitized: dict[str, Any] = {}
+    for k, v in data.items():
+        if isinstance(v, str):
+            sanitized[k] = redact_pii(v).redacted_text
+        else:
+            sanitized[k] = v
+    return sanitized
 
 
 class OutboxCloudEvent(BaseModel):
@@ -46,13 +59,15 @@ class TransactionalOutboxStore:
         subject: str,
         data: dict[str, Any],
     ) -> OutboxCloudEvent:
+        if len(self._staged) >= MAX_STAGED_OUTBOX_EVENTS:
+            self._staged.pop(0)
         evt = OutboxCloudEvent(
             id=new_id("outbox"),
             source=f"urn:ssra:api:{context_name}",
             type=event_type,
             subject=subject,
             time=utc_now(),
-            data=data,
+            data=_redact_outbox_data(data),
             published_to_nats=False,
         )
         self._staged.append(evt)
@@ -74,3 +89,10 @@ class TransactionalOutboxStore:
                 )
             )
         return count
+
+
+_default_outbox = TransactionalOutboxStore()
+
+
+def get_outbox_store() -> TransactionalOutboxStore:
+    return _default_outbox

@@ -17,12 +17,21 @@ def format_sse_event(event_type: str, data: dict[str, Any], event_id: str | None
     return f"id: {eid}\nevent: agui\ndata: {payload}\n\n"
 
 
-async def stream_agui_events(turn: RuntimeTurnResponse) -> AsyncIterator[str]:
-    """Yield standard AG-UI SSE lifecycle events from a completed RuntimeTurnResponse."""
+async def stream_agui_events(
+    turn: RuntimeTurnResponse,
+    *,
+    last_event_id: str | None = None,
+) -> AsyncIterator[str]:
+    """Yield standard AG-UI SSE lifecycle events with resumable `Last-Event-ID` support."""
     run_id = new_id("run")
     msg_id = new_id("msg")
+    staged: list[tuple[str, str, dict[str, Any]]] = []
 
-    yield format_sse_event(
+    def _push(event_type: str, data: dict[str, Any]) -> None:
+        seq = len(staged) + 1
+        staged.append((f"{turn.thread_id}:ev:{seq}", event_type, data))
+
+    _push(
         "RUN_STARTED",
         {
             "threadId": turn.thread_id,
@@ -33,7 +42,7 @@ async def stream_agui_events(turn: RuntimeTurnResponse) -> AsyncIterator[str]:
     )
 
     for art in turn.artifacts:
-        yield format_sse_event(
+        _push(
             "TOOL_CALL_START",
             {
                 "toolCallId": art.id,
@@ -41,7 +50,7 @@ async def stream_agui_events(turn: RuntimeTurnResponse) -> AsyncIterator[str]:
                 "tier": art.tier.value,
             },
         )
-        yield format_sse_event(
+        _push(
             "TOOL_CALL_END",
             {
                 "toolCallId": art.id,
@@ -50,13 +59,13 @@ async def stream_agui_events(turn: RuntimeTurnResponse) -> AsyncIterator[str]:
             },
         )
 
-    yield format_sse_event(
+    _push(
         "TEXT_MESSAGE_START",
         {"messageId": msg_id, "role": "assistant"},
     )
 
     for seg in turn.answer.segments:
-        yield format_sse_event(
+        _push(
             "TEXT_MESSAGE_CONTENT",
             {
                 "messageId": msg_id,
@@ -65,13 +74,13 @@ async def stream_agui_events(turn: RuntimeTurnResponse) -> AsyncIterator[str]:
             },
         )
 
-    yield format_sse_event(
+    _push(
         "TEXT_MESSAGE_END",
         {"messageId": msg_id},
     )
 
     if turn.answer.citations:
-        yield format_sse_event(
+        _push(
             "CUSTOM",
             {
                 "name": "ssra.citations",
@@ -80,7 +89,7 @@ async def stream_agui_events(turn: RuntimeTurnResponse) -> AsyncIterator[str]:
         )
 
     if turn.answer.ui_component is not None:
-        yield format_sse_event(
+        _push(
             "CUSTOM",
             {
                 "name": "ssra.ui_component",
@@ -88,7 +97,7 @@ async def stream_agui_events(turn: RuntimeTurnResponse) -> AsyncIterator[str]:
             },
         )
 
-    yield format_sse_event(
+    _push(
         "RUN_FINISHED",
         {
             "threadId": turn.thread_id,
@@ -98,3 +107,14 @@ async def stream_agui_events(turn: RuntimeTurnResponse) -> AsyncIterator[str]:
             "isEstimate": turn.answer.is_estimate,
         },
     )
+
+    start_idx = 0
+    if last_event_id:
+        cleaned_last = last_event_id.strip()
+        for idx, (eid, _, _) in enumerate(staged):
+            if eid == cleaned_last:
+                start_idx = idx + 1
+                break
+
+    for eid, ev_type, payload in staged[start_idx:]:
+        yield format_sse_event(ev_type, payload, event_id=eid)

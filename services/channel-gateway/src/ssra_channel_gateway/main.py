@@ -7,6 +7,7 @@ import hmac
 import math
 
 from fastapi import FastAPI, Header, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 from ssra_core import (
@@ -15,6 +16,7 @@ from ssra_core import (
     LocaleCode,
     McpErrorCode,
     SSRAError,
+    ensure_w3c_traceparent,
 )
 from ssra_testing import make_conversation_event
 
@@ -84,6 +86,7 @@ class UssdSessionRequest(BaseModel):
     session_id: str
     ussd_input: str = ""
     elapsed_seconds: int = 0
+    locale: str = "en"
 
 
 def create_channel_gateway_app(
@@ -96,15 +99,36 @@ def create_channel_gateway_app(
     app = FastAPI(title="SSRA Assist Channel Gateway", version="0.1.0")
     seen_message_ids: dict[str, None] = {}
     sender_counts: dict[str, int] = {}
+    opted_out_senders: set[str] = set()
 
     @app.exception_handler(SSRAError)
     async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:
         raw_path = str(request.scope.get("path", "/"))
-        problem = exc.to_problem_details(instance=raw_path)
+        tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
+        problem = exc.to_problem_details(instance=raw_path, trace_id=tp)
         return JSONResponse(
             status_code=exc.status_code,
             content=problem.model_dump(mode="json"),
             media_type="application/problem+json",
+            headers={"traceparent": tp},
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        raw_path = str(request.scope.get("path", "/"))
+        tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
+        err = SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"Channel gateway validation failed ({len(exc.errors())} error(s))",
+            status_code=422,
+        )
+        return JSONResponse(
+            status_code=422,
+            content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(mode="json"),
+            media_type="application/problem+json",
+            headers={"traceparent": tp},
         )
 
     @app.get("/healthz")
@@ -156,9 +180,20 @@ def create_channel_gateway_app(
             max_len=max_len,
             rich_ui=body.channel == ChannelName.WEB,
         )
+        upper_txt = body.text.strip().upper()
+        consent_action: str | None = None
+        if upper_txt in ("STOP", "UNSUBSCRIBE"):
+            opted_out_senders.add(body.sender_ref)
+            consent_action = "OPTED_OUT"
+        elif upper_txt == "START":
+            opted_out_senders.discard(body.sender_ref)
+            consent_action = "OPTED_IN"
+
         return {
             "status": "normalised",
             "cloud_event": event.model_dump(mode="json"),
+            "consent_action": consent_action,
+            "sender_opted_out": body.sender_ref in opted_out_senders,
             "sms_metrics": compute_sms_segments(body.text)
             if body.channel == ChannelName.SMS
             else None,
@@ -170,6 +205,7 @@ def create_channel_gateway_app(
             session_id=body.session_id,
             ussd_input=body.ussd_input,
             elapsed_seconds=body.elapsed_seconds,
+            locale=body.locale,
         )
         return {
             "session_id": screen.session_id,

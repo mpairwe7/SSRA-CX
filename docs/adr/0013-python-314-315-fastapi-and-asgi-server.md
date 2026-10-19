@@ -32,9 +32,10 @@ We adopt Option 2:
 1. **Workspace & Type/Lint Toolchain (`pyproject.toml`):**
    - Manage all Python services (`services/*`), MCP servers (`mcp-servers/*`), and shared libraries (`libs/*`) in a single root `uv` workspace with `exclude-newer = "2026-10-09T23:59:59Z"` (7-day cooldown).
    - Enforce `ruff==0.17.0` (lint + format) and `basedpyright==1.40.2` (`typeCheckingMode = "strict"`), plus `import-linter==2.15` for hexagonal boundaries.
-2. **FastAPI Version Pin (`0.139.2` Baseline):**
+2. **FastAPI Version Pin (`0.139.2` Baseline) & RFC 9457 / Outbox Conventions:**
    - Pin `fastapi==0.139.2` (`sha256: b9ad015a835173d59865e2f5d8296fbc2b317bf56a2ba1a5bfbdd03de2fd4b1c`) to strictly match the `0.13x` specification in Section 10.1 and Appendix A.
-   - Note: `fastapi==0.143.0` (2026-10-08) is verified compatible with `pydantic==2.14.0` and can be adopted via lockfile bump if SSRA prefers the `0.14x` line.
+   - Override both `SSRAError` and `RequestValidationError` handlers across `services/api`, `services/agent-runtime`, and `services/channel-gateway` to emit RFC 9457 `application/problem+json` with `traceparent` (`ensure_w3c_traceparent`), `Strict-Transport-Security`, and `Permissions-Policy` headers.
+   - Stage bounded, PII-redacted CloudEvents 1.0 domain events into `TransactionalOutboxStore` (`outbox_events` table) across bounded context mutations (`conversations`, `cases`, `consent`, `admin`), enforce PostgreSQL 18 RLS across `conversations`, `cases`, and `handoffs`, and support resumable `Last-Event-ID` AG-UI SSE streams (`services/agent-runtime`).
 3. **ASGI Server (Uvicorn `0.54.0` Default vs. Granian `2.8.4` Benchmark):**
    - Run **one Uvicorn process per container** (`uvicorn --no-access-log --loop uvloop --http httptools`) and scale replicas horizontally via Kubernetes HPA/KEDA.
    - Provide a benchmark target comparing `uvicorn==0.54.0` and `granian==2.8.4` under `k6` SSE streaming load (`services/agent-runtime`). Uvicorn remains the default because its OpenTelemetry ASGI middleware and graceful SSE connection draining semantics are fully verified across all dependencies.
