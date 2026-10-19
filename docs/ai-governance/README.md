@@ -26,6 +26,7 @@
 - Every conversation starts with an explicit disclosure in the user's language that they are interacting with **SSRA's automated virtual assistant**.
 - Users can escalate to a human agent (`AGENT` keyword or UI button) in a single step during office hours (`Africa/Juba`) or request a callback outside office hours.
 - Staff in `apps/console` inspect the exact prompt version, `KnowledgeSnapshot` version, retrieved citations, and tool artifacts for any conversation.
+- Auditors (`ssra_auditor` / `qa`) operate under strict read-only Separation of Duties (`executeConsoleProxy` blocks operational mutations), inspect turn-by-turn forensic conversation replays (`/admin/replay`, `buildForensicReplayTimelineView`), score sampled turns against the 4-dimension QA rubric (`evaluateAuditorQaRubricSubmission`), monitor language parity gaps (`buildAuditorDriftAndFairnessView`), and export ISO/IEC 42001 / EU AI Act Art. 12 evidence bundles (`buildAuditorEvidencePackage`) gated on an intact WORM hash chain (`buildAuditorTrailIntegrityView`).
 
 ---
 

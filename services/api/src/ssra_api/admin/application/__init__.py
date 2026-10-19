@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ssra_security import HashChainedAuditLedger
+from ssra_security import GENESIS_HASH, HashChainedAuditLedger
 
 from ssra_api.admin.domain import KillSwitchState
 from ssra_api.outbox import get_outbox_store
@@ -56,4 +56,10 @@ def update_kill_switch_state(
 
 
 def verify_admin_audit_chain() -> tuple[bool, int]:
+    """Verify cryptographic integrity of the admin WORM hash-chained audit ledger."""
     return _admin_audit.verify_integrity(), len(_admin_audit.events)
+
+
+def get_admin_audit_head_hash() -> str:
+    """Return the latest audit event SHA-256 hash or the 64-zero genesis hash when empty."""
+    return _admin_audit.events[-1].hash if _admin_audit.events else GENESIS_HASH
