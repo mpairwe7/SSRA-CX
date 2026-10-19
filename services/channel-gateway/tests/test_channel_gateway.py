@@ -93,6 +93,7 @@ def test_webhook_hmac_verification_and_deduplication() -> None:
 
 
 def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> None:
+    """Verify deterministic USSD 182-char menu, SMS follow-up, STOP/START consent, and channel middleware."""
     client = TestClient(create_channel_gateway_app())
 
     for opt in ("", "1", "2", "3", "4", "9", "0", "99"):
@@ -161,6 +162,12 @@ def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> Non
 
     r_oversize = client.post("/v1/ussd/session", content=b"x" * 1_050_000)
     assert r_oversize.status_code == 413
+
+    r_chunked_oversize = client.post(
+        "/v1/ussd/session",
+        content=(b"x" * 600_000 for _ in range(2)),
+    )
+    assert r_chunked_oversize.status_code == 413
 
 
 def test_whatsapp_24h_service_window_and_template_consent_gate() -> None:

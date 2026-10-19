@@ -60,6 +60,7 @@ class KnowledgeReleaseWorkflowEngine:
         return updated
 
     def approve_snapshot(self, version: str, *, legal_approver: str) -> KnowledgeSnapshotEntity:
+        """Approve a LEGAL_REVIEW snapshot by an independent legal approver (maker-checker)."""
         snap = self._get_or_404(version)
         if snap.status != "LEGAL_REVIEW":
             raise SSRAError(
@@ -86,6 +87,7 @@ class KnowledgeReleaseWorkflowEngine:
     def publish_snapshot(
         self, version: str, *, eval_regression_passed: bool
     ) -> KnowledgeSnapshotEntity:
+        """Publish an APPROVED snapshot after verifying the evaluation regression gate."""
         snap = self._get_or_404(version)
         if snap.status != "APPROVED":
             raise SSRAError(
@@ -118,6 +120,7 @@ class KnowledgeReleaseWorkflowEngine:
         return published
 
     def rollback_to_previous(self) -> KnowledgeSnapshotEntity:
+        """Perform a 1-step rollback to the previous published knowledge snapshot."""
         current = self._snapshots[self._active_version]
         self._snapshots[self._active_version] = replace(current, status="ROLLED_BACK")
         self._active_version = self._previous_published_version

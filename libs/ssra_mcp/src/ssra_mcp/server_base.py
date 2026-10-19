@@ -177,6 +177,7 @@ def validate_mcp_oauth_url(url: str, *, allow_dev_loopback: bool = False) -> str
 
 
 def _redact_audit_value(val: Any) -> Any:
+    """Recursively redact PII across string, dict, list, and tuple values."""
     if isinstance(val, str):
         return redact_pii(val).redacted_text
     if isinstance(val, dict):

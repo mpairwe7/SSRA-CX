@@ -44,9 +44,29 @@ class CursorPage[T](BaseModel):
 
 
 def generate_w3c_traceparent() -> str:
+    """Mint a cryptographically random W3C Trace Context traceparent header."""
     trace_id = os.urandom(16).hex()
     span_id = os.urandom(8).hex()
     return f"00-{trace_id}-{span_id}-01"
+
+
+async def _read_bounded_request_body(request: Request, max_bytes: int) -> bytes | None:
+    """Verify Content-Length and stream request chunks while enforcing max_bytes before buffering."""
+    content_len_str = request.headers.get("content-length")
+    if content_len_str and content_len_str.isdigit() and int(content_len_str) > max_bytes:
+        return None
+    if request.method not in ("POST", "PUT", "PATCH"):
+        return b""
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > max_bytes:
+            return None
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+    request._body = raw  # pyright: ignore[reportPrivateUsage]
+    return raw
 
 
 def _problem_response(
@@ -58,6 +78,7 @@ def _problem_response(
     instance: str,
     traceparent: str,
 ) -> Response:
+    """Build an RFC 9457 application/problem+json HTTP error response with security headers."""
     body = json.dumps(
         {
             "type": f"https://ssra.gov.ss/problems/{code.lower()}",
@@ -79,10 +100,12 @@ def _problem_response(
 
 
 def install_api_conventions_middleware(app: FastAPI) -> None:
+    """Install API security, Host validation, bounded body streaming, Idempotency-Key, and ETag middleware."""
     idempotency_cache: dict[str, tuple[str, int, bytes, str]] = {}
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError) -> Response:
+        """Convert FastAPI RequestValidationError into an RFC 9457 Problem Details 422 response."""
         raw_path = str(request.scope.get("path", "/"))
         traceparent = ensure_w3c_traceparent(request.headers.get("traceparent"))
         return _problem_response(
@@ -99,6 +122,7 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
+        """Enforce RFC 9112 Host grammar, streaming body limits, caller-scoped idempotency, and ETag headers."""
         raw_path = str(request.scope.get("path", "/"))
         traceparent = ensure_w3c_traceparent(request.headers.get("traceparent"))
 
@@ -114,11 +138,9 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
                 traceparent=traceparent,
             )
 
-        # 2. Enforce request payload cap on both Content-Length and chunked body (CVE-2026-54283)
-        req_bytes = await request.body() if request.method in ("POST", "PUT", "PATCH") else b""
-        content_len_str = request.headers.get("content-length")
-        declared_len = int(content_len_str) if content_len_str and content_len_str.isdigit() else 0
-        if max(declared_len, len(req_bytes)) > MAX_REQUEST_BODY_BYTES:
+        # 2. Enforce request payload cap before/during streaming chunk consumption (CVE-2026-54283)
+        bounded_body = await _read_bounded_request_body(request, MAX_REQUEST_BODY_BYTES)
+        if bounded_body is None:
             return _problem_response(
                 status_code=413,
                 code="PAYLOAD_TOO_LARGE",
@@ -127,6 +149,7 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
                 instance=raw_path,
                 traceparent=traceparent,
             )
+        req_bytes = bounded_body
 
         idem_key = request.headers.get("Idempotency-Key")
         caller_ctx = (

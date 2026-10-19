@@ -76,6 +76,7 @@ def test_hash_chained_audit_ledger_detects_tampering() -> None:
 
 
 def test_confirmation_token_single_use_and_argument_hash_binding() -> None:
+    """Verify ConfirmationTokenManager single-use enforcement, argument hash binding, and thread binding."""
     mgr = ConfirmationTokenManager(ttl_seconds=300)
     args = {"office_code": "JUBA_HQ", "slot_id": "slot_2026_10_20_0900"}
     issued = mgr.issue_token(

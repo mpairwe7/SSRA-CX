@@ -173,6 +173,7 @@ class GovernedMcpGatewayClient:
 
     @property
     def disabled_tools(self) -> set[str]:
+        """Return the set of tool keys currently disabled by gateway kill-switches."""
         return set(self._disabled_tools)
 
     def set_tool_kill_switch(self, tool_key: str, *, disabled: bool) -> None:
@@ -193,6 +194,7 @@ class GovernedMcpGatewayClient:
         traceparent: str | None = None,
         budget: TurnBudget | None = None,
     ) -> ToolArtifact:
+        """Invoke an MCP tool through agentgateway policy, token exchange, and circuit-breaker guards."""
         if budget is not None:
             if budget.tool_calls_used >= budget.max_tool_calls:
                 raise SSRAError(
@@ -276,6 +278,7 @@ class GovernedMcpGatewayClient:
         is_retryable_read = bool(tool.annotations.readOnlyHint and tool.annotations.idempotentHint)
 
         def _call_once() -> dict[str, Any]:
+            """Execute a single governed MCP tool call under circuit-breaker protection."""
             is_probe = cb.acquire_call_permission()
             try:
                 res = srv.handle_call_tool(
@@ -294,6 +297,9 @@ class GovernedMcpGatewayClient:
                     cb.record_failure()
                 elif is_probe:
                     cb.release_half_open_probe()
+                raise
+            except Exception:
+                cb.record_failure()
                 raise
 
         envelope, _attempts = execute_with_idempotent_retry(

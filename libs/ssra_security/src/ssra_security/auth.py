@@ -160,6 +160,7 @@ class ConfirmationTokenManager:
         return rec
 
     def get_record(self, token: str) -> ConfirmationRecord | None:
+        """Look up a confirmation record by token string."""
         return self._records.get(token)
 
     def consume_token(
@@ -173,6 +174,7 @@ class ConfirmationTokenManager:
         conversation_id: str | None = None,
         now: datetime | None = None,
     ) -> ConfirmationRecord:
+        """Consume a single-use confirmation token after verifying TTL, thread, and argument digest."""
         current = now or utc_now()
         rec = self._records.get(token)
         if rec is None:

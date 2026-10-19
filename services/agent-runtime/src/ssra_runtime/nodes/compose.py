@@ -22,6 +22,7 @@ from ssra_runtime.state import ConversationGraphState
 
 
 def compose_node(state: ConversationGraphState) -> dict[str, Any]:
+    """Assemble a grounded Answer with citations, numeric claims, and Generative UI cards."""
     # If an earlier deterministic node, policy gate, or confirmation sheet already produced the Answer, keep it
     if state.get("answer") is not None:
         return {}

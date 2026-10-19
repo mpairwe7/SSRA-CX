@@ -18,6 +18,7 @@ from ssra_api.middleware import SECURITY_HEADERS, install_api_conventions_middle
 
 
 def create_api_app() -> FastAPI:
+    """Create the SSRA Assist Core API FastAPI application assembling all 8 bounded contexts."""
     app = FastAPI(
         title="SSRA Assist Core API",
         version="0.1.0",
@@ -28,6 +29,7 @@ def create_api_app() -> FastAPI:
 
     @app.exception_handler(SSRAError)
     async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:
+        """Convert SSRAError exceptions into RFC 9457 Problem Details JSON responses."""
         traceparent = ensure_w3c_traceparent(request.headers.get("traceparent"))
         raw_path = str(request.scope.get("path", "/"))
         problem = exc.to_problem_details(instance=raw_path, trace_id=traceparent)
@@ -40,6 +42,7 @@ def create_api_app() -> FastAPI:
 
     @app.get("/healthz", tags=["system"])
     async def healthz() -> dict[str, str]:
+        """Return Core API service health status."""
         return {"status": "ok", "service": "ssra-api"}
 
     app.include_router(conversations_router)

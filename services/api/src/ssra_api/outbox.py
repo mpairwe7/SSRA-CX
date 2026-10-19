@@ -13,6 +13,7 @@ MAX_STAGED_OUTBOX_EVENTS = 4096
 
 
 def _redact_outbox_value(val: Any) -> Any:
+    """Recursively redact PII in strings, dicts, lists, and tuples before outbox staging."""
     if isinstance(val, str):
         return redact_pii(val).redacted_text
     if isinstance(val, dict):
@@ -25,6 +26,7 @@ def _redact_outbox_value(val: Any) -> Any:
 
 
 def _redact_outbox_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Sanitize a domain event payload dictionary by recursively redacting PII."""
     return {str(k): _redact_outbox_value(v) for k, v in data.items()}
 
 
@@ -46,20 +48,24 @@ class TransactionalOutboxStore:
     """Stages domain events transactionally and flushes CloudEvents 1.0 envelopes to NATS JetStream."""
 
     def __init__(self) -> None:
+        """Initialise staged and published event queues and active knowledge snapshot tracker."""
         self._staged: list[OutboxCloudEvent] = []
         self._published: list[OutboxCloudEvent] = []
         self._active_knowledge_snapshot: str = "2026.10.1"
 
     @property
     def active_knowledge_snapshot(self) -> str:
+        """Return the currently active published knowledge snapshot version."""
         return self._active_knowledge_snapshot
 
     @property
     def staged_events(self) -> tuple[OutboxCloudEvent, ...]:
+        """Return an immutable tuple of staged CloudEvents awaiting JetStream flush."""
         return tuple(self._staged)
 
     @property
     def published_events(self) -> tuple[OutboxCloudEvent, ...]:
+        """Return an immutable tuple of CloudEvents flushed to NATS JetStream."""
         return tuple(self._published)
 
     def stage_domain_event(
@@ -70,6 +76,7 @@ class TransactionalOutboxStore:
         subject: str,
         data: dict[str, Any],
     ) -> OutboxCloudEvent:
+        """Stage a PII-redacted CloudEvents 1.0 domain event in the transactional outbox."""
         if len(self._staged) >= MAX_STAGED_OUTBOX_EVENTS:
             self._staged.pop(0)
         if (

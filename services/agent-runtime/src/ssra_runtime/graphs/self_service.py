@@ -15,6 +15,7 @@ def execute_self_service_subgraph(
     state: ConversationGraphState,
     gateway: GovernedMcpGatewayClient,
 ) -> dict[str, Any]:
+    """Execute authenticated T1 read tools or issue T2/T3 confirmation interrupts."""
     intent = state.get("intent")
     intent_name = intent.intent if intent else IntentName.GET_BALANCE
     slots = state.get("slots", {})

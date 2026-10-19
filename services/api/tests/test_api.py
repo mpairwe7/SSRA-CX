@@ -9,9 +9,12 @@ from ssra_api.outbox import TransactionalOutboxStore
 
 
 def test_api_health_and_database_ddl_invariants() -> None:
+    """Verify database DDL invariants, FORCE ROW LEVEL SECURITY, and recursive outbox PII redaction."""
     assert len(Base.metadata.tables) == 11
     assert any("ENABLE ROW LEVEL SECURITY" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
     assert any("FORCE ROW LEVEL SECURITY" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
+    assert any("FOR SELECT" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
+    assert any("WITH CHECK" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
     assert any("staff_office_isolation_handoffs" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
     assert any("forbid_audit_events_mutation" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
 
@@ -167,6 +170,7 @@ def test_phase3_knowledge_release_6_step_workflow_and_one_step_rollback() -> Non
 
 
 def test_phase4_regional_and_multilingual_insights() -> None:
+    """Verify Phase 4 regional insights, JIT admin directory verification, maker-checker 404, and RLS."""
     client = TestClient(create_api_app())
     r = client.get("/v1/analytics/insights")
     assert r.status_code == 200
@@ -285,10 +289,34 @@ def test_phase4_regional_and_multilingual_insights() -> None:
     assert r_jit_ok.status_code == 200
     assert r_jit_ok.json()["granted"] is True
 
+    r_jit_unverified_staff = client.post(
+        "/v1/admin/jit-elevation",
+        json={
+            "requester_staff_id": "stf_unknown_99",
+            "approver_staff_id": "stf_supervisor_02",
+            "passkey_verified": True,
+            "device_posture_compliant": True,
+            "duration_minutes": 30,
+            "reason": "Unknown staff attempt",
+        },
+    )
+    assert r_jit_unverified_staff.status_code == 403
+
     # Real-time inbox SSE stream & Tier T3 Maker-Checker approval + Postgres RLS context
     r_inbox_stream = client.get("/v1/conversations/inbox/stream?office_code=JUBA_HQ")
     assert r_inbox_stream.status_code == 200
     assert "INBOX_SNAPSHOT" in r_inbox_stream.text
+
+    r_mc_missing = client.post(
+        "/v1/cases/case_nonexistent_999/maker-checker",
+        json={
+            "maker_staff_id": "stf_01",
+            "checker_staff_id": "stf_02",
+            "action_type": "TCC_EXCEPTION_REVIEW",
+            "rationale": "Missing case check",
+        },
+    )
+    assert r_mc_missing.status_code == 404
 
     r_mc_self = client.post(
         "/v1/cases/case_01/maker-checker",
@@ -322,6 +350,7 @@ def test_phase4_regional_and_multilingual_insights() -> None:
 
 
 def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
+    """Verify ETag 304, caller-scoped Idempotency-Key replay, SSE bypass, and timed OTP challenge lockout."""
     client = TestClient(create_api_app())
 
     # 1. GET returns ETag and traceparent; If-None-Match returns 304 Not Modified
@@ -385,21 +414,43 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     assert "no-transform" in r_sse.headers.get("Cache-Control", "")
     assert r_sse.headers.get("X-Accel-Buffering") == "no"
 
-    # 5. Per-TIN OTP brute-force lockout (MAX_OTP_FAILED_ATTEMPTS = 5 -> 429 RATE_LIMITED)
-    from ssra_api.identity_link.application import reset_otp_lockout_state
+    r_chunked_oversize = client.post(
+        "/v1/conversations",
+        content=(b"x" * 600_000 for _ in range(2)),
+    )
+    assert r_chunked_oversize.status_code == 413
+
+    # 5. Per-TIN OTP challenge verification & timed brute-force lockout (wrong 6-digit guess also locks out)
+    from datetime import timedelta
+
+    from ssra_api.identity_link.application import (
+        bind_tin_with_otp_use_case,
+        get_otp_state_store,
+        reset_otp_lockout_state,
+    )
+    from ssra_core import utc_now
 
     reset_otp_lockout_state()
+    get_otp_state_store().issue_challenge("3004009999", "654321")
     for _ in range(5):
         r_bad_otp = client.post(
             "/v1/identity-link/verify-otp",
-            json={"tin": "3004009999", "otp_code": "bad"},
+            json={"tin": "3004009999", "otp_code": "000000"},
         )
         assert r_bad_otp.status_code == 401
     r_locked_otp = client.post(
         "/v1/identity-link/verify-otp",
-        json={"tin": "3004009999", "otp_code": "123456"},
+        json={"tin": "3004009999", "otp_code": "654321"},
     )
     assert r_locked_otp.status_code == 429
+    # After lockout window expires, the valid issued challenge succeeds
+    unlocked_binding = bind_tin_with_otp_use_case(
+        tin="3004009999",
+        subject_ref="sub_taxpayer_amina_01",
+        otp_code="654321",
+        now=utc_now() + timedelta(seconds=360),
+    )
+    assert unlocked_binding.tin_masked == "••••9999"
     reset_otp_lockout_state()
 
     # 6. Auditor role accepted in PostgresRlsSessionContext

@@ -31,7 +31,7 @@
     },
     {
       "digest": {
-        "sha256": "e1b05fa36c33753df49167eb379ab43d13d37a68f88e681d1aa7bf7289c4e8c4"
+        "sha256": "ccc45aed6780f80304617195d662dbd26301f8d6118abad907cacf1d1caf67f1"
       },
       "name": "services/api/openapi.json"
     },

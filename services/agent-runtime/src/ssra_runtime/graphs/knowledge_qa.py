@@ -64,6 +64,7 @@ def execute_knowledge_qa_subgraph(
     state: ConversationGraphState,
     gateway: GovernedMcpGatewayClient,
 ) -> dict[str, Any]:
+    """Execute public T0 knowledge search, calculators, and official-channel verification tools."""
     intent = state.get("intent")
     intent_name = intent.intent if intent else IntentName.KNOWLEDGE_QA
     slots = state.get("slots", {})

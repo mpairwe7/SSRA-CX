@@ -23,6 +23,7 @@ from ssra_testing import make_conversation_event
 
 
 def test_t0_paye_calculator_and_agui_sse_stream() -> None:
+    """Verify T0 PAYE calculator turn, AG-UI SSE streaming, Last-Event-ID resumption, and runtime middleware."""
     client = TestClient(create_runtime_app())
     r = client.post(
         "/v1/turns",
@@ -88,6 +89,12 @@ def test_t0_paye_calculator_and_agui_sse_stream() -> None:
     r_oversize = client.post("/v1/turns", content=b"x" * 1_050_000)
     assert r_oversize.status_code == 413
 
+    r_chunked_oversize = client.post(
+        "/v1/turns",
+        content=(b"x" * 600_000 for _ in range(2)),
+    )
+    assert r_chunked_oversize.status_code == 413
+
 
 def test_t4_waiver_routes_deterministically_to_human_handoff_with_zero_tools() -> None:
     runtime = SSRAConversationRuntime()
@@ -123,6 +130,7 @@ def test_t1_balance_requires_step_up_when_anonymous_and_succeeds_when_bound() ->
 
 
 def test_t2_write_triggers_confirmation_interrupt_and_executes_after_token() -> None:
+    """Verify T2 confirmation interrupt, single-use token execution, and cross-thread replay blocking."""
     runtime = SSRAConversationRuntime()
     evt = make_conversation_event("Book an appointment at Juba HQ")
 
@@ -260,6 +268,7 @@ def test_numeric_provenance_blocks_untraced_numbers() -> None:
 
 
 def test_phase1_guided_journeys_and_minimal_data_complaint_intake() -> None:
+    """Verify guided journeys, complaint intake, semantic cache, and safe-mode PII redaction."""
     tin_steps = get_guided_journey_steps(IntentName.GUIDED_TIN_REGISTRATION)
     assert len(tin_steps) == 3
     assert tin_steps[0].official_portal == "https://etax.nra.gov.ss/"
@@ -307,15 +316,23 @@ def test_phase1_guided_journeys_and_minimal_data_complaint_intake() -> None:
     assert "CHANNEL_PAUSED_KILL_SWITCH" in paused_turn.safety_flags
 
     l5_turn = rt.run_turn(
-        make_conversation_event("What is BPT?", channel=ChannelName.WEB, thread_id="thr_l5_v1")
+        make_conversation_event(
+            "My TIN is 1002001234, what is BPT?",
+            channel=ChannelName.WEB,
+            thread_id="thr_l5_v1",
+        )
     )
     assert l5_turn.answer.abstained is True
     assert "DEGRADATION_L5_STATIC_FAQ" in l5_turn.safety_flags
-    assert rt.reconstruct_conversation("thr_l5_v1")[0].model_route == "none:static-faq-callback"
+    l5_rec = rt.reconstruct_conversation("thr_l5_v1")[0]
+    assert l5_rec.model_route == "none:static-faq-callback"
+    assert "100200" not in l5_rec.redacted_input
+    assert "••••1234" in l5_rec.redacted_input
     rt.set_kill_switches(degradation_level=1, disabled_tools=[], disabled_channels=[])
 
 
 def test_agentgateway_stateless_mcp_routing_spend_cap_and_a2a_stub() -> None:
+    """Verify agentgateway stateless MCP routing, spend caps, A2A stub, and zero-trust header guards."""
     gw_client = TestClient(create_agentgateway_app(daily_usd_cap=10.0))
 
     # 1. tools/list cached by server name
@@ -381,7 +398,20 @@ def test_agentgateway_stateless_mcp_routing_spend_cap_and_a2a_stub() -> None:
             },
             json={"params": {"name": "list_tax_facts", "arguments": {}}},
         ).status_code
-        == 403
+        == 401
+    )
+    assert (
+        gw_sec.post(
+            "/mcp",
+            headers={
+                "Mcp-Method": "tools/call",
+                "Mcp-Name": "ledger",
+                "X-SSRA-Auth-Level": "T1_TIN_BOUND",
+                "X-SSRA-Subject-Ref": "sub_taxpayer_amina_01",
+            },
+            json={"params": {"name": "get_balance", "arguments": {}}},
+        ).status_code
+        == 401
     )
 
     from ssra_security import TokenExchangeService

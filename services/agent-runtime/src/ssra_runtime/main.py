@@ -54,7 +54,27 @@ class AguiStreamRequest(BaseModel):
     low_data_mode: bool = False
 
 
+async def _read_bounded_runtime_body(request: Request, max_bytes: int) -> bytes | None:
+    """Check Content-Length and stream request chunks while enforcing max_bytes before buffering."""
+    content_len_str = request.headers.get("content-length")
+    if content_len_str and content_len_str.isdigit() and int(content_len_str) > max_bytes:
+        return None
+    if request.method not in ("POST", "PUT", "PATCH"):
+        return b""
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > max_bytes:
+            return None
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+    request._body = raw  # pyright: ignore[reportPrivateUsage]
+    return raw
+
+
 def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAPI:
+    """Create the FastAPI application for services/agent-runtime with security middleware and SSE streaming."""
     app = FastAPI(
         title="SSRA Assist Agent Runtime",
         version="0.1.0",
@@ -67,6 +87,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
+        """Enforce RFC 9112 Host validation, streaming payload bounds, traceparent, and security headers."""
         raw_path = str(request.scope.get("path", "/"))
         tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
         host_header = request.headers.get("host", "localhost")
@@ -84,22 +105,20 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
                 media_type="application/problem+json",
                 headers={"traceparent": tp, **_RUNTIME_SECURITY_HEADERS},
             )
-        if request.method in ("POST", "PUT", "PATCH"):
-            req_bytes = await request.body()
-            if len(req_bytes) > _MAX_RUNTIME_BODY_BYTES:
-                err = SSRAError(
-                    McpErrorCode.VALIDATION_FAILED,
-                    f"Request body exceeds maximum allowed size of {_MAX_RUNTIME_BODY_BYTES} bytes",
-                    status_code=413,
-                )
-                return JSONResponse(
-                    status_code=413,
-                    content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(
-                        mode="json"
-                    ),
-                    media_type="application/problem+json",
-                    headers={"traceparent": tp, **_RUNTIME_SECURITY_HEADERS},
-                )
+        if await _read_bounded_runtime_body(request, _MAX_RUNTIME_BODY_BYTES) is None:
+            err = SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Request body exceeds maximum allowed size of {_MAX_RUNTIME_BODY_BYTES} bytes",
+                status_code=413,
+            )
+            return JSONResponse(
+                status_code=413,
+                content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(
+                    mode="json"
+                ),
+                media_type="application/problem+json",
+                headers={"traceparent": tp, **_RUNTIME_SECURITY_HEADERS},
+            )
         response = await call_next(request)
         response.headers["traceparent"] = tp
         for hk, hv in _RUNTIME_SECURITY_HEADERS.items():
@@ -108,6 +127,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
 
     @app.exception_handler(SSRAError)
     async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:
+        """Format SSRAError exceptions as RFC 9457 Problem Details JSON responses."""
         raw_path = str(request.scope.get("path", "/"))
         tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
         problem = exc.to_problem_details(instance=raw_path, trace_id=tp)
@@ -122,6 +142,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
     async def validation_error_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        """Format FastAPI RequestValidationError exceptions as RFC 9457 Problem Details 422 responses."""
         raw_path = str(request.scope.get("path", "/"))
         tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
         err = SSRAError(
@@ -138,10 +159,12 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
+        """Return runtime service health status."""
         return {"status": "ok", "service": "ssra-agent-runtime"}
 
     @app.post("/v1/turns", response_model=RuntimeTurnResponse)
     async def execute_turn(body: AguiStreamRequest) -> RuntimeTurnResponse:
+        """Execute a synchronous 11-node LangGraph conversation turn."""
         event = make_conversation_event(
             body.message,
             locale=body.locale,
@@ -159,12 +182,14 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
 
     @app.get("/v1/turns/{thread_id}/replay", response_model=list[ReconstructedTurnRecord])
     async def replay_thread(thread_id: str) -> list[ReconstructedTurnRecord]:
+        """Reconstruct turn-by-turn forensic replay records for a conversation thread."""
         return active_runtime.reconstruct_conversation(thread_id)
 
     @app.post("/v1/field-officer/assist", response_model=FieldOfficerAssistResponse)
     async def field_officer_assist(
         body: FieldOfficerAssistRequest,
     ) -> FieldOfficerAssistResponse:
+        """Execute passkey-gated Field-Officer Assist tasks with WORM audit logging."""
         return execute_field_officer_assist(
             body,
             gateway=active_runtime.gateway,
@@ -176,6 +201,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         body: AguiStreamRequest,
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     ) -> StreamingResponse:
+        """Stream AG-UI protocol events over Server-Sent Events with Last-Event-ID resumption."""
         event = make_conversation_event(
             body.message,
             locale=body.locale,

@@ -26,6 +26,7 @@ _MONEY_RE = re.compile(r"\b(\d{1,3}(?:,\d{3})+|\d{4,10})(?:\.\d+)?\b")
 
 
 def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
+    """Classify taxpayer user text into a typed Intent with extracted slots."""
     lower = text.lower()
     slots: dict[str, str | int | float | bool] = {}
 

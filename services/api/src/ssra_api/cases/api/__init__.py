@@ -52,6 +52,7 @@ class MakerCheckerApprovalResponse(BaseModel):
 
 @router.post("", response_model=CaseResponse)
 async def create_case(body: CreateCaseRequest) -> CaseResponse:
+    """Open a new taxpayer support or inquiry case."""
     c = open_case_use_case(case_type=body.case_type, priority=body.priority)
     return CaseResponse(id=c.id, case_type=c.case_type, status=c.status, priority=c.priority)
 
@@ -60,6 +61,7 @@ async def create_case(body: CreateCaseRequest) -> CaseResponse:
 async def approve_maker_checker(
     case_id: str, body: MakerCheckerApprovalRequest
 ) -> MakerCheckerApprovalResponse:
+    """Approve a Tier T3 case action under two-officer maker-checker control."""
     if body.maker_staff_id == body.checker_staff_id:
         raise SSRAError(
             McpErrorCode.NOT_AUTHORIZED,

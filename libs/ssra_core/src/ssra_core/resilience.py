@@ -63,6 +63,7 @@ class UpstreamCircuitBreaker:
             self._half_open_in_flight = 0
 
     def release_half_open_probe(self) -> None:
+        """Release a reserved HALF_OPEN probe slot without changing circuit state."""
         self._half_open_in_flight = max(0, self._half_open_in_flight - 1)
 
     def acquire_call_permission(self) -> bool:
@@ -86,6 +87,7 @@ class UpstreamCircuitBreaker:
         return is_probe
 
     def call[T](self, fn: Callable[[], T]) -> T:
+        """Execute fn under circuit-breaker protection, recording success or failure."""
         self.acquire_call_permission()
         try:
             result = fn()

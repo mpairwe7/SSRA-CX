@@ -31,7 +31,7 @@ from ssra_core import (
     SSRAError,
 )
 from ssra_llm import AnonymousT0SemanticCache, SovereignModelRouter
-from ssra_security import HashChainedAuditLedger
+from ssra_security import HashChainedAuditLedger, redact_pii
 
 from ssra_runtime.graphs.handoff import execute_handoff_subgraph
 from ssra_runtime.graphs.knowledge_qa import execute_knowledge_qa_subgraph
@@ -122,22 +122,28 @@ class SSRAConversationRuntime:
         }
 
     def reconstruct_conversation(self, thread_id: str) -> list[ReconstructedTurnRecord]:
+        """Reconstruct the immutable turn-by-turn forensic history for a validated thread_id."""
         safe_id = validate_safe_thread_id(thread_id)
         return self.replay_store.reconstruct_thread(safe_id)
 
     def _build_graph(self) -> Any:
+        """Compile the 11-node deterministic LangGraph state machine."""
         builder: StateGraph[ConversationGraphState] = StateGraph(ConversationGraphState)
 
         def _knowledge_qa_node(state: ConversationGraphState) -> dict[str, Any]:
+            """Invoke the knowledge_qa specialist subgraph."""
             return execute_knowledge_qa_subgraph(state, self.gateway)
 
         def _self_service_node(state: ConversationGraphState) -> dict[str, Any]:
+            """Invoke the self_service specialist subgraph."""
             return execute_self_service_subgraph(state, self.gateway)
 
         def _confirm_node(state: ConversationGraphState) -> dict[str, Any]:
+            """Invoke the T2/T3 confirmation or write-execution node."""
             return confirm_or_execute_write_node(state, self.gateway)
 
         def _egress_node(state: ConversationGraphState) -> dict[str, Any]:
+            """Invoke the egress audit and running-summary node."""
             return egress_node(state, self.audit_ledger)
 
         builder.add_node("ingress", ingress_node)
@@ -157,6 +163,7 @@ class SSRAConversationRuntime:
         builder.add_edge("ingress", "deterministic_router")
 
         def _after_router(state: ConversationGraphState) -> str:
+            """Route deterministic turns directly to egress or continue to input_guard."""
             if state.get("deterministic_handled"):
                 return "egress"
             return "input_guard"
@@ -168,6 +175,7 @@ class SSRAConversationRuntime:
         )
 
         def _after_input_guard(state: ConversationGraphState) -> str:
+            """Route blocked adversarial inputs to egress or continue to understand."""
             if state.get("policy_decision") == "DENY":
                 return "egress"
             return "understand"
@@ -181,6 +189,7 @@ class SSRAConversationRuntime:
         builder.add_edge("understand", "policy_gate")
 
         def _route_subgraph(state: ConversationGraphState) -> str:
+            """Select the specialist subgraph determined by policy_gate."""
             return state.get("selected_subgraph", "knowledge_qa")
 
         builder.add_conditional_edges(
@@ -200,6 +209,7 @@ class SSRAConversationRuntime:
         builder.add_edge("compose", "output_guard")
 
         def _after_output_guard(state: ConversationGraphState) -> str:
+            """Loop back to compose once on validator feedback or proceed to egress."""
             if state.get("validator_feedback") and state.get("answer") is None:
                 return "compose"
             return "egress"
@@ -222,6 +232,7 @@ class SSRAConversationRuntime:
         confirmation_token: str | None = None,
         idempotency_key: str | None = None,
     ) -> RuntimeTurnResponse:
+        """Execute a full conversation turn with subject-binding, kill-switches, and forensic replay."""
         safe_thread_id = validate_safe_thread_id(event.subject)
 
         # ASI03 / ASI06: Prevent cross-subject thread hijacking on bound threads
@@ -322,7 +333,7 @@ class SSRAConversationRuntime:
                 locale=resp.locale,
                 auth_level=resp.auth_level,
                 subject_ref=subject_ref,
-                redacted_input=user_text,
+                redacted_input=redact_pii(user_text).redacted_text,
                 intent_name="safe_mode_fallback",
                 risk_tier=resp.tier,
                 policy_decision=resp.policy_decision,

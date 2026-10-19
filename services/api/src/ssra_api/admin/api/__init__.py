@@ -75,6 +75,7 @@ class PublicStatusResponse(BaseModel):
 
 @router.get("/kill-switches", response_model=KillSwitchResponse)
 async def get_kill_switches() -> KillSwitchResponse:
+    """Return the current SecOps degradation level and disabled tools/channels."""
     state = default_kill_switch_state()
     return KillSwitchResponse(
         degradation_level=state.degradation_level,
@@ -85,6 +86,7 @@ async def get_kill_switches() -> KillSwitchResponse:
 
 @router.post("/kill-switches", response_model=KillSwitchResponse)
 async def set_kill_switches(body: UpdateKillSwitchRequest) -> KillSwitchResponse:
+    """Update the active SecOps kill-switches and log the change to the WORM audit ledger."""
     state = update_kill_switch_state(
         degradation_level=body.degradation_level,
         disabled_tools=body.disabled_tools,
@@ -110,6 +112,7 @@ async def verify_audit() -> AuditVerifyResponse:
 
 @router.get("/public-status", response_model=PublicStatusResponse)
 async def get_public_status() -> PublicStatusResponse:
+    """Return the public degradation-aware system status and active knowledge snapshot version."""
     state = default_kill_switch_state()
     disabled_ch = set(state.disabled_channels)
     return PublicStatusResponse(
@@ -130,25 +133,14 @@ async def get_public_status() -> PublicStatusResponse:
 
 @router.post("/jit-elevation", response_model=JitElevationResponse)
 async def request_jit_elevation(body: JitElevationRequest) -> JitElevationResponse:
-    from ssra_core import McpErrorCode, SSRAError
-
-    if not body.passkey_verified or not body.device_posture_compliant:
-        raise SSRAError(
-            McpErrorCode.NOT_AUTHORIZED,
-            "JIT admin elevation requires WebAuthn passkey and compliant device posture",
-            status_code=403,
-        )
-    if body.requester_staff_id == body.approver_staff_id:
-        raise SSRAError(
-            McpErrorCode.NOT_AUTHORIZED,
-            "Maker-checker violation: approver_staff_id must differ from requester_staff_id",
-            status_code=403,
-        )
+    """Grant time-boxed JIT admin elevation after verifying trusted staff directory & maker-checker controls."""
     record_jit_admin_elevation(
         requester_staff_id=body.requester_staff_id,
         approver_staff_id=body.approver_staff_id,
         duration_minutes=body.duration_minutes,
         reason=body.reason,
+        passkey_verified=body.passkey_verified,
+        device_posture_compliant=body.device_posture_compliant,
     )
     return JitElevationResponse(
         requester_staff_id=body.requester_staff_id,

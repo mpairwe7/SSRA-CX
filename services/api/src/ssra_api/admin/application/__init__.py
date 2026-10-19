@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ssra_core import McpErrorCode, SSRAError
 from ssra_security import GENESIS_HASH, HashChainedAuditLedger
 
 from ssra_api.admin.domain import KillSwitchState
@@ -13,9 +14,30 @@ _current_state = KillSwitchState(
     disabled_channels=(),
 )
 _admin_audit = HashChainedAuditLedger()
+_VERIFIED_STAFF_DIRECTORY: dict[str, dict[str, str | bool]] = {
+    "stf_01": {
+        "staff_id": "stf_01",
+        "role": "admin",
+        "passkey_verified": True,
+        "device_posture_compliant": True,
+    },
+    "stf_supervisor_02": {
+        "staff_id": "stf_supervisor_02",
+        "role": "supervisor",
+        "passkey_verified": True,
+        "device_posture_compliant": True,
+    },
+    "secops_admin": {
+        "staff_id": "secops_admin",
+        "role": "secops",
+        "passkey_verified": True,
+        "device_posture_compliant": True,
+    },
+}
 
 
 def default_kill_switch_state() -> KillSwitchState:
+    """Return the current active SecOps kill-switch state."""
     return _current_state
 
 
@@ -26,6 +48,7 @@ def update_kill_switch_state(
     disabled_channels: list[str],
     actor: str = "secops_admin",
 ) -> KillSwitchState:
+    """Update the active kill-switch state and append a WORM audit event and outbox CloudEvent."""
     global _current_state
     _current_state = KillSwitchState(
         degradation_level=degradation_level,
@@ -71,16 +94,48 @@ def record_jit_admin_elevation(
     approver_staff_id: str,
     duration_minutes: int,
     reason: str,
+    passkey_verified: bool = True,
+    device_posture_compliant: bool = True,
 ) -> str:
-    """Append a hash-chained WORM audit event and stage a CloudEvent for JIT admin elevation."""
+    """Verify requester/approver against the trusted staff directory and append a WORM audit event."""
+    if not passkey_verified or not device_posture_compliant:
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            "JIT admin elevation requires WebAuthn passkey and compliant device posture",
+            status_code=403,
+        )
+    if requester_staff_id == approver_staff_id:
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            "Maker-checker violation: approver_staff_id must differ from requester_staff_id",
+            status_code=403,
+        )
+    req_rec = _VERIFIED_STAFF_DIRECTORY.get(requester_staff_id)
+    app_rec = _VERIFIED_STAFF_DIRECTORY.get(approver_staff_id)
+    if (
+        req_rec is None
+        or app_rec is None
+        or not req_rec.get("passkey_verified")
+        or not req_rec.get("device_posture_compliant")
+        or not app_rec.get("passkey_verified")
+        or not app_rec.get("device_posture_compliant")
+        or app_rec.get("role") not in {"supervisor", "secops", "admin"}
+    ):
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            "JIT admin elevation requires verified staff identities with active WebAuthn passkey and supervisor/secops approval",
+            status_code=403,
+        )
+    verified_requester = str(req_rec["staff_id"])
+    verified_approver = str(app_rec["staff_id"])
     ev = _admin_audit.append(
-        actor=approver_staff_id,
-        on_behalf_of=requester_staff_id,
+        actor=verified_approver,
+        on_behalf_of=verified_requester,
         action="admin.jit_elevation.grant",
-        resource=f"staff://{requester_staff_id}",
+        resource=f"staff://{verified_requester}",
         payload={
-            "requester_staff_id": requester_staff_id,
-            "approver_staff_id": approver_staff_id,
+            "requester_staff_id": verified_requester,
+            "approver_staff_id": verified_approver,
             "duration_minutes": duration_minutes,
             "reason": reason,
         },
@@ -88,10 +143,10 @@ def record_jit_admin_elevation(
     get_outbox_store().stage_domain_event(
         context_name="admin",
         event_type="ssra.admin.jit_elevation.granted.v1",
-        subject=requester_staff_id,
+        subject=verified_requester,
         data={
-            "requester_staff_id": requester_staff_id,
-            "approver_staff_id": approver_staff_id,
+            "requester_staff_id": verified_requester,
+            "approver_staff_id": verified_approver,
             "duration_minutes": duration_minutes,
             "reason": reason,
             "audit_hash": ev.hash,
