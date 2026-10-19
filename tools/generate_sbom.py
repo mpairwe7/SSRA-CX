@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tomllib
 from pathlib import Path
@@ -15,7 +16,9 @@ PYPROJECT = ROOT / "pyproject.toml"
 PACKAGE_JSON = ROOT / "package.json"
 ROUTING_YAML = ROOT / "ai" / "routing" / "model-routing.yaml"
 SNAPSHOT_MANIFEST = ROOT / "knowledge" / "snapshot-manifest-2026.10.1.json"
+OPENAPI_JSON = ROOT / "services" / "api" / "openapi.json"
 OUT_SBOM = ROOT / "infra" / "observability" / "cyclonedx-sbom.json"
+OUT_SLSA = ROOT / "infra" / "observability" / "slsa-provenance-v1.json"
 
 
 def build_sbom() -> dict[str, Any]:
@@ -129,13 +132,61 @@ def build_sbom() -> dict[str, Any]:
 
 
 def main() -> None:
+    """Write deterministic CycloneDX 1.6 SBOM + ML-BOM and SLSA v1.0 provenance statement."""
     sbom = build_sbom()
     OUT_SBOM.parent.mkdir(parents=True, exist_ok=True)
-    OUT_SBOM.write_text(json.dumps(sbom, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    sbom_bytes = (json.dumps(sbom, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    OUT_SBOM.write_bytes(sbom_bytes)
+    sbom_sha256 = hashlib.sha256(sbom_bytes).hexdigest()
+    snap_sha256 = hashlib.sha256(SNAPSHOT_MANIFEST.read_bytes()).hexdigest()
+    openapi_sha256 = hashlib.sha256(OPENAPI_JSON.read_bytes()).hexdigest()
+
+    from ssra_core import SCHEMA_BUNDLE_SHA256
+
+    slsa_statement = {
+        "_type": "https://in-toto.io/Statement/v1",
+        "subject": [
+            {
+                "name": "infra/observability/cyclonedx-sbom.json",
+                "digest": {"sha256": sbom_sha256},
+            },
+            {
+                "name": "knowledge/snapshot-manifest-2026.10.1.json",
+                "digest": {"sha256": snap_sha256},
+            },
+            {
+                "name": "services/api/openapi.json",
+                "digest": {"sha256": openapi_sha256},
+            },
+            {
+                "name": "packages/contracts/schemas",
+                "digest": {"sha256": SCHEMA_BUNDLE_SHA256},
+            },
+        ],
+        "predicateType": "https://slsa.dev/provenance/v1",
+        "predicate": {
+            "buildDefinition": {
+                "buildType": "https://ssra.gov.ss/slsa/taskfile-build/v1",
+                "externalParameters": {
+                    "workflow": ".github/workflows/ci.yml",
+                    "entryPoint": "task gen",
+                    "cooldownMinimumReleaseAgeMinutes": 10080,
+                },
+            },
+            "runDetails": {
+                "builder": {
+                    "id": "https://github.com/mpairwe7/SSRA-CX/.github/workflows/ci.yml@refs/heads/main"
+                }
+            },
+        },
+    }
+    OUT_SLSA.write_text(
+        json.dumps(slsa_statement, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     comps = sbom["components"]
     assert isinstance(comps, list)
     print(
-        f"Generated CycloneDX 1.6 SBOM + ML-BOM ({len(comps)} pinned components) -> {OUT_SBOM.relative_to(ROOT)}"
+        f"Generated CycloneDX 1.6 SBOM + ML-BOM ({len(comps)} pinned components) & SLSA v1.0 provenance -> {OUT_SBOM.relative_to(ROOT)}"
     )
 
 

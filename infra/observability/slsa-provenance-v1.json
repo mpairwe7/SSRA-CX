@@ -1,0 +1,45 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://ssra.gov.ss/slsa/taskfile-build/v1",
+      "externalParameters": {
+        "cooldownMinimumReleaseAgeMinutes": 10080,
+        "entryPoint": "task gen",
+        "workflow": ".github/workflows/ci.yml"
+      }
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://github.com/mpairwe7/SSRA-CX/.github/workflows/ci.yml@refs/heads/main"
+      }
+    }
+  },
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "subject": [
+    {
+      "digest": {
+        "sha256": "73281530dd7888e0d87598b8e97ca42e8cef7f834003aed18d7f99192818f655"
+      },
+      "name": "infra/observability/cyclonedx-sbom.json"
+    },
+    {
+      "digest": {
+        "sha256": "06039aabc01d0ee3605049742dc9e59e9104e0a99867f1a0cc9931928128b7d6"
+      },
+      "name": "knowledge/snapshot-manifest-2026.10.1.json"
+    },
+    {
+      "digest": {
+        "sha256": "e1b05fa36c33753df49167eb379ab43d13d37a68f88e681d1aa7bf7289c4e8c4"
+      },
+      "name": "services/api/openapi.json"
+    },
+    {
+      "digest": {
+        "sha256": "7760efe3102ce8368e36236009d8ef3f70c74fbc045aecc5cd9d4e09cdd09af9"
+      },
+      "name": "packages/contracts/schemas"
+    }
+  ]
+}

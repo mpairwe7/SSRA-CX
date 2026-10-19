@@ -23,6 +23,7 @@ export interface RenderedChatCard {
   readonly componentName: string | null;
   readonly ariaRole: "region" | "status";
   readonly dir: "ltr" | "rtl";
+  readonly numericFontVariant: "tabular-nums";
   readonly safeHtml: string;
 }
 
@@ -46,6 +47,7 @@ export function renderGenerativeUICard(
       componentName: null,
       ariaRole: "status",
       dir,
+      numericFontVariant: "tabular-nums",
       safeHtml: `<div role="status" aria-live="polite" dir="${dir}" class="ssra-text-fallback">${safeText}</div>`,
     };
   }
@@ -62,7 +64,8 @@ export function renderGenerativeUICard(
         componentName: "BalanceCard",
         ariaRole: "region",
         dir,
-        safeHtml: `<section role="region" aria-label="SSRA e-Tax Balance" dir="${dir}" data-component="BalanceCard"><strong>TIN ${tin}</strong>: ${amt} SSP (${status}, as of ${asOf})</section>`,
+        numericFontVariant: "tabular-nums",
+        safeHtml: `<section role="region" aria-label="SSRA e-Tax Balance" dir="${dir}" data-component="BalanceCard" data-numeric="tabular-nums"><strong>TIN ${tin}</strong>: ${amt} SSP (${status}, as of ${asOf})</section>`,
       };
     }
     case "CalculatorForm": {
@@ -75,7 +78,8 @@ export function renderGenerativeUICard(
         componentName: "CalculatorForm",
         ariaRole: "region",
         dir,
-        safeHtml: `<section role="region" aria-label="SSRA Tax Estimate" dir="${dir}" data-component="CalculatorForm"><span class="badge-estimate">ESTIMATE ONLY</span> ${calcType}: ${tax} SSP</section>`,
+        numericFontVariant: "tabular-nums",
+        safeHtml: `<section role="region" aria-label="SSRA Tax Estimate" dir="${dir}" data-component="CalculatorForm" data-numeric="tabular-nums"><span class="badge-estimate">ESTIMATE ONLY</span> ${calcType}: ${tax} SSP</section>`,
       };
     }
     case "PaymentInstructionsCard": {
@@ -86,6 +90,7 @@ export function renderGenerativeUICard(
         componentName: "PaymentInstructionsCard",
         ariaRole: "region",
         dir,
+        numericFontVariant: "tabular-nums",
         safeHtml: `<section role="region" aria-label="Official Payment Verification" dir="${dir}" data-component="PaymentInstructionsCard"><strong>${status}</strong>: ${id} (https://etax.nra.gov.ss/)</section>`,
       };
     }
@@ -97,6 +102,7 @@ export function renderGenerativeUICard(
         componentName: "ConfirmActionSheet",
         ariaRole: "region",
         dir,
+        numericFontVariant: "tabular-nums",
         safeHtml: `<section role="region" aria-label="Confirm Action" dir="${dir}" data-component="ConfirmActionSheet" data-tool="${tool}"><p>${summary}</p></section>`,
       };
     }
@@ -113,7 +119,8 @@ export function renderGenerativeUICard(
         componentName: "FilingStatusTimeline",
         ariaRole: "region",
         dir,
-        safeHtml: `<section role="region" aria-label="FilingStatusTimeline" dir="${dir}" data-component="FilingStatusTimeline"><strong>TIN ${tin}</strong>: ${status} (Period ${period}${asOfSuffix})</section>`,
+        numericFontVariant: "tabular-nums",
+        safeHtml: `<section role="region" aria-label="FilingStatusTimeline" dir="${dir}" data-component="FilingStatusTimeline" data-numeric="tabular-nums"><strong>TIN ${tin}</strong>: ${status} (Period ${period}${asOfSuffix})</section>`,
       };
     }
     case "CitationList":
@@ -125,6 +132,7 @@ export function renderGenerativeUICard(
         componentName: name,
         ariaRole: "region",
         dir,
+        numericFontVariant: "tabular-nums",
         safeHtml: `<section role="region" aria-label="${name}" dir="${dir}" data-component="${name}">${safeFallback}</section>`,
       };
     }
