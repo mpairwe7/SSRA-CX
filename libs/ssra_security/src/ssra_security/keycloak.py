@@ -110,6 +110,9 @@ class KeycloakOidcClaims(BaseModel):
     exp: datetime
 
 
+MAX_CONSUMED_JTIS = 4096
+
+
 class KeycloakOidcSecurityService:
     """Enforces Keycloak 26.x OAuth 2.1, PKCE S256, WebAuthn Passkey ACR, and anti-replay invariants."""
 
@@ -121,7 +124,7 @@ class KeycloakOidcSecurityService:
     ) -> None:
         self.expected_issuer = expected_issuer
         self.allowed_idp_aliases = allowed_idp_aliases
-        self._consumed_jtis: set[str] = set()
+        self._consumed_jtis: dict[str, None] = {}
 
     @staticmethod
     def compute_pkce_s256_challenge(code_verifier: str) -> str:
@@ -173,7 +176,10 @@ class KeycloakOidcSecurityService:
                 f"Replay of single-use token jti '{jti}' blocked (CVE-2026-1035 / CVE-2026-37982)",
                 status_code=401,
             )
-        self._consumed_jtis.add(jti)
+        if len(self._consumed_jtis) >= MAX_CONSUMED_JTIS:
+            oldest_jti = next(iter(self._consumed_jtis))
+            self._consumed_jtis.pop(oldest_jti, None)
+        self._consumed_jtis[jti] = None
 
     def validate_keycloak_oidc_claims(
         self,

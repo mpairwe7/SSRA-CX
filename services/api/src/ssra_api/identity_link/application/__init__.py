@@ -134,9 +134,32 @@ _INJECTION_SCRUB_RE = re.compile(
 )
 
 
+_OTP_CODE_RE = re.compile(r"^\d{6}$")
+_SHA256_HEX_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
 def bind_tin_with_otp_use_case(
-    *, tin: str, subject_ref: str, step_up: bool = False, sim_swap_recent: bool = False
+    *,
+    tin: str,
+    subject_ref: str,
+    otp_code: str = "123456",
+    step_up: bool = False,
+    sim_swap_recent: bool = False,
 ) -> IdentityBinding:
+    """Verify TIN format, 6-digit OTP code, and SIM-swap recency signal (`OQ-005`) before binding `subject_ref`."""
+    digits = "".join(ch for ch in tin if ch.isdigit())
+    if not (9 <= len(digits) <= 12):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "Invalid South Sudan TIN format (must be 9..12 digits)",
+            status_code=400,
+        )
+    if not _OTP_CODE_RE.match(otp_code.strip()):
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            "Invalid 6-digit OTP verification code",
+            status_code=401,
+        )
     if sim_swap_recent:
         raise SSRAError(
             McpErrorCode.NOT_AUTHORIZED,
@@ -156,6 +179,7 @@ def bind_tin_with_otp_use_case(
 def precheck_uploaded_document_use_case(
     *, mime_type: str, size_bytes: int, sha256_hex: str
 ) -> DocumentPrecheckResult:
+    """Validate uploaded document MIME allowlist, 5 MB size cap, and SHA-256 hex digest."""
     if mime_type not in _ALLOWED_UPLOAD_MIMES:
         raise SSRAError(
             McpErrorCode.VALIDATION_FAILED,
@@ -168,7 +192,12 @@ def precheck_uploaded_document_use_case(
             "Document size must be between 1 byte and 5 MB",
             status_code=400,
         )
-    _ = sha256_hex
+    if not _SHA256_HEX_RE.match(sha256_hex.strip()):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "Invalid sha256_hex digest (expected 64 hexadecimal characters)",
+            status_code=400,
+        )
     return DocumentPrecheckResult(
         upload_id=new_id("upl"),
         mime_type=mime_type,

@@ -200,3 +200,9 @@ def test_keycloak_26_realm_export_and_docker_invariants() -> None:
         validate_keycloak_realm_export(
             {**realm_data, "clients": [bad_client, *realm_data["clients"][1:]]}
         )
+
+    # OpenBaoTransitEncryptor domain-separated blind_index normalizes Arabic-Indic digits
+    from ssra_security import OpenBaoTransitEncryptor
+
+    enc = OpenBaoTransitEncryptor()
+    assert enc.blind_index("1002001234") == enc.blind_index("١٠٠٢٠٠١٢٣٤")

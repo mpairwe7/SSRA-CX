@@ -115,6 +115,10 @@ def compute_action_digest(
     )
 
 
+MAX_CONFIRMATION_RECORDS = 2048
+MAX_STEP_UP_AGE_SECONDS = 300
+
+
 class ConfirmationTokenManager:
     """Issues and validates single-use, short-TTL confirmation tokens bound to argument hashes."""
 
@@ -133,7 +137,11 @@ class ConfirmationTokenManager:
         idempotency_key: str | None = None,
         now: datetime | None = None,
     ) -> ConfirmationRecord:
+        """Issue a single-use, argument-digest-bound confirmation token with bounded cache eviction."""
         issued = now or utc_now()
+        if len(self._records) >= MAX_CONFIRMATION_RECORDS:
+            oldest_tok = next(iter(self._records))
+            self._records.pop(oldest_tok, None)
         token = new_id("cfm")
         idem_key = idempotency_key or new_id("idem")
         digest = compute_action_digest(
@@ -287,12 +295,21 @@ class TokenExchangeService:
                     f"Tier {required_tier} requires verified TIN-bound subject_ref",
                     status_code=403,
                 )
-        if required_tier == RiskTier.T3 and claims.auth_level != AuthLevel.T3_STEP_UP:
-            raise SSRAError(
-                McpErrorCode.STEP_UP_REQUIRED,
-                "Tier T3 requires fresh step-up authentication",
-                status_code=403,
-            )
+        if required_tier == RiskTier.T3:
+            if claims.auth_level != AuthLevel.T3_STEP_UP:
+                raise SSRAError(
+                    McpErrorCode.STEP_UP_REQUIRED,
+                    "Tier T3 requires fresh step-up authentication",
+                    status_code=403,
+                )
+            if claims.step_up_verified_at is not None and (
+                utc_now() - claims.step_up_verified_at
+            ) > timedelta(seconds=MAX_STEP_UP_AGE_SECONDS):
+                raise SSRAError(
+                    McpErrorCode.STEP_UP_REQUIRED,
+                    f"Tier T3 step-up authentication expired (> {MAX_STEP_UP_AGE_SECONDS}s max_age)",
+                    status_code=403,
+                )
         if not verify_mcp_scope_sufficiency(
             granted_scope=claims.scope,
             audience=expected_audience,
