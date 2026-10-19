@@ -29,9 +29,10 @@ We adopt Option 2:
    - Pre-caches the minimal offline app shell, localized static assets (`en`, `pga`, `ar`), and the published `T0` FAQ / Official-Channel Verification cards.
    - Implements a **Queued Outbox** (`IndexedDB` encrypted/ephemeral queue for anonymous `T0` questions only) using Background Sync / online-event replay when connectivity returns.
    - **Hard Security Rule:** Never cache `/api/*` authenticated responses or `T1`–`T3` turns; clear ephemeral client state immediately on logout or session expiry.
-2. **2G Low-Data / Text-Only Mode:**
-   - Automatic detection via `Save-Data` header and `navigator.connection.effectiveType` (`slow-2g`, `2g`), plus a persistent user toggle in the top header.
+2. **2G Low-Data / Text-Only Mode (`shouldEnableLowDataMode`):**
+   - Automatic detection via `Save-Data` header and `navigator.connection.effectiveType` (`slow-2g`, `2g`, `downlink < 0.5`, `rtt > 1000`), plus a persistent user toggle in the top header.
    - In Low-Data Mode, generative UI cards render as compact semantic HTML tables/lists, avatars/illustrations are suppressed, and the full interactive chat bundle loads only on interaction.
+   - Offline Outbox (`OfflineOutboxQueue`) rejects any `T1`–`T4` query or message containing unmasked TINs, `+211` phone numbers, South Sudan National IDs (`[RP]\d{7,8}`), or email addresses.
 3. **Performance Budget Enforcement in CI:**
    - First-load JS ≤ 150 KB gzip (target ≤ 120 KB) checked on every PR; Lighthouse CI checks LCP ≤ 2.5 s, INP ≤ 200 ms, CLS ≤ 0.1 on a throttled low-end Android profile.
 

@@ -90,6 +90,7 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
   it("parses resumable AG-UI SSE streams and enforces T0-only offline outbox policy", () => {
     const sampleSse = [
       'id: evt_1\nevent: agui\ndata: {"type":"RUN_STARTED","threadId":"thr_1"}',
+      "id: evt_corrupt\nevent: agui\ndata: {truncated-json-on-2g",
       'id: evt_2\nevent: agui\ndata: {"type":"TEXT_MESSAGE_CONTENT","delta":"PAYE is due by day 15."}',
       'id: evt_3\nevent: agui\ndata: {"type":"RUN_FINISHED","threadId":"thr_1"}',
       "",
@@ -100,8 +101,52 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(parsed.lastEventId).toBe("evt_3");
     expect(parsed.accumulatedText).toBe("PAYE is due by day 15.");
 
+    const whtCard = renderGenerativeUICard(
+      {
+        name: "CalculatorForm",
+        props: {
+          category: "rent",
+          gross_amount_ssp: "500000",
+          rate_percent: "10",
+          withholding_tax_ssp: "50000",
+          net_payable_ssp: "450000",
+          is_estimate: true,
+        },
+      },
+      "WHT estimate",
+    );
+    expect(whtCard.mode).toBe("component");
+    expect(whtCard.safeHtml).toContain("WHT: 50000 SSP");
+
+    const timelineCard = renderGenerativeUICard(
+      {
+        name: "FilingStatusTimeline",
+        props: {
+          tin_masked: "••••1234",
+          filing_status: "COMPLIANT",
+          last_filed_period: "2026-09",
+          as_of: "2026-10-20",
+        },
+      },
+      "Filing timeline",
+    );
+    expect(timelineCard.mode).toBe("component");
+    expect(timelineCard.safeHtml).toContain("Period 2026-09");
+
     const outbox = new OfflineOutboxQueue(2);
     expect(() => new OfflineOutboxQueue(0)).toThrow(RangeError);
+    expect(
+      outbox.enqueue({
+        id: "q_natid",
+        message: "My National ID is R12345678",
+        locale: "en",
+        tier: "T0",
+        queuedAtIso: "2026-10-16T08:00:00Z",
+      }),
+    ).toEqual({
+      queued: false,
+      reason: "SECURITY_POLICY_PII_REJECTED_FROM_OFFLINE_QUEUE",
+    });
     expect(
       outbox.enqueue({
         id: "q_pii",

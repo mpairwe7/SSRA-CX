@@ -21,6 +21,7 @@ export const FilingStatusTimelinePropsSchema = z.object({
   tin_masked: z.string().regex(/^••••\d{4}$/),
   filing_status: z.string().min(1),
   last_filed_period: z.string().min(1),
+  as_of: z.string().optional(),
 });
 
 export const PaymentInstructionsCardPropsSchema = z.object({
@@ -37,6 +38,11 @@ export const CalculatorFormPropsSchema = z.object({
   net_monthly_ssp: z.string().optional(),
   effective_rate_percent: z.string().optional(),
   filing_deadline_day: z.number().int().optional(),
+  category: z.string().optional(),
+  gross_amount_ssp: z.string().optional(),
+  rate_percent: z.string().optional(),
+  withholding_tax_ssp: z.string().optional(),
+  net_payable_ssp: z.string().optional(),
   is_estimate: z.literal(true),
 });
 

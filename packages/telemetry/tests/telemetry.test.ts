@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { checkPerformanceBudgets } from "../src/index.js";
+import {
+  checkPerformanceBudgets,
+  createBrowserTraceparent,
+  isValidW3cTraceparent,
+} from "../src/index.js";
 
 describe("@ssra/telemetry performance budget gates", () => {
   it("enforces Section 9.5 low-end Android & 150 KB gzip JS budgets", () => {
@@ -28,5 +32,10 @@ describe("@ssra/telemetry performance budget gates", () => {
       cls: 0.01,
     });
     expect(nanSample.passed).toBe(false);
+
+    const tp = createBrowserTraceparent();
+    expect(isValidW3cTraceparent(tp)).toBe(true);
+    expect(createBrowserTraceparent(tp)).toBe(tp);
+    expect(isValidW3cTraceparent("invalid-tp")).toBe(false);
   });
 });

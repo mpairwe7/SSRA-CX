@@ -48,8 +48,14 @@ export async function createAltchaChallenge(
 export async function verifyAltchaSolution(
   solution: AltchaSolution,
   hmacSecret: string,
+  maxnumber = 5000,
 ): Promise<boolean> {
-  if (solution.algorithm !== "SHA-256" || solution.number < 0) {
+  if (
+    solution.algorithm !== "SHA-256" ||
+    !Number.isSafeInteger(solution.number) ||
+    solution.number < 0 ||
+    solution.number > maxnumber
+  ) {
     return false;
   }
   const recomputedChallenge = await sha256Hex(`${solution.salt}:${solution.number}`);

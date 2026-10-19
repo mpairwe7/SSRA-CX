@@ -18,14 +18,19 @@ export interface QueuedOutboxMessage {
   readonly queuedAtIso: string;
 }
 
-const UNMASKED_TIN_PATTERN = /\d{9,12}/;
+const UNMASKED_TIN_OR_PHONE_PATTERN = /\d{9,12}|\+?211\d{9}/;
+const UNMASKED_NATIONAL_ID_OR_EMAIL_PATTERN =
+  /\b[RP]\d{7,8}\b|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/i;
 
 function containsUnmaskedTin(message: string): boolean {
+  if (UNMASKED_NATIONAL_ID_OR_EMAIL_PATTERN.test(message)) {
+    return true;
+  }
   const normalized = message
     .normalize("NFKC")
     .replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
     .replace(/[\s\-.]/g, "");
-  return UNMASKED_TIN_PATTERN.test(normalized);
+  return UNMASKED_TIN_OR_PHONE_PATTERN.test(normalized);
 }
 
 export class OfflineOutboxQueue {

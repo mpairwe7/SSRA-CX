@@ -42,9 +42,13 @@ export function parseAguiSseStream(
     if (!dataLine) {
       continue;
     }
-    const parsed = JSON.parse(dataLine) as Record<string, unknown>;
-    const type = parsed.type as AguiEventType;
-    allEvents.push({ id, type, payload: parsed });
+    try {
+      const parsed = JSON.parse(dataLine) as Record<string, unknown>;
+      const type = parsed.type as AguiEventType;
+      allEvents.push({ id, type, payload: parsed });
+    } catch {
+      // Skip malformed/truncated SSE JSON frame on unstable 2G links
+    }
   }
 
   let startIndex = 0;

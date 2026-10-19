@@ -60,8 +60,10 @@ export function renderGenerativeUICard(
       };
     }
     case "CalculatorForm": {
-      const calcType = escapeHtmlStrict(String(p.calculator_type ?? "PAYE"));
-      const tax = escapeHtmlStrict(String(p.estimated_tax_ssp ?? "0"));
+      const calcType = escapeHtmlStrict(
+        String(p.withholding_tax_ssp ? "WHT" : (p.calculator_type ?? "PAYE")),
+      );
+      const tax = escapeHtmlStrict(String(p.estimated_tax_ssp ?? p.withholding_tax_ssp ?? "0"));
       return {
         mode: "component",
         componentName: "CalculatorForm",
@@ -92,7 +94,18 @@ export function renderGenerativeUICard(
         safeHtml: `<section role="region" aria-label="Confirm Action" dir="${dir}" data-component="ConfirmActionSheet" data-tool="${tool}"><p>${summary}</p></section>`,
       };
     }
-    case "FilingStatusTimeline":
+    case "FilingStatusTimeline": {
+      const tin = escapeHtmlStrict(String(p.tin_masked));
+      const status = escapeHtmlStrict(String(p.filing_status));
+      const period = escapeHtmlStrict(String(p.last_filed_period));
+      return {
+        mode: "component",
+        componentName: "FilingStatusTimeline",
+        ariaRole: "region",
+        dir,
+        safeHtml: `<section role="region" aria-label="FilingStatusTimeline" dir="${dir}" data-component="FilingStatusTimeline"><strong>TIN ${tin}</strong>: ${status} (Period ${period})</section>`,
+      };
+    }
     case "CitationList":
     case "HandoffCard": {
       const name = resolved.componentName;

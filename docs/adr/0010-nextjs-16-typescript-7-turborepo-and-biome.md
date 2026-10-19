@@ -32,8 +32,8 @@ We adopt Option 2:
 1. **Framework & Runtime Pinning (7-Day Cooldown Verified 2026-10-16):**
    - Pin `next@16.3.8` (released 2026-09-30, latest in the `16.3.x` baseline line specified in Section 9.1; note `16.4.0` from 2026-10-06 is tracked for scheduled upgrade after Gate 0 review) and `react@19.3.0` / `react-dom@19.3.0`.
    - Use `output: "standalone"` for self-hosted container deployment on NCA Kubernetes with a shared Valkey cache handler—zero Vercel or cloud-vendor lock-in.
-   - Use `src/proxy.ts` in both apps for per-request cryptographic CSP nonces, `Trusted-Types`, locale negotiation (`en`, `pga`, `ar`), and route authentication gating.
-   - Enable `cacheComponents: true` (`"use cache"`) on public `T0` pages to minimise server compute and TTFB.
+   - Use `src/proxy.ts` in both apps for per-request cryptographic CSP nonces (`x-nonce` propagation, `worker-src 'self'`, `manifest-src 'self'`), `Trusted-Types`, 8-locale negotiation (`ROADMAP_LOCALES`: `en`, `pga`, `ar` RTL, `din`, `nus`, `bfa`, `zne`, `shk`), and route authentication / RBAC gating (`authorizeConsoleRoute`).
+   - Enable `cacheComponents: true` (`"use cache"`) on public `T0` pages to minimise server compute and TTFB, and propagate `Last-Event-ID`, `traceparent` (`createBrowserTraceparent`), `confirmation_token`, and `idempotency_key` through the BFF stream proxy (`apps/web/src/app/api/chat/stream/route.ts`).
 2. **Type-Checking (`typescript@7.0.2`):**
    - Enforce strict TypeScript (`strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`). Keep a TypeScript 6.x peer configuration only if a specific build plugin requires the legacy compiler API before TypeScript 7.1.
 3. **Linting & Formatting (`@biomejs/biome@2.5.15`):**

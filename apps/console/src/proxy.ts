@@ -48,3 +48,24 @@ export function authorizeConsoleAccess(session: ConsoleSession | null): {
   }
   return { allowed: true };
 }
+
+export function authorizeConsoleRoute(
+  session: ConsoleSession | null,
+  pathname: string,
+): { readonly allowed: boolean; readonly reason?: string } {
+  const base = authorizeConsoleAccess(session);
+  if (!base.allowed || !session) {
+    return base;
+  }
+  if (pathname.startsWith("/admin/kill-switches") || pathname.startsWith("/admin/jit")) {
+    if (session.role !== "admin" && session.role !== "secops") {
+      return { allowed: false, reason: "INSUFFICIENT_ROLE_ADMIN_REQUIRED" };
+    }
+  }
+  if (pathname.startsWith("/knowledge-release/approve")) {
+    if (session.role !== "legal_approver" && session.role !== "admin") {
+      return { allowed: false, reason: "INSUFFICIENT_ROLE_LEGAL_APPROVER_REQUIRED" };
+    }
+  }
+  return { allowed: true };
+}

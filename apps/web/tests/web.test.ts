@@ -34,7 +34,17 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
     expect(decision.headers["Content-Security-Policy"]).toContain(
       "require-trusted-types-for 'script'",
     );
+    expect(decision.headers["Content-Security-Policy"]).toContain("worker-src 'self'");
+    expect(decision.headers["x-nonce"]).toBe("nonce_test_123");
     expect(decision.headers["Cache-Control"]).toBe("private, no-cache, no-store, must-revalidate");
+
+    // 8-locale ROADMAP_LOCALES negotiation in proxy.ts (including Tier C din/nus/bfa/zne/shk)
+    expect(
+      executeProxy({
+        pathname: "/din/chat",
+        nonce: "n_din",
+      }).locale,
+    ).toBe("din");
 
     // CVE-2026-27979: Block untrusted next-resume header
     expect(
@@ -107,8 +117,15 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
       message: "How much is PAYE on 250,000 SSP?",
       locale: "en",
       lowDataMode: false,
+      lastEventId: "thr_1:ev:2",
+      traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      confirmationToken: "cfm_01",
+      idempotencyKey: "idem_01",
     });
     expect(req.url).toBe("http://localhost:8001/v1/agui/stream");
+    expect(req.headers["Last-Event-ID"]).toBe("thr_1:ev:2");
+    expect(req.headers.traceparent).toContain("00-4bf92f3577b34da6a3ce929d0e0e4736");
+    expect(JSON.parse(req.body).confirmation_token).toBe("cfm_01");
 
     const presented = presentTurnAnswerForWeb({
       segments: [{ text: "PAYE is 25,000 SSP.", citation_ids: ["cit_1"] }],
@@ -194,6 +211,20 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
     expect(
       validateClientUpload({ mimeType: "application/x-msdownload", sizeBytes: 100 }).accepted,
     ).toBe(false);
+    expect(
+      validateClientUpload({
+        mimeType: "application/pdf",
+        sizeBytes: 1000,
+        filename: "../../etc/passwd",
+      }),
+    ).toEqual({ accepted: false, reason: "UNSAFE_FILENAME" });
+    expect(
+      validateClientUpload({
+        mimeType: "application/pdf",
+        sizeBytes: 1000,
+        filename: "invoice.pdf.exe",
+      }),
+    ).toEqual({ accepted: false, reason: "UNSAFE_FILENAME" });
 
     const manifest = generatePwaManifest();
     expect(manifest.display).toBe("standalone");

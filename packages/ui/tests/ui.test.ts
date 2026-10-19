@@ -8,6 +8,7 @@ import {
   getSouthSudanFiscalYear,
   resolveMenuKeyNavigation,
   SSRA_DESIGN_TOKENS,
+  shouldEnableLowDataMode,
 } from "../src/index.js";
 
 describe("@ssra/ui design tokens and RTL layout", () => {
@@ -48,5 +49,10 @@ describe("@ssra/ui design tokens and RTL layout", () => {
       closeAndRestoreFocus: true,
       handled: true,
     });
+    expect(shouldEnableLowDataMode({ effectiveType: "2g" })).toBe(true);
+    expect(shouldEnableLowDataMode({ saveData: true })).toBe(true);
+    expect(shouldEnableLowDataMode({ downlink: 0.3 })).toBe(true);
+    expect(shouldEnableLowDataMode({ effectiveType: "4g", downlink: 10 })).toBe(false);
+    expect(shouldEnableLowDataMode({ effectiveType: "4g" }, true)).toBe(true);
   });
 });

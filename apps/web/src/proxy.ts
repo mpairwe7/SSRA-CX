@@ -8,7 +8,7 @@
  */
 
 import type { LocaleCode } from "@ssra/contracts";
-import { getTextDirection, PHASE1_LOCALES } from "@ssra/i18n";
+import { getTextDirection, ROADMAP_LOCALES } from "@ssra/i18n";
 
 export interface ProxyRequestContext {
   readonly pathname: string;
@@ -50,13 +50,16 @@ function isValidHttpHostHeader(host: string): boolean {
 }
 
 export function buildSecurityHeaders(nonce: string, strictConsole = false): Record<string, string> {
+  const safeNonce = nonce.replace(/[^A-Za-z0-9+/=_-]/g, "");
   const cspDirectives = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    `script-src 'self' 'nonce-${safeNonce}' 'strict-dynamic'`,
+    `style-src 'self' 'nonce-${safeNonce}'`,
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "connect-src 'self'",
+    "worker-src 'self'",
+    "manifest-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -69,6 +72,7 @@ export function buildSecurityHeaders(nonce: string, strictConsole = false): Reco
 
   return {
     "Content-Security-Policy": cspDirectives.join("; "),
+    "x-nonce": safeNonce,
     "Cache-Control": "private, no-cache, no-store, must-revalidate",
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
     "Cross-Origin-Opener-Policy": "same-origin",
@@ -84,15 +88,14 @@ export function buildSecurityHeaders(nonce: string, strictConsole = false): Reco
 export function negotiateLocale(pathname: string, acceptLanguage?: string): LocaleCode {
   const segments = pathname.split("/").filter(Boolean);
   const first = segments[0] as LocaleCode | undefined;
-  if (first && (PHASE1_LOCALES as readonly string[]).includes(first)) {
+  if (first && (ROADMAP_LOCALES as readonly string[]).includes(first)) {
     return first;
   }
   const lower = (acceptLanguage ?? "").toLowerCase();
-  if (lower.includes("pga")) {
-    return "pga";
-  }
-  if (lower.includes("ar")) {
-    return "ar";
+  for (const loc of ["pga", "ar", "din", "nus", "bfa", "zne", "shk"] as const) {
+    if (lower.includes(loc)) {
+      return loc;
+    }
   }
   return "en";
 }
