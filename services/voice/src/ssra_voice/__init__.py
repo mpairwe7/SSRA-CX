@@ -13,6 +13,9 @@ from ssra_security import redact_pii
 
 # Launch a language on voice only after its word-error rate on SSRA test sets meets the gate (<= 0.12)
 MAX_VOICE_WER_GATE: float = 0.12
+MIN_UTTERANCE_ASR_CONFIDENCE: float = 0.75
+MAX_VOICE_SPOKEN_SENTENCES: int = 3
+MAX_SMS_CONTINUATION_CHARS: int = 160
 
 # CVE-2026-54233: Cap decoded float32 PCM output at 15.36 MB (120s @ 16kHz mono float32) to prevent OPUS decompression bombs
 MAX_DECODED_PCM_BYTES: int = 15_360_000
@@ -150,12 +153,19 @@ def route_voice_turn(
     recording_consent_granted: bool,
     dtmf_digit: str | None = None,
     barge_in_detected: bool = False,
+    utterance_confidence: float = 0.95,
+    consecutive_low_confidence_turns: int = 0,
 ) -> VoiceSessionDecision:
+    """Route a voice turn across ASR, hybrid DTMF disambiguation, and progressive warm transfer."""
     _ = barge_in_detected
     asr_engine = ASR_MODEL_BY_LOCALE[locale]
     tts_engine = TTS_MODEL_BY_LOCALE[locale]
 
-    if dtmf_digit == "0" or not is_voice_language_approved(locale, measured_wer):
+    if (
+        dtmf_digit == "0"
+        or not is_voice_language_approved(locale, measured_wer)
+        or consecutive_low_confidence_turns >= 2
+    ):
         return VoiceSessionDecision(
             session_id=session_id,
             locale=locale,
@@ -164,12 +174,12 @@ def route_voice_turn(
             recording_enabled=recording_consent_granted,
             action="WARM_TRANSFER_TO_OFFICER",
             warm_transfer_summary=(
-                f"Warm transfer from IVR ({locale.value}): caller pressed 0 or language WER "
-                f"{measured_wer:.2f} exceeded gate {MAX_VOICE_WER_GATE}."
+                f"Warm transfer from IVR ({locale.value}): caller pressed 0, language WER "
+                f"{measured_wer:.2f} exceeded gate {MAX_VOICE_WER_GATE}, or consecutive low-confidence turns={consecutive_low_confidence_turns}."
             ),
         )
 
-    if dtmf_digit is not None:
+    if dtmf_digit is not None or utterance_confidence < MIN_UTTERANCE_ASR_CONFIDENCE:
         return VoiceSessionDecision(
             session_id=session_id,
             locale=locale,
@@ -808,6 +818,78 @@ def validate_call_wrap_up(
         else caller_satisfaction,
         "caller_satisfaction_status": caller_satisfaction_status,
         "ai_rating": ai_rating,
+    }
+
+
+@dataclass(frozen=True)
+class VoiceDtmfStepUpResult:
+    authorized: bool
+    action: Literal["BOUND_T1", "BOUND_T3", "REJECTED_SPOKEN_OTP", "WARM_TRANSFER_TO_OFFICER"]
+    tin_masked: str | None
+    recording_paused_for_dtmf: bool
+    reason: str | None = None
+
+
+def verify_voice_dtmf_step_up(
+    *,
+    dtmf_tin_digits: str,
+    dtmf_otp_digits: str,
+    input_modality: Literal["dtmf_rfc4733", "spoken_asr"] = "dtmf_rfc4733",
+    requested_tier: Literal["T1", "T2", "T3", "T4"] = "T1",
+    sim_swap_recent: bool = False,
+) -> VoiceDtmfStepUpResult:
+    """Enforce RFC 4733 DTMF-only TIN/OTP entry with recording pause and SIM-swap / T4 guards."""
+    if requested_tier == "T4" or sim_swap_recent:
+        return VoiceDtmfStepUpResult(
+            authorized=False,
+            action="WARM_TRANSFER_TO_OFFICER",
+            tin_masked=None,
+            recording_paused_for_dtmf=True,
+            reason="T4 action or recent SIM-swap signal requires live SSRA officer",
+        )
+    if input_modality != "dtmf_rfc4733":
+        return VoiceDtmfStepUpResult(
+            authorized=False,
+            action="REJECTED_SPOKEN_OTP",
+            tin_masked=None,
+            recording_paused_for_dtmf=True,
+            reason="Spoken TIN/OTP over ASR is prohibited; enter digits on telephone keypad (DTMF)",
+        )
+    clean_tin = "".join(ch for ch in dtmf_tin_digits if ch in "0123456789")
+    clean_otp = "".join(ch for ch in dtmf_otp_digits if ch in "0123456789")
+    if not (9 <= len(clean_tin) <= 12) or len(clean_otp) != 6:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "DTMF step-up requires 9..12 ASCII TIN digits and 6 ASCII OTP digits",
+            status_code=400,
+        )
+    return VoiceDtmfStepUpResult(
+        authorized=True,
+        action="BOUND_T3" if requested_tier == "T3" else "BOUND_T1",
+        tin_masked=f"••••{clean_tin[-4:]}",
+        recording_paused_for_dtmf=True,
+    )
+
+
+def build_voice_spoken_turn_and_sms_followup(
+    *,
+    reply_text: str,
+    citation_anchor: str | None = None,
+    is_estimate: bool = False,
+) -> dict[str, Any]:
+    """Cap spoken reply at <= 3 sentences with explicit estimate framing and generate a <= 160-char SMS continuation receipt."""
+    sentences = split_tts_sentences(reply_text)[:MAX_VOICE_SPOKEN_SENTENCES]
+    spoken = " ".join(sentences)
+    if is_estimate and "estimate" not in spoken.lower():
+        spoken = f"Estimate only. {spoken}"
+    anchor_suffix = f" ({citation_anchor})" if citation_anchor else ""
+    sms_raw = f"SSRA OFFICIAL: {spoken}{anchor_suffix} Ref: https://etax.nra.gov.ss/"
+    sms_text = sms_raw[:MAX_SMS_CONTINUATION_CHARS]
+    return {
+        "spoken_text": spoken,
+        "sentence_count": len(sentences),
+        "is_estimate": is_estimate,
+        "sms_continuation_text": sms_text,
     }
 
 
