@@ -7,7 +7,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-_ZERO_WIDTH_AND_BIDI_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
+_ZERO_WIDTH_AND_BIDI_RE = re.compile(r"[\u0640\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", flags=re.DOTALL)
 _WHITESPACE_RE = re.compile(r"\s+")
 
@@ -78,6 +78,7 @@ class InjectionCheckResult:
 
 
 def check_prompt_injection(text: str) -> InjectionCheckResult:
+    """Scan raw and 6-pass-normalised text against adversarial injection and exfiltration patterns."""
     normalised = normalise_adversarial_input(text)
     flags: list[str] = []
     for flag_name, pattern in _INJECTION_PATTERNS:

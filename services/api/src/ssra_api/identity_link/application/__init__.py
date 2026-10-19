@@ -134,7 +134,7 @@ _INJECTION_SCRUB_RE = re.compile(
 )
 
 
-_OTP_CODE_RE = re.compile(r"^\d{6}$")
+_OTP_CODE_RE = re.compile(r"[0-9]{6}")
 _SHA256_HEX_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
@@ -142,19 +142,19 @@ def bind_tin_with_otp_use_case(
     *,
     tin: str,
     subject_ref: str,
-    otp_code: str = "123456",
+    otp_code: str,
     step_up: bool = False,
     sim_swap_recent: bool = False,
 ) -> IdentityBinding:
-    """Verify TIN format, 6-digit OTP code, and SIM-swap recency signal (`OQ-005`) before binding `subject_ref`."""
-    digits = "".join(ch for ch in tin if ch.isdigit())
+    """Verify TIN format, 6-digit ASCII OTP code, and SIM-swap recency signal (`OQ-005`) before binding `subject_ref`."""
+    digits = "".join(ch for ch in tin if ch in "0123456789")
     if not (9 <= len(digits) <= 12):
         raise SSRAError(
             McpErrorCode.VALIDATION_FAILED,
             "Invalid South Sudan TIN format (must be 9..12 digits)",
             status_code=400,
         )
-    if not _OTP_CODE_RE.match(otp_code.strip()):
+    if not _OTP_CODE_RE.fullmatch(otp_code.strip()):
         raise SSRAError(
             McpErrorCode.NOT_AUTHORIZED,
             "Invalid 6-digit OTP verification code",

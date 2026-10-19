@@ -137,11 +137,13 @@ class ConfirmationTokenManager:
         idempotency_key: str | None = None,
         now: datetime | None = None,
     ) -> ConfirmationRecord:
-        """Issue a single-use, argument-digest-bound confirmation token with bounded cache eviction."""
+        """Issue a single-use, argument-digest-bound confirmation token, purging expired/used records first."""
         issued = now or utc_now()
+        self._records = {
+            k: v for k, v in self._records.items() if v.used_at is None and issued <= v.expires_at
+        }
         if len(self._records) >= MAX_CONFIRMATION_RECORDS:
-            oldest_tok = next(iter(self._records))
-            self._records.pop(oldest_tok, None)
+            self._records.pop(next(iter(self._records)), None)
         token = new_id("cfm")
         idem_key = idempotency_key or new_id("idem")
         digest = compute_action_digest(
@@ -227,6 +229,7 @@ class TokenExchangeService:
         step_up_verified_at: datetime | None = None,
         ttl_seconds: int = 60,
     ) -> str:
+        """Mint an RFC 8693 audience-, resource-, and least-privilege-scope-bound JWT."""
         now = utc_now()
         srv = audience.removeprefix("mcp-")
         if scope is not None:
@@ -237,6 +240,11 @@ class TokenExchangeService:
             resolved_scope = f"mcp:{srv}:read mcp:{srv}:write"
         else:
             resolved_scope = f"mcp:{srv}:read"
+        resolved_step_up = (
+            step_up_verified_at
+            if step_up_verified_at is not None
+            else (now if auth_level == AuthLevel.T3_STEP_UP else None)
+        )
         claims = SubjectTokenClaims(
             jti=new_id("jti"),
             aud=audience,
@@ -245,7 +253,7 @@ class TokenExchangeService:
             sub=subject_ref,
             caller_workload=caller_workload,
             auth_level=auth_level,
-            step_up_verified_at=step_up_verified_at,
+            step_up_verified_at=resolved_step_up,
             exp=now + timedelta(seconds=ttl_seconds),
         )
         payload_json = claims.model_dump_json()
@@ -260,6 +268,7 @@ class TokenExchangeService:
         required_tier: RiskTier,
         expected_resource: str | None = None,
     ) -> SubjectTokenClaims:
+        """Verify RFC 8693 token signature, audience, RFC 8707 resource, scope, and T3 step-up freshness."""
         if "." not in token:
             raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Malformed bearer token", status_code=401)
         payload_json, sig = token.rsplit(".", 1)
@@ -296,15 +305,15 @@ class TokenExchangeService:
                     status_code=403,
                 )
         if required_tier == RiskTier.T3:
-            if claims.auth_level != AuthLevel.T3_STEP_UP:
+            if claims.auth_level != AuthLevel.T3_STEP_UP or claims.step_up_verified_at is None:
                 raise SSRAError(
                     McpErrorCode.STEP_UP_REQUIRED,
                     "Tier T3 requires fresh step-up authentication",
                     status_code=403,
                 )
-            if claims.step_up_verified_at is not None and (
-                utc_now() - claims.step_up_verified_at
-            ) > timedelta(seconds=MAX_STEP_UP_AGE_SECONDS):
+            if (utc_now() - claims.step_up_verified_at) > timedelta(
+                seconds=MAX_STEP_UP_AGE_SECONDS
+            ):
                 raise SSRAError(
                     McpErrorCode.STEP_UP_REQUIRED,
                     f"Tier T3 step-up authentication expired (> {MAX_STEP_UP_AGE_SECONDS}s max_age)",

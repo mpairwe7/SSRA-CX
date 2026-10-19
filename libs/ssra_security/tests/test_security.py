@@ -201,8 +201,24 @@ def test_keycloak_26_realm_export_and_docker_invariants() -> None:
             {**realm_data, "clients": [bad_client, *realm_data["clients"][1:]]}
         )
 
-    # OpenBaoTransitEncryptor domain-separated blind_index normalizes Arabic-Indic digits
-    from ssra_security import OpenBaoTransitEncryptor
+
+def test_blind_index_normalizes_arabic_indic_digits() -> None:
+    """Verify domain-separated OpenBaoTransitEncryptor.blind_index across ASCII, Arabic-Indic, and different keys."""
+    from datetime import timedelta
+
+    from ssra_core import utc_now
+    from ssra_security import KeycloakOidcSecurityService, OpenBaoTransitEncryptor
 
     enc = OpenBaoTransitEncryptor()
     assert enc.blind_index("1002001234") == enc.blind_index("١٠٠٢٠٠١٢٣٤")
+    assert enc.blind_index("1002001234") == enc.blind_index("۱۰۰۲۰۰۱۲۳۴")
+    assert enc.blind_index("1002001234") == enc.blind_index(" 1002001234 ")
+    assert enc.blind_index("1002001234") != enc.blind_index("1002001235")
+    other = OpenBaoTransitEncryptor("other-key")
+    assert enc.blind_index("1002001234") != other.blind_index("1002001234")
+
+    # Exercise expired JTI eviction in KeycloakOidcSecurityService.consume_single_use_jti
+    kc = KeycloakOidcSecurityService()
+    past = utc_now() - timedelta(seconds=60)
+    kc.consume_single_use_jti("jti_expired_1", exp=past)
+    kc.consume_single_use_jti("jti_fresh_1")
