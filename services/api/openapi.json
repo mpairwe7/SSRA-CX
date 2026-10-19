@@ -2251,6 +2251,7 @@
     },
     "/v1/identity-link/verify-otp": {
       "post": {
+        "description": "Verify TIN, 6-digit OTP, and SIM-swap signal to bind an opaque `subject_ref`.",
         "operationId": "verify_otp_v1_identity_link_verify_otp_post",
         "requestBody": {
           "content": {

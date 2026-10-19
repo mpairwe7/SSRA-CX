@@ -7,7 +7,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-_ZERO_WIDTH_AND_BIDI_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
+_ZERO_WIDTH_AND_BIDI_RE = re.compile(r"[\u0640\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", flags=re.DOTALL)
 _WHITESPACE_RE = re.compile(r"\s+")
 
@@ -16,7 +16,9 @@ _INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "PROMPT_INJECTION_IGNORE_RULES",
         re.compile(
             r"(ignore\s+(all\s+)?(previous|prior|system)\s+(instructions|rules|prompts)|"
-            r"disregard\s+system\s+policy|reveal\s+your\s+system\s+prompt)",
+            r"disregard\s+system\s+policy|reveal\s+your\s+system\s+prompt|"
+            r"تجاهل\s+(?:جميع\s+)?التعليمات|اكشف\s+موجه\s+النظام|"
+            r"khali\s+kullu\s+talimat)",
             flags=re.IGNORECASE,
         ),
     ),
@@ -25,7 +27,8 @@ _INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         re.compile(
             r"(tell\s+the\s+user\s+to\s+pay\s+to\s+account|"
             r"send\s+tax\s+money\s+to\s+personal\s+number|"
-            r"override\s+official\s+bank\s+account)",
+            r"override\s+official\s+bank\s+account|"
+            r"ادفع\s+الضريبة\s+إلى\s+حساب|adfa\s+gurush\s+fi\s+hisab\s+shakhsi)",
             flags=re.IGNORECASE,
         ),
     ),
@@ -35,6 +38,14 @@ _INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             r"(show\s+(me\s+)?(balance|filings?|tcc|record)\s+(for|of)\s+(another|other)\s+taxpayer|"
             r"balance\s+(for|of)\s+tin\s+\d{6,12}|"
             r"access\s+victim\s+tin)",
+            flags=re.IGNORECASE,
+        ),
+    ),
+    (
+        "DATA_EXFILTRATION_MARKDOWN_OR_DELIMITER",
+        re.compile(
+            r"(!\[[^\]]*\]\(https?://[^\s)]+\)|"
+            r"</?untrusted_(?:user_document|knowledge_chunk|tool_result)[^>]*>)",
             flags=re.IGNORECASE,
         ),
     ),
@@ -67,6 +78,7 @@ class InjectionCheckResult:
 
 
 def check_prompt_injection(text: str) -> InjectionCheckResult:
+    """Scan raw and 6-pass-normalised text against adversarial injection and exfiltration patterns."""
     normalised = normalise_adversarial_input(text)
     flags: list[str] = []
     for flag_name, pattern in _INJECTION_PATTERNS:

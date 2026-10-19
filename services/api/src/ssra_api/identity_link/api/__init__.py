@@ -80,10 +80,12 @@ class AnalyzeDocumentResponse(BaseModel):
 
 @router.post("/verify-otp", response_model=VerifyOtpResponse)
 async def verify_otp(body: VerifyOtpRequest) -> VerifyOtpResponse:
+    """Verify TIN, 6-digit OTP, and SIM-swap signal to bind an opaque `subject_ref`."""
     subject_ref = "sub_taxpayer_deng_02" if body.tin.endswith("5678") else "sub_taxpayer_amina_01"
     binding = bind_tin_with_otp_use_case(
         tin=body.tin,
         subject_ref=subject_ref,
+        otp_code=body.otp_code,
         step_up=body.step_up,
         sim_swap_recent=body.sim_swap_recent,
     )

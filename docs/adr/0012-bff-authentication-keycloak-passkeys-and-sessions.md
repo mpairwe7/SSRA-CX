@@ -37,7 +37,7 @@ We adopt the **Next.js 16 BFF Session Pattern** using `openid-client@6.8.8` (wit
 3. **Taxpayer Web (`apps/web`) — Progressive Identity Proofing:**
    - Starts anonymous (`T0`).
    - Elevates to `T1`/`T2` via deterministic OTP + TIN verification (`identity_link` service + Keycloak custom authenticator), binding an opaque `subject_ref` to the BFF session.
-   - Elevates to `T3` via fresh step-up OTP (`step_up_verified_at` within 5 minutes).
+   - Elevates to `T3` via fresh step-up OTP (`step_up_verified_at` required and within `MAX_STEP_UP_AGE_SECONDS = 300`). Single-use token `jti` values are tracked with a `300s` TTL and `MAX_CONSUMED_JTIS = 4096` capacity, purging only expired entries and failing closed (`429 RATE_LIMITED`) if saturated with unexpired tokens.
 4. **CSRF & Bot Defence:**
    - Double-submit / `Origin` + custom header CSRF validation on all state-changing BFF routes, plus self-hosted **ALTCHA** proof-of-work verification on public chat initiation.
 

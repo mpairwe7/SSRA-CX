@@ -13,7 +13,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -110,6 +110,10 @@ class KeycloakOidcClaims(BaseModel):
     exp: datetime
 
 
+MAX_CONSUMED_JTIS = 4096
+DEFAULT_JTI_TTL_SECONDS = 300
+
+
 class KeycloakOidcSecurityService:
     """Enforces Keycloak 26.x OAuth 2.1, PKCE S256, WebAuthn Passkey ACR, and anti-replay invariants."""
 
@@ -121,7 +125,7 @@ class KeycloakOidcSecurityService:
     ) -> None:
         self.expected_issuer = expected_issuer
         self.allowed_idp_aliases = allowed_idp_aliases
-        self._consumed_jtis: set[str] = set()
+        self._consumed_jtis: dict[str, datetime] = {}
 
     @staticmethod
     def compute_pkce_s256_challenge(code_verifier: str) -> str:
@@ -165,15 +169,32 @@ class KeycloakOidcSecurityService:
             )
         return True
 
-    def consume_single_use_jti(self, jti: str) -> None:
-        """Atomically consume refresh or WebAuthn action token jti (CVE-2026-1035 & CVE-2026-37982)."""
+    def consume_single_use_jti(
+        self,
+        jti: str,
+        *,
+        exp: datetime | None = None,
+        now: datetime | None = None,
+    ) -> None:
+        """Atomically consume single-use refresh or WebAuthn action token jti, purging only expired entries and failing closed at capacity."""
+        current = now or utc_now()
+        expired = [k for k, expires_at in self._consumed_jtis.items() if current > expires_at]
+        for k in expired:
+            self._consumed_jtis.pop(k, None)
+
         if jti in self._consumed_jtis:
             raise SSRAError(
                 McpErrorCode.NOT_AUTHORIZED,
-                f"Replay of single-use token jti '{jti}' blocked (CVE-2026-1035 / CVE-2026-37982)",
+                f"Replay of single-use token jti '{jti}' blocked",
                 status_code=401,
             )
-        self._consumed_jtis.add(jti)
+        if len(self._consumed_jtis) >= MAX_CONSUMED_JTIS:
+            raise SSRAError(
+                McpErrorCode.RATE_LIMITED,
+                f"Single-use JTI replay cache capacity ({MAX_CONSUMED_JTIS}) saturated with unexpired tokens",
+                status_code=429,
+            )
+        self._consumed_jtis[jti] = exp or (current + timedelta(seconds=DEFAULT_JTI_TTL_SECONDS))
 
     def validate_keycloak_oidc_claims(
         self,

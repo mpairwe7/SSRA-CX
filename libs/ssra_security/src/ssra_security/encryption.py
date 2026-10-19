@@ -12,11 +12,13 @@ import hashlib
 import hmac
 import os
 import re
+import unicodedata
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from ssra_core import McpErrorCode, SSRAError
 
 _ENVELOPE_RE = re.compile(r"^vault:v(\d+):(.+)$")
+_ARABIC_INDIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 
 
 class OpenBaoTransitEncryptor:
@@ -31,6 +33,9 @@ class OpenBaoTransitEncryptor:
     ) -> None:
         seed = (master_key_material or "ssra-openbao-transit-dev-key").encode("utf-8")
         self._key = hashlib.sha256(seed).digest()
+        self._blind_index_key = hmac.new(
+            self._key, b"ssra-openbao-blind-index-v1", hashlib.sha256
+        ).digest()
         self._key_version = key_version
         self._keyring: dict[int, AESGCM] = {key_version: AESGCM(self._key)}
         if previous_keys:
@@ -80,5 +85,10 @@ class OpenBaoTransitEncryptor:
         return self.encrypt_field(pt, context=context)
 
     def blind_index(self, plaintext: str) -> str:
-        """Compute an HMAC-SHA256 blind index for exact-match lookups without storing plaintext."""
-        return hmac.new(self._key, plaintext.strip().encode("utf-8"), hashlib.sha256).hexdigest()
+        """Compute a domain-separated HMAC-SHA256 blind index normalizing Arabic-Indic digits."""
+        normalised = (
+            unicodedata.normalize("NFKC", plaintext).translate(_ARABIC_INDIC_DIGITS).strip()
+        )
+        return hmac.new(
+            self._blind_index_key, normalised.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
