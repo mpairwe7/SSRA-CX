@@ -109,4 +109,27 @@ def execute_self_service_subgraph(
             )
         }
 
+    if intent_name == IntentName.CREATE_CASE:
+        args = {
+            "case_type": str(slots.get("case_type", "INQUIRY")),
+            "summary": str(slots.get("summary", "Taxpayer support case inquiry")),
+        }
+        rec = gateway.confirmation_manager.issue_token(
+            conversation_id=thread_id,
+            tool_name="create_case",
+            arguments=args,
+            subject_ref=subject_ref,
+        )
+        return {
+            "pending_confirmation": PendingConfirmation(
+                token=rec.token,
+                idempotency_key=rec.idempotency_key,
+                server="cases",
+                tool="create_case",
+                arguments=args,
+                action_digest=rec.action_digest,
+                summary_text=f"Create SSRA taxpayer support case ({args['case_type']}).",
+            )
+        }
+
     return {"artifacts": artifacts}

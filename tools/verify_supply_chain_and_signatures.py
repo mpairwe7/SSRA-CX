@@ -122,6 +122,9 @@ def main() -> None:
     for df_rel in (
         "services/api/Dockerfile",
         "services/agent-runtime/Dockerfile",
+        "services/channel-gateway/Dockerfile",
+        "services/workers/Dockerfile",
+        "services/voice/Dockerfile",
         "apps/web/Dockerfile",
         "apps/console/Dockerfile",
     ):
@@ -129,6 +132,7 @@ def main() -> None:
         assert "USER 10001:10001" in df_txt, (
             f"Dockerfile {df_rel} must run as non-root USER 10001:10001"
         )
+        assert "HEALTHCHECK" in df_txt, f"Dockerfile {df_rel} must define a HEALTHCHECK"
 
     assert (ROOT / "infra" / "policies" / "seccomp-sovereign-default.json").is_file(), (
         "Missing infra/policies/seccomp-sovereign-default.json"

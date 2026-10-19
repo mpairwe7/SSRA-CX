@@ -8,6 +8,7 @@ from ssra_core import new_id, utc_now
 from ssra_security import redact_pii
 
 from ssra_api.conversations.domain import ConversationEntity, StaffCopilotDraft
+from ssra_api.outbox import get_outbox_store
 
 
 def create_conversation_use_case(
@@ -18,7 +19,7 @@ def create_conversation_use_case(
     auth_level: str = "ANONYMOUS",
     office_code: str = "JUBA_HQ",
 ) -> ConversationEntity:
-    return ConversationEntity(
+    entity = ConversationEntity(
         id=new_id("conv"),
         channel=channel,
         locale=locale,
@@ -27,14 +28,35 @@ def create_conversation_use_case(
         office_code=office_code,
         started_at=utc_now(),
     )
+    get_outbox_store().stage_domain_event(
+        context_name="conversations",
+        event_type="ssra.conversation.created.v1",
+        subject=entity.id,
+        data={"channel": channel, "locale": locale, "office_code": office_code},
+    )
+    return entity
 
 
 def staff_takeover_use_case(entity: ConversationEntity, *, staff_id: str) -> ConversationEntity:
-    return replace(entity, status="STAFF_TAKEOVER", assigned_staff_id=staff_id)
+    updated = replace(entity, status="STAFF_TAKEOVER", assigned_staff_id=staff_id)
+    get_outbox_store().stage_domain_event(
+        context_name="conversations",
+        event_type="ssra.conversation.staff_takeover.v1",
+        subject=entity.id,
+        data={"staff_id": staff_id, "office_code": entity.office_code},
+    )
+    return updated
 
 
 def staff_handback_to_ai_use_case(entity: ConversationEntity) -> ConversationEntity:
-    return replace(entity, status="HANDED_BACK_TO_AI", assigned_staff_id=None)
+    updated = replace(entity, status="HANDED_BACK_TO_AI", assigned_staff_id=None)
+    get_outbox_store().stage_domain_event(
+        context_name="conversations",
+        event_type="ssra.conversation.handback.v1",
+        subject=entity.id,
+        data={"office_code": entity.office_code},
+    )
+    return updated
 
 
 def generate_copilot_draft_use_case(

@@ -44,6 +44,7 @@ def test_t0_paye_calculator_and_agui_sse_stream() -> None:
         "/v1/agui/stream",
         json={
             "message": "How much is PAYE on 250,000 SSP per month?",
+            "thread_id": "thr_sse_resume_01",
             "locale": "en",
             "channel": "web",
         },
@@ -58,6 +59,26 @@ def test_t0_paye_calculator_and_agui_sse_stream() -> None:
         "RUN_FINISHED",
     ):
         assert expected_event in body_text
+
+    # Resumable AG-UI SSE via Last-Event-ID skips already delivered events
+    resumed_res = client.post(
+        "/v1/agui/stream",
+        headers={"Last-Event-ID": "thr_sse_resume_01:ev:2"},
+        json={
+            "message": "How much is PAYE on 250,000 SSP per month?",
+            "thread_id": "thr_sse_resume_01",
+            "locale": "en",
+            "channel": "web",
+        },
+    )
+    assert resumed_res.status_code == 200
+    assert "id: thr_sse_resume_01:ev:1\n" not in resumed_res.text
+    assert "RUN_FINISHED" in resumed_res.text
+
+    # RFC 9457 Problem Details on invalid runtime request payload
+    r_bad = client.post("/v1/turns", json={"unknown_field": 1})
+    assert r_bad.status_code == 422
+    assert r_bad.headers["content-type"].startswith("application/problem+json")
 
 
 def test_t4_waiver_routes_deterministically_to_human_handoff_with_zero_tools() -> None:
@@ -119,6 +140,58 @@ def test_t2_write_triggers_confirmation_interrupt_and_executes_after_token() -> 
     assert turn2.pending_confirmation is None
     assert any(a.tool == "book_appointment" for a in turn2.artifacts)
     assert "CONFIRMED" in turn2.answer.segments[0].text
+
+    # Deterministic HELP keyword, T1 filing_status & tcc_status, T2 create_case, and preference hydration
+    help_turn = runtime.run_turn(make_conversation_event("HELP", channel=ChannelName.SMS))
+    assert "SSRA Assist Help" in help_turn.answer.segments[0].text
+
+    runtime.preference_store.upsert_preferences(
+        subject_ref="sub_taxpayer_amina_01",
+        low_data_mode=True,
+    )
+    filing_turn = runtime.run_turn(
+        make_conversation_event("Check my filing status", thread_id="thr_filing_01"),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_amina_01",
+    )
+    assert any(a.tool == "get_filing_status" for a in filing_turn.artifacts)
+    assert filing_turn.answer.ui_component is None  # suppressed by hydrated low_data_mode
+
+    runtime.preference_store.delete_subject_preferences("sub_taxpayer_amina_01")
+    filing_rich = runtime.run_turn(
+        make_conversation_event("Check my filing status", thread_id="thr_filing_02"),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_amina_01",
+    )
+    assert filing_rich.answer.ui_component is not None
+    assert filing_rich.answer.ui_component.name.value == "FilingStatusTimeline"
+
+    tcc_turn = runtime.run_turn(
+        make_conversation_event("Check my TCC status", thread_id="thr_tcc_01"),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_amina_01",
+    )
+    assert any(a.tool == "get_tcc_status" for a in tcc_turn.artifacts)
+    assert "VALID" in tcc_turn.answer.segments[0].text
+
+    case_evt = make_conversation_event(
+        "Please open a support case for my eTax receipt", thread_id="thr_case_01"
+    )
+    case_t1 = runtime.run_turn(
+        case_evt,
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_amina_01",
+    )
+    assert case_t1.pending_confirmation is not None
+    case_t2 = runtime.run_turn(
+        case_evt,
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_amina_01",
+        confirmation_token=case_t1.pending_confirmation.token,
+        idempotency_key=case_t1.pending_confirmation.idempotency_key,
+    )
+    assert any(a.tool == "create_case" for a in case_t2.artifacts)
+    assert "OPEN" in case_t2.answer.segments[0].text
 
 
 def test_numeric_provenance_blocks_untraced_numbers() -> None:

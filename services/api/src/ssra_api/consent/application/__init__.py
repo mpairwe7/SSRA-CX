@@ -5,6 +5,7 @@ from __future__ import annotations
 from ssra_core import utc_now
 
 from ssra_api.consent.domain import ConsentRecord, SubjectPreferenceEntity
+from ssra_api.outbox import get_outbox_store
 
 _pref_store: dict[str, SubjectPreferenceEntity] = {}
 
@@ -13,13 +14,20 @@ def record_consent_use_case(
     *, subject_ref: str, channel: str, purpose: str, revoked: bool = False
 ) -> ConsentRecord:
     now = utc_now()
-    return ConsentRecord(
+    rec = ConsentRecord(
         subject_ref=subject_ref,
         channel=channel,
         purpose=purpose,
         granted_at=now,
         revoked_at=now if revoked else None,
     )
+    get_outbox_store().stage_domain_event(
+        context_name="consent",
+        event_type="ssra.consent.revoked.v1" if revoked else "ssra.consent.granted.v1",
+        subject=subject_ref,
+        data={"channel": channel, "purpose": purpose, "revoked": revoked},
+    )
+    return rec
 
 
 def upsert_subject_preferences_use_case(

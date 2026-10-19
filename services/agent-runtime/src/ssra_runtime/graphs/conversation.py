@@ -15,6 +15,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
 from ssra_core import (
     AuthLevel,
+    ChannelBulkhead,
     ChannelName,
     ConversationEvent,
     Intent,
@@ -28,6 +29,7 @@ from ssra_security import HashChainedAuditLedger
 from ssra_runtime.graphs.handoff import execute_handoff_subgraph
 from ssra_runtime.graphs.knowledge_qa import execute_knowledge_qa_subgraph
 from ssra_runtime.graphs.self_service import execute_self_service_subgraph
+from ssra_runtime.memory import SubjectPreferenceMemoryStore
 from ssra_runtime.nodes import (
     compose_node,
     confirm_or_execute_write_node,
@@ -85,6 +87,8 @@ class SSRAConversationRuntime:
         self.gateway = gateway or GovernedMcpGatewayClient()
         self.audit_ledger = audit_ledger or HashChainedAuditLedger()
         self.replay_store = replay_store or ConversationReplayStore()
+        self.preference_store = SubjectPreferenceMemoryStore()
+        self.channel_bulkhead = ChannelBulkhead()
         self.checkpointer = InMemorySaver()
         self._thread_subject_binding: dict[str, str] = {}
         self._pending_by_thread: dict[str, tuple[PendingConfirmation, Intent | None, RiskTier]] = {}
@@ -216,11 +220,18 @@ class SSRAConversationRuntime:
                 safe_thread_id
             ]
 
+        # Hydrate consented accessibility/low-data preferences if stored for subject_ref (Section 6.5)
+        capabilities = event.data.capabilities
+        if subject_ref is not None:
+            saved_pref = self.preference_store.get_preferences(subject_ref)
+            if saved_pref is not None and saved_pref.low_data_mode:
+                capabilities = capabilities.model_copy(update={"rich_ui": False})
+
         initial_state: ConversationGraphState = {
             "thread_id": safe_thread_id,
             "channel": event.data.channel,
             "locale": event.data.locale,
-            "capabilities": event.data.capabilities,
+            "capabilities": capabilities,
             "auth_level": auth_level,
             "subject_ref": subject_ref,
             "raw_user_text": user_text,
@@ -240,13 +251,17 @@ class SSRAConversationRuntime:
 
         assert verify_checkpoint_primitives_only(initial_state)
 
-        final_state: ConversationGraphState = self._compiled.invoke(
-            initial_state,
-            config={
-                "configurable": {"thread_id": safe_thread_id},
-                "recursion_limit": 25,
-            },
-        )
+        self.channel_bulkhead.acquire(event.data.channel)
+        try:
+            final_state: ConversationGraphState = self._compiled.invoke(
+                initial_state,
+                config={
+                    "configurable": {"thread_id": safe_thread_id},
+                    "recursion_limit": 25,
+                },
+            )
+        finally:
+            self.channel_bulkhead.release(event.data.channel)
 
         out_pending = final_state.get("pending_confirmation")
         if out_pending is not None:

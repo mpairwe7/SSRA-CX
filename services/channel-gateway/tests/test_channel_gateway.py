@@ -116,6 +116,46 @@ def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> Non
     assert r_timeout.status_code == 200
     assert r_timeout.json()["response_type"] == "END"
 
+    # Juba Arabic (pga) USSD menu & STOP/START webhook opt-out tracking + RFC 9457 422
+    r_pga = client.post(
+        "/v1/ussd/session",
+        json={"session_id": "ussd_pga", "ussd_input": "", "locale": "pga"},
+    )
+    assert r_pga.status_code == 200
+    assert "Qaima ta SSRA" in r_pga.json()["screen_text"]
+
+    r_stop = client.post(
+        "/v1/webhooks/inbound",
+        json={
+            "message_id": "sms_stop_1",
+            "channel": "sms",
+            "sender_ref": "sender_opt_01",
+            "text": "STOP",
+            "locale": "en",
+        },
+    )
+    assert r_stop.status_code == 200
+    assert r_stop.json()["consent_action"] == "OPTED_OUT"
+    assert r_stop.json()["sender_opted_out"] is True
+
+    r_start = client.post(
+        "/v1/webhooks/inbound",
+        json={
+            "message_id": "sms_start_1",
+            "channel": "sms",
+            "sender_ref": "sender_opt_01",
+            "text": "START",
+            "locale": "en",
+        },
+    )
+    assert r_start.status_code == 200
+    assert r_start.json()["consent_action"] == "OPTED_IN"
+    assert r_start.json()["sender_opted_out"] is False
+
+    r_val_err = client.post("/v1/ussd/session", json={"unknown": 1})
+    assert r_val_err.status_code == 422
+    assert r_val_err.headers["content-type"].startswith("application/problem+json")
+
 
 def test_whatsapp_24h_service_window_and_template_consent_gate() -> None:
     from datetime import UTC, datetime, timedelta

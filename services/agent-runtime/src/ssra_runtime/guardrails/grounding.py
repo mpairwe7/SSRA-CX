@@ -13,8 +13,11 @@ _DETERMINISTIC_TOOL_CITATION_IDS: frozenset[str] = frozenset(
         "cit_wht_act",
         "cit_cashfree_2026",
         "cit_etax_ledger",
+        "cit_etax_filing",
+        "cit_etax_tcc",
         "cit_scam_case",
         "cit_appt_confirm",
+        "cit_case_confirm",
     }
 )
 

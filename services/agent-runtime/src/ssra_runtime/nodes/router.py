@@ -45,6 +45,39 @@ def deterministic_router_node(state: ConversationGraphState) -> dict[str, Any]:
             ),
         }
 
+    # 1b. Deterministic HELP keyword (Section 11: SMS HELP, AGENT and STOP keywords)
+    if upper in ("HELP", "MENU"):
+        cit = Citation(
+            id="cit_help_etax",
+            snapshot_version="2026.10.1",
+            doc_title="SSRA e-Tax Portal Guide",
+            section_anchor="Part-I-Sec-1-TIN-Registration",
+            effective_from="2021-07-01",
+            url="https://etax.nra.gov.ss/",
+        )
+        return {
+            "deterministic_handled": True,
+            "tier": RiskTier.T0,
+            "policy_decision": "ALLOW",
+            "citations": [cit],
+            "answer": Answer(
+                segments=[
+                    AnswerSegment(
+                        text=(
+                            "SSRA Assist Help: Ask about TIN registration, PAYE/WHT calculators, "
+                            "or official payment verification at https://etax.nra.gov.ss/. "
+                            "Reply AGENT for an officer or STOP to opt out."
+                        ),
+                        citation_ids=["cit_help_etax"],
+                    )
+                ],
+                citations=[cit],
+                numbers=[],
+                is_estimate=False,
+                abstained=False,
+            ),
+        }
+
     # 2. Immediate human escalation keyword AGENT (Principle 6 & Section 11)
     if upper in ("AGENT", "HUMAN", "OFFICER"):
         ticket = HandoffTicket(
