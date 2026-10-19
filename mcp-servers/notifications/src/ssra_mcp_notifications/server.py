@@ -4,20 +4,35 @@ from __future__ import annotations
 
 from typing import Any
 
-from ssra_core import McpErrorCode, RiskTier, SSRAError, new_id
+from ssra_core import AuthLevel, McpErrorCode, RiskTier, SSRAError, juba_today, new_id
 from ssra_mcp import (
     JSON_SCHEMA_2020_12,
     RegisteredTool,
     StatelessMcpServer,
     ToolAnnotations,
     ToolContext,
+    require_subject_ref,
+)
+
+_ALLOWED_NOTIFICATION_WORKLOADS: frozenset[str] = frozenset(
+    {"ssra-agent-runtime", "ssra-console-staff", "ssra-system-scheduler"}
 )
 
 
 def create_notifications_mcp_server() -> StatelessMcpServer:
     server = StatelessMcpServer(server_name="notifications")
 
-    def _send_template(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
+    def _send_template(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        require_subject_ref(ctx)
+        if (
+            ctx.claims.caller_workload not in _ALLOWED_NOTIFICATION_WORKLOADS
+            and ctx.claims.auth_level != AuthLevel.STAFF_PASSKEY
+        ):
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "send_template_message is restricted to authorized SSRA staff or system workloads (Section 8.4)",
+                status_code=403,
+            )
         if not args.get("consent_verified", False):
             raise SSRAError(
                 McpErrorCode.NOT_AUTHORIZED,
@@ -30,7 +45,7 @@ def create_notifications_mcp_server() -> StatelessMcpServer:
             "template_id": str(args["template_id"]),
             "status": "QUEUED_WITH_VERIFICATION_FOOTER",
             "record_id": msg_id,
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     server.register_tool(

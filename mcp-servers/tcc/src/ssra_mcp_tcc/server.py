@@ -6,13 +6,14 @@ import os
 from typing import Any
 
 from ssra_adapters import MockETaxAdapter
-from ssra_core import McpErrorCode, RiskTier, SSRAError, new_id
+from ssra_core import McpErrorCode, RiskTier, SSRAError, juba_today, new_id
 from ssra_mcp import (
     JSON_SCHEMA_2020_12,
     RegisteredTool,
     StatelessMcpServer,
     ToolAnnotations,
     ToolContext,
+    require_subject_ref,
 )
 
 
@@ -26,15 +27,14 @@ def create_tcc_mcp_server(*, enable_t3_request_tcc: bool | None = None) -> State
     server = StatelessMcpServer(server_name="tcc")
 
     def _get_tcc_status(_args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        if not ctx.claims.sub:
-            raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Missing subject_ref", status_code=403)
-        rec = adapter.get_ledger_balance(subject_ref=ctx.claims.sub)
+        sub = require_subject_ref(ctx)
+        rec = adapter.get_ledger_balance(subject_ref=sub)
         return {
             "tin_masked": rec.tin_masked,
             "tcc_status": rec.tcc_status,
             "tcc_expiry_date": rec.tcc_expiry_date,
             "portal_url": "https://etax.nra.gov.ss/",
-            "record_id": f"etax:tcc:{ctx.claims.sub}",
+            "record_id": f"etax:tcc:{sub}",
             "as_of": rec.as_of.date().isoformat(),
         }
 
@@ -45,9 +45,8 @@ def create_tcc_mcp_server(*, enable_t3_request_tcc: bool | None = None) -> State
                 "request_tcc is disabled until SSRA confirms upstream e-Tax API capability (OQ-001)",
                 status_code=503,
             )
-        if not ctx.claims.sub:
-            raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Missing subject_ref", status_code=403)
-        rec = adapter.get_ledger_balance(subject_ref=ctx.claims.sub)
+        sub = require_subject_ref(ctx)
+        rec = adapter.get_ledger_balance(subject_ref=sub)
         app_id = new_id("tcc_req")
         return {
             "application_id": app_id,
@@ -55,7 +54,7 @@ def create_tcc_mcp_server(*, enable_t3_request_tcc: bool | None = None) -> State
             "purpose": str(args["purpose"]),
             "status": "SUBMITTED_ON_ETAX",
             "record_id": app_id,
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     server.register_tool(

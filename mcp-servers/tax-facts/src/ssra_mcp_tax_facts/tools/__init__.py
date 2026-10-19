@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from ssra_core import RiskTier
+from ssra_core import RiskTier, juba_today
 from ssra_mcp import JSON_SCHEMA_2020_12, RegisteredTool, ToolAnnotations, ToolContext
 from ssra_rules import TaxFactsRegistry
 
@@ -13,7 +13,7 @@ from ssra_rules import TaxFactsRegistry
 def build_tax_facts_tools(registry: TaxFactsRegistry) -> list[RegisteredTool]:
     def _get_tax_fact(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
         as_of_str = args.get("as_of")
-        as_of_date = date.fromisoformat(str(as_of_str)) if as_of_str else date(2026, 10, 16)
+        as_of_date = date.fromisoformat(str(as_of_str)) if as_of_str else juba_today()
         fact = registry.get_fact(str(args["key"]), as_of=as_of_date)
         return {
             "fact": fact.model_dump(mode="json"),
@@ -23,21 +23,22 @@ def build_tax_facts_tools(registry: TaxFactsRegistry) -> list[RegisteredTool]:
 
     def _list_tax_facts(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
         prefix = args.get("prefix")
+        today = juba_today()
         facts = registry.list_facts(
             prefix=str(prefix) if prefix else None,
-            as_of=date(2026, 10, 16),
+            as_of=today,
         )
         return {
             "snapshot_version": registry.snapshot_version,
             "facts": [f.model_dump(mode="json") for f in facts],
             "record_id": f"tax_facts:{registry.snapshot_version}",
-            "as_of": "2026-10-16",
+            "as_of": today.isoformat(),
         }
 
     def _calculate_paye(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
         res = registry.calculate_paye_estimate(
             str(args["gross_monthly_ssp"]),
-            as_of=date(2026, 10, 16),
+            as_of=juba_today(),
         )
         payload = res.model_dump(mode="json")
         payload["record_id"] = f"calc:paye:{res.gross_monthly_ssp}:{res.snapshot_version}"
@@ -48,7 +49,7 @@ def build_tax_facts_tools(registry: TaxFactsRegistry) -> list[RegisteredTool]:
         res = registry.calculate_withholding_estimate(
             str(args["gross_amount_ssp"]),
             category=category,  # type: ignore[arg-type]
-            as_of=date(2026, 10, 16),
+            as_of=juba_today(),
         )
         payload = res.model_dump(mode="json")
         payload["record_id"] = f"calc:wht:{category}:{res.gross_amount_ssp}:{res.snapshot_version}"
@@ -134,13 +135,17 @@ def build_tax_facts_tools(registry: TaxFactsRegistry) -> list[RegisteredTool]:
             output_schema={
                 "$schema": JSON_SCHEMA_2020_12,
                 "type": "object",
-                "additionalProperties": True,
+                "additionalProperties": False,
                 "required": [
                     "gross_monthly_ssp",
                     "estimated_tax_ssp",
                     "net_monthly_ssp",
                     "effective_rate_percent",
                     "filing_deadline_day",
+                    "currency",
+                    "snapshot_version",
+                    "legal_ref",
+                    "bands",
                     "is_estimate",
                     "disclaimer",
                     "numeric_claims",
@@ -153,6 +158,10 @@ def build_tax_facts_tools(registry: TaxFactsRegistry) -> list[RegisteredTool]:
                     "net_monthly_ssp": {"type": "string"},
                     "effective_rate_percent": {"type": "string"},
                     "filing_deadline_day": {"type": "integer"},
+                    "currency": {"type": "string", "const": "SSP"},
+                    "snapshot_version": {"type": "string"},
+                    "legal_ref": {"type": "string"},
+                    "bands": {"type": "array"},
                     "is_estimate": {"type": "boolean", "const": True},
                     "disclaimer": {"type": "string"},
                     "numeric_claims": {"type": "array"},
@@ -193,13 +202,17 @@ def build_tax_facts_tools(registry: TaxFactsRegistry) -> list[RegisteredTool]:
             output_schema={
                 "$schema": JSON_SCHEMA_2020_12,
                 "type": "object",
-                "additionalProperties": True,
+                "additionalProperties": False,
                 "required": [
                     "category",
                     "gross_amount_ssp",
                     "rate_percent",
                     "withholding_tax_ssp",
                     "net_payable_ssp",
+                    "currency",
+                    "snapshot_version",
+                    "legal_ref",
+                    "rate_fact_key",
                     "is_estimate",
                     "disclaimer",
                     "numeric_claims",
@@ -212,6 +225,10 @@ def build_tax_facts_tools(registry: TaxFactsRegistry) -> list[RegisteredTool]:
                     "rate_percent": {"type": "string"},
                     "withholding_tax_ssp": {"type": "string"},
                     "net_payable_ssp": {"type": "string"},
+                    "currency": {"type": "string", "const": "SSP"},
+                    "snapshot_version": {"type": "string"},
+                    "legal_ref": {"type": "string"},
+                    "rate_fact_key": {"type": "string"},
                     "is_estimate": {"type": "boolean", "const": True},
                     "disclaimer": {"type": "string"},
                     "numeric_claims": {"type": "array"},

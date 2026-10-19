@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ssra_core import RiskTier
+from ssra_core import RiskTier, juba_today
 from ssra_mcp import (
     JSON_SCHEMA_2020_12,
     RegisteredTool,
@@ -21,7 +21,7 @@ def create_{{PACKAGE_SUFFIX}}_mcp_server() -> StatelessMcpServer:
         return {
             "status": "ok",
             "record_id": "{{SERVER_NAME}}:ping",
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     server.register_tool(

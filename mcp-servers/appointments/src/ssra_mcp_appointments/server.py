@@ -4,18 +4,28 @@ from __future__ import annotations
 
 from typing import Any
 
-from ssra_core import RiskTier, new_id
+from ssra_core import McpErrorCode, RiskTier, SSRAError, juba_today, new_id
 from ssra_mcp import (
     JSON_SCHEMA_2020_12,
     RegisteredTool,
     StatelessMcpServer,
     ToolAnnotations,
     ToolContext,
+    require_subject_ref,
 )
 
 
 def create_appointments_mcp_server() -> StatelessMcpServer:
     server = StatelessMcpServer(server_name="appointments")
+    appointment_store: dict[str, dict[str, Any]] = {
+        "appt_seed_01": {
+            "appointment_id": "appt_seed_01",
+            "subject_ref": "sub_taxpayer_amina_01",
+            "office_code": "JUBA_HQ",
+            "slot_id": "slot_2026_10_20_0900",
+            "status": "CONFIRMED",
+        }
+    }
 
     def _list_slots(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
         office = str(args.get("office_code", "JUBA_HQ"))
@@ -26,27 +36,52 @@ def create_appointments_mcp_server() -> StatelessMcpServer:
                 {"slot_id": "slot_2026_10_20_1100", "start_eat": "2026-10-20T11:00:00+02:00"},
             ],
             "record_id": f"slots:{office}",
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
-    def _book_appointment(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
+    def _book_appointment(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        sub = require_subject_ref(ctx)
         appt_id = new_id("appt")
+        office = str(args["office_code"])
+        slot = str(args["slot_id"])
+        appointment_store[appt_id] = {
+            "appointment_id": appt_id,
+            "subject_ref": sub,
+            "office_code": office,
+            "slot_id": slot,
+            "status": "CONFIRMED",
+        }
         return {
             "appointment_id": appt_id,
-            "office_code": str(args["office_code"]),
-            "slot_id": str(args["slot_id"]),
+            "office_code": office,
+            "slot_id": slot,
             "status": "CONFIRMED",
             "record_id": appt_id,
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
-    def _cancel_appointment(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
+    def _cancel_appointment(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        sub = require_subject_ref(ctx)
         appt_id = str(args["appointment_id"])
+        rec = appointment_store.get(appt_id)
+        if rec is None:
+            raise SSRAError(
+                McpErrorCode.NOT_FOUND,
+                f"Appointment '{appt_id}' not found",
+                status_code=404,
+            )
+        if rec.get("subject_ref") != sub:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"State-handle hijacking blocked: caller does not own appointment '{appt_id}'",
+                status_code=403,
+            )
+        rec["status"] = "CANCELLED"
         return {
             "appointment_id": appt_id,
             "status": "CANCELLED",
             "record_id": appt_id,
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     server.register_tool(

@@ -9,23 +9,19 @@ from __future__ import annotations
 from typing import Any
 
 from ssra_adapters import MockETaxAdapter
-from ssra_core import McpErrorCode, RiskTier, SSRAError
-from ssra_mcp import JSON_SCHEMA_2020_12, RegisteredTool, ToolAnnotations, ToolContext
-
-
-def _require_subject(ctx: ToolContext) -> str:
-    if not ctx.claims.sub:
-        raise SSRAError(
-            McpErrorCode.NOT_AUTHORIZED,
-            "Verified subject_ref claim required for T1 ledger tools",
-            status_code=403,
-        )
-    return ctx.claims.sub
+from ssra_core import RiskTier
+from ssra_mcp import (
+    JSON_SCHEMA_2020_12,
+    RegisteredTool,
+    ToolAnnotations,
+    ToolContext,
+    require_subject_ref,
+)
 
 
 def build_ledger_tools(adapter: MockETaxAdapter) -> list[RegisteredTool]:
     def _get_balance(_args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        subject_ref = _require_subject(ctx)
+        subject_ref = require_subject_ref(ctx)
         rec = adapter.get_ledger_balance(subject_ref=subject_ref)
         return {
             "tin_masked": rec.tin_masked,
@@ -38,7 +34,7 @@ def build_ledger_tools(adapter: MockETaxAdapter) -> list[RegisteredTool]:
         }
 
     def _get_filing_status(_args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        subject_ref = _require_subject(ctx)
+        subject_ref = require_subject_ref(ctx)
         rec = adapter.get_ledger_balance(subject_ref=subject_ref)
         return {
             "tin_masked": rec.tin_masked,
@@ -49,7 +45,7 @@ def build_ledger_tools(adapter: MockETaxAdapter) -> list[RegisteredTool]:
         }
 
     def _list_assessments(_args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        subject_ref = _require_subject(ctx)
+        subject_ref = require_subject_ref(ctx)
         rec = adapter.get_ledger_balance(subject_ref=subject_ref)
         return {
             "tin_masked": rec.tin_masked,
@@ -65,7 +61,7 @@ def build_ledger_tools(adapter: MockETaxAdapter) -> list[RegisteredTool]:
         }
 
     def _list_payments(_args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        subject_ref = _require_subject(ctx)
+        subject_ref = require_subject_ref(ctx)
         rec = adapter.get_ledger_balance(subject_ref=subject_ref)
         return {
             "tin_masked": rec.tin_masked,

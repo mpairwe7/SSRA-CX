@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ssra_adapters import MockOfficialChannelsAdapter
-from ssra_core import RiskTier, new_id
+from ssra_core import RiskTier, juba_today, new_id
 from ssra_mcp import JSON_SCHEMA_2020_12, RegisteredTool, ToolAnnotations, ToolContext
 
 
@@ -17,7 +17,7 @@ def build_official_channels_tools(adapter: MockOfficialChannelsAdapter) -> list[
             "status": entry.status,
             "guidance": entry.guidance,
             "record_id": f"official_channel:{entry.identifier}",
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     def _verify_sender(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
@@ -27,7 +27,7 @@ def build_official_channels_tools(adapter: MockOfficialChannelsAdapter) -> list[
             "status": entry.status,
             "guidance": entry.guidance,
             "record_id": f"official_sender:{entry.identifier}",
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     def _report_scam(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
@@ -37,7 +37,7 @@ def build_official_channels_tools(adapter: MockOfficialChannelsAdapter) -> list[
             "status": "RECEIVED_BY_SSRA_SECOPS",
             "suspected_identifier": str(args["suspected_identifier"]),
             "record_id": report_id,
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     return [

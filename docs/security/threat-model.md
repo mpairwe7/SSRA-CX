@@ -54,7 +54,7 @@ Every required abuse case from Section 12.2 is mapped below to its OWASP Agentic
 | Control Domain | Implementation Location | Verification Mechanism |
 |---|---|---|
 | **Identity Proofing & Step-Up** | `services/agent-runtime/src/ssra_runtime/nodes/router.py`, `services/api/src/ssra_api/identity_link/` | Unit + integration tests for `ANONYMOUS` → `T1_TIN_BOUND` → `T3_STEP_UP` |
-| **OAuth 2.1 & RFC 8693 Subject Binding** | `infra/gateway/`, `libs/ssra_security/`, `libs/ssra_mcp/` | Contract tests proving MCP servers reject missing/mismatched `sub` or audience claims |
+| **OAuth 2.1, RFC 8693 Subject Binding & Scope Minimization** | `infra/gateway/`, `libs/ssra_security/`, `libs/ssra_mcp/` | Contract tests proving MCP servers enforce `sub`, audience, RFC 8707 `resource`, progressive `mcp:<server>:{read,write,step_up}` scopes, state-handle ownership, and SSRF URL blocks (`validate_mcp_oauth_url`) |
 | **PII Redaction (`+211`, TIN, National ID)** | `libs/ssra_security/redaction.py` (Presidio + custom SSRA recognisers) | Property tests verifying zero raw TINs or `+211` numbers appear in logs or OTel spans |
 | **Append-Only Hash-Chained Audit Log** | `libs/ssra_security/audit.py`, PostgreSQL trigger, S3 WORM | Tamper-detection tests verifying broken hash chains are caught immediately |
 | **Encryption in Transit & at Rest** | TLS 1.3 ingress, cluster mTLS, OpenBao Transit column encryption | Kyverno policy checks + integration tests |
