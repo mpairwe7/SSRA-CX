@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ssra_api.admin.application import (
     default_kill_switch_state,
+    get_admin_audit_head_hash,
     update_kill_switch_state,
     verify_admin_audit_chain,
 )
@@ -35,6 +36,7 @@ class AuditVerifyResponse(BaseModel):
 
     integrity_verified: bool
     events_count: int
+    head_hash: str = "0000000000000000000000000000000000000000000000000000000000000000"
 
 
 class JitElevationRequest(BaseModel):
@@ -96,7 +98,11 @@ async def set_kill_switches(body: UpdateKillSwitchRequest) -> KillSwitchResponse
 @router.get("/audit-verify", response_model=AuditVerifyResponse)
 async def verify_audit() -> AuditVerifyResponse:
     ok, count = verify_admin_audit_chain()
-    return AuditVerifyResponse(integrity_verified=ok, events_count=count)
+    return AuditVerifyResponse(
+        integrity_verified=ok,
+        events_count=count,
+        head_hash=get_admin_audit_head_hash(),
+    )
 
 
 @router.get("/public-status", response_model=PublicStatusResponse)

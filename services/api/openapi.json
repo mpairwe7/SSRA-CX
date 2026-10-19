@@ -134,6 +134,11 @@
             "title": "Events Count",
             "type": "integer"
           },
+          "head_hash": {
+            "default": "0000000000000000000000000000000000000000000000000000000000000000",
+            "title": "Head Hash",
+            "type": "string"
+          },
           "integrity_verified": {
             "title": "Integrity Verified",
             "type": "boolean"

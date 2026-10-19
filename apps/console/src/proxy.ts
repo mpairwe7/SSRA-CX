@@ -15,12 +15,28 @@ export type KnowledgeReleaseStep = (typeof KNOWLEDGE_RELEASE_STEPS)[number];
 
 export interface ConsoleSession {
   readonly staffId: string;
-  readonly role: "agent" | "supervisor" | "qa" | "legal_approver" | "secops" | "admin";
+  readonly role:
+    | "agent"
+    | "supervisor"
+    | "qa"
+    | "legal_approver"
+    | "secops"
+    | "admin"
+    | "ssra_staff"
+    | "ssra_admin"
+    | "ssra_auditor";
   readonly passkeyVerified: boolean;
   readonly officeCode: string;
   readonly idleAgeSeconds: number;
   readonly originHeader?: string;
   readonly allowedOrigin?: string;
+}
+
+/**
+ * Check whether a console session role is a read-only auditor (`qa` or `ssra_auditor`) under Separation of Duties.
+ */
+export function isReadOnlyAuditorRole(role: ConsoleSession["role"] | undefined | null): boolean {
+  return role === "qa" || role === "ssra_auditor";
 }
 
 /**
@@ -53,23 +69,45 @@ export function authorizeConsoleAccess(session: ConsoleSession | null): {
 }
 
 /**
- * Authorize route-specific Staff Console access by role (`admin`, `secops`, `legal_approver`, `agent`).
+ * Authorize route-specific Staff Console access by role and HTTP method (enforcing Auditor read-only Separation of Duties).
  */
 export function authorizeConsoleRoute(
   session: ConsoleSession | null,
   pathname: string,
+  method = "GET",
 ): { readonly allowed: boolean; readonly reason?: string } {
   const base = authorizeConsoleAccess(session);
   if (!base.allowed || !session) {
     return base;
   }
+  const upperMethod = method.trim().toUpperCase();
+  const isMutation =
+    upperMethod === "POST" ||
+    upperMethod === "PUT" ||
+    upperMethod === "PATCH" ||
+    upperMethod === "DELETE";
+
+  // Separation of Duties (ISO/IEC 42001 Clause 9.2 & EU AI Act Art. 14):
+  // Auditors (`qa` / `ssra_auditor`) are read-only across operational routes and may only submit QA rubric scores.
+  if (isMutation && isReadOnlyAuditorRole(session.role)) {
+    const allowedAuditorMutation =
+      pathname.endsWith("/qa-score") || pathname.startsWith("/admin/audit/export");
+    if (!allowedAuditorMutation) {
+      return { allowed: false, reason: "AUDITOR_READ_ONLY_SEPARATION_OF_DUTIES" };
+    }
+  }
+
   if (pathname.startsWith("/admin/kill-switches") || pathname.startsWith("/admin/jit")) {
-    if (session.role !== "admin" && session.role !== "secops") {
+    if (session.role !== "admin" && session.role !== "secops" && session.role !== "ssra_admin") {
       return { allowed: false, reason: "INSUFFICIENT_ROLE_ADMIN_REQUIRED" };
     }
   }
   if (pathname.startsWith("/knowledge-release/approve")) {
-    if (session.role !== "legal_approver" && session.role !== "admin") {
+    if (
+      session.role !== "legal_approver" &&
+      session.role !== "admin" &&
+      session.role !== "ssra_admin"
+    ) {
       return { allowed: false, reason: "INSUFFICIENT_ROLE_LEGAL_APPROVER_REQUIRED" };
     }
   }
@@ -77,17 +115,18 @@ export function authorizeConsoleRoute(
 }
 
 /**
- * Execute request-level Next.js 16 console proxy enforcing passkey, origin, idle timeout, and route RBAC.
+ * Execute request-level Next.js 16 console proxy enforcing passkey, origin, idle timeout, and route/method RBAC.
  */
 export function executeConsoleProxy(input: {
   readonly session: ConsoleSession | null;
   readonly pathname: string;
+  readonly method?: string;
 }): {
   readonly status: 200 | 401 | 403;
   readonly allowed: boolean;
   readonly reason?: string;
 } {
-  const decision = authorizeConsoleRoute(input.session, input.pathname);
+  const decision = authorizeConsoleRoute(input.session, input.pathname, input.method ?? "GET");
   if (!decision.allowed) {
     const status = decision.reason === "MISSING_SESSION" ? 401 : 403;
     return {

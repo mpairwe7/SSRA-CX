@@ -194,6 +194,14 @@ export const STAFF_DESTINATIONS: readonly StaffDestination[] = [
     blurb: "Hash-chained WORM ledger verification and Merkle seals",
     roles: ["ssra_admin", "ssra_auditor"],
   },
+  {
+    href: "/admin/replay",
+    label: "Forensic replay",
+    navLabel: "Replay",
+    group: "audit",
+    blurb: "Turn-by-turn conversation reconstruction, citations, and numeric provenance",
+    roles: ["ssra_admin", "ssra_auditor"],
+  },
 ];
 
 export function staffDestinationsFor(role: string | undefined | null): StaffDestination[] {
@@ -270,12 +278,23 @@ export interface AuditVerificationReport {
 
 /**
  * Auditor WORM Audit Trail & Merkle Seal Inspector (`admin/audit/page.tsx`):
- * Places integrity verification first and pauses `Seal now` (`sealButtonDisabled: true`)
- * whenever the chain fails verification so an altered record can never be sealed in place.
+ * Places integrity verification first, computes the tamper blast-radius sequence boundary,
+ * and pauses `Seal now` (`sealButtonDisabled: true`) whenever any break exists or when
+ * viewed by a non-authorised role so an altered record can never be sealed in place.
  */
-export function buildAuditorTrailIntegrityView(data: AuditVerificationReport) {
+export function buildAuditorTrailIntegrityView(
+  data: AuditVerificationReport,
+  options?: { readonly role?: StaffRole },
+) {
   const shortHeadHash = data.head_hash ? `${data.head_hash.slice(0, 10)}…` : "—";
-  if (!data.valid) {
+  const hasBreak = !data.valid || data.breaks.length > 0 || data.anchor_breaks.length > 0;
+  const breakSeqs = [
+    ...data.breaks.map((b) => b.seq),
+    ...data.anchor_breaks.map((ab) => ab.first_seq),
+  ].filter((n) => Number.isFinite(n) && n >= 0);
+  const compromisedFromSeq = breakSeqs.length > 0 ? Math.min(...breakSeqs) : null;
+
+  if (hasBreak) {
     const first = data.breaks[0];
     const sealBreak = data.anchor_breaks[0];
     const explanation = first
@@ -290,11 +309,15 @@ export function buildAuditorTrailIntegrityView(data: AuditVerificationReport) {
       headline: "The audit trail does not verify",
       explanation,
       shortHeadHash,
+      compromisedFromSeq,
       sealButtonDisabled: true,
       sealPausedReason:
         "Sealing is paused until the break is explained: a new seal would fix the altered record in place.",
     };
   }
+  const safeUnsealed =
+    Number.isFinite(data.unsealed_rows) && data.unsealed_rows > 0 ? data.unsealed_rows : 0;
+  const roleDisallowSeal = options?.role === "ssra_staff";
   return {
     bannerRole: "status" as const,
     chipClass: "is-good" as const,
@@ -302,8 +325,11 @@ export function buildAuditorTrailIntegrityView(data: AuditVerificationReport) {
     headline: "Every event fingerprint and Merkle seal verified",
     explanation: `Latest fingerprint ${shortHeadHash}.`,
     shortHeadHash,
-    sealButtonDisabled: data.unsealed_rows === 0,
-    sealPausedReason: null,
+    compromisedFromSeq: null,
+    sealButtonDisabled: safeUnsealed === 0 || roleDisallowSeal,
+    sealPausedReason: roleDisallowSeal
+      ? "Only administrators and auditors may seal unsealed WORM ledger batches."
+      : null,
   };
 }
 

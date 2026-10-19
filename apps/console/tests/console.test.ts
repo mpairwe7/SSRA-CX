@@ -10,15 +10,19 @@ import {
   aiCallsHeadline,
   buildAgentQueueWorkbench,
   buildAnalyticsDashboardView,
+  buildAuditorDriftAndFairnessView,
+  buildAuditorEvidencePackage,
   buildAuditorTrailIntegrityView,
   buildCallBriefCardView,
   buildCallConsoleBarView,
   buildEvaluationDashboardView,
+  buildForensicReplayTimelineView,
   buildKnowledgeReleasePipelineView,
   buildOpsPageShell,
   buildOpsStatTile,
   buildStaffDocumentInspectionViewerState,
   EVAL_METRIC_PLAIN_LABELS,
+  evaluateAuditorQaRubricSubmission,
   evaluateAuthorityStatusResponse,
   formatSafeTimestamp,
   isLiveOfficer,
@@ -296,6 +300,19 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(intactAudit.chipText).toBe("Record intact");
     expect(intactAudit.sealButtonDisabled).toBe(false);
 
+    // Separation of Duties: ssra_staff cannot seal WORM batches
+    const staffAuditView = buildAuditorTrailIntegrityView(
+      {
+        valid: true,
+        head_hash: "8f2b1290a5b1179c20f9e8123ab71e8902112a01",
+        unsealed_rows: 4,
+        breaks: [],
+        anchor_breaks: [],
+      },
+      { role: "ssra_staff" },
+    );
+    expect(staffAuditView.sealButtonDisabled).toBe(true);
+
     const alteredAudit = buildAuditorTrailIntegrityView({
       valid: false,
       head_hash: "8f2b1290a5b1179c20f9e8123ab71e8902112a01",
@@ -304,8 +321,122 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
       anchor_breaks: [],
     });
     expect(alteredAudit.chipText).toBe("Record altered");
+    expect(alteredAudit.compromisedFromSeq).toBe(12);
     expect(alteredAudit.sealButtonDisabled).toBe(true);
     expect(alteredAudit.explanation).toContain("Event #12 fails its check");
+
+    // Auditor Read-Only Separation of Duties at Console Request Boundary
+    const auditorSession = { ...session, role: "ssra_auditor" as const };
+    expect(
+      executeConsoleProxy({
+        session: auditorSession,
+        pathname: "/admin/flags",
+        method: "POST",
+      }),
+    ).toEqual({
+      status: 403,
+      allowed: false,
+      reason: "AUDITOR_READ_ONLY_SEPARATION_OF_DUTIES",
+    });
+    expect(
+      executeConsoleProxy({
+        session: auditorSession,
+        pathname: "/v1/conversations/conv_1/qa-score",
+        method: "POST",
+      }),
+    ).toEqual({ status: 200, allowed: true });
+    expect(staffDestinationsFor("ssra_auditor").map((d) => d.href)).toContain("/admin/replay");
+
+    // Forensic Conversation Replay Timeline, Sampled QA Rubric, Drift/Fairness & Evidence Exporter
+    const replayTimeline = buildForensicReplayTimelineView({
+      threadId: "thr_forensic_1",
+      turns: [
+        {
+          turn_index: 1,
+          thread_id: "thr_forensic_1",
+          channel: "web",
+          locale: "en",
+          auth_level: "T1_TIN_BOUND",
+          subject_ref: "sub_taxpayer_amina_01",
+          redacted_input: "Check my balance for TIN ••••1234",
+          intent_name: "get_balance",
+          risk_tier: "T1",
+          policy_decision: "ALLOW",
+          prompt_version: "2026.10.1",
+          model_route: "ssra-sovereign/sunflower-qwen3.5-9b",
+          knowledge_snapshot_version: "2026.10.1",
+          tool_calls: [{ id: "art_1", server: "ledger", tool: "get_balance" }],
+          citations: ["Ledger-••••1234"],
+          numbers: [{ value: "1450000", unit: "SSP", source_ref: "art_1.total_outstanding_ssp" }],
+          output_text: "Your balance is 1,450,000 SSP.",
+          abstained: false,
+          safety_flags: [],
+          audit_event_hash: "a".repeat(64),
+        },
+      ],
+    });
+    expect(replayTimeline.allTurnsReconstructable).toBe(true);
+    expect(replayTimeline.flaggedTurnsCount).toBe(0);
+
+    const qaBelowGate = evaluateAuditorQaRubricSubmission({
+      conversationId: "conv_1",
+      auditorId: "aud_01",
+      accuracy: 0.8,
+      citationsComplete: 1.0,
+      neutrality: 1.0,
+      languageQuality: 1.0,
+    });
+    expect(qaBelowGate.valid).toBe(false);
+    expect(qaBelowGate.requiresDiscrepancyTicket).toBe(true);
+
+    const qaWithNote = evaluateAuditorQaRubricSubmission({
+      conversationId: "conv_1",
+      auditorId: "aud_01",
+      accuracy: 0.8,
+      citationsComplete: 1.0,
+      neutrality: 1.0,
+      languageQuality: 1.0,
+      findingNote: "Missing citation anchor on BPT bracket",
+    });
+    expect(qaWithNote.valid).toBe(true);
+    expect(qaWithNote.requiresDiscrepancyTicket).toBe(true);
+
+    const driftAlert = buildAuditorDriftAndFairnessView({
+      intentMixKlDivergence: 0.04,
+      abstentionRate24h: 0.08,
+      guardrailTriggerRate24h: 0.01,
+      accuracyByLocale: { en: 1.0, pga: 0.91, ar: 0.99 },
+    });
+    expect(driftAlert.status).toBe("DRIFT_OR_PARITY_ALERT");
+    expect(driftAlert.breachedLocales).toContain("pga");
+
+    const blockedEvidence = buildAuditorEvidencePackage({
+      auditReport: {
+        valid: false,
+        head_hash: "8f2b1290a5b1179c20f9e8123ab71e8902112a01",
+        unsealed_rows: 1,
+        breaks: [{ seq: 5, reason: "tampered digest" }],
+        anchor_breaks: [],
+      },
+      snapshotVersion: "2026.10.1",
+      sampledThreadIds: ["thr_1"],
+      qaCompositeScore: 0.99,
+    });
+    expect(blockedEvidence.exportAllowed).toBe(false);
+
+    const validEvidence = buildAuditorEvidencePackage({
+      auditReport: {
+        valid: true,
+        head_hash: "8f2b1290a5b1179c20f9e8123ab71e8902112a01",
+        unsealed_rows: 0,
+        breaks: [],
+        anchor_breaks: [],
+      },
+      snapshotVersion: "2026.10.1",
+      sampledThreadIds: ["thr_1"],
+      qaCompositeScore: 0.99,
+    });
+    expect(validEvidence.exportAllowed).toBe(true);
 
     // Staff Document Inspection Viewer, Officer Call Brief Card & Wrap-Up Form
     const viewer = buildStaffDocumentInspectionViewerState({
