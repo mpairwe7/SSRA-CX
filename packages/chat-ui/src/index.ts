@@ -21,6 +21,7 @@ export const FilingStatusTimelinePropsSchema = z.object({
   tin_masked: z.string().regex(/^••••\d{4}$/),
   filing_status: z.string().min(1),
   last_filed_period: z.string().min(1),
+  as_of: z.string().optional(),
 });
 
 export const PaymentInstructionsCardPropsSchema = z.object({
@@ -30,15 +31,36 @@ export const PaymentInstructionsCardPropsSchema = z.object({
   official_portal: z.literal("https://etax.nra.gov.ss/"),
 });
 
-export const CalculatorFormPropsSchema = z.object({
-  calculator_type: z.enum(["PAYE", "WHT"]).default("PAYE"),
-  gross_monthly_ssp: z.string().optional(),
-  estimated_tax_ssp: z.string().optional(),
-  net_monthly_ssp: z.string().optional(),
-  effective_rate_percent: z.string().optional(),
-  filing_deadline_day: z.number().int().optional(),
-  is_estimate: z.literal(true),
-});
+export const CalculatorFormPropsSchema = z
+  .object({
+    calculator_type: z.enum(["PAYE", "WHT"]).optional(),
+    gross_monthly_ssp: z.string().optional(),
+    estimated_tax_ssp: z.string().optional(),
+    net_monthly_ssp: z.string().optional(),
+    effective_rate_percent: z.string().optional(),
+    filing_deadline_day: z.number().int().optional(),
+    category: z.string().optional(),
+    gross_amount_ssp: z.string().optional(),
+    rate_percent: z.string().optional(),
+    withholding_tax_ssp: z.string().optional(),
+    net_payable_ssp: z.string().optional(),
+    is_estimate: z.literal(true),
+  })
+  .refine(
+    (val) => {
+      if (val.estimated_tax_ssp !== undefined && val.withholding_tax_ssp !== undefined) {
+        return false;
+      }
+      if (val.calculator_type === "WHT" && val.estimated_tax_ssp !== undefined) {
+        return false;
+      }
+      if (val.calculator_type === "PAYE" && val.withholding_tax_ssp !== undefined) {
+        return false;
+      }
+      return true;
+    },
+    { message: "CalculatorForm props must not mix PAYE and WHT tax amounts" },
+  );
 
 export const CitationListPropsSchema = z.object({
   citations: z.array(CitationSchema),
@@ -75,6 +97,9 @@ export interface ResolvedGenerativeUI {
   readonly fallbackText: string;
 }
 
+/**
+ * Validate a candidate Generative UI component against the closed 7-card Zod 4 registry, falling back to text.
+ */
 export function resolveGenerativeUIComponent(
   candidate: { readonly name?: unknown; readonly props?: unknown } | null | undefined,
   fallbackText: string,

@@ -23,6 +23,9 @@ export interface ConsoleSession {
   readonly allowedOrigin?: string;
 }
 
+/**
+ * Authorize baseline Staff Console access (WebAuthn passkey, origin match, and 15-min idle timeout).
+ */
 export function authorizeConsoleAccess(session: ConsoleSession | null): {
   readonly allowed: boolean;
   readonly reason?: string;
@@ -47,4 +50,51 @@ export function authorizeConsoleAccess(session: ConsoleSession | null): {
     return { allowed: false, reason: "SESSION_IDLE_EXPIRED" };
   }
   return { allowed: true };
+}
+
+/**
+ * Authorize route-specific Staff Console access by role (`admin`, `secops`, `legal_approver`, `agent`).
+ */
+export function authorizeConsoleRoute(
+  session: ConsoleSession | null,
+  pathname: string,
+): { readonly allowed: boolean; readonly reason?: string } {
+  const base = authorizeConsoleAccess(session);
+  if (!base.allowed || !session) {
+    return base;
+  }
+  if (pathname.startsWith("/admin/kill-switches") || pathname.startsWith("/admin/jit")) {
+    if (session.role !== "admin" && session.role !== "secops") {
+      return { allowed: false, reason: "INSUFFICIENT_ROLE_ADMIN_REQUIRED" };
+    }
+  }
+  if (pathname.startsWith("/knowledge-release/approve")) {
+    if (session.role !== "legal_approver" && session.role !== "admin") {
+      return { allowed: false, reason: "INSUFFICIENT_ROLE_LEGAL_APPROVER_REQUIRED" };
+    }
+  }
+  return { allowed: true };
+}
+
+/**
+ * Execute request-level Next.js 16 console proxy enforcing passkey, origin, idle timeout, and route RBAC.
+ */
+export function executeConsoleProxy(input: {
+  readonly session: ConsoleSession | null;
+  readonly pathname: string;
+}): {
+  readonly status: 200 | 401 | 403;
+  readonly allowed: boolean;
+  readonly reason?: string;
+} {
+  const decision = authorizeConsoleRoute(input.session, input.pathname);
+  if (!decision.allowed) {
+    const status = decision.reason === "MISSING_SESSION" ? 401 : 403;
+    return {
+      status,
+      allowed: false,
+      ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+    };
+  }
+  return { status: 200, allowed: true };
 }

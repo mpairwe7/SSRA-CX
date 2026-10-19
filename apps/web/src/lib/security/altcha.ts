@@ -18,8 +18,12 @@ export interface AltchaSolution {
   readonly number: number;
   readonly salt: string;
   readonly signature: string;
+  readonly maxnumber?: number;
 }
 
+/**
+ * Compute SHA-256 hex digest using Web Crypto SubtleCrypto.
+ */
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
   const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
@@ -28,12 +32,24 @@ async function sha256Hex(input: string): Promise<string> {
     .join("");
 }
 
+/**
+ * Create a self-hosted ALTCHA SHA-256 proof-of-work challenge within `[0..maxnumber]`.
+ */
 export async function createAltchaChallenge(
   secretNumber: number,
   salt: string,
   hmacSecret: string,
   maxnumber = 5000,
 ): Promise<AltchaChallenge> {
+  if (
+    !Number.isSafeInteger(maxnumber) ||
+    maxnumber < 1 ||
+    !Number.isSafeInteger(secretNumber) ||
+    secretNumber < 0 ||
+    secretNumber > maxnumber
+  ) {
+    throw new RangeError("secretNumber must be an integer within [0..maxnumber]");
+  }
   const challenge = await sha256Hex(`${salt}:${secretNumber}`);
   const signature = await sha256Hex(`${hmacSecret}:${challenge}`);
   return {
@@ -45,11 +61,24 @@ export async function createAltchaChallenge(
   };
 }
 
+/**
+ * Verify a client-submitted ALTCHA proof-of-work solution against its challenge and HMAC signature.
+ */
 export async function verifyAltchaSolution(
   solution: AltchaSolution,
   hmacSecret: string,
+  maxnumber = 5000,
 ): Promise<boolean> {
-  if (solution.algorithm !== "SHA-256" || solution.number < 0) {
+  const solutionMax = solution.maxnumber ?? maxnumber;
+  const effectiveMax = Math.min(maxnumber, solutionMax);
+  if (
+    solution.algorithm !== "SHA-256" ||
+    !Number.isSafeInteger(solutionMax) ||
+    solutionMax < 1 ||
+    !Number.isSafeInteger(solution.number) ||
+    solution.number < 0 ||
+    solution.number > effectiveMax
+  ) {
     return false;
   }
   const recomputedChallenge = await sha256Hex(`${solution.salt}:${solution.number}`);

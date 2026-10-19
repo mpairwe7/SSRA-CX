@@ -8,7 +8,7 @@
  */
 
 import type { LocaleCode } from "@ssra/contracts";
-import { getTextDirection, PHASE1_LOCALES } from "@ssra/i18n";
+import { getTextDirection, ROADMAP_LOCALES } from "@ssra/i18n";
 
 export interface ProxyRequestContext {
   readonly pathname: string;
@@ -34,6 +34,9 @@ const IPV6_HOST_PATTERN = /^\[[0-9a-fA-F:]+\](?::(\d{1,5}))?$/;
 const DNS_HOST_PATTERN =
   /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.?(?::(\d{1,5}))?$/;
 
+/**
+ * Validate RFC 9112 Host header syntax (IPv6 bracketed or DNS hostname with optional port).
+ */
 function isValidHttpHostHeader(host: string): boolean {
   const m = IPV6_HOST_PATTERN.exec(host) ?? DNS_HOST_PATTERN.exec(host);
   if (!m) {
@@ -49,14 +52,20 @@ function isValidHttpHostHeader(host: string): boolean {
   return true;
 }
 
+/**
+ * Build per-request Content-Security-Policy and OWASP ASVS 5.0 security headers.
+ */
 export function buildSecurityHeaders(nonce: string, strictConsole = false): Record<string, string> {
+  const safeNonce = nonce.replace(/[^A-Za-z0-9+/=_-]/g, "");
   const cspDirectives = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    `script-src 'self' 'nonce-${safeNonce}' 'strict-dynamic'`,
+    `style-src 'self' 'nonce-${safeNonce}'`,
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "connect-src 'self'",
+    "worker-src 'self'",
+    "manifest-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -69,6 +78,7 @@ export function buildSecurityHeaders(nonce: string, strictConsole = false): Reco
 
   return {
     "Content-Security-Policy": cspDirectives.join("; "),
+    "x-nonce": safeNonce,
     "Cache-Control": "private, no-cache, no-store, must-revalidate",
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
     "Cross-Origin-Opener-Policy": "same-origin",
@@ -81,22 +91,45 @@ export function buildSecurityHeaders(nonce: string, strictConsole = false): Reco
   };
 }
 
+/**
+ * Negotiate one of the 8 supported South Sudan locales from URL path prefix or RFC 9110 Accept-Language q-values.
+ */
 export function negotiateLocale(pathname: string, acceptLanguage?: string): LocaleCode {
   const segments = pathname.split("/").filter(Boolean);
   const first = segments[0] as LocaleCode | undefined;
-  if (first && (PHASE1_LOCALES as readonly string[]).includes(first)) {
+  if (first && (ROADMAP_LOCALES as readonly string[]).includes(first)) {
     return first;
   }
-  const lower = (acceptLanguage ?? "").toLowerCase();
-  if (lower.includes("pga")) {
-    return "pga";
+  if (!acceptLanguage) {
+    return "en";
   }
-  if (lower.includes("ar")) {
-    return "ar";
-  }
-  return "en";
+  const candidates = acceptLanguage
+    .split(",")
+    .map((part, idx) => {
+      const [rawTag = "", ...params] = part.trim().toLowerCase().split(";");
+      const primary = rawTag.split("-")[0]?.trim() ?? "";
+      let q = 1.0;
+      for (const p of params) {
+        const trimmed = p.trim();
+        if (trimmed.startsWith("q=")) {
+          const parsedQ = Number(trimmed.slice(2));
+          q = Number.isFinite(parsedQ) ? parsedQ : 0;
+        }
+      }
+      return { primary, q, idx };
+    })
+    .filter(
+      (item) =>
+        item.q > 0 && item.q <= 1 && (ROADMAP_LOCALES as readonly string[]).includes(item.primary),
+    )
+    .sort((a, b) => (b.q !== a.q ? b.q - a.q : a.idx - b.idx));
+
+  return (candidates[0]?.primary as LocaleCode | undefined) ?? "en";
 }
 
+/**
+ * Execute Next.js 16 request proxy gating CSP nonces, Host/next-resume headers, locale, and BFF session cookies.
+ */
 export function executeProxy(req: ProxyRequestContext): ProxyDecision {
   const locale = negotiateLocale(req.pathname, req.acceptLanguage);
   const dir = getTextDirection(locale);

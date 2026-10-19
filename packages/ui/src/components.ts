@@ -103,6 +103,46 @@ export function extractOfficerHours(meta: Record<string, unknown>): OfficerDutyH
   };
 }
 
+export interface NetworkInformationLike {
+  readonly saveData?: boolean;
+  readonly effectiveType?: string;
+  readonly downlink?: number;
+  readonly rtt?: number;
+}
+
+/**
+ * ADR-011 2G Low-Data / Text-Only Mode detector from Network Information API or user preference.
+ */
+export function shouldEnableLowDataMode(
+  connection?: NetworkInformationLike | null,
+  userOverride?: boolean,
+): boolean {
+  if (userOverride !== undefined) {
+    return userOverride;
+  }
+  if (!connection) {
+    return false;
+  }
+  if (connection.saveData === true) {
+    return true;
+  }
+  const eff = (connection.effectiveType ?? "").toLowerCase();
+  if (eff === "slow-2g" || eff === "2g") {
+    return true;
+  }
+  if (
+    typeof connection.downlink === "number" &&
+    connection.downlink > 0 &&
+    connection.downlink < 0.5
+  ) {
+    return true;
+  }
+  if (typeof connection.rtt === "number" && connection.rtt > 1000) {
+    return true;
+  }
+  return false;
+}
+
 export interface MenuKeyNavigationOutcome {
   readonly nextIndex: number;
   readonly closeAndRestoreFocus: boolean;

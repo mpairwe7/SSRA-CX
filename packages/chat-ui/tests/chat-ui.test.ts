@@ -99,9 +99,90 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(parsed.events).toHaveLength(2);
     expect(parsed.lastEventId).toBe("evt_3");
     expect(parsed.accumulatedText).toBe("PAYE is due by day 15.");
+    expect(parsed.corrupted).toBe(false);
+
+    // Corrupt frame stops advancing lastEventId before the gap
+    const corruptSse = [
+      'id: evt_1\nevent: agui\ndata: {"type":"RUN_STARTED","threadId":"thr_1"}',
+      "id: evt_corrupt\nevent: agui\ndata: {truncated-json-on-2g",
+      'id: evt_3\nevent: agui\ndata: {"type":"RUN_FINISHED","threadId":"thr_1"}',
+    ].join("\n\n");
+    const parsedCorrupt = parseAguiSseStream(corruptSse);
+    expect(parsedCorrupt.corrupted).toBe(true);
+    expect(parsedCorrupt.lastEventId).toBe("evt_1");
+
+    const whtCard = renderGenerativeUICard(
+      {
+        name: "CalculatorForm",
+        props: {
+          category: "rent",
+          gross_amount_ssp: "500000",
+          rate_percent: "10",
+          withholding_tax_ssp: "50000",
+          net_payable_ssp: "450000",
+          is_estimate: true,
+        },
+      },
+      "WHT estimate",
+    );
+    expect(whtCard.mode).toBe("component");
+    expect(whtCard.safeHtml).toContain("WHT: 50000 SSP");
+
+    // Reject contradictory PAYE + WHT tax props
+    const mixedCalc = renderGenerativeUICard(
+      {
+        name: "CalculatorForm",
+        props: {
+          estimated_tax_ssp: "100",
+          withholding_tax_ssp: "20",
+          is_estimate: true,
+        },
+      },
+      "Fallback",
+    );
+    expect(mixedCalc.mode).toBe("text_fallback");
+
+    const timelineCard = renderGenerativeUICard(
+      {
+        name: "FilingStatusTimeline",
+        props: {
+          tin_masked: "••••1234",
+          filing_status: "COMPLIANT",
+          last_filed_period: "2026-09",
+          as_of: "2026-10-20",
+        },
+      },
+      "Filing timeline",
+    );
+    expect(timelineCard.mode).toBe("component");
+    expect(timelineCard.safeHtml).toContain("Period 2026-09, as of 2026-10-20");
 
     const outbox = new OfflineOutboxQueue(2);
     expect(() => new OfflineOutboxQueue(0)).toThrow(RangeError);
+    expect(
+      outbox.enqueue({
+        id: "q_natid",
+        message: "My National ID is R12345678",
+        locale: "en",
+        tier: "T0",
+        queuedAtIso: "2026-10-16T08:00:00Z",
+      }),
+    ).toEqual({
+      queued: false,
+      reason: "SECURITY_POLICY_PII_REJECTED_FROM_OFFLINE_QUEUE",
+    });
+    expect(
+      outbox.enqueue({
+        id: "q_natid_ar",
+        message: "My National ID is R١٢٣٤٥٦٧٨",
+        locale: "ar",
+        tier: "T0",
+        queuedAtIso: "2026-10-16T08:00:00Z",
+      }),
+    ).toEqual({
+      queued: false,
+      reason: "SECURITY_POLICY_PII_REJECTED_FROM_OFFLINE_QUEUE",
+    });
     expect(
       outbox.enqueue({
         id: "q_pii",

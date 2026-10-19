@@ -8,7 +8,10 @@ import {
   dispatchServiceWorkerLogoutPurge,
   validateBffCsrfMutation,
 } from "../src/app/api/auth/session/route.js";
-import { buildRuntimeStreamRequest } from "../src/app/api/chat/stream/route.js";
+import {
+  buildRuntimeStreamRequest,
+  POST as streamChatPost,
+} from "../src/app/api/chat/stream/route.js";
 import { validateClientUpload } from "../src/app/api/uploads/route.js";
 import { generatePwaManifest } from "../src/app/manifest.js";
 import { applyTaxpayerTurnMeta, buildTaxpayerChatTurnView } from "../src/components/index.js";
@@ -34,7 +37,31 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
     expect(decision.headers["Content-Security-Policy"]).toContain(
       "require-trusted-types-for 'script'",
     );
+    expect(decision.headers["Content-Security-Policy"]).toContain("worker-src 'self'");
+    expect(decision.headers["x-nonce"]).toBe("nonce_test_123");
     expect(decision.headers["Cache-Control"]).toBe("private, no-cache, no-store, must-revalidate");
+
+    // 8-locale ROADMAP_LOCALES negotiation in proxy.ts (including Tier C & RFC 9110 q-value weighting)
+    expect(
+      executeProxy({
+        pathname: "/din/chat",
+        nonce: "n_din",
+      }).locale,
+    ).toBe("din");
+    expect(
+      executeProxy({
+        pathname: "/",
+        acceptLanguage: "en-US,en;q=0.9,din;q=0.1",
+        nonce: "n_q",
+      }).locale,
+    ).toBe("en");
+    expect(
+      executeProxy({
+        pathname: "/",
+        acceptLanguage: "din;q=0,pga;q=0.8,en;q=0.5",
+        nonce: "n_q0",
+      }).locale,
+    ).toBe("pga");
 
     // CVE-2026-27979: Block untrusted next-resume header
     expect(
@@ -107,8 +134,15 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
       message: "How much is PAYE on 250,000 SSP?",
       locale: "en",
       lowDataMode: false,
+      lastEventId: "thr_1:ev:2",
+      traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      confirmationToken: "cfm_01",
+      idempotencyKey: "idem_01",
     });
     expect(req.url).toBe("http://localhost:8001/v1/agui/stream");
+    expect(req.headers["Last-Event-ID"]).toBe("thr_1:ev:2");
+    expect(req.headers.traceparent).toContain("00-4bf92f3577b34da6a3ce929d0e0e4736");
+    expect(JSON.parse(req.body).confirmation_token).toBe("cfm_01");
 
     const presented = presentTurnAnswerForWeb({
       segments: [{ text: "PAYE is 25,000 SSP.", citation_ids: ["cit_1"] }],
@@ -154,6 +188,9 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
 
   it("verifies self-hosted ALTCHA proof-of-work bot defence challenge", async () => {
     const challenge = await createAltchaChallenge(42, "salt_ssra_1", "secret_key");
+    await expect(createAltchaChallenge(9000, "salt_ssra_1", "secret_key", 5000)).rejects.toThrow(
+      RangeError,
+    );
     const valid = await verifyAltchaSolution(
       {
         ...challenge,
@@ -162,6 +199,29 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
       "secret_key",
     );
     expect(valid).toBe(true);
+
+    const postRes = await streamChatPost(
+      new Request("https://assist.ssra.gov.ss/api/chat/stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Last-Event-ID": "thr_1:ev:1",
+        },
+        body: JSON.stringify({
+          message: "What is BPT?",
+          locale: "en",
+          confirmationToken: "cfm_1",
+          idempotencyKey: "idem_1",
+        }),
+      }),
+      async (_url, init) =>
+        new Response(String(init?.body ?? ""), {
+          status: 200,
+          headers: init?.headers as Record<string, string>,
+        }),
+    );
+    expect(postRes.status).toBe(200);
+    expect(postRes.headers.get("Last-Event-ID")).toBe("thr_1:ev:1");
 
     const wrong = await verifyAltchaSolution(
       {
@@ -194,6 +254,20 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
     expect(
       validateClientUpload({ mimeType: "application/x-msdownload", sizeBytes: 100 }).accepted,
     ).toBe(false);
+    expect(
+      validateClientUpload({
+        mimeType: "application/pdf",
+        sizeBytes: 1000,
+        filename: "../../etc/passwd",
+      }),
+    ).toEqual({ accepted: false, reason: "UNSAFE_FILENAME" });
+    expect(
+      validateClientUpload({
+        mimeType: "application/pdf",
+        sizeBytes: 1000,
+        filename: "invoice.pdf.exe",
+      }),
+    ).toEqual({ accepted: false, reason: "UNSAFE_FILENAME" });
 
     const manifest = generatePwaManifest();
     expect(manifest.display).toBe("standalone");

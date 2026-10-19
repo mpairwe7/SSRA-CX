@@ -50,6 +50,20 @@ def main() -> None:
     assert "SSRA_LOGOUT_PURGE" in sw_src and "no-store" in sw_src, (
         "CVE-2026-50184 Service Worker logout purge & no-store guard missing in apps/web/public/sw.js"
     )
+    proxy_src = (ROOT / "apps" / "web" / "src" / "proxy.ts").read_text(encoding="utf-8")
+    stream_src = (
+        ROOT / "apps" / "web" / "src" / "app" / "api" / "chat" / "stream" / "route.ts"
+    ).read_text(encoding="utf-8")
+    tel_src = (ROOT / "packages" / "telemetry" / "src" / "index.ts").read_text(encoding="utf-8")
+    assert "ROADMAP_LOCALES" in proxy_src and '"x-nonce"' in proxy_src, (
+        "8-locale negotiation or x-nonce header missing in apps/web/src/proxy.ts"
+    )
+    assert "Last-Event-ID" in stream_src and "confirmation_token" in stream_src, (
+        "Resumable Last-Event-ID or confirmation_token missing in BFF stream route"
+    )
+    assert "createBrowserTraceparent" in tel_src, (
+        "Browser W3C traceparent helper missing in packages/telemetry"
+    )
 
     print(
         f"Frontend budget & WCAG 2.2 AA check passed: public gzip size={gzip_kb:.2f} KB (<= {TARGET_FIRST_LOAD_JS_GZIP_KB} KB target)."

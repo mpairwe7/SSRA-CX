@@ -19,6 +19,9 @@ export interface WebVitalsSample {
   readonly webTtftP95Ms?: number;
 }
 
+/**
+ * Check Web Vitals and first-load JS gzip size against Section 9.5 low-bandwidth budgets.
+ */
 export function checkPerformanceBudgets(sample: WebVitalsSample): {
   readonly passed: boolean;
   readonly violations: string[];
@@ -62,4 +65,32 @@ export function checkPerformanceBudgets(sample: WebVitalsSample): {
     passed: violations.length === 0,
     violations,
   };
+}
+
+const W3C_TRACEPARENT_PATTERN = /^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/;
+
+/**
+ * Validate a W3C Trace Context `traceparent` header (`00-<32hex>-<16hex>-<2hex>`).
+ */
+export function isValidW3cTraceparent(candidate: string): boolean {
+  const m = W3C_TRACEPARENT_PATTERN.exec(candidate.trim().toLowerCase());
+  if (!m) {
+    return false;
+  }
+  return m[1] !== "0".repeat(32) && m[2] !== "0".repeat(16);
+}
+
+/**
+ * Reuse an existing valid W3C `traceparent` or generate a fresh cryptographic `traceparent` in the browser.
+ */
+export function createBrowserTraceparent(existing?: string): string {
+  if (existing && isValidW3cTraceparent(existing)) {
+    return existing.trim().toLowerCase();
+  }
+  const bytes = new Uint8Array(24);
+  globalThis.crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `00-${hex.slice(0, 32)}-${hex.slice(32, 48)}-01`;
 }

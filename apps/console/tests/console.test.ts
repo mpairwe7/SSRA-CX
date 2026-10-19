@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { evaluateJitAdminElevation } from "../src/jit-admin.js";
-import { authorizeConsoleAccess, KNOWLEDGE_RELEASE_STEPS } from "../src/proxy.js";
+import {
+  authorizeConsoleAccess,
+  authorizeConsoleRoute,
+  executeConsoleProxy,
+  KNOWLEDGE_RELEASE_STEPS,
+} from "../src/proxy.js";
 import {
   aiCallsHeadline,
   buildAgentQueueWorkbench,
@@ -105,6 +110,32 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
       valid: false,
       error: "PRINCIPLE_1_GROUNDED_OR_SILENT_CITATIONS_REQUIRED",
     });
+
+    expect(authorizeConsoleRoute(session, "/admin/kill-switches")).toEqual({
+      allowed: false,
+      reason: "INSUFFICIENT_ROLE_ADMIN_REQUIRED",
+    });
+    expect(authorizeConsoleRoute(session, "/knowledge-release/approve")).toEqual({
+      allowed: false,
+      reason: "INSUFFICIENT_ROLE_LEGAL_APPROVER_REQUIRED",
+    });
+    expect(
+      authorizeConsoleRoute({ ...session, role: "admin" }, "/admin/kill-switches").allowed,
+    ).toBe(true);
+    expect(executeConsoleProxy({ session: null, pathname: "/admin/kill-switches" }).status).toBe(
+      401,
+    );
+    expect(executeConsoleProxy({ session, pathname: "/admin/kill-switches" })).toEqual({
+      status: 403,
+      allowed: false,
+      reason: "INSUFFICIENT_ROLE_ADMIN_REQUIRED",
+    });
+    expect(
+      executeConsoleProxy({
+        session: { ...session, role: "admin" },
+        pathname: "/admin/kill-switches",
+      }),
+    ).toEqual({ status: 200, allowed: true });
 
     const pipeline = buildKnowledgeReleasePipelineView(3);
     expect(pipeline[3]?.state).toBe("ACTIVE");
