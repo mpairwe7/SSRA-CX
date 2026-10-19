@@ -4,6 +4,7 @@ name: ssra-cx
 x-hardened-defaults: &hardened-defaults
   security_opt:
     - no-new-privileges:true
+    - seccomp:../policies/seccomp-sovereign-default.json
   cap_drop:
     - ALL
   pids_limit: 256
@@ -20,7 +21,7 @@ services:
     image: pgvector/pgvector:pg18
     environment:
       POSTGRES_USER: ssra
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: ssra_cx
     ports:
       - "127.0.0.1:5432:5432"
@@ -74,13 +75,13 @@ services:
       - "--features=passkeys,token-exchange-standard:v2"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-${KEYCLOAK_ADMIN_PASSWORD}}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD must be set}}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD must be set}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/ssra_cx
       KC_DB_USERNAME: ssra
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       KC_DB_SCHEMA: public
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
@@ -144,9 +145,9 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
-    ports:
-      - "127.0.0.1:8001:8001"
-    # Principle 8: Attached only to internal network; zero direct outbound internet access
+    expose:
+      - "8001"
+    # Principle 8: Attached only to internal network; zero direct host port exposure or outbound internet access
     networks:
       - sovereign_internal_net
     depends_on:
@@ -156,6 +157,11 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   channel-gateway:
     <<: *hardened-defaults
