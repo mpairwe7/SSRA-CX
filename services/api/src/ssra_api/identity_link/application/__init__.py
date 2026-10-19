@@ -17,6 +17,7 @@ from ssra_api.identity_link.domain import (
     IdentityBinding,
     SsraDocumentType,
 )
+from ssra_api.outbox import get_outbox_store
 
 _ALLOWED_UPLOAD_MIMES = frozenset({"application/pdf", "image/jpeg", "image/png"})
 _MAX_ARCHIVE_ENTRIES = 1000
@@ -136,6 +137,13 @@ _INJECTION_SCRUB_RE = re.compile(
 
 _OTP_CODE_RE = re.compile(r"[0-9]{6}")
 _SHA256_HEX_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+MAX_OTP_FAILED_ATTEMPTS = 5
+_failed_otp_attempts: dict[str, int] = {}
+
+
+def reset_otp_lockout_state() -> None:
+    """Reset in-memory failed OTP brute-force lockout counters."""
+    _failed_otp_attempts.clear()
 
 
 def bind_tin_with_otp_use_case(
@@ -146,7 +154,7 @@ def bind_tin_with_otp_use_case(
     step_up: bool = False,
     sim_swap_recent: bool = False,
 ) -> IdentityBinding:
-    """Verify TIN format, 6-digit ASCII OTP code, and SIM-swap recency signal (`OQ-005`) before binding `subject_ref`."""
+    """Verify TIN format, 6-digit ASCII OTP code, brute-force lockout, and SIM-swap recency signal (`OQ-005`) before binding `subject_ref`."""
     digits = "".join(ch for ch in tin if ch in "0123456789")
     if not (9 <= len(digits) <= 12):
         raise SSRAError(
@@ -154,22 +162,43 @@ def bind_tin_with_otp_use_case(
             "Invalid South Sudan TIN format (must be 9..12 digits)",
             status_code=400,
         )
+    if _failed_otp_attempts.get(digits, 0) >= MAX_OTP_FAILED_ATTEMPTS:
+        raise SSRAError(
+            McpErrorCode.RATE_LIMITED,
+            f"Too many failed OTP attempts ({MAX_OTP_FAILED_ATTEMPTS}) for TIN; step-up temporarily locked",
+            status_code=429,
+        )
     if not _OTP_CODE_RE.fullmatch(otp_code.strip()):
+        _failed_otp_attempts[digits] = _failed_otp_attempts.get(digits, 0) + 1
         raise SSRAError(
             McpErrorCode.NOT_AUTHORIZED,
             "Invalid 6-digit OTP verification code",
             status_code=401,
         )
+    _failed_otp_attempts.pop(digits, None)
+    masked = mask_tin(tin)
     if sim_swap_recent:
+        get_outbox_store().stage_domain_event(
+            context_name="identity_link",
+            event_type="ssra.identity.sim_swap_blocked.v1",
+            subject=subject_ref,
+            data={"tin_masked": masked, "sim_swap_recent": True},
+        )
         raise SSRAError(
             McpErrorCode.NOT_AUTHORIZED,
             "Recent SIM-swap signal detected on +211 line (OQ-005); step-up blocked pending officer review",
             status_code=403,
         )
     level = AuthLevel.T3_STEP_UP if step_up else AuthLevel.T1_TIN_BOUND
+    get_outbox_store().stage_domain_event(
+        context_name="identity_link",
+        event_type="ssra.identity.tin_bound.v1",
+        subject=subject_ref,
+        data={"tin_masked": masked, "auth_level": level.value, "sim_swap_checked": True},
+    )
     return IdentityBinding(
         subject_ref=subject_ref,
-        tin_masked=mask_tin(tin),
+        tin_masked=masked,
         auth_level=level.value,
         sim_swap_checked=True,
         verified_at=utc_now(),

@@ -8,9 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from ssra_api.admin.application import (
     default_kill_switch_state,
     get_admin_audit_head_hash,
+    record_jit_admin_elevation,
     update_kill_switch_state,
     verify_admin_audit_chain,
 )
+from ssra_api.outbox import get_outbox_store
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
@@ -113,7 +115,7 @@ async def get_public_status() -> PublicStatusResponse:
     return PublicStatusResponse(
         overall_status="OPERATIONAL" if state.degradation_level <= 3 else "DEGRADED_SAFE_MODE",
         degradation_level=state.degradation_level,
-        active_knowledge_snapshot="2026.10.1",
+        active_knowledge_snapshot=get_outbox_store().active_knowledge_snapshot,
         channels={
             ch: ("PAUSED" if ch in disabled_ch else "OPERATIONAL")
             for ch in ("web", "whatsapp", "sms", "ussd", "voice")
@@ -142,6 +144,12 @@ async def request_jit_elevation(body: JitElevationRequest) -> JitElevationRespon
             "Maker-checker violation: approver_staff_id must differ from requester_staff_id",
             status_code=403,
         )
+    record_jit_admin_elevation(
+        requester_staff_id=body.requester_staff_id,
+        approver_staff_id=body.approver_staff_id,
+        duration_minutes=body.duration_minutes,
+        reason=body.reason,
+    )
     return JitElevationResponse(
         requester_staff_id=body.requester_staff_id,
         approver_staff_id=body.approver_staff_id,

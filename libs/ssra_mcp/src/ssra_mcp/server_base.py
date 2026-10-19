@@ -176,15 +176,21 @@ def validate_mcp_oauth_url(url: str, *, allow_dev_loopback: bool = False) -> str
     return cleaned
 
 
-def _redact_audit_args(args: dict[str, Any]) -> dict[str, Any]:
-    """Redact PII from free-text tool arguments before appending to the hash-chained audit ledger."""
-    sanitized: dict[str, Any] = {}
-    for k, v in args.items():
-        if isinstance(v, str):
-            sanitized[k] = redact_pii(v).redacted_text
-        else:
-            sanitized[k] = v
-    return sanitized
+def _redact_audit_value(val: Any) -> Any:
+    if isinstance(val, str):
+        return redact_pii(val).redacted_text
+    if isinstance(val, dict):
+        return {str(k): _redact_audit_value(v) for k, v in val.items()}
+    if isinstance(val, list):
+        return [_redact_audit_value(item) for item in val]
+    if isinstance(val, tuple):
+        return tuple(_redact_audit_value(item) for item in val)
+    return val
+
+
+def redact_audit_args(args: dict[str, Any]) -> dict[str, Any]:
+    """Recursively redact PII from tool arguments before appending to the hash-chained audit ledger."""
+    return {str(k): _redact_audit_value(v) for k, v in args.items()}
 
 
 class ToolAnnotations(BaseModel):
@@ -540,7 +546,7 @@ class StatelessMcpServer:
             action=f"mcp.{self.server_name}.{tool_name}",
             resource=f"mcp://{self.server_name}/{tool_name}",
             payload={
-                "args": _redact_audit_args(clean_args),
+                "args": redact_audit_args(clean_args),
                 "record_id": provenance.record_id,
                 "tier": tool.tier.value,
             },

@@ -16,6 +16,6 @@ def ingress_node(state: ConversationGraphState) -> dict[str, Any]:
         "artifacts": list(state.get("artifacts", [])),
         "citations": list(state.get("citations", [])),
         "safety_flags": list(state.get("safety_flags", [])),
-        "budget": state.get("budget", TurnBudget()),
+        "budget": TurnBudget(),
         "regeneration_count": 0,
     }

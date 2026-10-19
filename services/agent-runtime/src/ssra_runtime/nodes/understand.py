@@ -191,6 +191,21 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
         )
 
     # 8. Guided journeys & Knowledge Q&A (T0)
+    if any(
+        w in lower
+        for w in (
+            "step by step how to file",
+            "guided filing",
+            "how do i file and pay",
+            "file my return and pay",
+        )
+    ):
+        return Intent(
+            intent=IntentName.GUIDED_FILING_AND_PAYMENT,
+            slots=slots,
+            language=locale,
+            confidence=0.96,
+        )
     if any(w in lower for w in ("tin", "register", "رقم الضريبي", "الرقم الضريبي", "tasjil")):
         return Intent(
             intent=IntentName.GUIDED_TIN_REGISTRATION,

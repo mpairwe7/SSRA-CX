@@ -175,22 +175,25 @@ class OutboxEventORM(Base):
 
 POSTGRES18_RLS_AND_WORM_DDL: tuple[str, ...] = (
     "ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;",
+    "ALTER TABLE conversations FORCE ROW LEVEL SECURITY;",
     (
         "CREATE POLICY staff_office_isolation_conversations ON conversations "
         "USING (office_code = current_setting('ssra.staff_office_code', true) "
-        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops'));"
+        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops', 'auditor'));"
     ),
     "ALTER TABLE cases ENABLE ROW LEVEL SECURITY;",
+    "ALTER TABLE cases FORCE ROW LEVEL SECURITY;",
     (
         "CREATE POLICY staff_office_isolation_cases ON cases "
         "USING (office_code = current_setting('ssra.staff_office_code', true) "
-        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops'));"
+        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops', 'auditor'));"
     ),
     "ALTER TABLE handoffs ENABLE ROW LEVEL SECURITY;",
+    "ALTER TABLE handoffs FORCE ROW LEVEL SECURITY;",
     (
         "CREATE POLICY staff_office_isolation_handoffs ON handoffs "
         "USING (office_code = current_setting('ssra.staff_office_code', true) "
-        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops'));"
+        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops', 'auditor'));"
     ),
     (
         "CREATE OR REPLACE FUNCTION forbid_audit_events_mutation() RETURNS trigger AS $$ "

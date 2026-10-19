@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from typing import Any
 
@@ -22,6 +23,8 @@ from ssra_mcp import MCP_PROTOCOL_VERSION, validate_mcp_transport_headers
 from ssra_security import compute_least_privilege_mcp_scope
 
 from ssra_runtime.tools import GovernedMcpGatewayClient
+
+_SAFE_SUBJECT_REF_RE = re.compile(r"^[A-Za-z0-9_:-]{3,64}$")
 
 
 def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
@@ -145,8 +148,24 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
                     headers=cache_headers,
                 )
 
-            resolved_auth_level = AuthLevel(x_ssra_auth_level)
-            resolved_subject_ref = x_ssra_subject_ref
+            try:
+                resolved_auth_level = AuthLevel(x_ssra_auth_level)
+            except ValueError as exc:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    f"Invalid X-SSRA-Auth-Level header '{x_ssra_auth_level}'",
+                    status_code=401,
+                ) from exc
+
+            resolved_subject_ref = x_ssra_subject_ref.strip() if x_ssra_subject_ref else None
+            if resolved_subject_ref is not None and not _SAFE_SUBJECT_REF_RE.match(
+                resolved_subject_ref
+            ):
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "Malformed X-SSRA-Subject-Ref header rejected",
+                    status_code=403,
+                )
             if authorization:
                 raw_tok = authorization.removeprefix("Bearer ").strip()
                 claims = gateway.token_service.verify_exchanged_token(
@@ -155,8 +174,30 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
                     required_tier=RiskTier.T0,
                     expected_resource=f"https://mcp.ssra.gov.ss/servers/{srv.audience}",
                 )
+                if (
+                    resolved_subject_ref is not None
+                    and claims.sub is not None
+                    and resolved_subject_ref != claims.sub
+                ):
+                    raise SSRAError(
+                        McpErrorCode.NOT_AUTHORIZED,
+                        "Confused deputy blocked: X-SSRA-Subject-Ref does not match Bearer token sub claim",
+                        status_code=403,
+                    )
+                if x_ssra_auth_level != "ANONYMOUS" and resolved_auth_level != claims.auth_level:
+                    raise SSRAError(
+                        McpErrorCode.NOT_AUTHORIZED,
+                        "Confused deputy blocked: X-SSRA-Auth-Level does not match Bearer token auth_level claim",
+                        status_code=403,
+                    )
                 resolved_auth_level = claims.auth_level
                 resolved_subject_ref = claims.sub
+            elif resolved_auth_level == AuthLevel.ANONYMOUS and resolved_subject_ref is not None:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "Anonymous MCP request cannot assert X-SSRA-Subject-Ref without authentication",
+                    status_code=403,
+                )
 
             body = await request.json()
             meta = body.get("_meta", {})

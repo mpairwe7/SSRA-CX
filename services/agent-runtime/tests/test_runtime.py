@@ -75,10 +75,18 @@ def test_t0_paye_calculator_and_agui_sse_stream() -> None:
     assert "id: thr_sse_resume_01:ev:1\n" not in resumed_res.text
     assert "RUN_FINISHED" in resumed_res.text
 
-    # RFC 9457 Problem Details on invalid runtime request payload
+    # RFC 9457 Problem Details on invalid runtime request payload, BadHost 400, and >1MB payload 413
     r_bad = client.post("/v1/turns", json={"unknown_field": 1})
     assert r_bad.status_code == 422
     assert r_bad.headers["content-type"].startswith("application/problem+json")
+
+    r_bad_host = client.post(
+        "/v1/turns", headers={"Host": "evil.com/path?"}, json={"message": "hi"}
+    )
+    assert r_bad_host.status_code == 400
+
+    r_oversize = client.post("/v1/turns", content=b"x" * 1_050_000)
+    assert r_oversize.status_code == 413
 
 
 def test_t4_waiver_routes_deterministically_to_human_handoff_with_zero_tools() -> None:
@@ -193,6 +201,29 @@ def test_t2_write_triggers_confirmation_interrupt_and_executes_after_token() -> 
     assert any(a.tool == "create_case" for a in case_t2.artifacts)
     assert "OPEN" in case_t2.answer.segments[0].text
 
+    # Cross-thread confirmation_token replay in confirm_or_execute_write_node is blocked
+    import pytest
+    from ssra_core import SSRAError
+    from ssra_runtime.nodes import confirm_or_execute_write_node
+
+    issued_other = runtime.gateway.confirmation_manager.issue_token(
+        conversation_id="thr_other_owner",
+        tool_name="book_appointment",
+        arguments={"office_code": "JUBA_HQ", "slot_id": "slot_2026_10_20_0900"},
+        subject_ref="sub_taxpayer_amina_01",
+    )
+    with pytest.raises(SSRAError):
+        confirm_or_execute_write_node(
+            {
+                "thread_id": "thr_attacker",
+                "tier": RiskTier.T2,
+                "pending_confirmation": turn1.pending_confirmation,
+                "confirmation_token_in": issued_other.token,
+                "idempotency_key_in": issued_other.idempotency_key,
+            },
+            runtime.gateway,
+        )
+
 
 def test_numeric_provenance_blocks_untraced_numbers() -> None:
     bad_answer = Answer(
@@ -243,6 +274,46 @@ def test_phase1_guided_journeys_and_minimal_data_complaint_intake() -> None:
     assert "••••1234" in complaint.redacted_summary
     assert "+211•••••••78" in complaint.redacted_summary
 
+    # Verify GUIDED_FILING_AND_PAYMENT classification, guided_steps props, kill-switches & L5 safe mode
+    rt = SSRAConversationRuntime()
+    guided_turn = rt.run_turn(
+        make_conversation_event("Please show me step by step how to file and pay my tax return")
+    )
+    assert guided_turn.intent is not None
+    assert guided_turn.intent.intent == IntentName.GUIDED_FILING_AND_PAYMENT
+    assert guided_turn.answer.ui_component is not None
+    assert len(guided_turn.answer.ui_component.props.get("guided_steps", [])) == 2
+
+    # Semantic cache populated for anonymous T0 turn
+    cached_ans = rt.semantic_cache.get(
+        snapshot_version="2026.10.1",
+        locale=LocaleCode.EN,
+        query="Please show me step by step how to file and pay my tax return",
+        tier=RiskTier.T0,
+        auth_level=AuthLevel.ANONYMOUS,
+    )
+    assert cached_ans is not None
+
+    # Channel kill-switch, tool kill-switch & Level 5 static FAQ safe-mode enforcement
+    rt.set_kill_switches(
+        degradation_level=5,
+        disabled_tools=["knowledge.list_forms"],
+        disabled_channels=["voice"],
+    )
+    paused_turn = rt.run_turn(
+        make_conversation_event("Hello", channel=ChannelName.VOICE, thread_id="thr_paused_v1")
+    )
+    assert paused_turn.answer.abstained is True
+    assert "CHANNEL_PAUSED_KILL_SWITCH" in paused_turn.safety_flags
+
+    l5_turn = rt.run_turn(
+        make_conversation_event("What is BPT?", channel=ChannelName.WEB, thread_id="thr_l5_v1")
+    )
+    assert l5_turn.answer.abstained is True
+    assert "DEGRADATION_L5_STATIC_FAQ" in l5_turn.safety_flags
+    assert rt.reconstruct_conversation("thr_l5_v1")[0].model_route == "none:static-faq-callback"
+    rt.set_kill_switches(degradation_level=1, disabled_tools=[], disabled_channels=[])
+
 
 def test_agentgateway_stateless_mcp_routing_spend_cap_and_a2a_stub() -> None:
     gw_client = TestClient(create_agentgateway_app(daily_usd_cap=10.0))
@@ -272,6 +343,80 @@ def test_agentgateway_stateless_mcp_routing_spend_cap_and_a2a_stub() -> None:
     # 4. Daily spend cap enforcement
     r_spend = gw_client.post("/v1/spend/record", json={"cost_usd": 12.5})
     assert r_spend.status_code == 429
+
+    # 5. Confused-deputy & invalid header guards on agentgateway POST /mcp
+    gw_sec = TestClient(create_agentgateway_app(daily_usd_cap=50.0))
+    assert (
+        gw_sec.post(
+            "/mcp",
+            headers={
+                "Mcp-Method": "tools/call",
+                "Mcp-Name": "tax-facts",
+                "X-SSRA-Auth-Level": "INVALID_LEVEL",
+            },
+            json={"params": {"name": "list_tax_facts", "arguments": {}}},
+        ).status_code
+        == 401
+    )
+    assert (
+        gw_sec.post(
+            "/mcp",
+            headers={
+                "Mcp-Method": "tools/call",
+                "Mcp-Name": "tax-facts",
+                "X-SSRA-Subject-Ref": "../etc/passwd",
+            },
+            json={"params": {"name": "list_tax_facts", "arguments": {}}},
+        ).status_code
+        == 403
+    )
+    assert (
+        gw_sec.post(
+            "/mcp",
+            headers={
+                "Mcp-Method": "tools/call",
+                "Mcp-Name": "tax-facts",
+                "X-SSRA-Auth-Level": "ANONYMOUS",
+                "X-SSRA-Subject-Ref": "sub_taxpayer_amina_01",
+            },
+            json={"params": {"name": "list_tax_facts", "arguments": {}}},
+        ).status_code
+        == 403
+    )
+
+    from ssra_security import TokenExchangeService
+
+    tok_amina = TokenExchangeService().mint_exchanged_token(
+        audience="mcp-tax-facts",
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_amina_01",
+    )
+    assert (
+        gw_sec.post(
+            "/mcp",
+            headers={
+                "Mcp-Method": "tools/call",
+                "Mcp-Name": "tax-facts",
+                "Authorization": f"Bearer {tok_amina}",
+                "X-SSRA-Subject-Ref": "sub_taxpayer_deng_02",
+            },
+            json={"params": {"name": "list_tax_facts", "arguments": {}}},
+        ).status_code
+        == 403
+    )
+    assert (
+        gw_sec.post(
+            "/mcp",
+            headers={
+                "Mcp-Method": "tools/call",
+                "Mcp-Name": "tax-facts",
+                "Authorization": f"Bearer {tok_amina}",
+                "X-SSRA-Auth-Level": "T3_STEP_UP",
+            },
+            json={"params": {"name": "list_tax_facts", "arguments": {}}},
+        ).status_code
+        == 403
+    )
 
 
 def test_subject_preference_memory_store_forbids_free_text_and_supports_erasure() -> None:

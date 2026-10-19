@@ -11,6 +11,7 @@ from ssra_api.outbox import TransactionalOutboxStore
 def test_api_health_and_database_ddl_invariants() -> None:
     assert len(Base.metadata.tables) == 11
     assert any("ENABLE ROW LEVEL SECURITY" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
+    assert any("FORCE ROW LEVEL SECURITY" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
     assert any("staff_office_isolation_handoffs" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
     assert any("forbid_audit_events_mutation" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
 
@@ -19,9 +20,15 @@ def test_api_health_and_database_ddl_invariants() -> None:
         context_name="cases",
         event_type="ssra.case.created.v1",
         subject="case_01",
-        data={"priority": "HIGH"},
+        data={
+            "priority": "HIGH",
+            "nested": {"tin": "2003005678", "phones": ["+211912345678", ("OTP: 849201", 42)]},
+        },
     )
     assert evt.specversion == "1.0"
+    assert evt.data["nested"]["tin"] == "••••5678"
+    assert "+211•••••••78" in evt.data["nested"]["phones"][0]
+    assert "[REDACTED_OTP]" in evt.data["nested"]["phones"][1][0]
     assert outbox.flush_to_jetstream() == 1
     assert outbox.published_events[0].published_to_nats is True
 
@@ -357,3 +364,48 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     assert r_post2.status_code == 200
     assert r_post2.headers.get("X-Idempotency-Replayed") == "true"
     assert r_post2.json()["id"] == r_post1.json()["id"]
+
+    # 3. Caller-scoped Idempotency-Key isolation: different X-SSRA-Subject-Ref does not collide
+    r_post_other_sub = client.post(
+        "/v1/conversations",
+        json={"channel": "web", "locale": "en"},
+        headers={
+            "Idempotency-Key": "idem_replay_test_01",
+            "X-SSRA-Subject-Ref": "sub_taxpayer_deng_02",
+        },
+    )
+    assert r_post_other_sub.status_code == 200
+    assert r_post_other_sub.headers.get("X-Idempotency-Replayed") == "false"
+    assert r_post_other_sub.json()["id"] != r_post1.json()["id"]
+
+    # 4. SSE stream bypasses ETag body buffering and sets Cache-Control: no-cache, no-transform
+    r_sse = client.get("/v1/conversations/inbox/stream?office_code=JUBA_HQ")
+    assert r_sse.status_code == 200
+    assert "ETag" not in r_sse.headers
+    assert "no-transform" in r_sse.headers.get("Cache-Control", "")
+    assert r_sse.headers.get("X-Accel-Buffering") == "no"
+
+    # 5. Per-TIN OTP brute-force lockout (MAX_OTP_FAILED_ATTEMPTS = 5 -> 429 RATE_LIMITED)
+    from ssra_api.identity_link.application import reset_otp_lockout_state
+
+    reset_otp_lockout_state()
+    for _ in range(5):
+        r_bad_otp = client.post(
+            "/v1/identity-link/verify-otp",
+            json={"tin": "3004009999", "otp_code": "bad"},
+        )
+        assert r_bad_otp.status_code == 401
+    r_locked_otp = client.post(
+        "/v1/identity-link/verify-otp",
+        json={"tin": "3004009999", "otp_code": "123456"},
+    )
+    assert r_locked_otp.status_code == 429
+    reset_otp_lockout_state()
+
+    # 6. Auditor role accepted in PostgresRlsSessionContext
+    from ssra_api.repositories import PostgresRlsSessionContext
+
+    aud_rls = PostgresRlsSessionContext(
+        staff_id="aud_01", office_code="JUBA_HQ", staff_role="auditor"
+    )
+    assert "auditor" in aud_rls.to_set_local_sql()[1]

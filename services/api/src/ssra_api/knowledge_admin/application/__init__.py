@@ -8,6 +8,7 @@ from dataclasses import replace
 from ssra_core import McpErrorCode, SSRAError
 
 from ssra_api.knowledge_admin.domain import KnowledgeSnapshotEntity
+from ssra_api.outbox import get_outbox_store
 
 
 class KnowledgeReleaseWorkflowEngine:
@@ -74,6 +75,12 @@ class KnowledgeReleaseWorkflowEngine:
             )
         updated = replace(snap, status="APPROVED", approved_by=legal_approver)
         self._snapshots[version] = updated
+        get_outbox_store().stage_domain_event(
+            context_name="knowledge_admin",
+            event_type="ssra.knowledge.snapshot.approved.v1",
+            subject=version,
+            data={"version": version, "approved_by": legal_approver, "checksum": snap.checksum},
+        )
         return updated
 
     def publish_snapshot(
@@ -90,18 +97,39 @@ class KnowledgeReleaseWorkflowEngine:
             # Step 6 automatic rollback on eval gate failure (Section 7)
             rolled = replace(snap, status="ROLLED_BACK")
             self._snapshots[version] = rolled
+            get_outbox_store().stage_domain_event(
+                context_name="knowledge_admin",
+                event_type="ssra.knowledge.snapshot.eval_failed_rollback.v1",
+                subject=version,
+                data={"version": version, "active_version": self._active_version},
+            )
             return rolled
 
         self._previous_published_version = self._active_version
         published = replace(snap, status="PUBLISHED")
         self._snapshots[version] = published
         self._active_version = version
+        get_outbox_store().stage_domain_event(
+            context_name="knowledge_admin",
+            event_type="ssra.knowledge.snapshot.published.v1",
+            subject=version,
+            data={"version": version, "active_version": version, "checksum": published.checksum},
+        )
         return published
 
     def rollback_to_previous(self) -> KnowledgeSnapshotEntity:
         current = self._snapshots[self._active_version]
         self._snapshots[self._active_version] = replace(current, status="ROLLED_BACK")
         self._active_version = self._previous_published_version
+        get_outbox_store().stage_domain_event(
+            context_name="knowledge_admin",
+            event_type="ssra.knowledge.snapshot.rolled_back.v1",
+            subject=self._active_version,
+            data={
+                "rolled_back_version": current.version,
+                "active_version": self._active_version,
+            },
+        )
         return self._snapshots[self._active_version]
 
     def _get_or_404(self, version: str) -> KnowledgeSnapshotEntity:

@@ -62,7 +62,19 @@ def confirm_or_execute_write_node(
         )
         return {"answer": confirm_answer}
 
-    # User confirmed: execute the T2/T3 MCP tool with the single-use confirmation token
+    # User confirmed: verify thread binding on confirmation_token before invoking T2/T3 MCP tool
+    thread_id = state.get("thread_id", "thr_default")
+    stored_rec = gateway.confirmation_manager.get_record(token_in)
+    if stored_rec is not None and stored_rec.conversation_id != thread_id:
+        from ssra_core import McpErrorCode, SSRAError
+
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            "confirmation_token conversation_id mismatch (cross-thread replay blocked)",
+            status_code=403,
+        )
+
+    budget = state.get("budget")
     art = gateway.invoke_tool(
         server_name=pending.server,
         tool_name=pending.tool,
@@ -73,11 +85,13 @@ def confirm_or_execute_write_node(
         },
         auth_level=state.get("auth_level", AuthLevel.ANONYMOUS),
         subject_ref=state.get("subject_ref"),
+        budget=budget,
     )
     artifacts = [*list(state.get("artifacts", [])), art]
     return {
         "artifacts": artifacts,
         "pending_confirmation": None,
+        "budget": budget,
     }
 
 

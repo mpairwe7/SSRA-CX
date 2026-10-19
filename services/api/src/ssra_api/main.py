@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from ssra_core import SSRAError
+from ssra_core import SSRAError, ensure_w3c_traceparent
 
 from ssra_api.admin.api import router as admin_router
 from ssra_api.analytics_api.api import router as analytics_router
@@ -14,7 +14,7 @@ from ssra_api.consent.api import router as consent_router
 from ssra_api.conversations.api import router as conversations_router
 from ssra_api.identity_link.api import router as identity_link_router
 from ssra_api.knowledge_admin.api import router as knowledge_admin_router
-from ssra_api.middleware import install_api_conventions_middleware
+from ssra_api.middleware import SECURITY_HEADERS, install_api_conventions_middleware
 
 
 def create_api_app() -> FastAPI:
@@ -28,13 +28,14 @@ def create_api_app() -> FastAPI:
 
     @app.exception_handler(SSRAError)
     async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:
-        traceparent = request.headers.get("traceparent")
+        traceparent = ensure_w3c_traceparent(request.headers.get("traceparent"))
         raw_path = str(request.scope.get("path", "/"))
         problem = exc.to_problem_details(instance=raw_path, trace_id=traceparent)
         return JSONResponse(
             status_code=exc.status_code,
             content=problem.model_dump(mode="json"),
             media_type="application/problem+json",
+            headers={"traceparent": traceparent, **SECURITY_HEADERS},
         )
 
     @app.get("/healthz", tags=["system"])

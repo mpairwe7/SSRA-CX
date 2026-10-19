@@ -106,7 +106,13 @@ def test_confirmation_token_single_use_and_argument_hash_binding() -> None:
     )
     assert consumed.used_at is not None
 
-    # Replay must be rejected
+    # Replay must be rejected even after issuing another token (used_at retained until expires_at)
+    mgr.issue_token(
+        conversation_id="thr_02",
+        tool_name="book_appointment",
+        arguments=args,
+        subject_ref="sub_123",
+    )
     with pytest.raises(SSRAError) as replay_exc:
         mgr.consume_token(
             token=issued.token,
@@ -116,6 +122,25 @@ def test_confirmation_token_single_use_and_argument_hash_binding() -> None:
             idempotency_key=issued.idempotency_key,
         )
     assert replay_exc.value.code == McpErrorCode.NOT_AUTHORIZED
+    assert "already been used" in replay_exc.value.message
+
+    # Cross-thread confirmation token replay must be blocked
+    issued_thr = mgr.issue_token(
+        conversation_id="thr_owner_A",
+        tool_name="book_appointment",
+        arguments=args,
+        subject_ref="sub_123",
+    )
+    with pytest.raises(SSRAError) as cross_thr_exc:
+        mgr.consume_token(
+            token=issued_thr.token,
+            tool_name="book_appointment",
+            arguments=args,
+            subject_ref="sub_123",
+            idempotency_key=issued_thr.idempotency_key,
+            conversation_id="thr_attacker_B",
+        )
+    assert cross_thr_exc.value.code == McpErrorCode.NOT_AUTHORIZED
 
 
 def test_rfc8693_token_exchange_enforces_audience_and_tier() -> None:

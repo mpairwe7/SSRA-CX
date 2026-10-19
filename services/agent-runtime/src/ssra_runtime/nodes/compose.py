@@ -436,6 +436,26 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
                             source_ref=str(fact_obj["key"]),
                         )
                     )
+        ui_props: dict[str, Any] = {"citations": [cit.model_dump(mode="json")]}
+        if intent_name in (
+            IntentName.GUIDED_TIN_REGISTRATION,
+            IntentName.GUIDED_TCC,
+            IntentName.GUIDED_FILING_AND_PAYMENT,
+        ):
+            from ssra_runtime.graphs.guided_journey import get_guided_journey_steps
+
+            steps = get_guided_journey_steps(intent_name, locale)
+            ui_props["guided_steps"] = [
+                {
+                    "journey_id": s.journey_id,
+                    "step_number": s.step_number,
+                    "total_steps": s.total_steps,
+                    "title": s.title,
+                    "instruction": s.instruction,
+                    "official_portal": s.official_portal,
+                }
+                for s in steps
+            ]
         return {
             "citations": [cit],
             "answer": Answer(
@@ -449,7 +469,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
                 numbers=numbers,
                 ui_component=GenerativeUIComponent(
                     name=GenerativeUIComponentName.CITATION_LIST,
-                    props={"citations": [cit.model_dump(mode="json")]},
+                    props=ui_props,
                 )
                 if capabilities.rich_ui
                 else None,

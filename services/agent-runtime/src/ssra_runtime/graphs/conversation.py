@@ -14,16 +14,23 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
 from ssra_core import (
+    Answer,
+    AnswerSegment,
     AuthLevel,
     ChannelBulkhead,
     ChannelName,
+    Citation,
     ConversationEvent,
+    GenerativeUIComponent,
+    GenerativeUIComponentName,
+    HandoffTicket,
     Intent,
     LocaleCode,
     McpErrorCode,
     RiskTier,
     SSRAError,
 )
+from ssra_llm import AnonymousT0SemanticCache, SovereignModelRouter
 from ssra_security import HashChainedAuditLedger
 
 from ssra_runtime.graphs.handoff import execute_handoff_subgraph
@@ -88,11 +95,31 @@ class SSRAConversationRuntime:
         self.audit_ledger = audit_ledger or HashChainedAuditLedger()
         self.replay_store = replay_store or ConversationReplayStore()
         self.preference_store = SubjectPreferenceMemoryStore()
+        self.model_router = SovereignModelRouter()
+        self.semantic_cache = AnonymousT0SemanticCache()
         self.channel_bulkhead = ChannelBulkhead()
         self.checkpointer = InMemorySaver()
+        self._disabled_channels: set[ChannelName] = set()
         self._thread_subject_binding: dict[str, str] = {}
         self._pending_by_thread: dict[str, tuple[PendingConfirmation, Intent | None, RiskTier]] = {}
         self._compiled = self._build_graph()
+
+    def set_kill_switches(
+        self,
+        *,
+        degradation_level: int = 1,
+        disabled_tools: list[str] | tuple[str, ...] = (),
+        disabled_channels: list[str] | tuple[str, ...] = (),
+    ) -> None:
+        """Apply live SecOps kill-switches to the model router, MCP gateway, and channel ingress."""
+        self.model_router.set_degradation_level(degradation_level)
+        for existing in list(self.gateway.disabled_tools):
+            self.gateway.set_tool_kill_switch(existing, disabled=False)
+        for tool_key in disabled_tools:
+            self.gateway.set_tool_kill_switch(tool_key, disabled=True)
+        self._disabled_channels = {
+            ChannelName(ch) for ch in disabled_channels if ch in ChannelName._value2member_map_
+        }
 
     def reconstruct_conversation(self, thread_id: str) -> list[ReconstructedTurnRecord]:
         safe_id = validate_safe_thread_id(thread_id)
@@ -211,6 +238,107 @@ class SSRAConversationRuntime:
         text_parts = [p.value for p in event.data.parts if p.kind == "text"]
         user_text = " ".join(text_parts).strip()
 
+        # Hydrate consented accessibility/low-data preferences if stored for subject_ref (Section 6.5)
+        capabilities = event.data.capabilities
+        if subject_ref is not None:
+            saved_pref = self.preference_store.get_preferences(subject_ref)
+            if saved_pref is not None and saved_pref.low_data_mode:
+                capabilities = capabilities.model_copy(update={"rich_ui": False})
+
+        # Enforce active channel kill-switch or Level 5 static FAQ safe mode before graph execution
+        if (
+            event.data.channel in self._disabled_channels
+            or self.model_router.degradation_level == 5
+        ):
+            is_channel_paused = event.data.channel in self._disabled_channels
+            reason_code = (
+                "CHANNEL_PAUSED_KILL_SWITCH" if is_channel_paused else "DEGRADATION_L5_STATIC_FAQ"
+            )
+            faq_cit = Citation(
+                id="cit_l5_static_faq",
+                snapshot_version="2026.10.1",
+                doc_title="SSRA Official e-Tax & Cash-Free Bank Collection Guide",
+                section_anchor="Part-I-Sec-1-TIN-Registration",
+                effective_from="2026-03-01",
+                url="https://etax.nra.gov.ss/",
+            )
+            fallback_text = (
+                f"SSRA Assist Safe Mode ({reason_code}): Visit the official portal at "
+                "https://etax.nra.gov.ss/ for TIN registration, return filing, and designated bank "
+                "payment instructions. We have queued a callback with an SSRA officer."
+            )[: capabilities.max_len]
+            ticket = HandoffTicket(
+                conversation_id=safe_thread_id,
+                reason="GUARD_FALLBACK",
+                queue="DOMESTIC_TAX",
+                summary=f"Safe-mode fallback ({reason_code}) routed to officer callback.",
+                citations=[faq_cit.id],
+                priority="HIGH",
+            )
+            ans = Answer(
+                segments=[AnswerSegment(text=fallback_text, citation_ids=[faq_cit.id])],
+                citations=[faq_cit],
+                numbers=[],
+                ui_component=GenerativeUIComponent(
+                    name=GenerativeUIComponentName.HANDOFF_CARD,
+                    props={
+                        "reason": ticket.reason,
+                        "queue": ticket.queue,
+                        "priority": ticket.priority,
+                    },
+                )
+                if capabilities.rich_ui
+                else None,
+                is_estimate=False,
+                abstained=True,
+            )
+            aud_ev = self.audit_ledger.append(
+                actor="ssra-agent-runtime",
+                on_behalf_of=subject_ref,
+                action="conversation.turn.safe_mode_egress",
+                resource=f"thread://{safe_thread_id}",
+                payload={"reason": reason_code, "channel": event.data.channel.value},
+            )
+            route_decision = self.model_router.select_route(node_name="compose", tier=RiskTier.T0)
+            resp = RuntimeTurnResponse(
+                thread_id=safe_thread_id,
+                channel=event.data.channel,
+                locale=event.data.locale,
+                auth_level=auth_level,
+                tier=RiskTier.T0,
+                policy_decision="HANDOFF",
+                intent=None,
+                answer=ans,
+                artifacts=[],
+                citations=[faq_cit],
+                pending_confirmation=None,
+                handoff_ticket=ticket,
+                safety_flags=[reason_code],
+                audit_event_hash=aud_ev.hash,
+            )
+            self.replay_store.record_turn(
+                thread_id=resp.thread_id,
+                channel=resp.channel,
+                locale=resp.locale,
+                auth_level=resp.auth_level,
+                subject_ref=subject_ref,
+                redacted_input=user_text,
+                intent_name="safe_mode_fallback",
+                risk_tier=resp.tier,
+                policy_decision=resp.policy_decision,
+                prompt_version="2026.10.1",
+                model_route=route_decision.selected_model,
+                knowledge_snapshot_version="2026.10.1",
+                tool_calls=[],
+                citations=[faq_cit.section_anchor],
+                numbers=[],
+                output_text=fallback_text,
+                abstained=True,
+                safety_flags=[reason_code],
+                audit_event_hash=aud_ev.hash,
+            )
+            return resp
+
         # Microsoft agent-framework#8132: Restore pending confirmation context when resuming with confirmation_token
         restored_pending: PendingConfirmation | None = None
         restored_intent: Intent | None = None
@@ -219,13 +347,6 @@ class SSRAConversationRuntime:
             restored_pending, restored_intent, restored_tier = self._pending_by_thread[
                 safe_thread_id
             ]
-
-        # Hydrate consented accessibility/low-data preferences if stored for subject_ref (Section 6.5)
-        capabilities = event.data.capabilities
-        if subject_ref is not None:
-            saved_pref = self.preference_store.get_preferences(subject_ref)
-            if saved_pref is not None and saved_pref.low_data_mode:
-                capabilities = capabilities.model_copy(update={"rich_ui": False})
 
         initial_state: ConversationGraphState = {
             "thread_id": safe_thread_id,
@@ -289,6 +410,15 @@ class SSRAConversationRuntime:
             safety_flags=final_state.get("safety_flags", []),
             audit_event_hash=final_state.get("audit_event_hash", ""),
         )
+        route_decision = self.model_router.select_route(node_name="compose", tier=resp.tier)
+        self.semantic_cache.put(
+            snapshot_version="2026.10.1",
+            locale=resp.locale,
+            query=user_text,
+            tier=resp.tier,
+            auth_level=resp.auth_level,
+            answer=resp.answer,
+        )
         self.replay_store.record_turn(
             thread_id=resp.thread_id,
             channel=resp.channel,
@@ -300,7 +430,7 @@ class SSRAConversationRuntime:
             risk_tier=resp.tier,
             policy_decision=resp.policy_decision,
             prompt_version="2026.10.1",
-            model_route="ssra-sovereign/sunflower-qwen3.5-9b",
+            model_route=route_decision.selected_model,
             knowledge_snapshot_version="2026.10.1",
             tool_calls=[
                 {

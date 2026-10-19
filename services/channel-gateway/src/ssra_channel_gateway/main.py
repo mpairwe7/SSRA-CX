@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import math
+import re
+from collections.abc import Awaitable, Callable
 
-from fastapi import FastAPI, Header, Request
+from fastapi import FastAPI, Header, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
@@ -21,6 +23,16 @@ from ssra_core import (
 from ssra_testing import make_conversation_event
 
 from ssra_channel_gateway.ussd import render_ussd_screen
+
+_VALID_HOST_RE = re.compile(r"^[A-Za-z0-9.\[\]:-]+$")
+_MAX_CHANNEL_BODY_BYTES = 1_048_576
+_CHANNEL_SECURITY_HEADERS: dict[str, str] = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+}
 
 # 3GPP TS 23.038 / GSM 03.38 Basic (1 septet) and Extended (2 septets via 0x1B escape) character sets
 _GSM7_BASIC_CHARS: frozenset[str] = frozenset(
@@ -101,6 +113,50 @@ def create_channel_gateway_app(
     sender_counts: dict[str, int] = {}
     opted_out_senders: set[str] = set()
 
+    @app.middleware("http")
+    async def channel_security_middleware(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        raw_path = str(request.scope.get("path", "/"))
+        tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
+        host_header = request.headers.get("host", "localhost")
+        if not host_header or not _VALID_HOST_RE.match(host_header):
+            err = SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                "Malformed HTTP Host header rejected per RFC 9112 §3.2 (CVE-2026-48710)",
+                status_code=400,
+            )
+            return JSONResponse(
+                status_code=400,
+                content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(
+                    mode="json"
+                ),
+                media_type="application/problem+json",
+                headers={"traceparent": tp, **_CHANNEL_SECURITY_HEADERS},
+            )
+        if request.method in ("POST", "PUT", "PATCH"):
+            req_bytes = await request.body()
+            if len(req_bytes) > _MAX_CHANNEL_BODY_BYTES:
+                err = SSRAError(
+                    McpErrorCode.VALIDATION_FAILED,
+                    f"Request body exceeds maximum allowed size of {_MAX_CHANNEL_BODY_BYTES} bytes",
+                    status_code=413,
+                )
+                return JSONResponse(
+                    status_code=413,
+                    content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(
+                        mode="json"
+                    ),
+                    media_type="application/problem+json",
+                    headers={"traceparent": tp, **_CHANNEL_SECURITY_HEADERS},
+                )
+        response = await call_next(request)
+        response.headers["traceparent"] = tp
+        for hk, hv in _CHANNEL_SECURITY_HEADERS.items():
+            response.headers.setdefault(hk, hv)
+        return response
+
     @app.exception_handler(SSRAError)
     async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:
         raw_path = str(request.scope.get("path", "/"))
@@ -110,7 +166,7 @@ def create_channel_gateway_app(
             status_code=exc.status_code,
             content=problem.model_dump(mode="json"),
             media_type="application/problem+json",
-            headers={"traceparent": tp},
+            headers={"traceparent": tp, **_CHANNEL_SECURITY_HEADERS},
         )
 
     @app.exception_handler(RequestValidationError)
@@ -128,7 +184,7 @@ def create_channel_gateway_app(
             status_code=422,
             content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(mode="json"),
             media_type="application/problem+json",
-            headers={"traceparent": tp},
+            headers={"traceparent": tp, **_CHANNEL_SECURITY_HEADERS},
         )
 
     @app.get("/healthz")

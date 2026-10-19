@@ -70,10 +70,11 @@ def execute_knowledge_qa_subgraph(
     locale = state.get("locale", LocaleCode.EN)
     auth_level = state.get("auth_level", AuthLevel.ANONYMOUS)
     subject_ref = state.get("subject_ref")
+    budget = state.get("budget")
     artifacts: list[ToolArtifact] = list(state.get("artifacts", []))
 
     if intent_name == IntentName.OUT_OF_SCOPE:
-        return {"artifacts": artifacts}
+        return {"artifacts": artifacts, "budget": budget}
 
     if intent_name == IntentName.CALCULATE_PAYE:
         gross = str(slots.get("amount_ssp", "250000"))
@@ -83,9 +84,10 @@ def execute_knowledge_qa_subgraph(
             arguments={"gross_monthly_ssp": gross},
             auth_level=auth_level,
             subject_ref=subject_ref,
+            budget=budget,
         )
         artifacts.append(art)
-        return {"artifacts": artifacts}
+        return {"artifacts": artifacts, "budget": budget}
 
     if intent_name == IntentName.CALCULATE_WITHHOLDING:
         gross = str(slots.get("amount_ssp", "1000000"))
@@ -95,9 +97,10 @@ def execute_knowledge_qa_subgraph(
             arguments={"gross_amount_ssp": gross, "category": "goods_and_services"},
             auth_level=auth_level,
             subject_ref=subject_ref,
+            budget=budget,
         )
         artifacts.append(art)
-        return {"artifacts": artifacts}
+        return {"artifacts": artifacts, "budget": budget}
 
     if intent_name == IntentName.VERIFY_OFFICIAL_CHANNEL:
         candidate = str(slots.get("candidate_channel", "https://etax.nra.gov.ss/"))
@@ -107,9 +110,10 @@ def execute_knowledge_qa_subgraph(
             arguments={"account_or_portal": candidate},
             auth_level=auth_level,
             subject_ref=subject_ref,
+            budget=budget,
         )
         artifacts.append(art)
-        return {"artifacts": artifacts}
+        return {"artifacts": artifacts, "budget": budget}
 
     # Default: search published knowledge corpus
     query = state.get("redacted_user_text") or state.get("raw_user_text", "SSRA eTax")
@@ -119,6 +123,7 @@ def execute_knowledge_qa_subgraph(
         arguments={"query": query, "language": locale.value, "top_k": 3},
         auth_level=auth_level,
         subject_ref=subject_ref,
+        budget=budget,
     )
     artifacts.append(kn_art)
 
@@ -133,7 +138,8 @@ def execute_knowledge_qa_subgraph(
                 arguments={"key": fkey},
                 auth_level=auth_level,
                 subject_ref=subject_ref,
+                budget=budget,
             )
             artifacts.append(tf_art)
 
-    return {"artifacts": artifacts}
+    return {"artifacts": artifacts, "budget": budget}

@@ -91,6 +91,7 @@ def test_circuit_breaker_idempotent_retries_and_channel_bulkhead() -> None:
     with pytest.raises(SSRAError) as cb_exc:
         cb.call(lambda: "ok")
     assert cb_exc.value.code == McpErrorCode.UPSTREAM_UNAVAILABLE
+    cb.release_half_open_probe()
 
     # Idempotent retry retries up to max_attempts; non-idempotent never retries
     calls = 0

@@ -6,7 +6,10 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
 from ssra_core import McpErrorCode, SSRAError
 
-from ssra_api.cases.application import open_case_use_case
+from ssra_api.cases.application import (
+    open_case_use_case,
+    record_maker_checker_approval_use_case,
+)
 
 router = APIRouter(prefix="/v1/cases", tags=["cases"])
 
@@ -63,6 +66,13 @@ async def approve_maker_checker(
             "Tier T3 maker-checker control requires checker_staff_id != maker_staff_id",
             status_code=403,
         )
+    record_maker_checker_approval_use_case(
+        case_id=case_id,
+        maker_staff_id=body.maker_staff_id,
+        checker_staff_id=body.checker_staff_id,
+        action_type=body.action_type,
+        rationale=body.rationale,
+    )
     return MakerCheckerApprovalResponse(
         case_id=case_id,
         maker_staff_id=body.maker_staff_id,

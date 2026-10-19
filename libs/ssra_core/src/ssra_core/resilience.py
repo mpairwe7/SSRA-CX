@@ -62,7 +62,11 @@ class UpstreamCircuitBreaker:
             self._opened_at = now or utc_now()
             self._half_open_in_flight = 0
 
-    def call[T](self, fn: Callable[[], T]) -> T:
+    def release_half_open_probe(self) -> None:
+        self._half_open_in_flight = max(0, self._half_open_in_flight - 1)
+
+    def acquire_call_permission(self) -> bool:
+        """Verify circuit is CLOSED or acquire a bounded HALF_OPEN probe slot."""
         current_state = self.state
         if current_state == CircuitState.OPEN:
             raise SSRAError(
@@ -79,6 +83,10 @@ class UpstreamCircuitBreaker:
                     status_code=503,
                 )
             self._half_open_in_flight += 1
+        return is_probe
+
+    def call[T](self, fn: Callable[[], T]) -> T:
+        self.acquire_call_permission()
         try:
             result = fn()
             self.record_success()

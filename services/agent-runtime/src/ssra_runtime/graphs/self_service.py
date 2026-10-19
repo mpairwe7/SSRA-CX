@@ -21,12 +21,13 @@ def execute_self_service_subgraph(
     auth_level = state.get("auth_level", AuthLevel.ANONYMOUS)
     subject_ref = state.get("subject_ref")
     thread_id = state.get("thread_id", "thr_default")
+    budget = state.get("budget")
     artifacts: list[ToolArtifact] = list(state.get("artifacts", []))
 
     # Microsoft agent-framework#8132: If resuming a pending confirmation with confirmation_token_in, preserve it for confirm_node
     existing_pending = state.get("pending_confirmation")
     if existing_pending is not None and state.get("confirmation_token_in"):
-        return {"pending_confirmation": existing_pending, "artifacts": artifacts}
+        return {"pending_confirmation": existing_pending, "artifacts": artifacts, "budget": budget}
 
     if intent_name == IntentName.GET_BALANCE:
         art = gateway.invoke_tool(
@@ -35,9 +36,10 @@ def execute_self_service_subgraph(
             arguments={},
             auth_level=auth_level,
             subject_ref=subject_ref,
+            budget=budget,
         )
         artifacts.append(art)
-        return {"artifacts": artifacts}
+        return {"artifacts": artifacts, "budget": budget}
 
     if intent_name == IntentName.GET_FILING_STATUS:
         art = gateway.invoke_tool(
@@ -46,9 +48,10 @@ def execute_self_service_subgraph(
             arguments={},
             auth_level=auth_level,
             subject_ref=subject_ref,
+            budget=budget,
         )
         artifacts.append(art)
-        return {"artifacts": artifacts}
+        return {"artifacts": artifacts, "budget": budget}
 
     if intent_name == IntentName.GET_TCC_STATUS:
         art = gateway.invoke_tool(
@@ -57,9 +60,10 @@ def execute_self_service_subgraph(
             arguments={},
             auth_level=auth_level,
             subject_ref=subject_ref,
+            budget=budget,
         )
         artifacts.append(art)
-        return {"artifacts": artifacts}
+        return {"artifacts": artifacts, "budget": budget}
 
     if intent_name == IntentName.REPORT_SCAM:
         args = {

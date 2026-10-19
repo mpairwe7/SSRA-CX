@@ -156,6 +156,12 @@ def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> Non
     assert r_val_err.status_code == 422
     assert r_val_err.headers["content-type"].startswith("application/problem+json")
 
+    r_bad_host = client.post("/v1/ussd/session", headers={"Host": "evil.com/path?"}, json={})
+    assert r_bad_host.status_code == 400
+
+    r_oversize = client.post("/v1/ussd/session", content=b"x" * 1_050_000)
+    assert r_oversize.status_code == 413
+
 
 def test_whatsapp_24h_service_window_and_template_consent_gate() -> None:
     from datetime import UTC, datetime, timedelta
