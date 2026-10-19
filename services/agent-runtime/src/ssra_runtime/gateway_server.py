@@ -19,7 +19,11 @@ from typing import Any
 from fastapi import FastAPI, Header, Request, Response
 from fastapi.responses import JSONResponse
 from ssra_core import AuthLevel, McpErrorCode, RiskTier, SSRAError
-from ssra_mcp import MCP_PROTOCOL_VERSION, validate_mcp_transport_headers
+from ssra_mcp import (
+    MCP_PROTOCOL_VERSION,
+    read_bounded_mcp_json_body,
+    validate_mcp_transport_headers,
+)
 from ssra_security import compute_least_privilege_mcp_scope
 
 from ssra_runtime.tools import GovernedMcpGatewayClient
@@ -83,6 +87,8 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
         request: Request,
         mcp_method: str | None = Header(default=None, alias="Mcp-Method"),
         mcp_name: str | None = Header(default=None, alias="Mcp-Name"),
+        mcp_protocol_version: str | None = Header(default=None, alias="MCP-Protocol-Version"),
+        mcp_session_id: str | None = Header(default=None, alias="Mcp-Session-Id"),
         authorization: str | None = Header(default=None, alias="Authorization"),
         if_none_match: str | None = Header(default=None, alias="If-None-Match"),
         x_ssra_auth_level: str = Header(default="ANONYMOUS", alias="X-SSRA-Auth-Level"),
@@ -94,7 +100,14 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
             validate_mcp_transport_headers(
                 request.headers.get("host"),
                 request.headers.get("origin"),
+                x_forwarded_host=request.headers.get("x-forwarded-host"),
             )
+            if mcp_session_id is not None:
+                raise SSRAError(
+                    McpErrorCode.VALIDATION_FAILED,
+                    "Legacy Mcp-Session-Id header is prohibited by stateless MCP 2026-07-28 (SEP-2567)",
+                    status_code=400,
+                )
             if state["daily_spend_usd"] >= daily_usd_cap:
                 raise SSRAError(
                     McpErrorCode.RATE_LIMITED,
@@ -115,6 +128,9 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
                     f"Unknown MCP server '{mcp_name}'",
                     status_code=404,
                 )
+
+            if mcp_method == "server/discover":
+                return JSONResponse(status_code=200, content=srv.handle_server_discover())
 
             if mcp_method == "tools/list":
                 now_ms = time.monotonic() * 1000.0
@@ -204,14 +220,25 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
                     status_code=401,
                 )
 
-            body = await request.json()
+            body = await read_bounded_mcp_json_body(request)
             meta = body.get("_meta", {})
             if isinstance(meta, dict):
-                proto = meta.get("protocolVersion", MCP_PROTOCOL_VERSION)
+                proto = str(
+                    meta.get(
+                        "io.modelcontextprotocol/protocolVersion",
+                        meta.get("protocolVersion", MCP_PROTOCOL_VERSION),
+                    )
+                )
                 if proto != MCP_PROTOCOL_VERSION:
                     raise SSRAError(
                         McpErrorCode.VALIDATION_FAILED,
                         f"Unsupported MCP protocolVersion '{proto}'; expected '{MCP_PROTOCOL_VERSION}'",
+                        status_code=400,
+                    )
+                if mcp_protocol_version and mcp_protocol_version.strip() != proto:
+                    raise SSRAError(
+                        McpErrorCode.VALIDATION_FAILED,
+                        "MCP-Protocol-Version header does not match _meta protocolVersion (HeaderMismatch -32020)",
                         status_code=400,
                     )
             body_method = body.get("method")

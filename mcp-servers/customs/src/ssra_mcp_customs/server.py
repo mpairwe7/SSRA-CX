@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from ssra_adapters import MockECustomsAdapter
@@ -16,12 +16,16 @@ from ssra_mcp import (
     require_subject_ref,
 )
 
+MAX_CIF_VALUE_USD = Decimal("1000000000")
+
 
 def create_customs_mcp_server() -> StatelessMcpServer:
+    """Create the stateless MCP 2026-07-28 server for SSRA customs tariffs, duties, and declarations."""
     adapter = MockECustomsAdapter()
     server = StatelessMcpServer(server_name="customs")
 
     def _lookup_tariff(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
+        """Look up customs tariff and official BoSS FX rate for an HS code."""
         t = adapter.lookup_tariff(str(args["hs_code"]))
         return {
             "hs_code": t.hs_code,
@@ -35,14 +39,22 @@ def create_customs_mcp_server() -> StatelessMcpServer:
         }
 
     def _estimate_duties(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
+        """Estimate customs duty in SSP using the official BoSS FX rate and finite Decimal bounds."""
         # Principle 2 & Section 2: Foreign-currency customs values convert to SSP strictly at the
         # official Bank of South Sudan (BoSS) rate from the adapter—never guessed by the LLM.
         t = adapter.lookup_tariff(str(args["hs_code"]))
-        cif_usd = Decimal(str(args["cif_value_usd"]))
-        if cif_usd < Decimal("0"):
+        try:
+            cif_usd = Decimal(str(args["cif_value_usd"]).strip())
+        except InvalidOperation as exc:
             raise SSRAError(
                 McpErrorCode.VALIDATION_FAILED,
-                "cif_value_usd must be non-negative",
+                "cif_value_usd must be a valid decimal number",
+                status_code=400,
+            ) from exc
+        if not cif_usd.is_finite() or cif_usd < Decimal("0") or cif_usd > MAX_CIF_VALUE_USD:
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"cif_value_usd must be a finite number between 0 and {MAX_CIF_VALUE_USD}",
                 status_code=400,
             )
         fx = Decimal(t.boss_official_fx_rate_ssp_per_usd)
@@ -65,6 +77,7 @@ def create_customs_mcp_server() -> StatelessMcpServer:
         }
 
     def _get_declaration_status(_args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        """Retrieve the authenticated importer's masked customs declaration status."""
         sub = require_subject_ref(ctx)
         dec = adapter.get_declaration_status(subject_ref=sub)
         return {

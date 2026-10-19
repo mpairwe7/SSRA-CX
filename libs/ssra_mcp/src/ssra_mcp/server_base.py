@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -49,9 +50,11 @@ MCP_PROTOCOL_VERSION = "2026-07-28"
 JSON_SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema"
 MAX_MCP_TASKS = 512
 MAX_MCP_IDEMPOTENT_CACHE = 1024
+MAX_MCP_REQUEST_BODY_BYTES = 262_144
 MCP_TASK_TTL_SECONDS = 3600
 _SHELL_METACHAR_RE = re.compile(r"[;|`$><\r\n\x00]")
 _NUMERIC_HOST_RE = re.compile(r"^(?:0x[0-9a-f]+|0[0-7]+|\d+)$", flags=re.IGNORECASE)
+_INTERNAL_MCP_HOST_RE = re.compile(r"^mcp-[a-z0-9-]+$")
 
 _ALLOWED_MCP_HOSTS: frozenset[str] = frozenset(
     {
@@ -72,20 +75,36 @@ _ALLOWED_MCP_ORIGINS: frozenset[str] = frozenset(
 )
 
 
-def validate_mcp_transport_headers(host: str | None, origin: str | None) -> None:
-    """Block Streamable HTTP DNS rebinding and untrusted browser Origins (CVE-2026-81092, CVE-2026-11624)."""
-    if host is not None:
-        clean_host = host.strip().lower().split(":", 1)[0]
-        if not clean_host or (
-            clean_host not in _ALLOWED_MCP_HOSTS
-            and not clean_host.endswith(".ssra.gov.ss")
-            and not clean_host.endswith(".svc.cluster.local")
-        ):
-            raise SSRAError(
-                McpErrorCode.NOT_AUTHORIZED,
-                f"MCP DNS rebinding blocked: untrusted Host header '{host}' (CVE-2026-81092)",
-                status_code=403,
-            )
+def _is_trusted_mcp_hostname(raw_host: str) -> bool:
+    """Return True if raw_host is an allow-listed sovereign or internal MCP hostname."""
+    clean_host = raw_host.strip().lower().split(":", 1)[0]
+    return bool(clean_host) and (
+        clean_host in _ALLOWED_MCP_HOSTS
+        or bool(_INTERNAL_MCP_HOST_RE.match(clean_host))
+        or clean_host.endswith(".ssra.gov.ss")
+        or clean_host.endswith(".svc.cluster.local")
+    )
+
+
+def validate_mcp_transport_headers(
+    host: str | None,
+    origin: str | None,
+    *,
+    x_forwarded_host: str | None = None,
+) -> None:
+    """Block Streamable HTTP DNS rebinding, spoofed X-Forwarded-Host, and untrusted Origins (CVE-2026-81092, CVE-2026-81315, CVE-2026-11624)."""
+    if host is not None and not _is_trusted_mcp_hostname(host):
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            f"MCP DNS rebinding blocked: untrusted Host header '{host}' (CVE-2026-81092)",
+            status_code=403,
+        )
+    if x_forwarded_host is not None and not _is_trusted_mcp_hostname(x_forwarded_host):
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            f"MCP DNS rebinding blocked: untrusted X-Forwarded-Host header '{x_forwarded_host}' (CVE-2026-81315)",
+            status_code=403,
+        )
     if origin is not None:
         clean_origin = origin.strip()
         if clean_origin.lower() == "null" or clean_origin not in _ALLOWED_MCP_ORIGINS:
@@ -94,6 +113,68 @@ def validate_mcp_transport_headers(host: str | None, origin: str | None) -> None
                 f"MCP cross-origin request blocked: untrusted Origin '{origin}' (CVE-2026-11624)",
                 status_code=403,
             )
+
+
+def _contains_null_byte(val: Any) -> bool:
+    """Return True if any dict key or string value contains a NUL byte (GHSA-q382-vc8q-7jhj)."""
+    if isinstance(val, str):
+        return "\x00" in val
+    if isinstance(val, dict):
+        return any(_contains_null_byte(k) or _contains_null_byte(v) for k, v in val.items())
+    if isinstance(val, (list, tuple)):
+        return any(_contains_null_byte(item) for item in val)
+    return False
+
+
+async def read_bounded_mcp_json_body(
+    request: Request,
+    *,
+    max_bytes: int = MAX_MCP_REQUEST_BODY_BYTES,
+) -> dict[str, Any]:
+    """Stream and parse a bounded JSON-RPC / MCP request body while rejecting >256KB DoS (CVE-2026-67432) and NUL bytes (GHSA-q382-vc8q-7jhj)."""
+    content_len_str = request.headers.get("content-length")
+    if content_len_str and content_len_str.isdigit() and int(content_len_str) > max_bytes:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"MCP request body exceeds maximum allowed size of {max_bytes} bytes (CVE-2026-67432)",
+            status_code=413,
+        )
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > max_bytes:
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"MCP request body exceeds maximum allowed size of {max_bytes} bytes (CVE-2026-67432)",
+                status_code=413,
+            )
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+    request._body = raw  # pyright: ignore[reportPrivateUsage]
+    if not raw:
+        return {}
+    if b"\x00" in raw:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "MCP JSON payload contains prohibited NUL byte (GHSA-q382-vc8q-7jhj)",
+            status_code=400,
+        )
+    try:
+        parsed = json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "Malformed JSON in MCP request body",
+            status_code=400,
+        ) from exc
+    if not isinstance(parsed, dict) or _contains_null_byte(parsed):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "MCP request body must be a JSON object without NUL characters (GHSA-q382-vc8q-7jhj)",
+            status_code=400,
+        )
+    return parsed
 
 
 def validate_mcp_oauth_url(url: str, *, allow_dev_loopback: bool = False) -> str:
@@ -249,6 +330,7 @@ class RegisteredTool:
 
     @property
     def description_sha256(self) -> str:
+        """Compute the immutable SHA-256 hex digest of the tool description."""
         return hashlib.sha256(self.description.encode("utf-8")).hexdigest()
 
 
@@ -257,6 +339,15 @@ class McpRequestMeta(BaseModel):
 
     protocolVersion: str = MCP_PROTOCOL_VERSION
     clientCapabilities: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def effective_protocol_version(self) -> str:
+        """Resolve protocolVersion from either standard or SEP-2575 namespaced _meta field."""
+        extra = self.model_extra or {}
+        namespaced = extra.get("io.modelcontextprotocol/protocolVersion")
+        if isinstance(namespaced, str) and namespaced.strip():
+            return namespaced.strip()
+        return self.protocolVersion
 
 
 class StatelessMcpRequest(BaseModel):
@@ -267,9 +358,24 @@ class StatelessMcpRequest(BaseModel):
     meta: McpRequestMeta = Field(default_factory=McpRequestMeta, alias="_meta")
 
 
-_DEPRECATED_METHOD_PREFIXES: tuple[str, ...] = ("roots/", "sampling/", "logging/")
+_DEPRECATED_METHOD_PREFIXES: tuple[str, ...] = (
+    "roots/",
+    "sampling/",
+    "logging/",
+    "initialize",
+    "notifications/initialized",
+    "ping",
+)
 _ALLOWED_MCP_METHODS: frozenset[str] = frozenset(
-    {"tools/list", "tools/call", "tasks/create", "tasks/get", "tasks/cancel"}
+    {
+        "server/discover",
+        "tools/list",
+        "tools/call",
+        "tasks/create",
+        "tasks/get",
+        "tasks/update",
+        "tasks/cancel",
+    }
 )
 
 
@@ -298,9 +404,11 @@ class StatelessMcpServer:
 
     @property
     def tools(self) -> dict[str, RegisteredTool]:
+        """Return a shallow copy of registered tools on this MCP server."""
         return dict(self._tools)
 
     def register_tool(self, tool: RegisteredTool) -> None:
+        """Register a tool after verifying Tier T0-T3 and JSON Schema 2020-12 invariants."""
         if tool.tier == RiskTier.T4:
             raise ValueError("Principle 3: T4 is human-only; no MCP tool may exist at Tier T4.")
         # Validate schemas are valid JSON Schema 2020-12 and forbid additionalProperties: True
@@ -320,11 +428,38 @@ class StatelessMcpServer:
         jsonschema.Draft202012Validator.check_schema(tool.output_schema)
         self._tools[tool.name] = tool
 
-    def handle_list_tools(self) -> dict[str, Any]:
+    def handle_server_discover(self) -> dict[str, Any]:
+        """Return MCP 2026-07-28 server/discover capabilities, protocol versions, and server identity (SEP-2575)."""
         return {
+            "resultType": "complete",
+            "supportedProtocolVersions": [MCP_PROTOCOL_VERSION],
+            "serverInfo": {
+                "name": f"ssra-mcp-{self.server_name}",
+                "version": "2026.10.1",
+            },
+            "capabilities": {
+                "tools": {"listChanged": False},
+                "extensions": {"io.modelcontextprotocol/tasks": {}},
+            },
             "_meta": {
                 "protocolVersion": MCP_PROTOCOL_VERSION,
+                "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
+                "server": self.server_name,
+            },
+        }
+
+    def handle_list_tools(self) -> dict[str, Any]:
+        """Return deterministic sorted tools/list CacheableResult with ttlMs and cacheScope (SEP-2549)."""
+        sorted_tools = sorted(self._tools.values(), key=lambda item: item.name)
+        return {
+            "resultType": "complete",
+            "ttlMs": self.ttl_ms,
+            "cacheScope": "private",
+            "_meta": {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
                 "ttlMs": self.ttl_ms,
+                "cacheScope": "private",
                 "server": self.server_name,
             },
             "tools": [
@@ -337,7 +472,7 @@ class StatelessMcpServer:
                     "inputSchema": t.input_schema,
                     "outputSchema": t.output_schema,
                 }
-                for t in self._tools.values()
+                for t in sorted_tools
             ],
         }
 
@@ -348,7 +483,7 @@ class StatelessMcpServer:
         *,
         caller_sub: str = "ANONYMOUS",
     ) -> dict[str, Any]:
-        """MCP 2026-07-28 Tasks extension with State-Handle Hijacking & TTL protection (Section 8.1 & 8.2)."""
+        """MCP 2026-07-28 Tasks extension (SEP-2663) with State-Handle Hijacking & TTL protection."""
         now = utc_now()
         now_iso = now.isoformat()
         # Evict expired tasks proactively
@@ -361,7 +496,9 @@ class StatelessMcpServer:
         if method == "tasks/create":
             if len(self._tasks) >= MAX_MCP_TASKS:
                 reclaimable = [
-                    tid for tid, trec in self._tasks.items() if trec.get("status") != "RUNNING"
+                    tid
+                    for tid, trec in self._tasks.items()
+                    if trec.get("status") not in ("RUNNING", "working")
                 ]
                 if not reclaimable:
                     raise SSRAError(
@@ -371,16 +508,23 @@ class StatelessMcpServer:
                     )
                 self._tasks.pop(reclaimable[0], None)
             task_id = new_id("task")
-            task_rec = {
+            task_rec: dict[str, Any] = {
                 "taskId": task_id,
                 "owner_sub": caller_sub,
                 "status": "RUNNING",
+                "taskStatus": "working",
                 "operation": str(params.get("operation", "background_task")),
                 "createdAt": now_iso,
+                "lastUpdatedAt": now_iso,
+                "ttlMs": MCP_TASK_TTL_SECONDS * 1000,
                 "expiresAt": (now + timedelta(seconds=MCP_TASK_TTL_SECONDS)).isoformat(),
             }
             self._tasks[task_id] = task_rec
-            return {"_meta": {"protocolVersion": MCP_PROTOCOL_VERSION}, "task": task_rec}
+            return {
+                "resultType": "complete",
+                "_meta": {"protocolVersion": MCP_PROTOCOL_VERSION},
+                "task": task_rec,
+            }
 
         task_id = str(params.get("taskId", ""))
         rec = self._tasks.get(task_id)
@@ -396,9 +540,20 @@ class StatelessMcpServer:
                 "State-handle hijacking blocked: caller does not own taskId",
                 status_code=403,
             )
-        if method == "tasks/cancel":
+        rec["lastUpdatedAt"] = now_iso
+        if method == "tasks/update":
+            if "inputResponses" in params:
+                rec["inputResponses"] = params["inputResponses"]
+            rec["status"] = "RUNNING"
+            rec["taskStatus"] = "working"
+        elif method == "tasks/cancel":
             rec["status"] = "CANCELLED"
-        return {"_meta": {"protocolVersion": MCP_PROTOCOL_VERSION}, "task": rec}
+            rec["taskStatus"] = "cancelled"
+        return {
+            "resultType": "complete",
+            "_meta": {"protocolVersion": MCP_PROTOCOL_VERSION},
+            "task": rec,
+        }
 
     def handle_call_tool(
         self,
@@ -408,6 +563,13 @@ class StatelessMcpServer:
         bearer_token: str | None,
         traceparent: str | None = None,
     ) -> dict[str, Any]:
+        """Execute a registered MCP tool with OAuth 2.1, confirmation token, JSON Schema 2020-12, and output sanitisation."""
+        if _contains_null_byte(arguments):
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Tool '{tool_name}' arguments contain prohibited NUL byte (GHSA-q382-vc8q-7jhj)",
+                status_code=400,
+            )
         tool = self._tools.get(tool_name)
         if tool is None:
             raise SSRAError(
@@ -528,8 +690,17 @@ class StatelessMcpServer:
             traceparent=resolved_tp,
         )
         response_envelope = {
+            "resultType": "complete",
+            "isError": False,
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(raw_result, ensure_ascii=False, sort_keys=True),
+                }
+            ],
             "_meta": {
                 "protocolVersion": MCP_PROTOCOL_VERSION,
+                "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
                 "server": self.server_name,
                 "tool": tool_name,
                 "tier": tool.tier.value,
@@ -581,6 +752,7 @@ class StatelessMcpServer:
         }
 
     def create_fastapi_app(self) -> FastAPI:
+        """Create the FastAPI Streamable HTTP transport app for this StatelessMcpServer."""
         app = FastAPI(
             title=f"SSRA MCP Server — {self.server_name}",
             version="0.1.0",
@@ -588,6 +760,7 @@ class StatelessMcpServer:
 
         @app.get("/healthz")
         async def healthz() -> dict[str, str]:
+            """Return MCP server health status and protocol revision."""
             return {
                 "status": "ok",
                 "server": self.server_name,
@@ -597,6 +770,7 @@ class StatelessMcpServer:
         @app.get(f"/.well-known/oauth-protected-resource/servers/{self.audience}")
         @app.get("/.well-known/oauth-protected-resource")
         async def oauth_protected_resource() -> dict[str, Any]:
+            """Return RFC 9728 OAuth 2.0 Protected Resource Metadata for this MCP server."""
             return self.get_protected_resource_metadata()
 
         @app.post("/mcp")
@@ -604,20 +778,37 @@ class StatelessMcpServer:
             request: Request,
             mcp_method: str | None = Header(default=None, alias="Mcp-Method"),
             mcp_name: str | None = Header(default=None, alias="Mcp-Name"),
+            mcp_protocol_version: str | None = Header(default=None, alias="MCP-Protocol-Version"),
+            mcp_session_id: str | None = Header(default=None, alias="Mcp-Session-Id"),
             authorization: str | None = Header(default=None, alias="Authorization"),
             traceparent: str | None = Header(default=None, alias="traceparent"),
         ) -> JSONResponse:
+            """Handle stateless MCP 2026-07-28 Streamable HTTP POST requests."""
             try:
                 validate_mcp_transport_headers(
                     request.headers.get("host"),
                     request.headers.get("origin"),
+                    x_forwarded_host=request.headers.get("x-forwarded-host"),
                 )
-                body = await request.json()
-                req = StatelessMcpRequest.model_validate(body)
-                if req.meta.protocolVersion != MCP_PROTOCOL_VERSION:
+                if mcp_session_id is not None:
                     raise SSRAError(
                         McpErrorCode.VALIDATION_FAILED,
-                        f"Unsupported MCP protocolVersion '{req.meta.protocolVersion}'; expected '{MCP_PROTOCOL_VERSION}'",
+                        "Legacy Mcp-Session-Id header is prohibited by stateless MCP 2026-07-28 (SEP-2567)",
+                        status_code=400,
+                    )
+                body = await read_bounded_mcp_json_body(request)
+                req = StatelessMcpRequest.model_validate(body)
+                effective_proto = req.meta.effective_protocol_version
+                if effective_proto != MCP_PROTOCOL_VERSION:
+                    raise SSRAError(
+                        McpErrorCode.VALIDATION_FAILED,
+                        f"Unsupported MCP protocolVersion '{effective_proto}'; expected '{MCP_PROTOCOL_VERSION}'",
+                        status_code=400,
+                    )
+                if mcp_protocol_version and mcp_protocol_version.strip() != effective_proto:
+                    raise SSRAError(
+                        McpErrorCode.VALIDATION_FAILED,
+                        "MCP-Protocol-Version header does not match _meta protocolVersion (HeaderMismatch -32020)",
                         status_code=400,
                     )
                 if mcp_method and mcp_method != req.method:
@@ -636,7 +827,7 @@ class StatelessMcpServer:
                 if any(req.method.startswith(p) for p in _DEPRECATED_METHOD_PREFIXES):
                     raise SSRAError(
                         McpErrorCode.VALIDATION_FAILED,
-                        f"Deprecated MCP feature '{req.method}' (Roots/Sampling/Logging) is prohibited by SSRA MCP 2026-07-28 baseline",
+                        f"Deprecated or removed MCP feature '{req.method}' is prohibited by SSRA MCP 2026-07-28 baseline",
                         status_code=400,
                     )
                 if req.method not in _ALLOWED_MCP_METHODS:
@@ -645,6 +836,9 @@ class StatelessMcpServer:
                         f"Unsupported MCP method '{req.method}'",
                         status_code=400,
                     )
+
+                if req.method == "server/discover":
+                    return JSONResponse(content=self.handle_server_discover(), status_code=200)
 
                 if req.method == "tools/list":
                     return JSONResponse(content=self.handle_list_tools(), status_code=200)

@@ -15,9 +15,11 @@ from ssra_mcp import (
 
 
 def create_{{PACKAGE_SUFFIX}}_mcp_server() -> StatelessMcpServer:
+    """Create the stateless MCP 2026-07-28 server for SSRA {{SERVER_NAME}}."""
     server = StatelessMcpServer(server_name="{{SERVER_NAME}}")
 
     def _ping_handler(_args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
+        """Execute the generated {{TOOL_NAME}} handler with provenance metadata."""
         return {
             "status": "ok",
             "record_id": "{{SERVER_NAME}}:ping",

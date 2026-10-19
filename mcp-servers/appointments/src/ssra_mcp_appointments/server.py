@@ -14,8 +14,14 @@ from ssra_mcp import (
     require_subject_ref,
 )
 
+MAX_APPOINTMENTS = 1024
+_ALLOWED_OFFICE_CODES: frozenset[str] = frozenset(
+    {"JUBA_HQ", "NIMULE_CUSTOMS", "WAU_BRANCH", "MALAKAL_BRANCH"}
+)
+
 
 def create_appointments_mcp_server() -> StatelessMcpServer:
+    """Create the stateless MCP 2026-07-28 server for SSRA appointments with bounded state and ownership guards."""
     server = StatelessMcpServer(server_name="appointments")
     appointment_store: dict[str, dict[str, Any]] = {
         "appt_seed_01": {
@@ -28,7 +34,14 @@ def create_appointments_mcp_server() -> StatelessMcpServer:
     }
 
     def _list_slots(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
-        office = str(args.get("office_code", "JUBA_HQ"))
+        """List available Africa/Juba appointment slots for an approved SSRA office."""
+        office = str(args.get("office_code", "JUBA_HQ")).strip().upper()
+        if office not in _ALLOWED_OFFICE_CODES:
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Unknown SSRA office_code '{office}'",
+                status_code=400,
+            )
         return {
             "office_code": office,
             "slots": [
@@ -40,10 +53,19 @@ def create_appointments_mcp_server() -> StatelessMcpServer:
         }
 
     def _book_appointment(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        """Book a confirmed in-person appointment bound to the authenticated taxpayer's subject_ref."""
         sub = require_subject_ref(ctx)
+        office = str(args["office_code"]).strip().upper()
+        if office not in _ALLOWED_OFFICE_CODES:
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Unknown SSRA office_code '{office}'",
+                status_code=400,
+            )
+        slot = str(args["slot_id"]).strip()
+        if len(appointment_store) >= MAX_APPOINTMENTS:
+            appointment_store.pop(next(k for k in appointment_store if k != "appt_seed_01"), None)
         appt_id = new_id("appt")
-        office = str(args["office_code"])
-        slot = str(args["slot_id"])
         appointment_store[appt_id] = {
             "appointment_id": appt_id,
             "subject_ref": sub,
@@ -61,6 +83,7 @@ def create_appointments_mcp_server() -> StatelessMcpServer:
         }
 
     def _cancel_appointment(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        """Cancel an appointment after verifying the caller owns the appointment_id state handle."""
         sub = require_subject_ref(ctx)
         appt_id = str(args["appointment_id"])
         rec = appointment_store.get(appt_id)

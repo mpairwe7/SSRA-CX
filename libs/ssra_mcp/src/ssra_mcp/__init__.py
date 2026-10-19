@@ -9,6 +9,7 @@ from ssra_mcp.sanitiser import (
 )
 from ssra_mcp.server_base import (
     JSON_SCHEMA_2020_12,
+    MAX_MCP_REQUEST_BODY_BYTES,
     MCP_PROTOCOL_VERSION,
     McpRequestMeta,
     ProvenanceEnvelope,
@@ -17,6 +18,7 @@ from ssra_mcp.server_base import (
     StatelessMcpServer,
     ToolAnnotations,
     ToolContext,
+    read_bounded_mcp_json_body,
     redact_audit_args,
     require_subject_ref,
     validate_mcp_oauth_url,
@@ -26,6 +28,7 @@ from ssra_mcp.server_base import (
 __all__ = [
     "ALLOWED_SSRA_DOMAINS",
     "JSON_SCHEMA_2020_12",
+    "MAX_MCP_REQUEST_BODY_BYTES",
     "MCP_PROTOCOL_VERSION",
     "McpRequestMeta",
     "ProvenanceEnvelope",
@@ -35,6 +38,7 @@ __all__ = [
     "ToolAnnotations",
     "ToolContext",
     "is_allowed_ssra_url",
+    "read_bounded_mcp_json_body",
     "redact_audit_args",
     "require_subject_ref",
     "sanitise_structured_output",
