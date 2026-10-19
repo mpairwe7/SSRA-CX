@@ -81,17 +81,14 @@ export function authorizeConsoleRoute(
     return base;
   }
   const upperMethod = method.trim().toUpperCase();
-  const isMutation =
-    upperMethod === "POST" ||
-    upperMethod === "PUT" ||
-    upperMethod === "PATCH" ||
-    upperMethod === "DELETE";
+  const isMutation = !["GET", "HEAD", "OPTIONS"].includes(upperMethod);
 
   // Separation of Duties (ISO/IEC 42001 Clause 9.2 & EU AI Act Art. 14):
   // Auditors (`qa` / `ssra_auditor`) are read-only across operational routes and may only submit QA rubric scores.
   if (isMutation && isReadOnlyAuditorRole(session.role)) {
     const allowedAuditorMutation =
-      pathname.endsWith("/qa-score") || pathname.startsWith("/admin/audit/export");
+      /^\/v1\/conversations\/[^/]+\/qa-score$/.test(pathname) ||
+      /^\/admin\/audit\/export$/.test(pathname);
     if (!allowedAuditorMutation) {
       return { allowed: false, reason: "AUDITOR_READ_ONLY_SEPARATION_OF_DUTIES" };
     }

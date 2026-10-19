@@ -135,7 +135,6 @@
             "type": "integer"
           },
           "head_hash": {
-            "default": "0000000000000000000000000000000000000000000000000000000000000000",
             "title": "Head Hash",
             "type": "string"
           },
@@ -146,7 +145,8 @@
         },
         "required": [
           "integrity_verified",
-          "events_count"
+          "events_count",
+          "head_hash"
         ],
         "title": "AuditVerifyResponse",
         "type": "object"
@@ -1256,6 +1256,7 @@
     },
     "/v1/admin/audit-verify": {
       "get": {
+        "description": "Verify the admin WORM audit chain and return integrity status, event count, and head hash.",
         "operationId": "verify_audit_v1_admin_audit_verify_get",
         "responses": {
           "200": {

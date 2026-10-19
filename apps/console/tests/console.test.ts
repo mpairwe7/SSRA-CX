@@ -290,17 +290,20 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(auditorCallDesk.canTakeCall).toBe(false);
 
     // Auditor WORM Audit Trail & Merkle Seal Inspector
-    const intactAudit = buildAuditorTrailIntegrityView({
-      valid: true,
-      head_hash: "8f2b1290a5b1179c20f9e8123ab71e8902112a01",
-      unsealed_rows: 4,
-      breaks: [],
-      anchor_breaks: [],
-    });
+    const intactAudit = buildAuditorTrailIntegrityView(
+      {
+        valid: true,
+        head_hash: "8f2b1290a5b1179c20f9e8123ab71e8902112a01",
+        unsealed_rows: 4,
+        breaks: [],
+        anchor_breaks: [],
+      },
+      { role: "ssra_admin" },
+    );
     expect(intactAudit.chipText).toBe("Record intact");
     expect(intactAudit.sealButtonDisabled).toBe(false);
 
-    // Separation of Duties: ssra_staff cannot seal WORM batches
+    // Separation of Duties: ssra_staff and ssra_auditor cannot seal WORM batches
     const staffAuditView = buildAuditorTrailIntegrityView(
       {
         valid: true,
@@ -377,6 +380,7 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     });
     expect(replayTimeline.allTurnsReconstructable).toBe(true);
     expect(replayTimeline.flaggedTurnsCount).toBe(0);
+    expect(replayTimeline.turns[0]?.redactedInput).toBe("Check my balance for TIN ••••1234");
 
     const qaBelowGate = evaluateAuditorQaRubricSubmission({
       conversationId: "conv_1",

@@ -36,7 +36,7 @@ class AuditVerifyResponse(BaseModel):
 
     integrity_verified: bool
     events_count: int
-    head_hash: str = "0000000000000000000000000000000000000000000000000000000000000000"
+    head_hash: str
 
 
 class JitElevationRequest(BaseModel):
@@ -97,6 +97,7 @@ async def set_kill_switches(body: UpdateKillSwitchRequest) -> KillSwitchResponse
 
 @router.get("/audit-verify", response_model=AuditVerifyResponse)
 async def verify_audit() -> AuditVerifyResponse:
+    """Verify the admin WORM audit chain and return integrity status, event count, and head hash."""
     ok, count = verify_admin_audit_chain()
     return AuditVerifyResponse(
         integrity_verified=ok,

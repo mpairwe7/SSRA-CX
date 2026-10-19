@@ -317,7 +317,7 @@ export function buildAuditorTrailIntegrityView(
   }
   const safeUnsealed =
     Number.isFinite(data.unsealed_rows) && data.unsealed_rows > 0 ? data.unsealed_rows : 0;
-  const roleDisallowSeal = options?.role === "ssra_staff";
+  const roleDisallowSeal = options?.role !== "ssra_admin";
   return {
     bannerRole: "status" as const,
     chipClass: "is-good" as const,
@@ -328,7 +328,7 @@ export function buildAuditorTrailIntegrityView(
     compromisedFromSeq: null,
     sealButtonDisabled: safeUnsealed === 0 || roleDisallowSeal,
     sealPausedReason: roleDisallowSeal
-      ? "Only administrators and auditors may seal unsealed WORM ledger batches."
+      ? "Only administrators may seal unsealed WORM ledger batches."
       : null,
   };
 }

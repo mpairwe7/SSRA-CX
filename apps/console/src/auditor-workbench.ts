@@ -42,6 +42,7 @@ export interface ReconstructedTurnItem {
 
 export interface ForensicReplayTurnView {
   readonly turnIndex: number;
+  readonly redactedInput: string;
   readonly riskTier: string;
   readonly policyDecision: string;
   readonly shortAuditHash: string;
@@ -85,6 +86,7 @@ export function buildForensicReplayTimelineView(params: {
 
     return {
       turnIndex: t.turn_index,
+      redactedInput: t.redacted_input,
       riskTier: t.risk_tier,
       policyDecision: t.policy_decision,
       shortAuditHash,
