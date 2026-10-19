@@ -8,7 +8,9 @@ from dataclasses import dataclass
 from ssra_core import McpErrorCode, SSRAError
 
 _SAFE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_]+$")
-_ALLOWED_STAFF_ROLES = frozenset({"agent", "supervisor", "qa", "legal_approver", "secops", "admin"})
+_ALLOWED_STAFF_ROLES = frozenset(
+    {"agent", "supervisor", "qa", "legal_approver", "secops", "admin", "auditor"}
+)
 
 
 @dataclass(frozen=True)

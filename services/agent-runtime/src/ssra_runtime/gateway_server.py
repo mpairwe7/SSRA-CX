@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from typing import Any
 
@@ -23,8 +24,11 @@ from ssra_security import compute_least_privilege_mcp_scope
 
 from ssra_runtime.tools import GovernedMcpGatewayClient
 
+_SAFE_SUBJECT_REF_RE = re.compile(r"^[A-Za-z0-9_:-]{3,64}$")
+
 
 def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
+    """Create the governed AI Gateway FastAPI application enforcing MCP 2026-07-28 and spend caps."""
     app = FastAPI(title="SSRA Assist AI Gateway (agentgateway)", version="1.0.0")
     gateway = GovernedMcpGatewayClient()
     tools_list_cache: dict[str, tuple[float, str, dict[str, Any]]] = {}
@@ -32,6 +36,7 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
 
     @app.get("/healthz")
     async def healthz() -> dict[str, Any]:
+        """Return gateway health, daily spend, and pinned tool count."""
         return {
             "status": "ok",
             "service": "ssra-agentgateway",
@@ -43,6 +48,7 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
     @app.get("/.well-known/oauth-protected-resource/gateway")
     @app.get("/.well-known/oauth-protected-resource")
     async def oauth_protected_resource() -> dict[str, Any]:
+        """Return RFC 9728 OAuth 2.0 Protected Resource Metadata for agentgateway."""
         return {
             "resource": "https://mcp.ssra.gov.ss/gateway",
             "authorization_servers": ["https://sso.ssra.gov.ss/realms/ssra"],
@@ -53,6 +59,7 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
 
     @app.post("/v1/spend/record")
     async def record_spend(request: Request) -> JSONResponse:
+        """Record incremental USD inference spend and enforce the daily spend cap."""
         body = await request.json()
         delta = float(body.get("cost_usd", 0.0))
         if state["daily_spend_usd"] + delta > daily_usd_cap:
@@ -82,6 +89,7 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
         x_ssra_subject_ref: str | None = Header(default=None, alias="X-SSRA-Subject-Ref"),
         traceparent: str | None = Header(default=None, alias="traceparent"),
     ) -> Response:
+        """Route stateless MCP 2026-07-28 requests with zero-trust Bearer token verification."""
         try:
             validate_mcp_transport_headers(
                 request.headers.get("host"),
@@ -145,8 +153,24 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
                     headers=cache_headers,
                 )
 
-            resolved_auth_level = AuthLevel(x_ssra_auth_level)
-            resolved_subject_ref = x_ssra_subject_ref
+            try:
+                resolved_auth_level = AuthLevel(x_ssra_auth_level)
+            except ValueError as exc:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    f"Invalid X-SSRA-Auth-Level header '{x_ssra_auth_level}'",
+                    status_code=401,
+                ) from exc
+
+            resolved_subject_ref = x_ssra_subject_ref.strip() if x_ssra_subject_ref else None
+            if resolved_subject_ref is not None and not _SAFE_SUBJECT_REF_RE.match(
+                resolved_subject_ref
+            ):
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "Malformed X-SSRA-Subject-Ref header rejected",
+                    status_code=403,
+                )
             if authorization:
                 raw_tok = authorization.removeprefix("Bearer ").strip()
                 claims = gateway.token_service.verify_exchanged_token(
@@ -155,8 +179,30 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
                     required_tier=RiskTier.T0,
                     expected_resource=f"https://mcp.ssra.gov.ss/servers/{srv.audience}",
                 )
+                if (
+                    resolved_subject_ref is not None
+                    and claims.sub is not None
+                    and resolved_subject_ref != claims.sub
+                ):
+                    raise SSRAError(
+                        McpErrorCode.NOT_AUTHORIZED,
+                        "Confused deputy blocked: X-SSRA-Subject-Ref does not match Bearer token sub claim",
+                        status_code=403,
+                    )
+                if x_ssra_auth_level != "ANONYMOUS" and resolved_auth_level != claims.auth_level:
+                    raise SSRAError(
+                        McpErrorCode.NOT_AUTHORIZED,
+                        "Confused deputy blocked: X-SSRA-Auth-Level does not match Bearer token auth_level claim",
+                        status_code=403,
+                    )
                 resolved_auth_level = claims.auth_level
                 resolved_subject_ref = claims.sub
+            elif resolved_auth_level != AuthLevel.ANONYMOUS or resolved_subject_ref is not None:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "Asserted X-SSRA-Auth-Level or X-SSRA-Subject-Ref requires a verified Bearer token",
+                    status_code=401,
+                )
 
             body = await request.json()
             meta = body.get("_meta", {})
@@ -231,6 +277,7 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
 
     @app.post("/a2a/v1")
     async def a2a_boundary_stub() -> JSONResponse:
+        """Reject A2A v1.0 requests while the interoperability boundary is disabled in MVP (ADR-014)."""
         return JSONResponse(
             status_code=403,
             content={

@@ -137,11 +137,9 @@ class ConfirmationTokenManager:
         idempotency_key: str | None = None,
         now: datetime | None = None,
     ) -> ConfirmationRecord:
-        """Issue a single-use, argument-digest-bound confirmation token, purging expired/used records first."""
+        """Issue a single-use, argument-digest-bound confirmation token, purging expired records first."""
         issued = now or utc_now()
-        self._records = {
-            k: v for k, v in self._records.items() if v.used_at is None and issued <= v.expires_at
-        }
+        self._records = {k: v for k, v in self._records.items() if issued <= v.expires_at}
         if len(self._records) >= MAX_CONFIRMATION_RECORDS:
             self._records.pop(next(iter(self._records)), None)
         token = new_id("cfm")
@@ -161,6 +159,10 @@ class ConfirmationTokenManager:
         self._records[token] = rec
         return rec
 
+    def get_record(self, token: str) -> ConfirmationRecord | None:
+        """Look up a confirmation record by token string."""
+        return self._records.get(token)
+
     def consume_token(
         self,
         *,
@@ -169,8 +171,10 @@ class ConfirmationTokenManager:
         arguments: dict[str, Any],
         subject_ref: str | None,
         idempotency_key: str,
+        conversation_id: str | None = None,
         now: datetime | None = None,
     ) -> ConfirmationRecord:
+        """Consume a single-use confirmation token after verifying TTL, thread, and argument digest."""
         current = now or utc_now()
         rec = self._records.get(token)
         if rec is None:
@@ -189,6 +193,12 @@ class ConfirmationTokenManager:
             raise SSRAError(
                 McpErrorCode.NOT_AUTHORIZED,
                 "confirmation_token has expired",
+                status_code=403,
+            )
+        if conversation_id is not None and rec.conversation_id != conversation_id:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "confirmation_token conversation_id mismatch (cross-thread replay blocked)",
                 status_code=403,
             )
         expected_digest = compute_action_digest(

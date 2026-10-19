@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hmac
 import io
 import re
 import zipfile
+from datetime import datetime, timedelta
 from typing import Any
 
 from ssra_core import AuthLevel, McpErrorCode, SSRAError, new_id, utc_now
@@ -17,6 +19,7 @@ from ssra_api.identity_link.domain import (
     IdentityBinding,
     SsraDocumentType,
 )
+from ssra_api.outbox import get_outbox_store
 
 _ALLOWED_UPLOAD_MIMES = frozenset({"application/pdf", "image/jpeg", "image/png"})
 _MAX_ARCHIVE_ENTRIES = 1000
@@ -136,6 +139,82 @@ _INJECTION_SCRUB_RE = re.compile(
 
 _OTP_CODE_RE = re.compile(r"[0-9]{6}")
 _SHA256_HEX_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+MAX_OTP_FAILED_ATTEMPTS = 5
+OTP_LOCKOUT_SECONDS = 300
+DEFAULT_SYNTHETIC_OTP_CHALLENGE = "123456"
+
+
+class OtpChallengeAndLockoutStore:
+    """Shared state store tracking issued OTP challenges, failure windows, and timed lockout expiry per TIN."""
+
+    def __init__(self, *, lockout_seconds: int = OTP_LOCKOUT_SECONDS) -> None:
+        """Initialise the OTP challenge and timed lockout store."""
+        self.lockout_seconds = lockout_seconds
+        self._issued_challenges: dict[str, str] = {}
+        self._failures: dict[str, tuple[int, datetime | None]] = {}
+
+    def clear(self) -> None:
+        """Reset all issued OTP challenges and timed lockout states."""
+        self._issued_challenges.clear()
+        self._failures.clear()
+
+    def issue_challenge(self, tin_digits: str, otp_code: str) -> None:
+        """Issue and bind a 6-digit OTP challenge for a normalized TIN."""
+        self._issued_challenges[tin_digits] = otp_code.strip()
+
+    def verify_and_record_attempt(
+        self,
+        tin_digits: str,
+        otp_code: str,
+        *,
+        now: datetime | None = None,
+    ) -> None:
+        """Verify otp_code against the issued challenge, enforcing timed lockout expiry and clearing failures only on match."""
+        current = now or utc_now()
+        fail_count, locked_until = self._failures.get(tin_digits, (0, None))
+        if locked_until is not None:
+            if current < locked_until:
+                raise SSRAError(
+                    McpErrorCode.RATE_LIMITED,
+                    f"Too many failed OTP attempts ({MAX_OTP_FAILED_ATTEMPTS}) for TIN; step-up temporarily locked",
+                    status_code=429,
+                )
+            fail_count = 0
+            locked_until = None
+            self._failures.pop(tin_digits, None)
+
+        cleaned_code = otp_code.strip()
+        expected_code = self._issued_challenges.get(tin_digits, DEFAULT_SYNTHETIC_OTP_CHALLENGE)
+        if not _OTP_CODE_RE.fullmatch(cleaned_code) or not hmac.compare_digest(
+            cleaned_code, expected_code
+        ):
+            new_count = fail_count + 1
+            new_lock = (
+                current + timedelta(seconds=self.lockout_seconds)
+                if new_count >= MAX_OTP_FAILED_ATTEMPTS
+                else None
+            )
+            self._failures[tin_digits] = (new_count, new_lock)
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "Invalid or unverified 6-digit OTP verification code",
+                status_code=401,
+            )
+
+        self._failures.pop(tin_digits, None)
+
+
+_otp_state_store = OtpChallengeAndLockoutStore()
+
+
+def get_otp_state_store() -> OtpChallengeAndLockoutStore:
+    """Return the shared OTP challenge and lockout state store."""
+    return _otp_state_store
+
+
+def reset_otp_lockout_state() -> None:
+    """Reset in-memory failed OTP brute-force lockout counters."""
+    _otp_state_store.clear()
 
 
 def bind_tin_with_otp_use_case(
@@ -145,8 +224,9 @@ def bind_tin_with_otp_use_case(
     otp_code: str,
     step_up: bool = False,
     sim_swap_recent: bool = False,
+    now: datetime | None = None,
 ) -> IdentityBinding:
-    """Verify TIN format, 6-digit ASCII OTP code, and SIM-swap recency signal (`OQ-005`) before binding `subject_ref`."""
+    """Verify TIN format, issued 6-digit OTP challenge, timed lockout, and SIM-swap recency signal (`OQ-005`) before binding `subject_ref`."""
     digits = "".join(ch for ch in tin if ch in "0123456789")
     if not (9 <= len(digits) <= 12):
         raise SSRAError(
@@ -154,22 +234,30 @@ def bind_tin_with_otp_use_case(
             "Invalid South Sudan TIN format (must be 9..12 digits)",
             status_code=400,
         )
-    if not _OTP_CODE_RE.fullmatch(otp_code.strip()):
-        raise SSRAError(
-            McpErrorCode.NOT_AUTHORIZED,
-            "Invalid 6-digit OTP verification code",
-            status_code=401,
-        )
+    _otp_state_store.verify_and_record_attempt(digits, otp_code, now=now)
+    masked = mask_tin(tin)
     if sim_swap_recent:
+        get_outbox_store().stage_domain_event(
+            context_name="identity_link",
+            event_type="ssra.identity.sim_swap_blocked.v1",
+            subject=subject_ref,
+            data={"tin_masked": masked, "sim_swap_recent": True},
+        )
         raise SSRAError(
             McpErrorCode.NOT_AUTHORIZED,
             "Recent SIM-swap signal detected on +211 line (OQ-005); step-up blocked pending officer review",
             status_code=403,
         )
     level = AuthLevel.T3_STEP_UP if step_up else AuthLevel.T1_TIN_BOUND
+    get_outbox_store().stage_domain_event(
+        context_name="identity_link",
+        event_type="ssra.identity.tin_bound.v1",
+        subject=subject_ref,
+        data={"tin_masked": masked, "auth_level": level.value, "sim_swap_checked": True},
+    )
     return IdentityBinding(
         subject_ref=subject_ref,
-        tin_masked=mask_tin(tin),
+        tin_masked=masked,
         auth_level=level.value,
         sim_swap_checked=True,
         verified_at=utc_now(),

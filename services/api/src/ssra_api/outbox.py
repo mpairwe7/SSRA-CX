@@ -12,14 +12,22 @@ from ssra_security import redact_pii
 MAX_STAGED_OUTBOX_EVENTS = 4096
 
 
+def _redact_outbox_value(val: Any) -> Any:
+    """Recursively redact PII in strings, dicts, lists, and tuples before outbox staging."""
+    if isinstance(val, str):
+        return redact_pii(val).redacted_text
+    if isinstance(val, dict):
+        return {str(k): _redact_outbox_value(v) for k, v in val.items()}
+    if isinstance(val, list):
+        return [_redact_outbox_value(item) for item in val]
+    if isinstance(val, tuple):
+        return tuple(_redact_outbox_value(item) for item in val)
+    return val
+
+
 def _redact_outbox_data(data: dict[str, Any]) -> dict[str, Any]:
-    sanitized: dict[str, Any] = {}
-    for k, v in data.items():
-        if isinstance(v, str):
-            sanitized[k] = redact_pii(v).redacted_text
-        else:
-            sanitized[k] = v
-    return sanitized
+    """Sanitize a domain event payload dictionary by recursively redacting PII."""
+    return {str(k): _redact_outbox_value(v) for k, v in data.items()}
 
 
 class OutboxCloudEvent(BaseModel):
@@ -40,15 +48,24 @@ class TransactionalOutboxStore:
     """Stages domain events transactionally and flushes CloudEvents 1.0 envelopes to NATS JetStream."""
 
     def __init__(self) -> None:
+        """Initialise staged and published event queues and active knowledge snapshot tracker."""
         self._staged: list[OutboxCloudEvent] = []
         self._published: list[OutboxCloudEvent] = []
+        self._active_knowledge_snapshot: str = "2026.10.1"
+
+    @property
+    def active_knowledge_snapshot(self) -> str:
+        """Return the currently active published knowledge snapshot version."""
+        return self._active_knowledge_snapshot
 
     @property
     def staged_events(self) -> tuple[OutboxCloudEvent, ...]:
+        """Return an immutable tuple of staged CloudEvents awaiting JetStream flush."""
         return tuple(self._staged)
 
     @property
     def published_events(self) -> tuple[OutboxCloudEvent, ...]:
+        """Return an immutable tuple of CloudEvents flushed to NATS JetStream."""
         return tuple(self._published)
 
     def stage_domain_event(
@@ -59,8 +76,18 @@ class TransactionalOutboxStore:
         subject: str,
         data: dict[str, Any],
     ) -> OutboxCloudEvent:
+        """Stage a PII-redacted CloudEvents 1.0 domain event in the transactional outbox."""
         if len(self._staged) >= MAX_STAGED_OUTBOX_EVENTS:
             self._staged.pop(0)
+        if (
+            event_type
+            in (
+                "ssra.knowledge.snapshot.published.v1",
+                "ssra.knowledge.snapshot.rolled_back.v1",
+            )
+            and "active_version" in data
+        ):
+            self._active_knowledge_snapshot = str(data["active_version"])
         evt = OutboxCloudEvent(
             id=new_id("outbox"),
             source=f"urn:ssra:api:{context_name}",

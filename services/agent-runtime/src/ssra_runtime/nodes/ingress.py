@@ -9,6 +9,7 @@ from ssra_runtime.state import ConversationGraphState
 
 
 def ingress_node(state: ConversationGraphState) -> dict[str, Any]:
+    """Initialise per-turn conversation state, reset turn budget, and normalise user input."""
     raw_text = state.get("raw_user_text", "").strip()
     return {
         "raw_user_text": raw_text,
@@ -16,6 +17,6 @@ def ingress_node(state: ConversationGraphState) -> dict[str, Any]:
         "artifacts": list(state.get("artifacts", [])),
         "citations": list(state.get("citations", [])),
         "safety_flags": list(state.get("safety_flags", [])),
-        "budget": state.get("budget", TurnBudget()),
+        "budget": TurnBudget(),
         "regeneration_count": 0,
     }

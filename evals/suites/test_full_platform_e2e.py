@@ -16,10 +16,15 @@ from ssra_channel_gateway import (
 from ssra_core import AuthLevel, ChannelName, ConversationEvent, LocaleCode
 from ssra_runtime import create_runtime_app
 from ssra_runtime.gateway_server import create_agentgateway_app
-from ssra_security import format_audit_event_as_cef, format_audit_event_as_ocsf
+from ssra_security import (
+    TokenExchangeService,
+    format_audit_event_as_cef,
+    format_audit_event_as_ocsf,
+)
 
 
 def test_end_to_end_12_layer_omnichannel_lifecycle() -> None:
+    """Verify end-to-end 12-layer omnichannel flow across channel-gateway, runtime, agentgateway, and API."""
     cgw_secret = "e2e-webhook-secret"
     cgw_client = TestClient(create_channel_gateway_app(webhook_secret=cgw_secret))
     api_client = TestClient(create_api_app())
@@ -75,11 +80,17 @@ def test_end_to_end_12_layer_omnichannel_lifecycle() -> None:
     assert r_otp.status_code == 200
     subject_ref = r_otp.json()["subject_ref"]
 
+    exchanged_tok = TokenExchangeService().mint_exchanged_token(
+        audience="mcp-ledger",
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref=subject_ref,
+    )
     r_mcp = gw_client.post(
         "/mcp",
         headers={
             "Mcp-Method": "tools/call",
             "Mcp-Name": "ledger",
+            "Authorization": f"Bearer {exchanged_tok}",
             "X-SSRA-Auth-Level": AuthLevel.T1_TIN_BOUND.value,
             "X-SSRA-Subject-Ref": subject_ref,
         },

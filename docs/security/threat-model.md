@@ -53,12 +53,12 @@ Every required abuse case from Section 12.2 is mapped below to its OWASP Agentic
 
 | Control Domain | Implementation Location | Verification Mechanism |
 |---|---|---|
-| **Identity Proofing & Step-Up** | `services/agent-runtime/src/ssra_runtime/nodes/router.py`, `services/api/src/ssra_api/identity_link/` | Unit + integration tests for `ANONYMOUS` → `T1_TIN_BOUND` → `T3_STEP_UP` |
-| **OAuth 2.1, RFC 8693 Subject Binding & Scope Minimization** | `infra/gateway/`, `libs/ssra_security/`, `libs/ssra_mcp/` | Contract tests proving MCP servers enforce `sub`, audience, RFC 8707 `resource`, progressive `mcp:<server>:{read,write,step_up}` scopes, state-handle ownership, and SSRF URL blocks (`validate_mcp_oauth_url`) |
-| **PII Redaction (`+211`, TIN, National ID)** | `libs/ssra_security/redaction.py` (Presidio + custom SSRA recognisers) | Property tests verifying zero raw TINs or `+211` numbers appear in logs or OTel spans |
-| **Append-Only Hash-Chained Audit Log** | `libs/ssra_security/audit.py`, PostgreSQL trigger, S3 WORM | Tamper-detection tests verifying broken hash chains are caught immediately |
+| **Identity Proofing & Step-Up** | `services/agent-runtime/src/ssra_runtime/nodes/router.py`, `services/api/src/ssra_api/identity_link/` | Unit + integration tests for `ANONYMOUS` → `T1_TIN_BOUND` → `T3_STEP_UP`, SIM-swap block (`OQ-005`), and per-TIN OTP brute-force lockout (`MAX_OTP_FAILED_ATTEMPTS = 5`) |
+| **OAuth 2.1, RFC 8693 Subject Binding & Scope Minimization** | `infra/gateway/`, `libs/ssra_security/`, `libs/ssra_mcp/`, `services/agent-runtime/src/ssra_runtime/gateway_server.py` | Contract tests proving MCP servers and `agentgateway` enforce `sub`, audience, RFC 8707 `resource`, progressive `mcp:<server>:{read,write,step_up}` scopes, Confused-Deputy header/token parity, thread-bound single-use `confirmation_token`s, state-handle ownership, and SSRF URL blocks (`validate_mcp_oauth_url`) |
+| **PII Redaction (`+211`, TIN, National ID)** | `libs/ssra_security/redaction.py`, `services/api/src/ssra_api/outbox.py`, `libs/ssra_mcp/src/ssra_mcp/server_base.py` | Property & unit tests verifying zero raw TINs or `+211` numbers appear in logs, OTel spans, or nested `dict`/`list`/`tuple` outbox & MCP audit payloads |
+| **Append-Only Hash-Chained Audit Log** | `libs/ssra_security/audit.py`, PostgreSQL trigger (`FORCE ROW LEVEL SECURITY` + WORM), S3 WORM | Tamper-detection tests verifying broken hash chains and privileged `jit-elevation`/`kill-switches` audit entries |
 | **Encryption in Transit & at Rest** | TLS 1.3 ingress, cluster mTLS, OpenBao Transit column encryption | Kyverno policy checks + integration tests |
-| **Kill Switches** | `ai/policies/`, `services/api/src/ssra_api/admin/` | Runbook drill & automated test toggling model/tool/channel kill switches |
+| **Kill Switches & Degradation Ladder (`L1`–`L5`)** | `ai/policies/`, `services/api/src/ssra_api/admin/`, `services/agent-runtime/src/ssra_runtime/graphs/conversation.py` | Runbook drill & automated tests toggling `SSRAConversationRuntime.set_kill_switches(...)` across model (`DEGRADATION_L5_STATIC_FAQ`), tool, and channel (`CHANNEL_PAUSED_KILL_SWITCH`) gates |
 
 ---
 

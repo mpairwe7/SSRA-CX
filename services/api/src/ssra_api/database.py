@@ -175,23 +175,49 @@ class OutboxEventORM(Base):
 
 POSTGRES18_RLS_AND_WORM_DDL: tuple[str, ...] = (
     "ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;",
+    "ALTER TABLE conversations FORCE ROW LEVEL SECURITY;",
     (
-        "CREATE POLICY staff_office_isolation_conversations ON conversations "
+        "CREATE POLICY staff_office_isolation_conversations ON conversations FOR SELECT "
         "USING (office_code = current_setting('ssra.staff_office_code', true) "
+        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops', 'auditor'));"
+    ),
+    (
+        "CREATE POLICY staff_office_write_conversations ON conversations FOR ALL "
+        "USING (office_code = current_setting('ssra.staff_office_code', true) "
+        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops')) "
+        "WITH CHECK (office_code = current_setting('ssra.staff_office_code', true) "
         "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops'));"
     ),
     "ALTER TABLE cases ENABLE ROW LEVEL SECURITY;",
+    "ALTER TABLE cases FORCE ROW LEVEL SECURITY;",
     (
-        "CREATE POLICY staff_office_isolation_cases ON cases "
+        "CREATE POLICY staff_office_isolation_cases ON cases FOR SELECT "
         "USING (office_code = current_setting('ssra.staff_office_code', true) "
+        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops', 'auditor'));"
+    ),
+    (
+        "CREATE POLICY staff_office_write_cases ON cases FOR ALL "
+        "USING (office_code = current_setting('ssra.staff_office_code', true) "
+        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops')) "
+        "WITH CHECK (office_code = current_setting('ssra.staff_office_code', true) "
         "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops'));"
     ),
     "ALTER TABLE handoffs ENABLE ROW LEVEL SECURITY;",
+    "ALTER TABLE handoffs FORCE ROW LEVEL SECURITY;",
     (
-        "CREATE POLICY staff_office_isolation_handoffs ON handoffs "
+        "CREATE POLICY staff_office_isolation_handoffs ON handoffs FOR SELECT "
         "USING (office_code = current_setting('ssra.staff_office_code', true) "
+        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops', 'auditor'));"
+    ),
+    (
+        "CREATE POLICY staff_office_write_handoffs ON handoffs FOR ALL "
+        "USING (office_code = current_setting('ssra.staff_office_code', true) "
+        "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops')) "
+        "WITH CHECK (office_code = current_setting('ssra.staff_office_code', true) "
         "OR current_setting('ssra.staff_role', true) IN ('supervisor', 'admin', 'secops'));"
     ),
+    "REVOKE INSERT, UPDATE, DELETE ON conversations, cases, handoffs FROM ssra_auditor;",
+    "GRANT SELECT ON conversations, cases, handoffs, audit_events TO ssra_auditor;",
     (
         "CREATE OR REPLACE FUNCTION forbid_audit_events_mutation() RETURNS trigger AS $$ "
         "BEGIN RAISE EXCEPTION 'audit_events is append-only (WORM policy)'; END; $$ LANGUAGE plpgsql;"

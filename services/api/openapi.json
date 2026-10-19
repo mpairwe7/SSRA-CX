@@ -1231,6 +1231,7 @@
   "paths": {
     "/healthz": {
       "get": {
+        "description": "Return Core API service health status.",
         "operationId": "healthz_healthz_get",
         "responses": {
           "200": {
@@ -1278,6 +1279,7 @@
     },
     "/v1/admin/jit-elevation": {
       "post": {
+        "description": "Grant time-boxed JIT admin elevation after verifying trusted staff directory & maker-checker controls.",
         "operationId": "request_jit_elevation_v1_admin_jit_elevation_post",
         "requestBody": {
           "content": {
@@ -1319,6 +1321,7 @@
     },
     "/v1/admin/kill-switches": {
       "get": {
+        "description": "Return the current SecOps degradation level and disabled tools/channels.",
         "operationId": "get_kill_switches_v1_admin_kill_switches_get",
         "responses": {
           "200": {
@@ -1338,6 +1341,7 @@
         ]
       },
       "post": {
+        "description": "Update the active SecOps kill-switches and log the change to the WORM audit ledger.",
         "operationId": "set_kill_switches_v1_admin_kill_switches_post",
         "requestBody": {
           "content": {
@@ -1379,6 +1383,7 @@
     },
     "/v1/admin/public-status": {
       "get": {
+        "description": "Return the public degradation-aware system status and active knowledge snapshot version.",
         "operationId": "get_public_status_v1_admin_public_status_get",
         "responses": {
           "200": {
@@ -1597,6 +1602,7 @@
     },
     "/v1/cases": {
       "post": {
+        "description": "Open a new taxpayer support or inquiry case.",
         "operationId": "create_case_v1_cases_post",
         "requestBody": {
           "content": {
@@ -1638,6 +1644,7 @@
     },
     "/v1/cases/{case_id}/maker-checker": {
       "post": {
+        "description": "Approve a Tier T3 case action under two-officer maker-checker control.",
         "operationId": "approve_maker_checker_v1_cases__case_id__maker_checker_post",
         "parameters": [
           {

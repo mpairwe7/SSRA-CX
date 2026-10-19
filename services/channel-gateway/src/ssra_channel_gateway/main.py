@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import math
+import re
+from collections.abc import Awaitable, Callable
 
-from fastapi import FastAPI, Header, Request
+from fastapi import FastAPI, Header, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
@@ -21,6 +23,16 @@ from ssra_core import (
 from ssra_testing import make_conversation_event
 
 from ssra_channel_gateway.ussd import render_ussd_screen
+
+_VALID_HOST_RE = re.compile(r"^[A-Za-z0-9.\[\]:-]+$")
+_MAX_CHANNEL_BODY_BYTES = 1_048_576
+_CHANNEL_SECURITY_HEADERS: dict[str, str] = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+}
 
 # 3GPP TS 23.038 / GSM 03.38 Basic (1 septet) and Extended (2 septets via 0x1B escape) character sets
 _GSM7_BASIC_CHARS: frozenset[str] = frozenset(
@@ -63,11 +75,31 @@ def compute_sms_segments(text: str) -> dict[str, int | str]:
 
 
 def verify_webhook_hmac(payload: bytes, signature_header: str | None, secret: str) -> bool:
+    """Verify the X-Hub-Signature-256 HMAC-SHA256 webhook signature in constant time."""
     if not signature_header or not signature_header.startswith("sha256="):
         return False
     expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
     provided = signature_header.removeprefix("sha256=").strip()
     return hmac.compare_digest(expected, provided)
+
+
+async def _read_bounded_channel_body(request: Request, max_bytes: int) -> bytes | None:
+    """Check Content-Length and stream request chunks while enforcing max_bytes before buffering."""
+    content_len_str = request.headers.get("content-length")
+    if content_len_str and content_len_str.isdigit() and int(content_len_str) > max_bytes:
+        return None
+    if request.method not in ("POST", "PUT", "PATCH"):
+        return b""
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > max_bytes:
+            return None
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+    request._body = raw  # pyright: ignore[reportPrivateUsage]
+    return raw
 
 
 class InboundChannelWebhook(BaseModel):
@@ -95,14 +127,59 @@ def create_channel_gateway_app(
     max_requests_per_sender: int = 25,
     require_signature: bool = False,
 ) -> FastAPI:
+    """Create the FastAPI application for WhatsApp, SMS, and USSD channel webhooks."""
     active_secret = webhook_secret or "ssra-dev-webhook-key"
     app = FastAPI(title="SSRA Assist Channel Gateway", version="0.1.0")
     seen_message_ids: dict[str, None] = {}
     sender_counts: dict[str, int] = {}
     opted_out_senders: set[str] = set()
 
+    @app.middleware("http")
+    async def channel_security_middleware(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Enforce RFC 9112 Host validation, streaming payload bounds, traceparent, and security headers."""
+        raw_path = str(request.scope.get("path", "/"))
+        tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
+        host_header = request.headers.get("host", "localhost")
+        if not host_header or not _VALID_HOST_RE.match(host_header):
+            err = SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                "Malformed HTTP Host header rejected per RFC 9112 §3.2 (CVE-2026-48710)",
+                status_code=400,
+            )
+            return JSONResponse(
+                status_code=400,
+                content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(
+                    mode="json"
+                ),
+                media_type="application/problem+json",
+                headers={"traceparent": tp, **_CHANNEL_SECURITY_HEADERS},
+            )
+        if await _read_bounded_channel_body(request, _MAX_CHANNEL_BODY_BYTES) is None:
+            err = SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Request body exceeds maximum allowed size of {_MAX_CHANNEL_BODY_BYTES} bytes",
+                status_code=413,
+            )
+            return JSONResponse(
+                status_code=413,
+                content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(
+                    mode="json"
+                ),
+                media_type="application/problem+json",
+                headers={"traceparent": tp, **_CHANNEL_SECURITY_HEADERS},
+            )
+        response = await call_next(request)
+        response.headers["traceparent"] = tp
+        for hk, hv in _CHANNEL_SECURITY_HEADERS.items():
+            response.headers.setdefault(hk, hv)
+        return response
+
     @app.exception_handler(SSRAError)
     async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:
+        """Format SSRAError exceptions as RFC 9457 Problem Details JSON responses."""
         raw_path = str(request.scope.get("path", "/"))
         tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
         problem = exc.to_problem_details(instance=raw_path, trace_id=tp)
@@ -110,13 +187,14 @@ def create_channel_gateway_app(
             status_code=exc.status_code,
             content=problem.model_dump(mode="json"),
             media_type="application/problem+json",
-            headers={"traceparent": tp},
+            headers={"traceparent": tp, **_CHANNEL_SECURITY_HEADERS},
         )
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        """Format RequestValidationError exceptions as RFC 9457 Problem Details 422 responses."""
         raw_path = str(request.scope.get("path", "/"))
         tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
         err = SSRAError(
@@ -128,11 +206,12 @@ def create_channel_gateway_app(
             status_code=422,
             content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(mode="json"),
             media_type="application/problem+json",
-            headers={"traceparent": tp},
+            headers={"traceparent": tp, **_CHANNEL_SECURITY_HEADERS},
         )
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
+        """Return channel-gateway service health status."""
         return {"status": "ok", "service": "ssra-channel-gateway"}
 
     @app.post("/v1/webhooks/inbound")
@@ -140,6 +219,7 @@ def create_channel_gateway_app(
         request: Request,
         x_hub_signature_256: str | None = Header(default=None, alias="X-Hub-Signature-256"),
     ) -> dict[str, object]:
+        """Verify inbound channel webhook HMAC, deduplicate message_id, and normalise to CloudEvents 1.0."""
         raw_bytes = await request.body()
         if (require_signature or x_hub_signature_256 is not None) and not verify_webhook_hmac(
             raw_bytes, x_hub_signature_256, active_secret
@@ -201,6 +281,7 @@ def create_channel_gateway_app(
 
     @app.post("/v1/ussd/session")
     async def ussd_session(body: UssdSessionRequest) -> dict[str, object]:
+        """Render a synchronous deterministic USSD screen strictly <= 182 characters."""
         screen = render_ussd_screen(
             session_id=body.session_id,
             ussd_input=body.ussd_input,
