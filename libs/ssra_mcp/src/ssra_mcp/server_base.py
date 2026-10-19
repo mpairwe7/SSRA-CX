@@ -13,27 +13,45 @@ Implements:
 from __future__ import annotations
 
 import hashlib
+import ipaddress
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 import jsonschema
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
-from ssra_core import AuthLevel, McpErrorCode, RiskTier, SSRAError, new_id, utc_now
+from ssra_core import (
+    AuthLevel,
+    McpErrorCode,
+    RiskTier,
+    SSRAError,
+    build_mcp_span_attributes,
+    ensure_w3c_traceparent,
+    new_id,
+    utc_now,
+)
 from ssra_security import (
     ConfirmationTokenManager,
     HashChainedAuditLedger,
     SubjectTokenClaims,
     TokenExchangeService,
+    compute_action_digest,
+    compute_least_privilege_mcp_scope,
+    redact_pii,
 )
 
 MCP_PROTOCOL_VERSION = "2026-07-28"
 JSON_SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema"
 MAX_MCP_TASKS = 512
 MAX_MCP_IDEMPOTENT_CACHE = 1024
+MCP_TASK_TTL_SECONDS = 3600
+_SHELL_METACHAR_RE = re.compile(r"[;|`$><\r\n\x00]")
+_NUMERIC_HOST_RE = re.compile(r"^(?:0x[0-9a-f]+|0[0-7]+|\d+)$", flags=re.IGNORECASE)
 
 _ALLOWED_MCP_HOSTS: frozenset[str] = frozenset(
     {
@@ -78,6 +96,97 @@ def validate_mcp_transport_headers(host: str | None, origin: str | None) -> None
             )
 
 
+def validate_mcp_oauth_url(url: str, *, allow_dev_loopback: bool = False) -> str:
+    """Validate MCP OAuth 2.1 metadata/authorization URLs against SSRF and XSS/RCE (MCP 2026-07-28 Security Best Practices & RFC 9728 §7.7)."""
+    cleaned = url.strip()
+    if not cleaned or _SHELL_METACHAR_RE.search(cleaned):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "MCP OAuth URL rejected: empty or contains shell metacharacters",
+            status_code=400,
+        )
+    parsed = urlparse(cleaned)
+    scheme = parsed.scheme.lower()
+    if scheme not in ("https", "http"):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"MCP OAuth URL rejected: dangerous or unsupported scheme '{scheme}'",
+            status_code=400,
+        )
+    if parsed.username or parsed.password:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "MCP OAuth URL rejected: embedded credentials are prohibited",
+            status_code=400,
+        )
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "MCP OAuth URL rejected: missing hostname",
+            status_code=400,
+        )
+    if _NUMERIC_HOST_RE.match(host):
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            f"MCP OAuth SSRF blocked: obfuscated numeric IP host '{host}' (RFC 9728 §7.7)",
+            status_code=403,
+        )
+    is_loopback_name = host in ("localhost", "127.0.0.1", "::1")
+    try:
+        ip_obj = ipaddress.ip_address(host)
+        effective_ip = (
+            ip_obj.ipv4_mapped
+            if isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj.ipv4_mapped
+            else ip_obj
+        )
+        if effective_ip.is_loopback:
+            if not allow_dev_loopback:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    f"MCP OAuth SSRF blocked: loopback IP '{host}' not permitted in production",
+                    status_code=403,
+                )
+        elif (
+            effective_ip.is_private
+            or effective_ip.is_link_local
+            or effective_ip.is_multicast
+            or effective_ip.is_reserved
+            or effective_ip.is_unspecified
+        ):
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"MCP OAuth SSRF blocked: private/reserved/metadata IP '{host}' (RFC 9728 §7.7)",
+                status_code=403,
+            )
+    except ValueError:
+        if is_loopback_name and not allow_dev_loopback:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"MCP OAuth SSRF blocked: loopback host '{host}' not permitted in production",
+                status_code=403,
+            ) from None
+
+    if scheme == "http" and not (allow_dev_loopback and is_loopback_name):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "MCP OAuth 2.1 requires https:// for all non-loopback URLs (OAuth 2.1 §1.5)",
+            status_code=400,
+        )
+    return cleaned
+
+
+def _redact_audit_args(args: dict[str, Any]) -> dict[str, Any]:
+    """Redact PII from free-text tool arguments before appending to the hash-chained audit ledger."""
+    sanitized: dict[str, Any] = {}
+    for k, v in args.items():
+        if isinstance(v, str):
+            sanitized[k] = redact_pii(v).redacted_text
+        else:
+            sanitized[k] = v
+    return sanitized
+
+
 class ToolAnnotations(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -103,6 +212,17 @@ class ToolContext:
     tier: RiskTier
     claims: SubjectTokenClaims
     traceparent: str | None
+
+
+def require_subject_ref(ctx: ToolContext) -> str:
+    """Return verified `ctx.claims.sub` for T1-T3 tools or raise NOT_AUTHORIZED (Section 8.2 & 12.3)."""
+    if not ctx.claims.sub:
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            f"Verified subject_ref claim required for '{ctx.server_name}.{ctx.tool_name}'",
+            status_code=403,
+        )
+    return ctx.claims.sub
 
 
 ToolHandler = Callable[[dict[str, Any], ToolContext], dict[str, Any]]
@@ -166,7 +286,7 @@ class StatelessMcpServer:
         self.confirmation_manager = confirmation_manager or ConfirmationTokenManager()
         self.audit_ledger = audit_ledger or HashChainedAuditLedger()
         self._tools: dict[str, RegisteredTool] = {}
-        self._idempotent_cache: dict[str, dict[str, Any]] = {}
+        self._idempotent_cache: dict[str, tuple[str, dict[str, Any]]] = {}
         self._tasks: dict[str, dict[str, Any]] = {}
 
     @property
@@ -176,11 +296,19 @@ class StatelessMcpServer:
     def register_tool(self, tool: RegisteredTool) -> None:
         if tool.tier == RiskTier.T4:
             raise ValueError("Principle 3: T4 is human-only; no MCP tool may exist at Tier T4.")
-        # Validate schemas are valid JSON Schema 2020-12
+        # Validate schemas are valid JSON Schema 2020-12 and forbid additionalProperties: True
         if tool.input_schema.get("$schema") != JSON_SCHEMA_2020_12:
             raise ValueError(f"Tool '{tool.name}' input_schema must declare $schema 2020-12")
         if tool.output_schema.get("$schema") != JSON_SCHEMA_2020_12:
             raise ValueError(f"Tool '{tool.name}' output_schema must declare $schema 2020-12")
+        if tool.input_schema.get("additionalProperties") is True:
+            raise ValueError(
+                f"Tool '{tool.name}' input_schema must not set additionalProperties: True (Section 8.3)"
+            )
+        if tool.output_schema.get("additionalProperties") is True:
+            raise ValueError(
+                f"Tool '{tool.name}' output_schema must not set additionalProperties: True (Section 8.3)"
+            )
         jsonschema.Draft202012Validator.check_schema(tool.input_schema)
         jsonschema.Draft202012Validator.check_schema(tool.output_schema)
         self._tools[tool.name] = tool
@@ -213,7 +341,16 @@ class StatelessMcpServer:
         *,
         caller_sub: str = "ANONYMOUS",
     ) -> dict[str, Any]:
-        """MCP 2026-07-28 Tasks extension with State-Handle Hijacking protection (Section 8.1 & 8.2)."""
+        """MCP 2026-07-28 Tasks extension with State-Handle Hijacking & TTL protection (Section 8.1 & 8.2)."""
+        now = utc_now()
+        now_iso = now.isoformat()
+        # Evict expired tasks proactively
+        expired_ids = [
+            tid for tid, trec in self._tasks.items() if str(trec.get("expiresAt", "9999")) < now_iso
+        ]
+        for tid in expired_ids:
+            self._tasks.pop(tid, None)
+
         if method == "tasks/create":
             if len(self._tasks) >= MAX_MCP_TASKS:
                 reclaimable = [
@@ -232,7 +369,8 @@ class StatelessMcpServer:
                 "owner_sub": caller_sub,
                 "status": "RUNNING",
                 "operation": str(params.get("operation", "background_task")),
-                "createdAt": utc_now().isoformat(),
+                "createdAt": now_iso,
+                "expiresAt": (now + timedelta(seconds=MCP_TASK_TTL_SECONDS)).isoformat(),
             }
             self._tasks[task_id] = task_rec
             return {"_meta": {"protocolVersion": MCP_PROTOCOL_VERSION}, "task": task_rec}
@@ -271,6 +409,8 @@ class StatelessMcpServer:
                 status_code=404,
             )
 
+        resolved_tp = ensure_w3c_traceparent(traceparent)
+
         # 1. Verify OAuth 2.1 / RFC 8693 token & RFC 8707 resource indicator
         expected_res = f"https://mcp.ssra.gov.ss/servers/{self.audience}"
         if bearer_token:
@@ -295,7 +435,7 @@ class StatelessMcpServer:
                 exp=utc_now(),
             )
 
-        # 2. Extract and validate state-changing controls (T2/T3)
+        # 2. Extract and validate state-changing controls (T2/T3) with payload-bound idempotency
         clean_args = dict(arguments)
         confirmation_token = clean_args.pop("confirmation_token", None)
         idempotency_key = clean_args.pop("idempotency_key", None)
@@ -307,9 +447,21 @@ class StatelessMcpServer:
                     f"State-changing tool '{tool_name}' ({tool.tier}) requires confirmation_token and idempotency_key",
                     status_code=403,
                 )
+            action_digest = compute_action_digest(
+                tool_name=tool_name,
+                arguments=clean_args,
+                subject_ref=claims.sub,
+            )
             cache_key = f"{self.server_name}:{tool_name}:{claims.sub or 'anon'}:{idempotency_key}"
             if cache_key in self._idempotent_cache:
-                return self._idempotent_cache[cache_key]
+                cached_digest, cached_envelope = self._idempotent_cache[cache_key]
+                if cached_digest != action_digest:
+                    raise SSRAError(
+                        McpErrorCode.VALIDATION_FAILED,
+                        f"Idempotency key '{idempotency_key}' replayed with mutated arguments for '{tool_name}'",
+                        status_code=422,
+                    )
+                return cached_envelope
 
             self.confirmation_manager.consume_token(
                 token=str(confirmation_token),
@@ -320,6 +472,7 @@ class StatelessMcpServer:
             )
         else:
             cache_key = None
+            action_digest = ""
 
         # 3. Validate input arguments against JSON Schema 2020-12
         try:
@@ -337,7 +490,7 @@ class StatelessMcpServer:
             tool_name=tool_name,
             tier=tool.tier,
             claims=claims,
-            traceparent=traceparent,
+            traceparent=resolved_tp,
         )
         from ssra_mcp.sanitiser import sanitise_structured_output
 
@@ -360,13 +513,21 @@ class StatelessMcpServer:
             retrieved_at=now,
             as_of=str(raw_result.get("as_of", now.date().isoformat())),
         )
+        otel_span = build_mcp_span_attributes(
+            server_name=self.server_name,
+            tool_name=tool_name,
+            tier=tool.tier,
+            data_classification=tool.data_classification,
+            traceparent=resolved_tp,
+        )
         response_envelope = {
             "_meta": {
                 "protocolVersion": MCP_PROTOCOL_VERSION,
                 "server": self.server_name,
                 "tool": tool_name,
                 "tier": tool.tier.value,
-                "traceparent": traceparent,
+                "traceparent": resolved_tp,
+                "otel": otel_span.to_otel_dict(),
             },
             "structuredContent": raw_result,
             "provenance": provenance.model_dump(mode="json"),
@@ -379,24 +540,34 @@ class StatelessMcpServer:
             action=f"mcp.{self.server_name}.{tool_name}",
             resource=f"mcp://{self.server_name}/{tool_name}",
             payload={
-                "args": clean_args,
+                "args": _redact_audit_args(clean_args),
                 "record_id": provenance.record_id,
                 "tier": tool.tier.value,
             },
         )
 
         if cache_key is not None:
-            self._idempotent_cache[cache_key] = response_envelope
+            if len(self._idempotent_cache) >= MAX_MCP_IDEMPOTENT_CACHE:
+                oldest_key = next(iter(self._idempotent_cache))
+                self._idempotent_cache.pop(oldest_key, None)
+            self._idempotent_cache[cache_key] = (action_digest, response_envelope)
 
         return response_envelope
 
     def get_protected_resource_metadata(self) -> dict[str, Any]:
-        """RFC 9728 OAuth 2.0 Protected Resource Metadata for MCP 2026-07-28."""
+        """RFC 9728 OAuth 2.0 Protected Resource Metadata with progressive Scope Minimization (MCP 2026-07-28)."""
         resource_uri = f"https://mcp.ssra.gov.ss/servers/{self.audience}"
+        tiers_present = {t.tier for t in self._tools.values()}
+        scopes = [f"mcp:{self.server_name}:read"]
+        if RiskTier.T2 in tiers_present:
+            scopes.append(f"mcp:{self.server_name}:write")
+        if RiskTier.T3 in tiers_present:
+            scopes.append(f"mcp:{self.server_name}:step_up")
+        scopes.append(f"mcp:{self.server_name}:invoke")
         return {
             "resource": resource_uri,
             "authorization_servers": ["https://sso.ssra.gov.ss/realms/ssra"],
-            "scopes_supported": [f"mcp:{self.server_name}:invoke", f"mcp:{self.server_name}:read"],
+            "scopes_supported": scopes,
             "bearer_methods_supported": ["header"],
             "mcp_protocol_version": MCP_PROTOCOL_VERSION,
             "resource_documentation": f"{resource_uri}/docs",
@@ -502,12 +673,21 @@ class StatelessMcpServer:
                 err_headers: dict[str, str] = {}
                 if err.status_code in (401, 403):
                     res_meta_url = f"https://mcp.ssra.gov.ss/.well-known/oauth-protected-resource/servers/{self.audience}"
+                    target_tier = (
+                        RiskTier.T3 if err.code == McpErrorCode.STEP_UP_REQUIRED else RiskTier.T1
+                    )
+                    req_scope = compute_least_privilege_mcp_scope(self.audience, target_tier)
+                    oauth_err = (
+                        "insufficient_scope"
+                        if err.code == McpErrorCode.STEP_UP_REQUIRED
+                        else err.code.value.lower()
+                    )
                     err_headers["WWW-Authenticate"] = (
                         f'Bearer realm="{self.audience}", '
                         f'resource="https://mcp.ssra.gov.ss/servers/{self.audience}", '
                         f'resource_metadata="{res_meta_url}", '
-                        f'scope="mcp:{self.server_name}:invoke", '
-                        f'error="{err.code.value.lower()}"'
+                        f'scope="{req_scope}", '
+                        f'error="{oauth_err}"'
                     )
                 return JSONResponse(
                     content={

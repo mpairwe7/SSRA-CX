@@ -13,6 +13,8 @@ from ssra_security.auth import (
     SubjectTokenClaims,
     TokenExchangeService,
     compute_action_digest,
+    compute_least_privilege_mcp_scope,
+    verify_mcp_scope_sufficiency,
 )
 from ssra_security.encryption import OpenBaoTransitEncryptor
 from ssra_security.governance import (
@@ -56,10 +58,12 @@ __all__ = [
     "compute_action_digest",
     "compute_audit_event_hash",
     "compute_canonical_digest",
+    "compute_least_privilege_mcp_scope",
     "evaluate_iso42001_nist_ai600_compliance",
     "format_audit_event_as_cef",
     "format_audit_event_as_ocsf",
     "mask_tin",
     "redact_pii",
     "validate_inter_model_handoff",
+    "verify_mcp_scope_sufficiency",
 ]

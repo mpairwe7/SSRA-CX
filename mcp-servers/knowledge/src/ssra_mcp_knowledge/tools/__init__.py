@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ssra_core import RiskTier
+from ssra_core import RiskTier, juba_today
 from ssra_mcp import JSON_SCHEMA_2020_12, RegisteredTool, ToolAnnotations, ToolContext
 
 from ssra_mcp_knowledge.adapters import KnowledgeCorpusAdapter
@@ -21,7 +21,7 @@ def build_knowledge_tools(adapter: KnowledgeCorpusAdapter) -> list[RegisteredToo
             "snapshot_version": adapter.snapshot_version,
             "results": hits,
             "record_id": f"snapshot:{adapter.snapshot_version}",
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     def _get_section(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
@@ -38,7 +38,7 @@ def build_knowledge_tools(adapter: KnowledgeCorpusAdapter) -> list[RegisteredToo
             "snapshot_version": adapter.snapshot_version,
             "forms": adapter.list_forms(),
             "record_id": "forms:directory",
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     def _get_office_info(args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
@@ -47,7 +47,7 @@ def build_knowledge_tools(adapter: KnowledgeCorpusAdapter) -> list[RegisteredToo
         return {
             "office": office,
             "record_id": f"office:{office['office_code']}",
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     return [

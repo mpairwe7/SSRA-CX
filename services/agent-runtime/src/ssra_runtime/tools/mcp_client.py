@@ -10,9 +10,20 @@ Enforces:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
-from ssra_core import AuthLevel, McpErrorCode, RiskTier, SSRAError, new_id
+import yaml
+from ssra_core import (
+    AuthLevel,
+    McpErrorCode,
+    RiskTier,
+    SSRAError,
+    UpstreamCircuitBreaker,
+    ensure_w3c_traceparent,
+    execute_with_idempotent_retry,
+    new_id,
+)
 from ssra_mcp import StatelessMcpServer
 from ssra_mcp_appointments import create_appointments_mcp_server
 from ssra_mcp_cases import create_cases_mcp_server
@@ -25,23 +36,40 @@ from ssra_mcp_payments_info import create_payments_info_mcp_server
 from ssra_mcp_tax_facts import create_tax_facts_mcp_server
 from ssra_mcp_taxpayer import create_taxpayer_mcp_server
 from ssra_mcp_tcc import create_tcc_mcp_server
-from ssra_security import ConfirmationTokenManager, TokenExchangeService
+from ssra_security import (
+    ConfirmationTokenManager,
+    TokenExchangeService,
+    compute_least_privilege_mcp_scope,
+)
 
 from ssra_runtime.guardrails.injection import check_prompt_injection
 from ssra_runtime.schemas import ToolArtifact, TurnBudget
 
+_RISK_TIERS_FILE = Path(__file__).resolve().parents[5] / "ai" / "policies" / "risk-tiers.yaml"
+
+
+def _load_canonical_tool_tiers() -> dict[str, str]:
+    raw = yaml.safe_load(_RISK_TIERS_FILE.read_text(encoding="utf-8"))
+    return {str(k): str(v) for k, v in raw.get("tool_tiers", {}).items()}
+
 
 class GovernedMcpGatewayClient:
-    """Routes runtime tool calls through agentgateway policy, token exchange, and hash-pin checks."""
+    """Routes runtime tool calls through agentgateway policy, token exchange, circuit breakers, and hash-pin checks."""
 
     def __init__(
         self,
         *,
         token_service: TokenExchangeService | None = None,
         confirmation_manager: ConfirmationTokenManager | None = None,
+        allow_open_world: bool = False,
+        write_tools_enabled: bool = True,
     ) -> None:
         self.token_service = token_service or TokenExchangeService()
         self.confirmation_manager = confirmation_manager or ConfirmationTokenManager()
+        self.allow_open_world = allow_open_world
+        self.write_tools_enabled = write_tools_enabled
+        self._disabled_tools: set[str] = set()
+        self._canonical_tool_tiers = _load_canonical_tool_tiers()
         self._servers: dict[str, StatelessMcpServer] = {
             "knowledge": create_knowledge_mcp_server(),
             "tax-facts": create_tax_facts_mcp_server(),
@@ -55,20 +83,42 @@ class GovernedMcpGatewayClient:
             "appointments": create_appointments_mcp_server(),
             "notifications": create_notifications_mcp_server(),
         }
+        self._circuit_breakers: dict[str, UpstreamCircuitBreaker] = {
+            srv_name: UpstreamCircuitBreaker(
+                upstream_name=f"mcp-{srv_name}",
+                failure_threshold=3,
+                recovery_timeout_seconds=30,
+                max_half_open_probes=1,
+            )
+            for srv_name in self._servers
+        }
         # Share the same token and confirmation manager across governed servers
         for srv in self._servers.values():
             srv.token_service = self.token_service
             srv.confirmation_manager = self.confirmation_manager
 
-        # Pin tool description SHA-256 hashes & scan for MCP03:2025 tool poisoning and shadowing at startup (Section 8.3 & ASI02/ASI04)
+        # Pin tool description SHA-256 hashes & scan for MCP03:2025 tool poisoning, shadowing, and tier drift at startup
         self._pinned_description_hashes: dict[str, str] = {}
         self.verify_no_cross_server_tool_shadowing()
         for srv_name, srv in self._servers.items():
             for tool_name, tool in srv.tools.items():
+                tool_key = f"{srv_name}.{tool_name}"
                 self.scan_tool_metadata_for_poisoning(
-                    srv_name, tool_name, tool.description, tool.input_schema
+                    srv_name,
+                    tool_name,
+                    tool.description,
+                    tool.input_schema,
+                    tool.output_schema,
                 )
-                self._pinned_description_hashes[f"{srv_name}.{tool_name}"] = tool.description_sha256
+                if self._canonical_tool_tiers:
+                    expected_tier = self._canonical_tool_tiers.get(tool_key)
+                    if expected_tier != tool.tier.value:
+                        raise SSRAError(
+                            McpErrorCode.NOT_AUTHORIZED,
+                            f"Tool tier drift detected for '{tool_key}': server declared '{tool.tier.value}', policy requires '{expected_tier}'",
+                            status_code=403,
+                        )
+                self._pinned_description_hashes[tool_key] = tool.description_sha256
 
     def verify_no_cross_server_tool_shadowing(self) -> None:
         """Prevent duplicate tool names or cross-server tool shadowing across the 11 MCP servers (CVE-2026-30856 / MCP03)."""
@@ -89,11 +139,17 @@ class GovernedMcpGatewayClient:
         tool_name: str,
         description: str,
         input_schema: dict[str, Any],
+        output_schema: dict[str, Any] | None = None,
     ) -> None:
         """Scan MCP tool descriptions and JSON schemas for embedded prompt injection (CSA July 2026 MCP03:2025)."""
         desc_scan = check_prompt_injection(description)
-        schema_scan = check_prompt_injection(json.dumps(input_schema, sort_keys=True))
-        if desc_scan.is_blocked or schema_scan.is_blocked:
+        in_scan = check_prompt_injection(json.dumps(input_schema, sort_keys=True))
+        out_scan = (
+            check_prompt_injection(json.dumps(output_schema, sort_keys=True))
+            if output_schema is not None
+            else None
+        )
+        if desc_scan.is_blocked or in_scan.is_blocked or (out_scan and out_scan.is_blocked):
             raise SSRAError(
                 McpErrorCode.NOT_AUTHORIZED,
                 f"MCP03 tool metadata poisoning detected in '{srv_name}.{tool_name}'",
@@ -105,11 +161,22 @@ class GovernedMcpGatewayClient:
         return dict(self._servers)
 
     @property
+    def circuit_breakers(self) -> dict[str, UpstreamCircuitBreaker]:
+        return dict(self._circuit_breakers)
+
+    @property
     def pinned_description_hashes(self) -> dict[str, str]:
         return dict(self._pinned_description_hashes)
 
     def override_pinned_hash_for_testing(self, tool_key: str, new_hash: str) -> None:
         self._pinned_description_hashes[tool_key] = new_hash
+
+    def set_tool_kill_switch(self, tool_key: str, *, disabled: bool) -> None:
+        """Runtime kill-switch for disabling a specific MCP tool (`server.tool`) at agentgateway."""
+        if disabled:
+            self._disabled_tools.add(tool_key)
+        else:
+            self._disabled_tools.discard(tool_key)
 
     def invoke_tool(
         self,
@@ -145,30 +212,94 @@ class GovernedMcpGatewayClient:
                 status_code=404,
             )
 
+        tool_key = f"{server_name}.{tool_name}"
+        if tool_key in self._disabled_tools:
+            raise SSRAError(
+                McpErrorCode.UPSTREAM_UNAVAILABLE,
+                f"MCP tool '{tool_key}' is disabled by active gateway kill-switch",
+                status_code=503,
+            )
+
         # Verify tool description hash has not drifted (Section 8.3)
-        expected_hash = self._pinned_description_hashes.get(f"{server_name}.{tool_name}")
+        expected_hash = self._pinned_description_hashes.get(tool_key)
         if expected_hash != tool.description_sha256:
             raise SSRAError(
                 McpErrorCode.NOT_AUTHORIZED,
-                f"Tool description hash drift detected for '{server_name}.{tool_name}'",
+                f"Tool description hash drift detected for '{tool_key}'",
                 status_code=403,
             )
 
-        # Perform OAuth 2.1 RFC 8693 token exchange at the gateway for T1-T3 tools
+        # Enforce tool annotations at the gateway (Section 8.3)
+        if tool.annotations.openWorldHint and not self.allow_open_world:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"Gateway blocked openWorldHint=True tool '{tool_key}' under sovereign egress policy",
+                status_code=403,
+            )
+        is_state_changing = (
+            not tool.annotations.readOnlyHint
+            or tool.annotations.destructiveHint
+            or tool.tier in (RiskTier.T2, RiskTier.T3)
+        )
+        if is_state_changing:
+            if not self.write_tools_enabled:
+                raise SSRAError(
+                    McpErrorCode.UPSTREAM_UNAVAILABLE,
+                    f"Write tool '{tool_key}' blocked: gateway write_tools kill-switch is active",
+                    status_code=503,
+                )
+            if not arguments.get("confirmation_token") or not arguments.get("idempotency_key"):
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    f"Gateway annotation policy: state-changing tool '{tool_key}' requires confirmation_token and idempotency_key",
+                    status_code=403,
+                )
+
+        # Perform OAuth 2.1 RFC 8693 token exchange with progressive least-privilege scope for T1-T3 tools
         bearer: str | None = None
         if tool.tier in (RiskTier.T1, RiskTier.T2, RiskTier.T3):
+            least_priv_scope = compute_least_privilege_mcp_scope(srv.audience, tool.tier)
             exchanged = self.token_service.mint_exchanged_token(
                 audience=srv.audience,
                 auth_level=auth_level,
                 subject_ref=subject_ref,
+                scope=least_priv_scope,
             )
             bearer = f"Bearer {exchanged}"
 
-        envelope = srv.handle_call_tool(
-            tool_name=tool_name,
-            arguments=arguments,
-            bearer_token=bearer,
-            traceparent=traceparent,
+        resolved_tp = ensure_w3c_traceparent(traceparent)
+        cb = self._circuit_breakers[server_name]
+        if cb.state.value == "OPEN":
+            raise SSRAError(
+                McpErrorCode.UPSTREAM_UNAVAILABLE,
+                f"Circuit breaker OPEN for MCP server '{server_name}'",
+                status_code=503,
+            )
+
+        is_retryable_read = bool(tool.annotations.readOnlyHint and tool.annotations.idempotentHint)
+
+        def _call_once() -> dict[str, Any]:
+            try:
+                res = srv.handle_call_tool(
+                    tool_name=tool_name,
+                    arguments=arguments,
+                    bearer_token=bearer,
+                    traceparent=resolved_tp,
+                )
+                cb.record_success()
+                return res
+            except SSRAError as exc:
+                if (
+                    exc.code == McpErrorCode.UPSTREAM_UNAVAILABLE
+                    and "disabled until SSRA confirms" not in exc.message
+                ):
+                    cb.record_failure()
+                raise
+
+        envelope, _attempts = execute_with_idempotent_retry(
+            _call_once,
+            is_idempotent=is_retryable_read,
+            max_attempts=2,
         )
         return ToolArtifact(
             id=new_id("art"),

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from ssra_core import McpErrorCode, RiskTier, SSRAError, new_id
+from ssra_core import McpErrorCode, RiskTier, SSRAError, juba_today, new_id
 from ssra_mcp import (
     JSON_SCHEMA_2020_12,
     RegisteredTool,
     StatelessMcpServer,
     ToolAnnotations,
     ToolContext,
+    require_subject_ref,
 )
 
 
@@ -27,10 +28,11 @@ def create_cases_mcp_server() -> StatelessMcpServer:
     }
 
     def _create_case(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        sub = require_subject_ref(ctx)
         cid = new_id("case")
         case_store[cid] = {
             "case_id": cid,
-            "subject_ref": ctx.claims.sub,
+            "subject_ref": sub,
             "case_type": str(args.get("case_type", "INQUIRY")),
             "status": "OPEN",
             "notes_count": 1,
@@ -40,15 +42,14 @@ def create_cases_mcp_server() -> StatelessMcpServer:
             "case_type": str(args.get("case_type", "INQUIRY")),
             "status": "OPEN",
             "record_id": cid,
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     def _get_case_status(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        if not ctx.claims.sub:
-            raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Missing subject_ref", status_code=403)
+        sub = require_subject_ref(ctx)
         cid = str(args["case_id"])
         rec = case_store.get(cid)
-        if rec is None or rec.get("subject_ref") != ctx.claims.sub:
+        if rec is None or rec.get("subject_ref") != sub:
             raise SSRAError(
                 McpErrorCode.NOT_FOUND,
                 f"Case '{cid}' not found for authenticated subject",
@@ -59,15 +60,14 @@ def create_cases_mcp_server() -> StatelessMcpServer:
             "case_type": str(rec["case_type"]),
             "status": str(rec["status"]),
             "record_id": cid,
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     def _add_case_note(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        if not ctx.claims.sub:
-            raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Missing subject_ref", status_code=403)
+        sub = require_subject_ref(ctx)
         cid = str(args["case_id"])
         rec = case_store.get(cid)
-        if rec is None or rec.get("subject_ref") != ctx.claims.sub:
+        if rec is None or rec.get("subject_ref") != sub:
             raise SSRAError(
                 McpErrorCode.NOT_FOUND,
                 f"Case '{cid}' not found for authenticated subject",
@@ -79,7 +79,7 @@ def create_cases_mcp_server() -> StatelessMcpServer:
             "notes_count": int(rec["notes_count"]),
             "status": str(rec["status"]),
             "record_id": f"{cid}:note:{rec['notes_count']}",
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     case_out_schema = {

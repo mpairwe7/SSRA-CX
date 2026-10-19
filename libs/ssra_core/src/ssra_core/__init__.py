@@ -48,7 +48,10 @@ from ssra_core.synonyms import expand_ssra_nra_synonyms, normalise_authority_men
 from ssra_core.telemetry import (
     FinOpsBudgetDecision,
     GenAISpanAttributes,
+    McpSpanAttributes,
     build_genai_span_attributes,
+    build_mcp_span_attributes,
+    ensure_w3c_traceparent,
     evaluate_finops_turn_budget,
 )
 
@@ -77,6 +80,7 @@ __all__ = [
     "IntentName",
     "LocaleCode",
     "McpErrorCode",
+    "McpSpanAttributes",
     "NumericClaim",
     "NumericUnit",
     "Plan",
@@ -87,8 +91,10 @@ __all__ = [
     "ToolCall",
     "UpstreamCircuitBreaker",
     "build_genai_span_attributes",
+    "build_mcp_span_attributes",
     "compute_monthly_filing_deadline",
     "configure_logging",
+    "ensure_w3c_traceparent",
     "evaluate_channel_latency_slo",
     "evaluate_finops_turn_budget",
     "execute_with_idempotent_retry",

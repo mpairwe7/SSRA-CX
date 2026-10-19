@@ -1,12 +1,94 @@
-"""OpenTelemetry GenAI semantic conventions (v1.32+ 2026) & FinOps cost discipline (Sections 13 & 14.3)."""
+"""OpenTelemetry GenAI & MCP semantic conventions (v1.42 2026) & FinOps cost discipline (Sections 8.1, 13 & 14.3)."""
 
 from __future__ import annotations
 
 import math
+import re
+import secrets
 from dataclasses import dataclass
 from typing import Any, Literal
 
 from ssra_core.contracts import ChannelName, IntentName, LocaleCode, RiskTier
+from ssra_core.ids import new_id
+
+_W3C_TRACEPARENT_RE = re.compile(r"^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
+
+
+def ensure_w3c_traceparent(traceparent: str | None = None) -> str:
+    """Validate or mint a W3C Trace Context `traceparent` header (`00-<trace_id>-<span_id>-01`)."""
+    if traceparent:
+        candidate = traceparent.strip().lower()
+        match = _W3C_TRACEPARENT_RE.match(candidate)
+        if match and match.group(1) != "0" * 32 and match.group(2) != "0" * 16:
+            return candidate
+    trace_id = secrets.token_hex(16)
+    span_id = secrets.token_hex(8)
+    return f"00-{trace_id}-{span_id}-01"
+
+
+@dataclass(frozen=True)
+class McpSpanAttributes:
+    """OpenTelemetry GenAI & MCP Semantic Conventions (v1.39-v1.42 `semantic-conventions-genai`)."""
+
+    span_name: str
+    mcp_method_name: str
+    mcp_protocol_version: str
+    mcp_server_name: str
+    gen_ai_operation_name: str
+    gen_ai_tool_name: str
+    gen_ai_tool_call_id: str
+    gen_ai_tool_type: str
+    ssra_risk_tier: str
+    ssra_data_classification: str
+    rpc_response_status_code: str
+    traceparent: str
+
+    def to_otel_dict(self) -> dict[str, str]:
+        return {
+            "mcp.method.name": self.mcp_method_name,
+            "mcp.protocol.version": self.mcp_protocol_version,
+            "mcp.server.name": self.mcp_server_name,
+            "gen_ai.operation.name": self.gen_ai_operation_name,
+            "gen_ai.tool.name": self.gen_ai_tool_name,
+            "gen_ai.tool.call.id": self.gen_ai_tool_call_id,
+            "gen_ai.tool.type": self.gen_ai_tool_type,
+            "ssra.risk_tier": self.ssra_risk_tier,
+            "ssra.data_classification": self.ssra_data_classification,
+            "rpc.response.status_code": self.rpc_response_status_code,
+            "traceparent": self.traceparent,
+        }
+
+
+def build_mcp_span_attributes(
+    *,
+    server_name: str,
+    tool_name: str,
+    tier: RiskTier,
+    data_classification: str = "PUBLIC",
+    mcp_method: str = "tools/call",
+    protocol_version: str = "2026-07-28",
+    tool_call_id: str | None = None,
+    status_code: str = "OK",
+    traceparent: str | None = None,
+) -> McpSpanAttributes:
+    """Construct standardized OpenTelemetry MCP span attributes per `{mcp.method.name} {target}` convention."""
+    resolved_tp = ensure_w3c_traceparent(traceparent)
+    resolved_call_id = tool_call_id or new_id("call")
+    target = f"{server_name}.{tool_name}" if tool_name else server_name
+    return McpSpanAttributes(
+        span_name=f"{mcp_method} {target}",
+        mcp_method_name=mcp_method,
+        mcp_protocol_version=protocol_version,
+        mcp_server_name=server_name,
+        gen_ai_operation_name="execute_tool" if mcp_method == "tools/call" else "mcp_request",
+        gen_ai_tool_name=tool_name or mcp_method,
+        gen_ai_tool_call_id=resolved_call_id,
+        gen_ai_tool_type="extension",
+        ssra_risk_tier=tier.value,
+        ssra_data_classification=data_classification,
+        rpc_response_status_code=status_code,
+        traceparent=resolved_tp,
+    )
 
 
 @dataclass(frozen=True)

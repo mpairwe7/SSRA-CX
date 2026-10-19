@@ -148,6 +148,45 @@ def main() -> None:
         gw_routes.get("spec", {}).get("spendLimits", {}).get("perConversationMaxToolCalls") == 16
     ), "routes.yaml perConversationMaxToolCalls must equal 16"
 
+    for srv_entry in mcp_servers:
+        srv_name = str(srv_entry["name"])
+        srv_url = str(srv_entry["url"])
+        port_match = re.search(r":(\d+)/mcp$", srv_url)
+        assert port_match is not None, f"Invalid MCP server URL '{srv_url}' in routes.yaml"
+        expected_port = port_match.group(1)
+        mcp_df = ROOT / "mcp-servers" / srv_name / "Dockerfile"
+        assert mcp_df.is_file(), f"Missing Dockerfile for MCP server '{srv_name}'"
+        mcp_df_txt = mcp_df.read_text(encoding="utf-8")
+        assert "USER 10001:10001" in mcp_df_txt, (
+            f"MCP Dockerfile {mcp_df} must run as non-root USER 10001:10001"
+        )
+        assert "HEALTHCHECK" in mcp_df_txt, f"MCP Dockerfile {mcp_df} must define a HEALTHCHECK"
+        assert (
+            f"EXPOSE {expected_port}" in mcp_df_txt and f'"--port", "{expected_port}"' in mcp_df_txt
+        ), f"MCP Dockerfile {mcp_df} port mismatch with routes.yaml (expected {expected_port})"
+
+    from ssra_runtime.tools import GovernedMcpGatewayClient
+
+    risk_tiers_cfg = yaml.safe_load(
+        (ROOT / "ai" / "policies" / "risk-tiers.yaml").read_text(encoding="utf-8")
+    )
+    canonical_tool_tiers: dict[str, str] = risk_tiers_cfg.get("tool_tiers", {})
+    gw_client = GovernedMcpGatewayClient()
+    discovered_tools: dict[str, str] = {}
+    for s_name, s_inst in gw_client.servers.items():
+        for t_name, t_reg in s_inst.tools.items():
+            t_key = f"{s_name}.{t_name}"
+            discovered_tools[t_key] = t_reg.tier.value
+            assert t_reg.input_schema.get("additionalProperties") is False, (
+                f"MCP tool '{t_key}' input_schema must set additionalProperties: False"
+            )
+            assert t_reg.output_schema.get("additionalProperties") is False, (
+                f"MCP tool '{t_key}' output_schema must set additionalProperties: False"
+            )
+    assert discovered_tools == canonical_tool_tiers, (
+        "MCP tool catalog / tier drift between mcp-servers/* (33 tools) and ai/policies/risk-tiers.yaml"
+    )
+
     otel_cfg = yaml.safe_load(
         (ROOT / "infra" / "observability" / "otel-collector-config.yaml").read_text(
             encoding="utf-8"

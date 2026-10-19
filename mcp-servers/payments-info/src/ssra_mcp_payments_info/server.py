@@ -5,13 +5,14 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from ssra_core import McpErrorCode, RiskTier, SSRAError, new_id
+from ssra_core import McpErrorCode, RiskTier, SSRAError, juba_today, new_id
 from ssra_mcp import (
     JSON_SCHEMA_2020_12,
     RegisteredTool,
     StatelessMcpServer,
     ToolAnnotations,
     ToolContext,
+    require_subject_ref,
 )
 
 
@@ -33,16 +34,32 @@ def create_payments_info_mcp_server(
     out_schema = {
         "$schema": JSON_SCHEMA_2020_12,
         "type": "object",
-        "additionalProperties": True,
+        "additionalProperties": False,
         "required": ["portal_url", "directive_ref", "instructions", "record_id", "as_of"],
         "properties": {
             "portal_url": {"type": "string"},
             "directive_ref": {"type": "string"},
             "instructions": {"type": "string"},
+            "channels": {"type": "array", "items": {"type": "string"}},
             "record_id": {"type": "string"},
             "as_of": {"type": "string"},
         },
     }
+
+    def _list_channels(_args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
+        return {
+            "portal_url": "https://etax.nra.gov.ss/",
+            "directive_ref": "SSRA March 2026 Exclusive e-Tax & Cash-Free Bank Collection Directive",
+            "instructions": (
+                "Generate an official e-Tax payment assessment slip at https://etax.nra.gov.ss/ "
+                "and remit via designated commercial banks into the Treasury Single Account (TSA)."
+            ),
+            "channels": [
+                "National e-Tax Portal (https://etax.nra.gov.ss/) -> Designated Commercial Bank -> TSA"
+            ],
+            "record_id": "payments-info:channels:tsa-etax-2026",
+            "as_of": juba_today().isoformat(),
+        }
 
     def _instructions(_args: dict[str, Any], _ctx: ToolContext) -> dict[str, Any]:
         return {
@@ -54,7 +71,7 @@ def create_payments_info_mcp_server(
                 "to the Treasury Single Account (TSA). Never pay cash to an individual collector."
             ),
             "record_id": "payments-info:tsa-etax-2026",
-            "as_of": "2026-10-16",
+            "as_of": juba_today().isoformat(),
         }
 
     def _generate_payment_ref(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -64,24 +81,27 @@ def create_payments_info_mcp_server(
                 "generate_payment_reference is disabled until SSRA confirms upstream e-Tax capability (OQ-006)",
                 status_code=503,
             )
+        sub = require_subject_ref(ctx)
         ref_id = new_id("prn")
         return {
             "payment_reference": ref_id,
             "tax_type": str(args["tax_type"]),
             "amount_ssp": str(args["amount_ssp"]),
             "portal_url": "https://etax.nra.gov.ss/",
-            "record_id": f"etax:prn:{ctx.claims.sub}:{ref_id}",
-            "as_of": "2026-10-16",
+            "record_id": f"etax:prn:{sub}:{ref_id}",
+            "as_of": juba_today().isoformat(),
         }
 
-    for tool_name, desc in [
+    for tool_name, desc, handler_fn in [
         (
             "list_payment_channels",
             "List official SSRA cash-free bank payment channels via the National e-Tax System.",
+            _list_channels,
         ),
         (
             "get_payment_instructions",
             "Retrieve step-by-step instructions for paying taxes through e-Tax into designated banks.",
+            _instructions,
         ),
     ]:
         server.register_tool(
@@ -94,7 +114,7 @@ def create_payments_info_mcp_server(
                 output_schema=out_schema,
                 data_classification="PUBLIC",
                 upstream_system="ssra-official-channels-registry",
-                handler=_instructions,
+                handler=handler_fn,
             )
         )
 

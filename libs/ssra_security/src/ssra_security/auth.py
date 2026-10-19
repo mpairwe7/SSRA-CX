@@ -15,7 +15,7 @@ from ssra_security.audit import compute_canonical_digest
 
 
 class SubjectTokenClaims(BaseModel):
-    """Audience- & RFC 8707 Resource-bound OAuth 2.1 / RFC 8693 exchanged token claims verified by MCP servers."""
+    """Audience-, Scope- & RFC 8707 Resource-bound OAuth 2.1 / RFC 8693 exchanged token claims verified by MCP servers."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -23,11 +23,63 @@ class SubjectTokenClaims(BaseModel):
     iss: str = "https://sso.ssra.gov.ss/realms/ssra"
     aud: str
     resource: str = "https://mcp.ssra.gov.ss"  # RFC 8707 Resource Indicator
+    scope: str = (
+        "mcp:tools:read"  # Progressive least-privilege scope (MCP 2026-07-28 Scope Minimization)
+    )
     sub: str | None = None  # Opaque subject_ref for T1+
     caller_workload: str = "ssra-agent-runtime"
     auth_level: AuthLevel = AuthLevel.ANONYMOUS
     step_up_verified_at: datetime | None = None
     exp: datetime
+
+
+def compute_least_privilege_mcp_scope(audience: str, tier: RiskTier) -> str:
+    """Compute progressive, least-privilege OAuth 2.1 scope for an MCP server and risk tier."""
+    srv = audience.removeprefix("mcp-")
+    if tier == RiskTier.T3:
+        return f"mcp:{srv}:step_up"
+    if tier == RiskTier.T2:
+        return f"mcp:{srv}:write"
+    return f"mcp:{srv}:read"
+
+
+def verify_mcp_scope_sufficiency(
+    *,
+    granted_scope: str,
+    audience: str,
+    required_tier: RiskTier,
+) -> bool:
+    """Verify hierarchical scope sufficiency per MCP 2026-07-28 Scope Minimization specification."""
+    srv = audience.removeprefix("mcp-")
+    tokens = set(granted_scope.split())
+    if "*" in tokens or "all" in tokens or "full-access" in tokens:
+        # Omnibus / wildcard scopes are prohibited by MCP 2026-07-28 Scope Minimization
+        return False
+    allowed_for_tier: dict[RiskTier, set[str]] = {
+        RiskTier.T0: {
+            "mcp:tools:read",
+            f"mcp:{srv}:read",
+            f"mcp:{srv}:write",
+            f"mcp:{srv}:step_up",
+            f"mcp:{srv}:invoke",
+        },
+        RiskTier.T1: {
+            f"mcp:{srv}:read",
+            f"mcp:{srv}:write",
+            f"mcp:{srv}:step_up",
+            f"mcp:{srv}:invoke",
+        },
+        RiskTier.T2: {
+            f"mcp:{srv}:write",
+            f"mcp:{srv}:step_up",
+            f"mcp:{srv}:invoke",
+        },
+        RiskTier.T3: {
+            f"mcp:{srv}:step_up",
+        },
+    }
+    accepted = allowed_for_tier.get(required_tier, set())
+    return bool(tokens & accepted)
 
 
 class ConfirmationRecord(BaseModel):
@@ -162,15 +214,28 @@ class TokenExchangeService:
         auth_level: AuthLevel,
         subject_ref: str | None = None,
         resource: str | None = None,
+        scope: str | None = None,
+        caller_workload: str = "ssra-agent-runtime",
         step_up_verified_at: datetime | None = None,
         ttl_seconds: int = 60,
     ) -> str:
         now = utc_now()
+        srv = audience.removeprefix("mcp-")
+        if scope is not None:
+            resolved_scope = scope
+        elif auth_level == AuthLevel.T3_STEP_UP:
+            resolved_scope = f"mcp:{srv}:read mcp:{srv}:write mcp:{srv}:step_up"
+        elif auth_level in (AuthLevel.T1_TIN_BOUND, AuthLevel.STAFF_PASSKEY):
+            resolved_scope = f"mcp:{srv}:read mcp:{srv}:write"
+        else:
+            resolved_scope = f"mcp:{srv}:read"
         claims = SubjectTokenClaims(
             jti=new_id("jti"),
             aud=audience,
             resource=resource or f"https://mcp.ssra.gov.ss/servers/{audience}",
+            scope=resolved_scope,
             sub=subject_ref,
+            caller_workload=caller_workload,
             auth_level=auth_level,
             step_up_verified_at=step_up_verified_at,
             exp=now + timedelta(seconds=ttl_seconds),
@@ -226,6 +291,22 @@ class TokenExchangeService:
             raise SSRAError(
                 McpErrorCode.STEP_UP_REQUIRED,
                 "Tier T3 requires fresh step-up authentication",
+                status_code=403,
+            )
+        if not verify_mcp_scope_sufficiency(
+            granted_scope=claims.scope,
+            audience=expected_audience,
+            required_tier=required_tier,
+        ):
+            err_code = (
+                McpErrorCode.STEP_UP_REQUIRED
+                if required_tier == RiskTier.T3
+                else McpErrorCode.NOT_AUTHORIZED
+            )
+            req_scope = compute_least_privilege_mcp_scope(expected_audience, required_tier)
+            raise SSRAError(
+                err_code,
+                f"Insufficient OAuth 2.1 scope '{claims.scope}'; operation requires '{req_scope}'",
                 status_code=403,
             )
         return claims

@@ -13,6 +13,7 @@ from ssra_mcp import (
     StatelessMcpServer,
     ToolAnnotations,
     ToolContext,
+    require_subject_ref,
 )
 
 
@@ -64,16 +65,15 @@ def create_customs_mcp_server() -> StatelessMcpServer:
         }
 
     def _get_declaration_status(_args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        if not ctx.claims.sub:
-            raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Missing subject_ref", status_code=403)
-        dec = adapter.get_declaration_status(subject_ref=ctx.claims.sub)
+        sub = require_subject_ref(ctx)
+        dec = adapter.get_declaration_status(subject_ref=sub)
         return {
             "declaration_ref_masked": dec.declaration_ref_masked,
             "port_of_entry": dec.port_of_entry,
             "status": dec.status,
             "assessed_duty_ssp": dec.assessed_duty_ssp,
             "boss_official_fx_rate_used": dec.boss_official_fx_rate_used,
-            "record_id": f"ecustoms:dec:{ctx.claims.sub}",
+            "record_id": f"ecustoms:dec:{sub}",
             "as_of": dec.as_of.date().isoformat(),
         }
 
