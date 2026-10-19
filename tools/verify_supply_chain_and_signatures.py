@@ -23,7 +23,7 @@ _ACTION_SHA_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 
 def main() -> None:
     """Verify CI action SHA pinning, 7-day cooldowns, contract SHA parity, and Docker Compose hardening."""
-    # 1. Verify GitHub Actions 40-char SHA pinning (March 2026 LiteLLM/Trivy lesson)
+    # 1. Verify GitHub Actions 40-char SHA pinning & persist-credentials: false (March 2026 LiteLLM/Trivy lesson)
     wf_dir = ROOT / ".github" / "workflows"
     for wf_path in sorted(wf_dir.glob("*.yml")):
         raw = yaml.safe_load(wf_path.read_text(encoding="utf-8"))
@@ -34,6 +34,10 @@ def main() -> None:
                     assert _ACTION_SHA_RE.match(str(uses)), (
                         f"Unpinned GitHub Action '{uses}' in {wf_path.name}; must use 40-char SHA"
                     )
+                    if str(uses).startswith("actions/checkout@"):
+                        assert step.get("with", {}).get("persist-credentials") is False, (
+                            f"actions/checkout in {wf_path.name} must set persist-credentials: false"
+                        )
 
     # 2. Verify pnpm 7-day dependency cooldown (`minimumReleaseAge: 10080`)
     pnpm_ws = yaml.safe_load((ROOT / "pnpm-workspace.yaml").read_text(encoding="utf-8"))
@@ -75,6 +79,9 @@ def main() -> None:
     assert (
         base_compose.get("networks", {}).get("sovereign_internal_net", {}).get("internal") is True
     ), "docker-compose.yml must define sovereign_internal_net with internal: true"
+    assert "ports" not in base_compose.get("services", {}).get("agent-runtime", {}), (
+        "agent-runtime on sovereign_internal_net must not publish host ports"
+    )
     assert "vllm-sovereign" in prod_compose.get("services", {}), (
         "docker-compose.prod.yml must define hardened vllm-sovereign service"
     )

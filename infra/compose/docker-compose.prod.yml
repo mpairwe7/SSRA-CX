@@ -148,6 +148,27 @@ services:
           cpus: "2.0"
           memory: 2G
 
+  channel-gateway:
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  valkey:
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  nats:
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
 volumes:
   wal_archive:
     driver: local
