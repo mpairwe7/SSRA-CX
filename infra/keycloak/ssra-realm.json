@@ -4,22 +4,69 @@
   "displayName": "South Sudan Revenue Authority (SSRA) Sovereign Identity Realm",
   "sslRequired": "all",
   "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
   "revokeRefreshToken": true,
   "refreshTokenMaxReuse": 0,
   "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 120,
   "ssoSessionIdleTimeout": 900,
   "ssoSessionMaxLifespan": 28800,
+  "offlineSessionIdleTimeout": 0,
+  "attributes": {
+    "acr.loa.map": "{\"urn:ssra:acr:otp-t1\":1,\"urn:ssra:acr:t3-step-up\":3,\"urn:ssra:acr:passkey\":3}",
+    "parRequestUriLifespan": "60"
+  },
+  "webAuthnPolicyRpEntityName": "South Sudan Revenue Authority (SSRA)",
   "webAuthnPolicySignatureAlgorithms": ["ES256", "EdDSA"],
   "webAuthnPolicyAttestationConveyancePreference": "direct",
   "webAuthnPolicyAuthenticatorAttachment": "cross-platform",
   "webAuthnPolicyRequireResidentKey": "Yes",
   "webAuthnPolicyUserVerificationRequirement": "required",
+  "webAuthnPolicyAvoidSameAuthenticatorRegister": true,
+  "roles": {
+    "realm": [
+      { "name": "agent", "description": "SSRA Contact-Centre & Tax Desk Officer" },
+      { "name": "supervisor", "description": "SSRA Contact-Centre Supervisor" },
+      { "name": "qa", "description": "SSRA Quality Assurance Reviewer" },
+      { "name": "legal_approver", "description": "SSRA Legal & Policy Snapshot Approver" },
+      { "name": "secops", "description": "SSRA Security Operations & Audit Officer" },
+      { "name": "admin", "description": "SSRA Platform Administrator (JIT Elevated)" }
+    ]
+  },
+  "clientScopes": [
+    { "name": "mcp:tools:read", "protocol": "openid-connect" },
+    { "name": "mcp:knowledge:read", "protocol": "openid-connect" },
+    { "name": "mcp:tax-facts:read", "protocol": "openid-connect" },
+    { "name": "mcp:official-channels:read", "protocol": "openid-connect" },
+    { "name": "mcp:official-channels:write", "protocol": "openid-connect" },
+    { "name": "mcp:taxpayer:read", "protocol": "openid-connect" },
+    { "name": "mcp:ledger:read", "protocol": "openid-connect" },
+    { "name": "mcp:payments-info:read", "protocol": "openid-connect" },
+    { "name": "mcp:payments-info:step_up", "protocol": "openid-connect" },
+    { "name": "mcp:tcc:read", "protocol": "openid-connect" },
+    { "name": "mcp:tcc:step_up", "protocol": "openid-connect" },
+    { "name": "mcp:customs:read", "protocol": "openid-connect" },
+    { "name": "mcp:cases:read", "protocol": "openid-connect" },
+    { "name": "mcp:cases:write", "protocol": "openid-connect" },
+    { "name": "mcp:appointments:read", "protocol": "openid-connect" },
+    { "name": "mcp:appointments:write", "protocol": "openid-connect" },
+    { "name": "mcp:notifications:write", "protocol": "openid-connect" }
+  ],
   "identityProviders": [
     {
       "alias": "ssra-national-idp",
       "providerId": "oidc",
       "enabled": true,
-      "trustEmail": false
+      "trustEmail": false,
+      "storeToken": false
     }
   ],
   "clients": [
@@ -29,9 +76,13 @@
       "publicClient": false,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "token.exchange.standard.enabled": "true"
+        "token.exchange.standard.enabled": "true",
+        "use.refresh.tokens": "true",
+        "client.offline.session.idle.timeout": "0"
       }
     },
     {
@@ -40,9 +91,158 @@
       "publicClient": false,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "default.acr.values": "urn:ssra:acr:passkey"
+        "default.acr.values": "urn:ssra:acr:passkey",
+        "minimum.acr.value": "urn:ssra:acr:passkey",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "ssra-agentgateway",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-knowledge",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-tax-facts",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-official-channels",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-taxpayer",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-ledger",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-payments-info",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-tcc",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-customs",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-cases",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-appointments",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
+      }
+    },
+    {
+      "clientId": "mcp-notifications",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true"
       }
     }
   ]

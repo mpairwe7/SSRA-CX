@@ -14,7 +14,7 @@
 |---|---|
 | `task up` | Start local hardened Docker Compose stack (`infra/compose/docker-compose.yml`) and run end-to-end AG-UI smoke test (`tools/smoke_test_stack.py`) |
 | `task down` | Stop local Docker Compose stack cleanly (`--remove-orphans`) |
-| `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.prod.yml --profile prod up -d --wait` | Deploy production NCA Sovereign stack (including offline `vllm-sovereign` GPU container and `postgres-wal-archiver`) |
+| `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.prod.yml --profile prod up -d --wait` | Deploy production NCA Sovereign stack (including pre-built `keycloak` `--optimized` on port `8080`/`9000`, offline `vllm-sovereign` GPU container, and `postgres-wal-archiver`) |
 | `task gen` | Regenerate Pydantic v2 models, TypeScript types, Zod 4 schemas, OpenAPI 3.1 client, and CycloneDX 1.6 SBOM + ML-BOM |
 | `task lint` | Run Ruff check/format, `basedpyright` strict, `import-linter`, JSON Schema 2020-12 validator (33 MCP tools), `gitleaks`, Biome, and TypeScript `tsc` |
 | `task test` | Run Python (`pytest` + Hypothesis, `>= 98%` coverage gate) and TypeScript (`vitest`) unit and contract test suites |

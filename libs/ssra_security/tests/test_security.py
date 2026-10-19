@@ -172,3 +172,31 @@ def test_siem_ocsf_cef_export_and_inter_model_handoff_validator() -> None:
     assert "\u202e" not in bidi_res.redacted_text
     assert "UNICODE_BIDI_OR_ZW_STRIPPED" in bidi_res.pii_tags
     assert "••••1234" in bidi_res.redacted_text
+
+
+def test_keycloak_26_realm_export_and_docker_invariants() -> None:
+    """Verify Keycloak 26.4.11 ssra-realm.json and validate_keycloak_realm_export branches."""
+    import json
+    from pathlib import Path
+
+    from ssra_security import validate_keycloak_realm_export
+
+    realm_path = Path(__file__).resolve().parents[3] / "infra" / "keycloak" / "ssra-realm.json"
+    realm_data = json.loads(realm_path.read_text(encoding="utf-8"))
+    assert validate_keycloak_realm_export(realm_data) is True
+
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export({**realm_data, "sslRequired": "external"})
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export({**realm_data, "bruteForceProtected": False})
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export(
+            {**realm_data, "webAuthnPolicySignatureAlgorithms": ["RS256"]}
+        )
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export({**realm_data, "clients": []})
+    bad_client = {**realm_data["clients"][0], "publicClient": True}
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export(
+            {**realm_data, "clients": [bad_client, *realm_data["clients"][1:]]}
+        )
