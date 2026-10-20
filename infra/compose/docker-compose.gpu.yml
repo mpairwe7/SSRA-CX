@@ -1,6 +1,15 @@
-# SSRA Assist Local Sovereign GPU + Local HF Cache + Qdrant + Valkey/Redis + PostgreSQL 18 Stack
-# Usage:
-#   docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait
+# SSRA Assist Local Sovereign GPU Stack (Following ~/Mpairwe7/FinalYearProject Pattern)
+# Orchestrates:
+# - ssra-vllm-sunflower (Sunbird/Sunflower-Qwen3.5-9B FP8 on GPU 4, port 8011)
+# - ssra-vllm-reasoner  (Qwen/Qwen3.8-27B-FP8 on GPU 7, port 8012)
+# - ssra-orpheus-tts    (Orpheus-3B Multilingual TTS on GPU 3, port 18100)
+# - ssra-postgres       (PostgreSQL 18 + pgvector/pgaudit, port 25432)
+# - ssra-valkey         (Valkey/Redis 8, port 26379)
+# - ssra-qdrant         (Qdrant v1.19.0 Vector Store, ports 6333 & 26333)
+# - ssra-api            (SSRA Core Modular Monolith API, ports 8083 & 18000)
+# - ssra-agent-runtime  (SSRA 11-Node LangGraph + Voice/RAG Runtime on GPU 2, port 18001)
+# - ssra-frontend       (SSRA Taxpayer Web PWA + Ngrok Entry on port 3032 & 3033)
+# - ssra-console        (SSRA Staff, Admin & Auditor Console on port 3034)
 name: ssra-cx-gpu
 
 x-hardened-gpu-defaults: &hardened-gpu-defaults
@@ -10,7 +19,7 @@ x-hardened-gpu-defaults: &hardened-gpu-defaults
   cap_drop:
     - ALL
   pids_limit: 256
-  restart: on-failure:5
+  restart: unless-stopped
   logging:
     driver: json-file
     options:
@@ -18,8 +27,150 @@ x-hardened-gpu-defaults: &hardened-gpu-defaults
       max-file: "3"
 
 services:
+  ssra-vllm-sunflower:
+    image: vllm/vllm-openai:v0.17.1@sha256:0dc46f74eb0e630675d83101dc66c6441c4475cceedcf9235ee42b87c3affd23
+    container_name: ssra-vllm-sunflower
+    command:
+      - --model
+      - /model
+      - --served-model-name
+      - "${SUNFLOWER_MODEL:-Sunbird/Sunflower-Qwen3.5-9B}"
+      - --quantization
+      - "${SUNFLOWER_QUANTIZATION:-fp8}"
+      - --kv-cache-dtype
+      - "${SUNFLOWER_KV_CACHE_DTYPE:-fp8}"
+      - --dtype
+      - "${SUNFLOWER_DTYPE:-auto}"
+      - --port
+      - "8001"
+      - --max-model-len
+      - "${SUNFLOWER_MAX_MODEL_LEN:-262144}"
+      - --gpu-memory-utilization
+      - "${SUNFLOWER_GPU_MEM_UTIL:-0.90}"
+      - --max-num-seqs
+      - "${SUNFLOWER_MAX_NUM_SEQS:-12}"
+      - --limit-mm-per-prompt
+      - '{"image": 0, "video": 0}'
+      - --enable-prefix-caching
+      - --enable-chunked-prefill
+      - --max-num-batched-tokens
+      - "${SUNFLOWER_MAX_BATCH_TOKENS:-16384}"
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - hermes
+    ports:
+      - "8011:8001"
+    volumes:
+      - ${SUNFLOWER_LOCAL_MODEL_DIR:-/mnt/nas1/caches/huggingface_cache/hub/models--Sunbird--Sunflower-Qwen3.5-9B/snapshots/c56081c5024b1c11186a69898f5f6a7a2dabe454}:/model:ro
+    ipc: host
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=${SUNFLOWER_GPU_ID:-4}
+      - HF_HUB_OFFLINE=1
+      - VLLM_NO_USAGE_STATS=1
+      - DO_NOT_TRACK=1
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/v1/models', timeout=5).status == 200 else 1)"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 3m
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${SUNFLOWER_GPU_ID:-4}"]
+              capabilities: [gpu]
+    networks:
+      - ssra_sovereign_net
+
+  ssra-vllm-reasoner:
+    image: vllm/vllm-openai:v0.17.1@sha256:0dc46f74eb0e630675d83101dc66c6441c4475cceedcf9235ee42b87c3affd23
+    container_name: ssra-vllm-reasoner
+    command:
+      - --model
+      - /model
+      - --served-model-name
+      - "${REASONER_MODEL:-Qwen/Qwen3.8-27B-FP8}"
+      - --kv-cache-dtype
+      - "${REASONER_KV_CACHE_DTYPE:-fp8}"
+      - --dtype
+      - "${REASONER_DTYPE:-auto}"
+      - --port
+      - "8001"
+      - --max-model-len
+      - "${REASONER_MAX_MODEL_LEN:-65536}"
+      - --gpu-memory-utilization
+      - "${REASONER_GPU_MEM_UTIL:-0.90}"
+      - --max-num-seqs
+      - "${REASONER_MAX_NUM_SEQS:-8}"
+      - --limit-mm-per-prompt
+      - '{"image": 0, "video": 0}'
+      - --enable-prefix-caching
+      - --enable-chunked-prefill
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - qwen3_coder
+      - --reasoning-parser
+      - qwen3
+    ports:
+      - "127.0.0.1:8012:8001"
+    volumes:
+      - ${REASONER_LOCAL_MODEL_DIR:-/mnt/nas1/caches/huggingface_cache/hub/models--Qwen--Qwen3.8-27B-FP8/snapshots/017b9c7af6b5689d5dd426a76e0bc077eb5ca20a}:/model:ro
+    ipc: host
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=${REASONER_GPU_ID:-7}
+      - HF_HUB_OFFLINE=1
+      - VLLM_NO_USAGE_STATS=1
+      - DO_NOT_TRACK=1
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/v1/models', timeout=5).status == 200 else 1)"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 4m
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${REASONER_GPU_ID:-7}"]
+              capabilities: [gpu]
+    networks:
+      - ssra_sovereign_net
+
+  ssra-orpheus-tts:
+    image: ${DOCKER_IMAGE_ORPHEUS:-app-orpheus-tts}:latest
+    container_name: ssra-orpheus-tts
+    environment:
+      - HF_HOME=/app/hf_cache
+      - HF_HUB_OFFLINE=1
+      - ORPHEUS_GPU_MEM_UTIL=${ORPHEUS_GPU_MEM_UTIL:-0.35}
+      - ORPHEUS_QUANTIZATION=${ORPHEUS_QUANTIZATION:-fp8}
+      - NVIDIA_VISIBLE_DEVICES=${ORPHEUS_GPU_ID:-3}
+    volumes:
+      - type: bind
+        source: ${SSRA_HF_CACHE_DIR:-/mnt/nas1/caches/huggingface_cache}
+        target: /app/hf_cache
+    ports:
+      - "18100:8100"
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${ORPHEUS_GPU_ID:-3}"]
+              capabilities: [gpu]
+    networks:
+      - ssra_sovereign_net
+
   ssra-postgres:
     image: ${SSRA_POSTGRES_IMAGE:-bsms-postgres:18-pgaudit}
+    container_name: ssra-postgres
     environment:
       POSTGRES_USER: ssra
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
@@ -39,6 +190,7 @@ services:
   ssra-valkey:
     <<: *hardened-gpu-defaults
     image: redis:8-alpine@sha256:c5e375abb885e6b2021c0377879e4890bf76f9065b8922ffc113f2b226b9fc17
+    container_name: ssra-valkey
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m
@@ -56,7 +208,9 @@ services:
   ssra-qdrant:
     <<: *hardened-gpu-defaults
     image: qdrant/qdrant:v1.19.0@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc
+    container_name: ssra-qdrant
     ports:
+      - "127.0.0.1:6333:6333"
       - "127.0.0.1:26333:6333"
     volumes:
       - ssra_qdrant_data:/qdrant/storage:rw
@@ -73,6 +227,7 @@ services:
     build:
       context: ../..
       dockerfile: services/api/Dockerfile
+    container_name: ssra-api
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
@@ -87,6 +242,7 @@ services:
         target: /home/developer/huggingface_cache
         read_only: true
     ports:
+      - "8083:8000"
       - "127.0.0.1:18000:8000"
     networks:
       - ssra_sovereign_net
@@ -103,6 +259,7 @@ services:
     build:
       context: ../..
       dockerfile: services/agent-runtime/Dockerfile
+    container_name: ssra-agent-runtime
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
@@ -110,6 +267,13 @@ services:
       HF_HOME: /home/developer/huggingface_cache
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
+      LLM_BACKEND: vllm
+      LLM_MODEL: "${SUNFLOWER_MODEL:-Sunbird/Sunflower-Qwen3.5-9B}"
+      VLLM_BASE_URL: http://ssra-vllm-sunflower:8001/v1
+      REASONER_BASE_URL: http://ssra-vllm-reasoner:8001/v1
+      REASONER_MODEL: "${REASONER_MODEL:-Qwen/Qwen3.8-27B-FP8}"
+      ORPHEUS_TTS_URL: http://ssra-orpheus-tts:8100
+      WHISPER_SALT_MODEL: Sunbird/SunflowerASR-51-african-languages
       SSRA_MEMORY_VECTOR_BACKEND: qdrant
       SSRA_QDRANT_URL: http://ssra-qdrant:6333
       SSRA_REDIS_URL: redis://ssra-valkey:6379/0
@@ -135,7 +299,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ["${SSRA_GPU_DEVICE_ID:-5}"]
+              device_ids: ["${SSRA_GPU_DEVICE_ID:-2}"]
               capabilities: [gpu]
 
   ssra-frontend:
@@ -146,6 +310,7 @@ services:
       args:
         INTERNAL_API_URL: http://ssra-api:8000
         INTERNAL_RUNTIME_URL: http://ssra-agent-runtime:8001
+    container_name: ssra-frontend
     init: true
     read_only: true
     tmpfs:
@@ -155,6 +320,7 @@ services:
       INTERNAL_API_URL: http://ssra-api:8000
       INTERNAL_RUNTIME_URL: http://ssra-agent-runtime:8001
     ports:
+      - "3032:3000"
       - "127.0.0.1:${SSRA_WEB_PORT:-3033}:3000"
     networks:
       - ssra_sovereign_net
@@ -171,6 +337,7 @@ services:
       dockerfile: apps/console/Dockerfile
       args:
         INTERNAL_API_URL: http://ssra-api:8000
+    container_name: ssra-console
     init: true
     read_only: true
     tmpfs:
