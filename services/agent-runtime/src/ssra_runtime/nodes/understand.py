@@ -238,17 +238,25 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
 
 def understand_node(state: ConversationGraphState) -> dict[str, Any]:
     """Execute Stage 4 & 5: English-Router normalization, intent classification, tier lookup, and bounded goal planning."""
-    # Microsoft agent-framework#8132: Preserve restored intent/tier on AG-UI confirmation resume turns
+    # Microsoft agent-framework#8132: Preserve or promote restored intent/tier on AG-UI confirmation resume turns
+    existing_pending = state.get("pending_confirmation")
     existing_intent = state.get("intent")
     if (
-        state.get("pending_confirmation") is not None
+        existing_pending is not None
         and state.get("confirmation_token_in")
         and existing_intent is not None
     ):
-        tier = _INTENT_TIERS.get(existing_intent.intent.value, state.get("tier", RiskTier.T2))
+        tool_to_intent = {
+            "create_case": IntentName.CREATE_CASE,
+            "book_appointment": IntentName.BOOK_APPOINTMENT,
+            "report_scam": IntentName.REPORT_SCAM,
+        }
+        resumed_intent_name = tool_to_intent.get(existing_pending.tool, existing_intent.intent)
+        resumed_intent = existing_intent.model_copy(update={"intent": resumed_intent_name})
+        tier = _INTENT_TIERS.get(resumed_intent.intent.value, state.get("tier", RiskTier.T2))
         return {
-            "intent": existing_intent,
-            "slots": dict(existing_intent.slots),
+            "intent": resumed_intent,
+            "slots": dict(resumed_intent.slots),
             "tier": tier,
         }
 

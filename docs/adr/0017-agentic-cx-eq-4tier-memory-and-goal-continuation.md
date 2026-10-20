@@ -44,7 +44,7 @@ We adopt Option 2:
 
 ## 5. Consequences
 
-- **Positive:** Higher quality-adjusted autonomous resolution on compound flows, zero context repetition on officer handoffs, real-time empathetic de-escalation, and full backward compatibility with all existing contracts and guardrails.
+- **Positive:** Higher quality-adjusted autonomous resolution on compound flows, zero context repetition on officer handoffs, real-time empathetic de-escalation, and full backward compatibility with all existing contracts and guardrails. Verified under live Docker GPU + Local HF Cache + Qdrant + Valkey + PostgreSQL 18 (`infra/compose/docker-compose.gpu.yml`) and Ngrok HTTPS load via `tools/run_1000_complex_ngrok_benchmark.py` (`1,000/1,000` scenarios passed across `en`, `ar`/`pga`, `din` and `TTT`/`STT`/`TTS`, `32.66 turns/sec` / `1,959.8 turns/min`, `p50=430.46ms`, `230` Qdrant episodic points indexed & `0` residual points after Right-to-Erasure).
 - **Negative / Trade-offs:** Additional state fields in `ConversationGraphState` and `RuntimeTurnResponse`, governed by strict Pydantic/Zod schemas and feature flags.
 
 ## 6. Reversal Cost & Migration Path

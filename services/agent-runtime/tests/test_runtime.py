@@ -1035,3 +1035,133 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
     mem.set_memory_continuity_consent("sub_mem_01", consented=False)
     assert mem.upsert_active_goal(subject_ref="sub_mem_01", goal_type=IntentName.GUIDED_TCC) is None
     assert mem.delete_subject_preferences("sub_mem_01") is False
+
+    # 6. HTTP Memory Endpoints, Stack Status & Multi-Turn Compound T1->T2 Confirmation Resume
+    import os
+    from unittest.mock import MagicMock, patch
+
+    import httpx
+    from ssra_runtime.main import probe_valkey_redis
+    from ssra_runtime.memory import deterministic_16d_vector
+
+    vec16 = deterministic_16d_vector("redacted summary")
+    assert len(vec16) == 16
+    assert probe_valkey_redis("") == "in_memory_fallback"
+    assert probe_valkey_redis("redis://127.0.0.1:59999/0") == "unreachable"
+    mock_sock = MagicMock()
+    mock_sock.__enter__.return_value.recv.return_value = b"+PONG\r\n"
+    with patch("socket.create_connection", return_value=mock_sock):
+        assert probe_valkey_redis("redis://127.0.0.1:6379/0") == "healthy"
+
+    # Exercise Qdrant vector store sync and Right-to-Erasure branches in SubjectPreferenceMemoryStore
+    q_mem = SubjectPreferenceMemoryStore()
+    q_mem.set_memory_continuity_consent("sub_qdrant_test", consented=True)
+    mock_resp_404 = MagicMock(status_code=404)
+    mock_resp_200 = MagicMock(status_code=200)
+    mock_resp_200.json.return_value = {"result": {"count": 1}}
+    with (
+        patch.dict(os.environ, {"SSRA_QDRANT_URL": "http://127.0.0.1:26333"}),
+        patch("httpx.get", side_effect=[mock_resp_404, mock_resp_200]),
+        patch("httpx.put", return_value=mock_resp_200),
+        patch("httpx.post", return_value=mock_resp_200),
+    ):
+        q_mem.record_episode(
+            subject_ref="sub_qdrant_test",
+            channel=ChannelName.WEB,
+            locale=LocaleCode.EN,
+            intent=IntentName.GET_BALANCE,
+            outcome_status="RESOLVED",
+            raw_summary="Checked balance 100 SSP",
+        )
+        assert q_mem.qdrant_episodic_points_count("sub_qdrant_test") == 1
+        assert q_mem.delete_subject_preferences("sub_qdrant_test") is True
+    with (
+        patch.dict(os.environ, {"SSRA_QDRANT_URL": "http://127.0.0.1:26333"}),
+        patch("httpx.get", side_effect=httpx.ConnectError("offline")),
+        patch("httpx.put", side_effect=httpx.ConnectError("offline")),
+        patch("httpx.post", side_effect=httpx.ConnectError("offline")),
+    ):
+        q_mem._qdrant_collection_ready = False  # pyright: ignore[reportPrivateUsage]
+        assert q_mem.qdrant_episodic_points_count() == 0
+        q_mem._qdrant_collection_ready = True  # pyright: ignore[reportPrivateUsage]
+        q_mem.set_memory_continuity_consent("sub_qdrant_test", consented=True)
+        q_mem.record_episode(
+            subject_ref="sub_qdrant_test",
+            channel=ChannelName.WEB,
+            locale=LocaleCode.EN,
+            intent=IntentName.GET_BALANCE,
+            outcome_status="RESOLVED",
+            raw_summary="Offline fallback",
+        )
+        assert q_mem.qdrant_episodic_points_count() == 0
+        q_mem.delete_subject_preferences("sub_qdrant_test")
+
+    client = TestClient(create_runtime_app(rt))
+    stack_res = client.get("/v1/runtime/stack-status")
+    assert stack_res.status_code == 200
+    assert stack_res.json()["service"] == "ssra-agent-runtime"
+    with (
+        patch.dict(os.environ, {"SSRA_QDRANT_URL": "http://127.0.0.1:26333"}),
+        patch("httpx.get", return_value=mock_resp_200),
+        patch("httpx.post", return_value=mock_resp_200),
+    ):
+        assert client.get("/v1/runtime/stack-status").json()["qdrant_status"] == "healthy"
+
+    consent_res = client.post(
+        "/v1/memory/sub_taxpayer_amina_01/consent",
+        json={
+            "consented": True,
+            "auth_level": "T1_TIN_BOUND",
+            "preferred_locale": "en",
+            "preferred_channel": "whatsapp",
+            "low_data_mode": False,
+        },
+    )
+    assert consent_res.status_code == 200
+    assert consent_res.json()["memory_continuity_consented"] is True
+
+    # Guided journey creates IN_PROGRESS Tier 4 ActiveGoalRecord when consented
+    g_res = client.post(
+        "/v1/turns",
+        json={
+            "message": "How do I register for a TIN?",
+            "thread_id": "thr_compound_http_01",
+            "auth_level": "T1_TIN_BOUND",
+            "subject_ref": "sub_taxpayer_amina_01",
+        },
+    )
+    assert g_res.status_code == 200
+    assert len(client.get("/v1/memory/sub_taxpayer_amina_01").json()["active_goals"]) >= 1
+
+    # Compound T1 reads + staged T2 create_case -> confirm on next turn
+    c_turn1 = client.post(
+        "/v1/turns",
+        json={
+            "message": "Check my tax balance and check my TCC status and open a support case",
+            "thread_id": "thr_compound_http_01",
+            "auth_level": "T1_TIN_BOUND",
+            "subject_ref": "sub_taxpayer_amina_01",
+        },
+    )
+    assert c_turn1.status_code == 200
+    pending_c = c_turn1.json()["pending_confirmation"]
+    assert pending_c is not None
+
+    c_turn2 = client.post(
+        "/v1/turns",
+        json={
+            "message": "Confirm case creation",
+            "thread_id": "thr_compound_http_01",
+            "auth_level": "T1_TIN_BOUND",
+            "subject_ref": "sub_taxpayer_amina_01",
+            "confirmation_token": pending_c["token"],
+            "idempotency_key": pending_c["idempotency_key"],
+        },
+    )
+    assert c_turn2.status_code == 200
+    assert any(a["tool"] == "create_case" for a in c_turn2.json()["artifacts"])
+
+    del_res = client.delete("/v1/memory/sub_taxpayer_amina_01")
+    assert del_res.status_code == 200
+    assert del_res.json()["erased"] is True
+    assert client.get("/v1/memory/sub_taxpayer_amina_01").json()["recent_episodes"] == []

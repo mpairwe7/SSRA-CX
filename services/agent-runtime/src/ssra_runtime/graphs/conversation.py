@@ -529,6 +529,45 @@ class SSRAConversationRuntime:
                 raw_summary=" ".join(s.text for s in resp.answer.segments)[:240],
                 unresolved_blocker_code=str(blockers[0]) if blockers else None,
             )
+            if resp.intent.intent in (
+                IntentName.GUIDED_TIN_REGISTRATION,
+                IntentName.GUIDED_FILING_AND_PAYMENT,
+                IntentName.GUIDED_TCC,
+            ):
+                self.preference_store.upsert_active_goal(
+                    subject_ref=subject_ref,
+                    goal_type=resp.intent.intent,
+                    current_step_index=1,
+                    total_steps=(
+                        3 if resp.intent.intent == IntentName.GUIDED_TIN_REGISTRATION else 2
+                    ),
+                    completed_steps=["step_1_guided_briefing"],
+                    resume_channel=resp.channel,
+                    status="IN_PROGRESS",
+                )
+            elif resp.pending_confirmation is not None:
+                self.preference_store.upsert_active_goal(
+                    subject_ref=subject_ref,
+                    goal_type=resp.intent.intent,
+                    current_step_index=1,
+                    total_steps=2,
+                    completed_steps=[a.tool for a in resp.artifacts],
+                    resume_channel=resp.channel,
+                    status="WAITING_ASYNC",
+                )
+            elif confirmation_token is not None and resp.artifacts:
+                for active_g in self.preference_store.list_active_goals(subject_ref):
+                    if active_g.status == "WAITING_ASYNC":
+                        self.preference_store.upsert_active_goal(
+                            subject_ref=subject_ref,
+                            goal_type=active_g.goal_type,
+                            goal_id=active_g.goal_id,
+                            current_step_index=active_g.total_steps,
+                            total_steps=active_g.total_steps,
+                            completed_steps=[a.tool for a in resp.artifacts],
+                            resume_channel=resp.channel,
+                            status="COMPLETED",
+                        )
         route_decision = self.model_router.select_route(node_name="compose", tier=resp.tier)
         self.semantic_cache.put(
             snapshot_version="2026.10.1",

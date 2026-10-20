@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import os
 import re
+import socket
 from collections.abc import Awaitable, Callable
+from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ssra_core import (
     AuthLevel,
     ChannelName,
@@ -24,7 +28,8 @@ from ssra_runtime.field_officer import (
     FieldOfficerAssistResponse,
     execute_field_officer_assist,
 )
-from ssra_runtime.graphs import SSRAConversationRuntime
+from ssra_runtime.graphs import SSRAConversationRuntime, validate_safe_subject_ref
+from ssra_runtime.memory import HydratedCognitiveContext
 from ssra_runtime.replay import ReconstructedTurnRecord
 from ssra_runtime.schemas import RuntimeTurnResponse
 from ssra_runtime.streaming import stream_agui_events
@@ -52,6 +57,7 @@ class AguiStreamRequest(BaseModel):
     confirmation_token: str | None = None
     idempotency_key: str | None = None
     low_data_mode: bool = False
+    metadata: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _validate_auth_subject_consistency(self) -> AguiStreamRequest:
@@ -59,6 +65,59 @@ class AguiStreamRequest(BaseModel):
         if self.auth_level == AuthLevel.ANONYMOUS and self.subject_ref is not None:
             raise ValueError("Anonymous requests cannot specify a non-null subject_ref (ASI03)")
         return self
+
+
+class MemoryConsentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    consented: bool
+    auth_level: AuthLevel = AuthLevel.T1_TIN_BOUND
+    preferred_locale: LocaleCode = LocaleCode.EN
+    preferred_channel: ChannelName = ChannelName.WEB
+    low_data_mode: bool = False
+    high_contrast_a11y: bool = False
+    voice_first_a11y: bool = False
+
+
+def probe_valkey_redis(redis_url: str) -> str:
+    """Probe Valkey/Redis TCP RESP `PING` health without external redis client dependencies."""
+    if not redis_url:
+        return "in_memory_fallback"
+    parsed = urlparse(redis_url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 6379
+    try:
+        with socket.create_connection((host, port), timeout=2.0) as sock:
+            sock.sendall(b"*1\r\n$4\r\nPING\r\n")
+            return "healthy" if b"+PONG" in sock.recv(32) else "unreachable"
+    except OSError:
+        return "unreachable"
+
+
+def _collect_runtime_stack_status(active_runtime: SSRAConversationRuntime) -> dict[str, object]:
+    """Collect sovereign GPU, local HF cache models, Qdrant vector store, and Valkey/Redis health."""
+    hf_home = Path(os.environ.get("HF_HOME", "/home/developer/huggingface_cache"))
+    hub_dir = hf_home / "hub"
+    cached_entries = sorted(p.name for p in hub_dir.iterdir()) if hub_dir.exists() else []
+    sunflower_models = [name for name in cached_entries if "Sunflower" in name]
+    gpu_devs = sorted(p.name for p in Path("/dev").glob("nvidia[0-9]*"))
+    qdrant_url = os.environ.get("SSRA_QDRANT_URL", "").strip().rstrip("/")
+    qdrant_points = active_runtime.preference_store.qdrant_episodic_points_count()
+    qdrant_status = (
+        "healthy"
+        if (qdrant_url and active_runtime.preference_store._qdrant_collection_ready)  # pyright: ignore[reportPrivateUsage]
+        else ("unreachable" if qdrant_url else "in_memory_fallback")
+    )
+    return {
+        "service": "ssra-agent-runtime",
+        "hf_offline_mode": os.environ.get("HF_HUB_OFFLINE") == "1",
+        "hf_cached_entries_count": len(cached_entries),
+        "sunflower_models": sunflower_models,
+        "gpu_devices": gpu_devs,
+        "qdrant_status": qdrant_status,
+        "qdrant_episodic_points": qdrant_points,
+        "valkey_status": probe_valkey_redis(os.environ.get("SSRA_REDIS_URL", "")),
+    }
 
 
 async def _read_bounded_runtime_body(request: Request, max_bytes: int) -> bytes | None:
@@ -169,6 +228,59 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         """Return runtime service health status."""
         return {"status": "ok", "service": "ssra-agent-runtime"}
 
+    @app.get("/v1/runtime/stack-status")
+    async def runtime_stack_status() -> dict[str, object]:
+        """Return sovereign GPU, local HF cache models, Qdrant vector store, and Valkey/Redis health."""
+        return _collect_runtime_stack_status(active_runtime)
+
+    @app.post("/v1/memory/{subject_ref}/consent", response_model=HydratedCognitiveContext)
+    async def configure_memory_consent(
+        subject_ref: str,
+        body: MemoryConsentRequest,
+    ) -> HydratedCognitiveContext:
+        """Configure Tier 2/4 memory continuity consent and Tier 3 accessibility/channel preferences."""
+        safe_sub = validate_safe_subject_ref(subject_ref, auth_level=body.auth_level)
+        active_runtime.preference_store.upsert_preferences(
+            subject_ref=safe_sub,
+            preferred_locale=body.preferred_locale,
+            preferred_channel=body.preferred_channel,
+            low_data_mode=body.low_data_mode,
+            high_contrast_a11y=body.high_contrast_a11y,
+            voice_first_a11y=body.voice_first_a11y,
+        )
+        active_runtime.preference_store.set_memory_continuity_consent(
+            safe_sub,
+            consented=body.consented,
+        )
+        return active_runtime.preference_store.hydrate_subject_context(safe_sub)
+
+    @app.get("/v1/memory/{subject_ref}", response_model=HydratedCognitiveContext)
+    async def get_hydrated_memory(subject_ref: str) -> HydratedCognitiveContext:
+        """Hydrate Tiers 2, 3, and 4 cognitive memory snapshot for a validated `subject_ref`."""
+        safe_sub = validate_safe_subject_ref(subject_ref, auth_level=AuthLevel.T1_TIN_BOUND)
+        return active_runtime.preference_store.hydrate_subject_context(safe_sub)
+
+    @app.delete("/v1/memory/{subject_ref}")
+    async def erase_subject_memory(subject_ref: str) -> dict[str, object]:
+        """Execute immediate Right-to-Erasure across Tiers 2, 3, 4 and Qdrant vector store."""
+        safe_sub = validate_safe_subject_ref(subject_ref, auth_level=AuthLevel.T1_TIN_BOUND)
+        erased = active_runtime.preference_store.delete_subject_preferences(safe_sub)
+        aud = active_runtime.audit_ledger.append(
+            actor="ssra-agent-runtime",
+            on_behalf_of=safe_sub,
+            action="memory.subject.right_to_erasure",
+            resource=f"memory://{safe_sub}",
+            payload={"erased": erased},
+        )
+        return {
+            "subject_ref": safe_sub,
+            "erased": erased,
+            "qdrant_remaining_points": active_runtime.preference_store.qdrant_episodic_points_count(
+                safe_sub
+            ),
+            "audit_event_hash": aud.hash,
+        }
+
     @app.post("/v1/turns", response_model=RuntimeTurnResponse)
     async def execute_turn(body: AguiStreamRequest) -> RuntimeTurnResponse:
         """Execute a synchronous 11-node LangGraph conversation turn."""
@@ -178,6 +290,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
             channel=body.channel,
             thread_id=body.thread_id,
             rich_ui=not body.low_data_mode,
+            metadata=body.metadata,
         )
         return active_runtime.run_turn(
             event,
@@ -215,6 +328,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
             channel=body.channel,
             thread_id=body.thread_id,
             rich_ui=not body.low_data_mode,
+            metadata=body.metadata,
         )
         turn = active_runtime.run_turn(
             event,
