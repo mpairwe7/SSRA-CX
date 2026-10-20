@@ -273,6 +273,8 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
         number: 99,
       },
       "secret_key",
+      5000,
+      1_500_000,
     );
     expect(wrong).toBe(false);
   });

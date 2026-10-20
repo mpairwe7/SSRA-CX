@@ -10,13 +10,16 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 from ssra_core import new_id, utc_now
 
+from ssra_security.redaction import redact_pii
+
 GENESIS_HASH = "0" * 64
 
 
 def _sanitise_audit_field(raw: str) -> str:
-    """Escape pipe delimiters and strip CR/LF/NUL control characters to prevent hash-chain delimiter collisions."""
+    """Redact PII/secrets, escape pipe delimiters, and strip CR/LF/NUL characters for canonical audit storage."""
     return (
-        raw.replace("\x00", "")
+        redact_pii(raw)
+        .redacted_text.replace("\x00", "")
         .replace("\r", " ")
         .replace("\n", " ")
         .replace("\\", "\\\\")
@@ -57,18 +60,20 @@ def compute_audit_event_hash(
     digest: str,
     at_iso: str,
 ) -> str:
-    """Compute the SHA-256 hash chain link over canonicalized, delimiter-escaped audit event fields."""
-    material = "|".join(
+    """Compute the SHA-256 hash chain link over an unambiguous JSON-array encoding of the stored audit fields."""
+    material = json.dumps(
         [
-            _sanitise_audit_field(prev_hash),
-            _sanitise_audit_field(event_id),
-            _sanitise_audit_field(actor),
-            _sanitise_audit_field(on_behalf_of or ""),
-            _sanitise_audit_field(action),
-            _sanitise_audit_field(resource),
-            _sanitise_audit_field(digest),
-            _sanitise_audit_field(at_iso),
-        ]
+            prev_hash,
+            event_id,
+            actor,
+            on_behalf_of or "",
+            action,
+            resource,
+            digest,
+            at_iso,
+        ],
+        separators=(",", ":"),
+        ensure_ascii=False,
     )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 

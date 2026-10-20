@@ -59,10 +59,10 @@ def test_hash_chained_audit_ledger_detects_tampering() -> None:
     assert e2.prev_hash == e1.hash
     assert ledger.verify_integrity() is True
 
-    # Simulate tampering with event 1
+    # Simulate tampering with event 1 (including replacing "a b" with "a\nb")
     tampered = AuditEvent(
         id=e1.id,
-        actor="attacker",
+        actor="ssra-agent\nruntime",
         on_behalf_of=e1.on_behalf_of,
         action=e1.action,
         resource=e1.resource,
@@ -165,6 +165,11 @@ def test_rfc8693_token_exchange_enforces_audience_and_tier() -> None:
     assert step_exc.value.code == McpErrorCode.STEP_UP_REQUIRED
 
     # RFC 9449 DPoP cnf_jkt sender-constrained thumbprint binding & single-use JTI replay check
+    from datetime import timedelta
+
+    from ssra_core import utc_now
+
+    svc._consumed_jtis["jti_expired_seed"] = utc_now() - timedelta(seconds=60)
     dpop_tok = svc.mint_exchanged_token(
         audience="mcp-ledger",
         auth_level=AuthLevel.T1_TIN_BOUND,
@@ -196,6 +201,33 @@ def test_rfc8693_token_exchange_enforces_audience_and_tier() -> None:
             required_tier=RiskTier.T1,
             expected_dpop_jkt="wrong_thumbprint",
         )
+
+    # Concurrent multi-thread & cross-instance single-use JTI redemption: exactly 1 succeeds
+    from concurrent.futures import ThreadPoolExecutor
+
+    race_tok = svc.mint_exchanged_token(
+        audience="mcp-ledger",
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_01",
+    )
+
+    def _try_redeem(_idx: int) -> bool:
+        """Attempt concurrent single-use JTI redemption across verifier threads."""
+        try:
+            TokenExchangeService().verify_exchanged_token(
+                race_tok,
+                expected_audience="mcp-ledger",
+                required_tier=RiskTier.T1,
+                enforce_single_use_jti=True,
+            )
+            return True
+        except SSRAError:
+            return False
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        outcomes = list(pool.map(_try_redeem, range(4)))
+    assert outcomes.count(True) == 1
+    assert outcomes.count(False) == 3
 
 
 def test_siem_ocsf_cef_export_and_inter_model_handoff_validator() -> None:

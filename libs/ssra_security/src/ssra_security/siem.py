@@ -80,18 +80,16 @@ def format_audit_event_as_ocsf(
 ) -> OcsfSecurityEvent:
     """Format an AuditEvent into an OCSF v1.3 Account/Access Activity security event with PII redaction."""
     severity = classify_siem_severity(event.action, safety_flags)
-    masked_sub = (
-        _escape_cef_extension(redact_pii(event.on_behalf_of).redacted_text)
-        if event.on_behalf_of
-        else None
-    )
+    masked_sub = redact_pii(event.on_behalf_of).redacted_text if event.on_behalf_of else None
+    actor_clean = redact_pii(event.actor).redacted_text
+    resource_clean = redact_pii(event.resource).redacted_text
     return OcsfSecurityEvent(
         severity=severity,
         time=event.at.isoformat(),
-        actor_id=_escape_cef_extension(event.actor),
+        actor_id=actor_clean,
         on_behalf_of_masked=masked_sub,
-        action=_escape_cef_header(event.action),
-        resource=_escape_cef_extension(event.resource),
+        action=event.action,
+        resource=resource_clean,
         digest=event.digest,
         chain_hash=event.hash,
     )

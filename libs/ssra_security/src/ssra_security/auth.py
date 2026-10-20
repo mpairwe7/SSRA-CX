@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import threading
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -118,6 +119,8 @@ def compute_action_digest(
 
 MAX_CONFIRMATION_RECORDS = 2048
 MAX_STEP_UP_AGE_SECONDS = 300
+_SHARED_JTI_LOCK = threading.Lock()
+_SHARED_CONSUMED_JTIS: dict[str, datetime] = {}
 
 
 class ConfirmationTokenManager:
@@ -225,10 +228,10 @@ class TokenExchangeService:
     """RFC 8693 OAuth 2.1 Token Exchange & RFC 9449 DPoP thumbprint helper used by agentgateway and MCP servers."""
 
     def __init__(self, signing_secret: str | None = None) -> None:
-        """Initialise the token exchange service with an HMAC signing secret and JTI replay cache."""
+        """Initialise the token exchange service with an HMAC signing secret and shared JTI replay cache."""
         raw_secret = signing_secret or "ssra-dev-hmac-key"
         self._secret = raw_secret.encode("utf-8")
-        self._consumed_jtis: dict[str, datetime] = {}
+        self._consumed_jtis = _SHARED_CONSUMED_JTIS
 
     def mint_exchanged_token(
         self,
@@ -311,31 +314,17 @@ class TokenExchangeService:
             raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Bearer token expired", status_code=401)
 
         if expected_dpop_jkt is not None or claims.cnf_jkt is not None:
-            if (
-                not claims.cnf_jkt
-                or not expected_dpop_jkt
-                or not hmac.compare_digest(claims.cnf_jkt, expected_dpop_jkt)
-            ):
+            dpop_ok = bool(
+                claims.cnf_jkt
+                and expected_dpop_jkt
+                and hmac.compare_digest(claims.cnf_jkt, expected_dpop_jkt)
+            )
+            if not dpop_ok:
                 raise SSRAError(
                     McpErrorCode.NOT_AUTHORIZED,
                     "RFC 9449 DPoP sender-constrained cnf.jkt thumbprint mismatch (ASVS 5.0 V10.3.5)",
                     status_code=401,
                 )
-
-        if enforce_single_use_jti:
-            now_dt = utc_now()
-            self._consumed_jtis = {
-                k: exp_dt for k, exp_dt in self._consumed_jtis.items() if now_dt <= exp_dt
-            }
-            if claims.jti in self._consumed_jtis:
-                raise SSRAError(
-                    McpErrorCode.NOT_AUTHORIZED,
-                    f"Single-use exchanged token jti '{claims.jti}' replay blocked",
-                    status_code=401,
-                )
-            if len(self._consumed_jtis) >= MAX_CONFIRMATION_RECORDS:
-                self._consumed_jtis.pop(next(iter(self._consumed_jtis)), None)
-            self._consumed_jtis[claims.jti] = claims.exp
 
         if required_tier in (RiskTier.T1, RiskTier.T2, RiskTier.T3):
             if not claims.sub or claims.auth_level not in (
@@ -379,4 +368,26 @@ class TokenExchangeService:
                 f"Insufficient OAuth 2.1 scope '{claims.scope}'; operation requires '{req_scope}'",
                 status_code=403,
             )
+
+        if enforce_single_use_jti:
+            with _SHARED_JTI_LOCK:
+                now_dt = utc_now()
+                active = {
+                    k: exp_dt for k, exp_dt in self._consumed_jtis.items() if now_dt <= exp_dt
+                }
+                self._consumed_jtis.clear()
+                self._consumed_jtis.update(active)
+                is_replayed_or_full = (
+                    claims.jti in self._consumed_jtis
+                    or len(self._consumed_jtis) >= MAX_CONFIRMATION_RECORDS
+                )
+                if is_replayed_or_full:
+                    raise SSRAError(
+                        McpErrorCode.NOT_AUTHORIZED
+                        if claims.jti in self._consumed_jtis
+                        else McpErrorCode.RATE_LIMITED,
+                        f"Single-use exchanged token jti '{claims.jti}' replay or capacity blocked",
+                        status_code=401 if claims.jti in self._consumed_jtis else 429,
+                    )
+                self._consumed_jtis[claims.jti] = claims.exp
         return claims

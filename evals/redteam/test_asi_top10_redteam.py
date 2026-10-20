@@ -112,7 +112,13 @@ def test_asi02_tool_misuse_zero_cross_subject_data_leakage() -> None:
     sample_leak = "Bearer " + "tok_secret_value_1234567890"
     assert verify_no_cross_subject_or_unmasked_pii(f"Leaked {sample_leak}").passed is False
     assert (
-        verify_no_cross_subject_or_unmasked_pii("Official SSRA helpdesk is +211 918806493").passed
+        verify_no_cross_subject_or_unmasked_pii("Call personal number +211 912 345 678").passed
+        is False
+    )
+    assert (
+        verify_no_cross_subject_or_unmasked_pii(
+            "Official SSRA helpdesk is +211 918806493 or +211-918806493"
+        ).passed
         is True
     )
 
