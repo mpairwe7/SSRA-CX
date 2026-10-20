@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from ssra_security import mask_tin, redact_pii
 
-_UNMASKED_TIN_RE = re.compile(r"\b[0-9]{9,12}\b")
+_UNMASKED_TIN_RE = re.compile(r"\b(?:[0-9]{9,12}|[0-9]{3}[-\s][0-9]{3}[-\s][0-9]{4})\b")
 _UNMASKED_PASSPORT_RE = re.compile(
     r"(?<![A-Za-z0-9_])[RP][0-9]{7,8}(?![A-Za-z0-9_])",
     flags=re.IGNORECASE,

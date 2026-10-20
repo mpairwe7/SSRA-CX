@@ -1236,7 +1236,7 @@ def sync_affective_state_to_call_lobby(
 
 @dataclass(frozen=True)
 class CallToWebCarryover:
-    """Symmetric Voice-to-Web carryover descriptor (`VR-G3`) for continuing a voice workflow on `apps/web`."""
+    """Symmetric Voice-to-Web carryover descriptor (`VR-G3`) with HMAC-SHA256 integrity signature (`SEC-G5`)."""
 
     call_id: str
     conversation_id: str
@@ -1244,6 +1244,25 @@ class CallToWebCarryover:
     resume_step_index: int
     pending_action: str
     local_models_only: bool = True
+    carryover_hmac: str = ""
+
+
+_CARRYOVER_HMAC_KEY = b"ssra-voice-to-web-carryover-key-2026-10"
+
+
+def _compute_carryover_hmac(
+    *,
+    call_id: str,
+    conversation_id: str,
+    owner_user_id: str,
+    active_goal_id: str,
+    resume_step_index: int,
+) -> str:
+    """Compute a deterministic HMAC-SHA256 signature binding a CallToWebCarryover to its owner and step."""
+    msg = (
+        f"{call_id}:{conversation_id}:{owner_user_id}:{active_goal_id}:{resume_step_index}".encode()
+    )
+    return hashlib.sha256(_CARRYOVER_HMAC_KEY + msg).hexdigest()
 
 
 def build_call_to_web_carryover(
@@ -1256,23 +1275,49 @@ def build_call_to_web_carryover(
     resume_step_index: int = 2,
     pending_action: str = "upload_supporting_receipt",
 ) -> CallToWebCarryover | None:
-    """Build a session-bound Voice-to-Web carryover token when caller and owner identities match."""
+    """Build a session-bound, HMAC-signed Voice-to-Web carryover token when caller and owner identities match."""
     is_valid = (
         bool(_SAFE_ID_RE.match(call_id))
         and bool(_SAFE_ID_RE.match(conversation_id))
         and bool(_SAFE_ID_RE.match(owner_user_id))
+        and bool(_SAFE_ID_RE.match(active_goal_id))
         and owner_user_id == caller_user_id
     )
     if not is_valid:
         return None
+    step_idx = max(1, resume_step_index)
+    sig = _compute_carryover_hmac(
+        call_id=call_id,
+        conversation_id=conversation_id,
+        owner_user_id=owner_user_id,
+        active_goal_id=active_goal_id,
+        resume_step_index=step_idx,
+    )
     return CallToWebCarryover(
         call_id=call_id,
         conversation_id=conversation_id,
         active_goal_id=active_goal_id,
-        resume_step_index=max(1, resume_step_index),
+        resume_step_index=step_idx,
         pending_action=pending_action[:120],
         local_models_only=True,
+        carryover_hmac=sig,
     )
+
+
+def verify_call_to_web_carryover(
+    carryover: CallToWebCarryover,
+    *,
+    caller_user_id: str,
+) -> bool:
+    """Verify the HMAC signature and caller ownership of a `CallToWebCarryover` token (`SEC-G5`)."""
+    expected = _compute_carryover_hmac(
+        call_id=carryover.call_id,
+        conversation_id=carryover.conversation_id,
+        owner_user_id=caller_user_id,
+        active_goal_id=carryover.active_goal_id,
+        resume_step_index=carryover.resume_step_index,
+    )
+    return carryover.carryover_hmac == expected
 
 
 __all__ = [
@@ -1325,6 +1370,7 @@ __all__ = [
     "validate_audio_pcm_expansion_budget",
     "validate_call_wrap_up",
     "verbalize_statutory_figures_for_tts",
+    "verify_call_to_web_carryover",
     "verify_spoken_figure_fidelity",
     "verify_voice_dtmf_step_up",
 ]

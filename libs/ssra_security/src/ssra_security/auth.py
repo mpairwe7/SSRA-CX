@@ -127,7 +127,9 @@ class ConfirmationTokenManager:
     """Issues and validates single-use, short-TTL confirmation tokens bound to argument hashes."""
 
     def __init__(self, ttl_seconds: int = 300) -> None:
+        """Initialise the confirmation token manager with a thread lock and TTL."""
         self._ttl_seconds = ttl_seconds
+        self._lock = threading.Lock()
         self._records: dict[str, ConfirmationRecord] = {}
         self._idempotency_results: dict[str, dict[str, Any]] = {}
 
@@ -143,9 +145,6 @@ class ConfirmationTokenManager:
     ) -> ConfirmationRecord:
         """Issue a single-use, argument-digest-bound confirmation token, purging expired records first."""
         issued = now or utc_now()
-        self._records = {k: v for k, v in self._records.items() if issued <= v.expires_at}
-        if len(self._records) >= MAX_CONFIRMATION_RECORDS:
-            self._records.pop(next(iter(self._records)), None)
         token = new_id("cfm")
         idem_key = idempotency_key or new_id("idem")
         digest = compute_action_digest(
@@ -160,12 +159,17 @@ class ConfirmationTokenManager:
             issued_at=issued,
             expires_at=issued + timedelta(seconds=self._ttl_seconds),
         )
-        self._records[token] = rec
+        with self._lock:
+            self._records = {k: v for k, v in self._records.items() if issued <= v.expires_at}
+            if len(self._records) >= MAX_CONFIRMATION_RECORDS:
+                self._records.pop(next(iter(self._records)), None)
+            self._records[token] = rec
         return rec
 
     def get_record(self, token: str) -> ConfirmationRecord | None:
         """Look up a confirmation record by token string."""
-        return self._records.get(token)
+        with self._lock:
+            return self._records.get(token)
 
     def consume_token(
         self,
@@ -178,50 +182,51 @@ class ConfirmationTokenManager:
         conversation_id: str | None = None,
         now: datetime | None = None,
     ) -> ConfirmationRecord:
-        """Consume a single-use confirmation token after verifying TTL, thread, and argument digest."""
+        """Consume a single-use confirmation token atomically after verifying TTL, thread, and argument digest."""
         current = now or utc_now()
-        rec = self._records.get(token)
-        if rec is None:
-            raise SSRAError(
-                McpErrorCode.NOT_AUTHORIZED,
-                "Invalid or unknown confirmation_token",
-                status_code=403,
-            )
-        if rec.used_at is not None:
-            raise SSRAError(
-                McpErrorCode.NOT_AUTHORIZED,
-                "confirmation_token has already been used (single-use policy)",
-                status_code=403,
-            )
-        if current > rec.expires_at:
-            raise SSRAError(
-                McpErrorCode.NOT_AUTHORIZED,
-                "confirmation_token has expired",
-                status_code=403,
-            )
-        if conversation_id is not None and rec.conversation_id != conversation_id:
-            raise SSRAError(
-                McpErrorCode.NOT_AUTHORIZED,
-                "confirmation_token conversation_id mismatch (cross-thread replay blocked)",
-                status_code=403,
-            )
         expected_digest = compute_action_digest(
             tool_name=tool_name, arguments=arguments, subject_ref=subject_ref
         )
-        if not hmac.compare_digest(rec.action_digest, expected_digest):
-            raise SSRAError(
-                McpErrorCode.NOT_AUTHORIZED,
-                "confirmation_token argument hash mismatch (tampered arguments or subject)",
-                status_code=403,
-            )
-        if rec.idempotency_key != idempotency_key:
-            raise SSRAError(
-                McpErrorCode.VALIDATION_FAILED,
-                "idempotency_key does not match confirmed action",
-                status_code=400,
-            )
-        rec.used_at = current
-        return rec
+        with self._lock:
+            rec = self._records.get(token)
+            if rec is None:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "Invalid or unknown confirmation_token",
+                    status_code=403,
+                )
+            if rec.used_at is not None:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "confirmation_token has already been used (single-use policy)",
+                    status_code=403,
+                )
+            if current > rec.expires_at:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "confirmation_token has expired",
+                    status_code=403,
+                )
+            if conversation_id is not None and rec.conversation_id != conversation_id:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "confirmation_token conversation_id mismatch (cross-thread replay blocked)",
+                    status_code=403,
+                )
+            if not hmac.compare_digest(rec.action_digest, expected_digest):
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "confirmation_token argument hash mismatch (tampered arguments or subject)",
+                    status_code=403,
+                )
+            if rec.idempotency_key != idempotency_key:
+                raise SSRAError(
+                    McpErrorCode.VALIDATION_FAILED,
+                    "idempotency_key does not match confirmed action",
+                    status_code=400,
+                )
+            rec.used_at = current
+            return rec
 
 
 class TokenExchangeService:

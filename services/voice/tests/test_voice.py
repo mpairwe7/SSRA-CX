@@ -328,6 +328,7 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         build_call_to_web_carryover,
         sync_affective_state_to_call_lobby,
         verbalize_statutory_figures_for_tts,
+        verify_call_to_web_carryover,
     )
 
     verb_en = verbalize_statutory_figures_for_tts(
@@ -391,6 +392,8 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         caller_user_id="usr_01",
     )
     assert c2w is not None and c2w.local_models_only is True
+    assert verify_call_to_web_carryover(c2w, caller_user_id="usr_01") is True
+    assert verify_call_to_web_carryover(c2w, caller_user_id="usr_02") is False
     assert (
         build_call_to_web_carryover(
             call_id="call_01",

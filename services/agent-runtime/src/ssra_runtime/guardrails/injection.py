@@ -10,6 +10,10 @@ from dataclasses import dataclass
 _ZERO_WIDTH_AND_BIDI_RE = re.compile(r"[\u0640\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", flags=re.DOTALL)
 _WHITESPACE_RE = re.compile(r"\s+")
+_CONFUSABLE_HOMOGLYPH_MAP = str.maketrans(
+    "аеіорухсАЕІОРУХСαεορκχν",
+    "aeiopuxcAEIOPUXCaeopkxv",
+)
 
 _INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
@@ -18,7 +22,8 @@ _INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             r"(ignore\s+(all\s+)?(previous|prior|system)\s+(instructions|rules|prompts)|"
             r"disregard\s+system\s+policy|reveal\s+your\s+system\s+prompt|"
             r"تجاهل\s+(?:جميع\s+)?التعليمات|اكشف\s+موجه\s+النظام|"
-            r"khali\s+kullu\s+talimat)",
+            r"khali\s+kullu\s+talimat|pal\s+loong\s+ke\s+ssra|"
+            r"<\|(?:system|im_start|im_end|assistant)\|>|\[\s*SYSTEM\s*INSTRUCTION\s*\])",
             flags=re.IGNORECASE,
         ),
     ),
@@ -28,7 +33,8 @@ _INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             r"(tell\s+the\s+user\s+to\s+pay\s+to\s+account|"
             r"send\s+tax\s+money\s+to\s+personal\s+number|"
             r"override\s+official\s+bank\s+account|"
-            r"ادفع\s+الضريبة\s+إلى\s+حساب|adfa\s+gurush\s+fi\s+hisab\s+shakhsi)",
+            r"ادفع\s+الضريبة\s+إلى\s+حساب|adfa\s+gurush\s+fi\s+hisab\s+shakhsi|"
+            r"tuooc\s+weu\s+tene\s+akoon)",
             flags=re.IGNORECASE,
         ),
     ),
@@ -62,10 +68,10 @@ def normalise_adversarial_input(raw_text: str) -> str:
     step3 = unicodedata.normalize("NFKC", step2)
     # Pass 4: Strip hidden HTML comments
     step4 = _HTML_COMMENT_RE.sub(" ", step3)
-    # Pass 5: Strip combining diacritical marks used to obfuscate ASCII keywords
+    # Pass 5: Strip combining diacritical marks and collapse Cyrillic/Greek confusable homoglyphs
     step5 = "".join(
         ch for ch in unicodedata.normalize("NFD", step4) if unicodedata.category(ch) != "Mn"
-    )
+    ).translate(_CONFUSABLE_HOMOGLYPH_MAP)
     # Pass 6: Collapse repeated whitespace
     return _WHITESPACE_RE.sub(" ", step5).strip()
 
