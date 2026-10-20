@@ -165,11 +165,6 @@ def test_rfc8693_token_exchange_enforces_audience_and_tier() -> None:
     assert step_exc.value.code == McpErrorCode.STEP_UP_REQUIRED
 
     # RFC 9449 DPoP cnf_jkt sender-constrained thumbprint binding & single-use JTI replay check
-    from datetime import timedelta
-
-    from ssra_core import utc_now
-
-    svc._consumed_jtis["jti_expired_seed"] = utc_now() - timedelta(seconds=60)
     dpop_tok = svc.mint_exchanged_token(
         audience="mcp-ledger",
         auth_level=AuthLevel.T1_TIN_BOUND,
