@@ -11,8 +11,8 @@ _ZERO_WIDTH_AND_BIDI_RE = re.compile(r"[\u0640\u200b-\u200f\u202a-\u202e\u2060\u
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", flags=re.DOTALL)
 _WHITESPACE_RE = re.compile(r"\s+")
 _CONFUSABLE_HOMOGLYPH_MAP = str.maketrans(
-    "аеіорухсАЕІОРУХСαεορκχν",
-    "aeiopuxcAEIOPUXCaeopkxv",
+    "аеіорухсАЕІОРУХСαεορκχνυ",
+    "aeiopyxcAEIOPYXCaeopkxvu",
 )
 
 _INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (

@@ -394,6 +394,22 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     assert c2w is not None and c2w.local_models_only is True
     assert verify_call_to_web_carryover(c2w, caller_user_id="usr_01") is True
     assert verify_call_to_web_carryover(c2w, caller_user_id="usr_02") is False
+    from dataclasses import replace
+
+    assert (
+        verify_call_to_web_carryover(
+            replace(c2w, pending_action="tampered_action"),
+            caller_user_id="usr_01",
+        )
+        is False
+    )
+    assert (
+        verify_call_to_web_carryover(
+            replace(c2w, local_models_only=False),
+            caller_user_id="usr_01",
+        )
+        is False
+    )
     assert (
         build_call_to_web_carryover(
             call_id="call_01",
