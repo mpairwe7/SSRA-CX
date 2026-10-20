@@ -130,7 +130,7 @@ def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> Non
         json={"session_id": "ussd_din", "ussd_input": "", "locale": "din"},
     )
     assert r_din.status_code == 200
-    assert "SSRA Thuɔŋjäŋ" in r_din.json()["screen_text"]
+    assert "SSRA Official Menu" in r_din.json()["screen_text"]
     assert r_din.json()["char_length"] <= 182
 
     r_stop = client.post(

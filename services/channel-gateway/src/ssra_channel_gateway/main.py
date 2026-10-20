@@ -244,7 +244,10 @@ def create_channel_gateway_app(
                 status_code=429,
             )
         if len(sender_counts) >= MAX_TRACKED_SENDERS and body.sender_ref not in sender_counts:
-            sender_counts.pop(next(iter(sender_counts)), None)
+            sender_counts.pop(
+                next((k for k, v in sender_counts.items() if v < max_requests_per_sender), ""),
+                None,
+            )
         sender_counts[body.sender_ref] = current_count + 1
         if len(seen_message_ids) >= MAX_SEEN_MESSAGE_IDS:
             oldest_mid = next(iter(seen_message_ids))
@@ -268,8 +271,6 @@ def create_channel_gateway_app(
         upper_txt = body.text.strip().upper()
         consent_action: str | None = None
         if upper_txt in ("STOP", "UNSUBSCRIBE"):
-            if len(opted_out_senders) >= MAX_TRACKED_SENDERS:
-                opted_out_senders.pop(next(iter(opted_out_senders)), None)
             opted_out_senders[body.sender_ref] = None
             consent_action = "OPTED_OUT"
         elif upper_txt == "START":

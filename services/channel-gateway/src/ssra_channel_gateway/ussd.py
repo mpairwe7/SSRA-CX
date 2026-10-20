@@ -54,17 +54,8 @@ def render_ussd_screen(
                 "9. Arsil bil SMS\n"
                 "0. Muwazaf SSRA"
             )
-        elif locale == "din":
-            menu = (
-                "CON SSRA Thuɔŋjäŋ:\n"
-                "1. Gät Namba de Ajul (TIN)\n"
-                "2. Cuɔl Wëu në Bɛ̈ŋic\n"
-                "3. Aköl de PAYE\n"
-                "4. Cɔkpiny SSRA\n"
-                "9. Tuɔɔc në SMS\n"
-                "0. Cɔl Raan de SSRA"
-            )
         else:
+            # Tier C locales (e.g. `din`) use the approved English menu fallback until OQ-008 human translator sign-off
             menu = (
                 "CON SSRA Official Menu:\n"
                 "1. TIN Registration\n"

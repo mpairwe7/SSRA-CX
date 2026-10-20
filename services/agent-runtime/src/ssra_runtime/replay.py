@@ -81,7 +81,7 @@ class ConversationReplayStore:
                 self._by_thread.pop(oldest_tid, None)
             history = self._by_thread.setdefault(thread_id, [])
             rec = ReconstructedTurnRecord(
-                turn_index=len(history) + 1,
+                turn_index=(history[-1].turn_index + 1) if history else 1,
                 thread_id=thread_id,
                 recorded_at=utc_now(),
                 channel=channel,
