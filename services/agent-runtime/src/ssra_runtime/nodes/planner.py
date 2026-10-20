@@ -1,0 +1,113 @@
+"""Stage 5: Bounded Autonomous Goal Planner & Subgraph Delegation Stack (October 2026 Agentic CX).
+
+Constructs a bounded `Plan` (`max_plan_steps=4` within `TurnBudget.max_tool_calls=16`) from the
+taxpayer's canonical English-Router query and current `Intent`, supporting:
+1. Compound multi-step T1 read / T0 verification plans (e.g., `get_balance` + `get_filing_status` + `get_tcc_status`).
+2. Mid-journey specialist delegation (`workflow_stack`) so a taxpayer in a guided journey can ask a
+   statutory/calculator question and resume their exact step without losing progress.
+"""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+from ssra_core import Intent, IntentName, Plan, RiskTier
+
+MAX_PLAN_STEPS: int = 4
+MAX_WORKFLOW_STACK_DEPTH: int = 2
+
+
+class ActiveWorkflowCursor(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workflow_id: str
+    journey_intent: IntentName
+    current_step: int = Field(ge=1, default=1)
+    total_steps: int = Field(ge=1, default=2)
+    status: Literal["ACTIVE", "PAUSED_FOR_DELEGATION", "COMPLETED"] = "ACTIVE"
+
+
+def detect_compound_self_service_steps(text: str, primary_intent: IntentName) -> list[str]:
+    """Detect whether a taxpayer utterance requests multiple governed T1/T0 actions in one turn."""
+    lower = text.lower()
+    steps: list[str] = []
+
+    wants_balance = primary_intent == IntentName.GET_BALANCE or any(
+        k in lower for k in ("balance", "how much do i owe", "outstanding", "gurush kam", "medyun")
+    )
+    wants_filing = primary_intent == IntentName.GET_FILING_STATUS or any(
+        k in lower for k in ("filing status", "did my return", "return status", "last filed")
+    )
+    wants_tcc = primary_intent == IntentName.GET_TCC_STATUS or any(
+        k in lower for k in ("tcc status", "check my tcc", "compliance certificate status")
+    )
+
+    if primary_intent in (
+        IntentName.GET_BALANCE,
+        IntentName.GET_FILING_STATUS,
+        IntentName.GET_TCC_STATUS,
+    ):
+        if wants_balance:
+            steps.append("ledger.get_balance")
+        if wants_filing:
+            steps.append("ledger.get_filing_status")
+        if wants_tcc:
+            steps.append("tcc.get_tcc_status")
+
+    if not steps:
+        if primary_intent == IntentName.GET_BALANCE:
+            steps.append("ledger.get_balance")
+        elif primary_intent == IntentName.GET_FILING_STATUS:
+            steps.append("ledger.get_filing_status")
+        elif primary_intent == IntentName.GET_TCC_STATUS:
+            steps.append("tcc.get_tcc_status")
+        elif primary_intent == IntentName.CALCULATE_PAYE:
+            steps.append("tax-facts.calculate_paye_estimate")
+        elif primary_intent == IntentName.CALCULATE_WITHHOLDING:
+            steps.append("tax-facts.calculate_withholding_estimate")
+        elif primary_intent == IntentName.VERIFY_OFFICIAL_CHANNEL:
+            steps.append("official-channels.verify_payment_account")
+        elif primary_intent == IntentName.REPORT_SCAM:
+            steps.append("official-channels.report_scam")
+        elif primary_intent == IntentName.BOOK_APPOINTMENT:
+            steps.append("appointments.book_appointment")
+        elif primary_intent == IntentName.CREATE_CASE:
+            steps.append("cases.create_case")
+        elif primary_intent in (
+            IntentName.GUIDED_TIN_REGISTRATION,
+            IntentName.GUIDED_FILING_AND_PAYMENT,
+            IntentName.GUIDED_TCC,
+        ):
+            steps.append(f"guided_journey.{primary_intent.value}")
+            steps.append("knowledge.search_corpus")
+        elif primary_intent == IntentName.KNOWLEDGE_QA:
+            steps.append("knowledge.search_corpus")
+            steps.append("tax-facts.get_tax_fact")
+        else:
+            steps.append(f"route.{primary_intent.value}")
+
+    return steps[:MAX_PLAN_STEPS]
+
+
+def build_execution_plan(
+    *,
+    intent: Intent,
+    canonical_query: str,
+    tier: RiskTier,
+    selected_subgraph: str = "knowledge_qa",
+    planner_enabled: bool = True,
+) -> Plan:
+    """Construct a bounded `Plan` for Stage 5 execution."""
+    if not planner_enabled:
+        return Plan(
+            subgraph=selected_subgraph,
+            steps=[f"single.{intent.intent.value}"],
+            tier=tier,
+        )
+    steps = detect_compound_self_service_steps(canonical_query, intent.intent)
+    return Plan(
+        subgraph=selected_subgraph,
+        steps=steps[:MAX_PLAN_STEPS],
+        tier=tier,
+    )

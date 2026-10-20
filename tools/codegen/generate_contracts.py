@@ -195,6 +195,51 @@ export const TaxFactSchema = z.object({{
   version: z.string().min(1),
 }});
 export type TaxFact = z.infer<typeof TaxFactSchema>;
+
+export const AffectiveSnapshotSchema = z.object({{
+  primary_emotion: z.enum(["calm", "confused", "frustrated", "anxious", "distressed"]),
+  intensity: z.number().min(0).max(1),
+  frustration_velocity: z.number().min(-1).max(1),
+  urgency_level: z.enum(["low", "normal", "high", "critical"]),
+  signals: z.array(z.string()),
+  recommended_tone: z.enum([
+    "standard_clear",
+    "reassuring_step_by_step",
+    "concise_urgent",
+    "empathetic_deescalation",
+  ]),
+}});
+export type AffectiveSnapshot = z.infer<typeof AffectiveSnapshotSchema>;
+
+export const EnglishRouterEnvelopeSchema = z.object({{
+  source_locale: LocaleCodeSchema,
+  detected_vernacular: z.string(),
+  language_state: z.enum(["LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN"]),
+  canonical_en_query: z.string().min(1),
+  extracted_slots: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  preserved_statutory_tokens: z.array(z.string()),
+}});
+export type EnglishRouterEnvelope = z.infer<typeof EnglishRouterEnvelopeSchema>;
+
+export const HandoffEnvelopeSchema = z.object({{
+  envelope_version: z.literal("2.0"),
+  conversation_id: z.string().min(1),
+  reason: z.enum(["USER_REQUEST", "T4_POLICY", "GUARD_FALLBACK", "LOW_CONFIDENCE", "EQ_ESCALATION"]),
+  queue: z.enum(["DOMESTIC_TAX", "CUSTOMS", "ETAX_TECH", "SCAM_REPORT"]),
+  priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]),
+  summary: z.string().min(1),
+  source_channel: ChannelNameSchema,
+  target_channel: ChannelNameSchema,
+  locale: LocaleCodeSchema,
+  language_state: z.enum(["LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN"]),
+  subject_ref_masked: z.string().nullable().optional(),
+  affective_state: AffectiveSnapshotSchema,
+  active_goal_id: z.string().nullable().optional(),
+  verified_tool_names: z.array(z.string()),
+  suggested_opener: z.string().min(1),
+  return_to_ai_eligible: z.boolean(),
+}});
+export type HandoffEnvelope = z.infer<typeof HandoffEnvelopeSchema>;
 """
 
 
@@ -355,11 +400,68 @@ class HandoffTicket(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     conversation_id: str
-    reason: Literal["USER_REQUEST", "T4_POLICY", "GUARD_FALLBACK", "LOW_CONFIDENCE"]
+    reason: Literal[
+        "USER_REQUEST",
+        "T4_POLICY",
+        "GUARD_FALLBACK",
+        "LOW_CONFIDENCE",
+        "EQ_ESCALATION",
+    ]
     queue: Literal["DOMESTIC_TAX", "CUSTOMS", "ETAX_TECH", "SCAM_REPORT"]
     summary: str
     citations: list[str] = Field(default_factory=list)
     priority: Literal["LOW", "NORMAL", "HIGH", "CRITICAL"] = "NORMAL"
+
+
+class AffectiveSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    primary_emotion: Literal["calm", "confused", "frustrated", "anxious", "distressed"] = "calm"
+    intensity: float = Field(ge=0.0, le=1.0, default=0.1)
+    frustration_velocity: float = Field(ge=-1.0, le=1.0, default=0.0)
+    urgency_level: Literal["low", "normal", "high", "critical"] = "normal"
+    signals: list[str] = Field(default_factory=list)
+    recommended_tone: Literal[
+        "standard_clear",
+        "reassuring_step_by_step",
+        "concise_urgent",
+        "empathetic_deescalation",
+    ] = "standard_clear"
+
+
+class EnglishRouterEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_locale: LocaleCode = LocaleCode.EN
+    detected_vernacular: str = "en"
+    language_state: Literal["LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN"] = (
+        "LOCKED"
+    )
+    canonical_en_query: str = Field(min_length=1)
+    extracted_slots: dict[str, str | int | float | bool] = Field(default_factory=dict)
+    preserved_statutory_tokens: list[str] = Field(default_factory=list)
+
+
+class HandoffEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    envelope_version: Literal["2.0"] = "2.0"
+    ticket: HandoffTicket
+    source_channel: ChannelName = ChannelName.WEB
+    target_channel: ChannelName = ChannelName.CONSOLE
+    locale: LocaleCode = LocaleCode.EN
+    language_state: Literal["LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN"] = (
+        "LOCKED"
+    )
+    subject_ref_masked: str | None = None
+    auth_level: AuthLevel = AuthLevel.ANONYMOUS
+    affective_state: AffectiveSnapshot = Field(default_factory=AffectiveSnapshot)
+    active_goal: dict[str, Any] | None = None
+    verified_tool_artifacts: list[dict[str, Any]] = Field(default_factory=list)
+    officer_call_brief: dict[str, Any] | None = None
+    chat_to_call_carryover: dict[str, Any] | None = None
+    suggested_opener: str = ""
+    return_to_ai_eligible: bool = True
 
 
 class Citation(BaseModel):

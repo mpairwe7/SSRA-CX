@@ -405,6 +405,9 @@ class SSRAConversationRuntime:
         else:
             self._pending_by_thread.pop(safe_thread_id, None)
 
+        verif_dict = final_state.get("outcome_verification") or {}
+        outcome_verified = bool(verif_dict.get("verified", True))
+
         resp = RuntimeTurnResponse(
             thread_id=safe_thread_id,
             channel=final_state.get("channel", ChannelName.WEB),
@@ -418,9 +421,31 @@ class SSRAConversationRuntime:
             citations=final_state.get("citations", []),
             pending_confirmation=final_state.get("pending_confirmation"),
             handoff_ticket=final_state.get("handoff_state"),
+            handoff_envelope=final_state.get("handoff_envelope"),
+            affective_state=final_state.get("affective_state"),
+            english_router_envelope=final_state.get("english_router_envelope"),
+            plan=final_state.get("plan"),
+            outcome_verified=outcome_verified,
             safety_flags=final_state.get("safety_flags", []),
             audit_event_hash=final_state.get("audit_event_hash", ""),
         )
+        if subject_ref is not None and resp.intent is not None:
+            blockers = verif_dict.get("blocker_codes") or []
+            self.preference_store.record_episode(
+                subject_ref=subject_ref,
+                channel=resp.channel,
+                locale=resp.locale,
+                intent=resp.intent.intent,
+                outcome_status=(
+                    "ESCALATED"
+                    if resp.handoff_ticket is not None
+                    else "PENDING_ASYNC"
+                    if resp.pending_confirmation is not None
+                    else "RESOLVED"
+                ),
+                raw_summary=" ".join(s.text for s in resp.answer.segments)[:240],
+                unresolved_blocker_code=str(blockers[0]) if blockers else None,
+            )
         route_decision = self.model_router.select_route(node_name="compose", tier=resp.tier)
         self.semantic_cache.put(
             snapshot_version="2026.10.1",

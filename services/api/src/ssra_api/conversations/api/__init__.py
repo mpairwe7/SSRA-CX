@@ -51,6 +51,15 @@ class TakeoverRequest(BaseModel):
     staff_id: str
 
 
+class HandbackResolutionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    officer_id: str = Field(min_length=2)
+    resolution_summary: str = Field(min_length=3, max_length=240)
+    approved_next_intent: str = "guided_filing_and_payment"
+    return_to_ai_step: int = Field(ge=1, le=10, default=1)
+
+
 class CopilotDraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -145,11 +154,26 @@ async def takeover_conversation(
 
 
 @router.post("/{conversation_id}/handback", response_model=ConversationResponse)
-async def handback_conversation(conversation_id: str) -> ConversationResponse:
+async def handback_conversation(
+    conversation_id: str,
+    body: HandbackResolutionRequest | None = None,
+) -> ConversationResponse:
+    from ssra_api.conversations.domain import OfficerResolutionArtifact
+
     entity = _repo.get(conversation_id)
     if entity is None:
         raise SSRAError(McpErrorCode.NOT_FOUND, "Conversation not found", status_code=404)
-    updated = staff_handback_to_ai_use_case(entity)
+    resolution = (
+        OfficerResolutionArtifact(
+            officer_id=body.officer_id,
+            resolution_summary=body.resolution_summary,
+            approved_next_intent=body.approved_next_intent,
+            return_to_ai_step=body.return_to_ai_step,
+        )
+        if body is not None
+        else None
+    )
+    updated = staff_handback_to_ai_use_case(entity, officer_resolution=resolution)
     _repo.save(updated)
     return _to_response(updated)
 

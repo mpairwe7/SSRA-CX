@@ -1,16 +1,21 @@
-"""Specialist subgraph: handoff & T4 human-only routing (Section 4 & 6.1)."""
+"""Specialist subgraph: handoff & T4 human-only routing with HandoffEnvelope v2 (Section 4 & 6.1)."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from ssra_core import (
+    AffectiveSnapshot,
     Answer,
     AnswerSegment,
+    AuthLevel,
     ChannelCapabilities,
+    ChannelName,
     GenerativeUIComponent,
     GenerativeUIComponentName,
+    HandoffEnvelope,
     HandoffTicket,
+    LocaleCode,
     RiskTier,
 )
 
@@ -25,6 +30,16 @@ def execute_handoff_subgraph(state: ConversationGraphState) -> dict[str, Any]:
     tier = state.get("tier", RiskTier.T0)
     decision = state.get("policy_decision", "HANDOFF")
     capabilities = state.get("capabilities", ChannelCapabilities())
+    channel = state.get("channel", ChannelName.WEB)
+    locale = state.get("locale", LocaleCode.EN)
+    auth_level = state.get("auth_level", AuthLevel.ANONYMOUS)
+    affective = state.get("affective_state") or AffectiveSnapshot()
+    raw_lang_state = state.get("language_state", "LOCKED")
+    lang_state = (
+        raw_lang_state
+        if raw_lang_state in ("LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN")
+        else "LOCKED"
+    )
 
     if decision == "STEP_UP":
         text = (
@@ -57,21 +72,50 @@ def execute_handoff_subgraph(state: ConversationGraphState) -> dict[str, Any]:
             priority="HIGH",
         )
     else:
+        is_eq = affective.primary_emotion in ("distressed", "frustrated") and (
+            affective.intensity >= 0.80 or affective.frustration_velocity >= 0.45
+        )
         text = (
             "Connecting you to an SSRA Contact-Centre Officer. Office hours are Monday–Friday "
             "08:00–17:00 Africa/Juba time (UTC+02:00)."
         )
         ticket = HandoffTicket(
             conversation_id=thread_id,
-            reason="USER_REQUEST",
+            reason="EQ_ESCALATION" if is_eq else "USER_REQUEST",
             queue="DOMESTIC_TAX",
-            summary="Taxpayer requested human handoff.",
+            summary=(
+                f"Empathetic priority handoff ({affective.primary_emotion})."
+                if is_eq
+                else "Taxpayer requested human handoff."
+            ),
             citations=[],
-            priority="NORMAL",
+            priority="HIGH" if is_eq else "NORMAL",
         )
+
+    artifacts = state.get("artifacts", [])
+    envelope = HandoffEnvelope(
+        envelope_version="2.0",
+        ticket=ticket,
+        source_channel=channel,
+        target_channel=ChannelName.CONSOLE,
+        locale=locale,
+        language_state=lang_state,
+        subject_ref_masked=state.get("subject_ref"),
+        auth_level=auth_level,
+        affective_state=affective,
+        verified_tool_artifacts=[
+            {"id": a.id, "server": a.server, "tool": a.tool} for a in artifacts
+        ],
+        suggested_opener=(
+            f"Hello, I am an SSRA officer reviewing your {ticket.queue} inquiry ({ticket.reason}) — "
+            "I already have the context from SSRA Assist so you do not need to repeat yourself."
+        ),
+        return_to_ai_eligible=(tier != RiskTier.T4),
+    )
 
     return {
         "handoff_state": ticket,
+        "handoff_envelope": envelope,
         "answer": Answer(
             segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[])],
             citations=[],

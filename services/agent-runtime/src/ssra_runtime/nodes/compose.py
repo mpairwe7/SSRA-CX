@@ -18,6 +18,7 @@ from ssra_core import (
 )
 from ssra_llm import PromptRegistry
 
+from ssra_runtime.guardrails.eq_detector import build_empathetic_preamble
 from ssra_runtime.state import ConversationGraphState
 
 
@@ -207,7 +208,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             ),
         }
 
-    # 5. Authenticated T1 Balance (`BalanceCard`)
+    # 5. Authenticated T1 Balance (`BalanceCard`) — including multi-step compound T1 plan outcomes
     bal_art = next((a for a in artifacts if a.tool == "get_balance"), None)
     if bal_art is not None:
         sc = bal_art.structured_content
@@ -227,10 +228,26 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             unit=NumericUnit.SSP,
             source_ref=f"{bal_art.id}.total_outstanding_ssp",
         )
+        extra_clauses: list[str] = []
+        tcc_comp = next((a for a in artifacts if a.tool == "get_tcc_status"), None)
+        if tcc_comp is not None:
+            extra_clauses.append(
+                f"TCC status: {tcc_comp.structured_content.get('tcc_status', 'UNKNOWN')}."
+            )
+        verif = state.get("outcome_verification") or {}
+        for note in verif.get("remediation_notes", []):
+            extra_clauses.append(str(note))
+        suffix = f" {' '.join(extra_clauses)}" if extra_clauses else ""
+        affective = state.get("affective_state")
+        preamble = (
+            build_empathetic_preamble(affective, locale_code=locale.value)
+            if affective is not None and capabilities.max_len >= 240
+            else ""
+        )
         text = (
-            f"For TIN {tin_masked}, your outstanding e-Tax balance is {amt} SSP as of {as_of} "
+            f"{preamble}For TIN {tin_masked}, your outstanding e-Tax balance is {amt} SSP as of {as_of} "
             f"(Filing status: {sc['filing_status']}). Pay exclusively through "
-            f"https://etax.nra.gov.ss/ into designated commercial banks."
+            f"https://etax.nra.gov.ss/ into designated commercial banks.{suffix}"
         )
         return {
             "citations": [cit],

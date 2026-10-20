@@ -125,3 +125,78 @@ def test_circuit_breaker_idempotent_retries_and_channel_bulkhead() -> None:
         bulkhead.acquire(ChannelName.WHATSAPP)
     assert bh_exc.value.code == McpErrorCode.RATE_LIMITED
     bulkhead.release(ChannelName.WHATSAPP)
+
+
+def test_feature_flag_engine_cohort_bucketing_and_agentic_cx_telemetry() -> None:
+    from ssra_core import (
+        FeatureFlagEngine,
+        LocaleCode,
+        build_agentic_cx_span_attributes,
+        compute_deterministic_flag_bucket,
+    )
+
+    b1 = compute_deterministic_flag_bucket("FF_AUTONOMOUS_GOAL_PLANNER", "sub_taxpayer_amina_01")
+    b2 = compute_deterministic_flag_bucket("FF_AUTONOMOUS_GOAL_PLANNER", "sub_taxpayer_amina_01")
+    assert b1 == b2
+    assert 0 <= b1 < 100
+
+    eng = FeatureFlagEngine()
+    assert len(eng.list_rules()) >= 6
+    full_eval = eng.evaluate(
+        "FF_AUTONOMOUS_GOAL_PLANNER",
+        subject_ref="sub_taxpayer_amina_01",
+        channel="web",
+        locale="pga",
+    )
+    assert full_eval.active is True
+    assert full_eval.reason == "FULL_ROLLOUT"
+
+    eng.set_flag_override("FF_AUTONOMOUS_GOAL_PLANNER", enabled=False, rollout_pct=0)
+    disabled_eval = eng.evaluate("FF_AUTONOMOUS_GOAL_PLANNER", subject_ref="sub_taxpayer_amina_01")
+    assert disabled_eval.active is False
+    assert disabled_eval.reason == "FLAG_DISABLED"
+
+    # Test unknown flag, channel exclusion, locale exclusion, and partial cohort percentage
+    assert eng.get_rule("FF_AUTONOMOUS_GOAL_PLANNER") is not None
+    assert eng.evaluate("FF_NONEXISTENT_FLAG").reason == "FLAG_NOT_REGISTERED"
+    eng.set_flag_override(
+        "FF_CUSTOM_CANARY",
+        enabled=True,
+        rollout_pct=50,
+        allowed_channels=["web"],
+        allowed_locales=["en"],
+    )
+    assert (
+        eng.evaluate("FF_CUSTOM_CANARY", channel="ussd", locale="en").reason
+        == "CHANNEL_EXCLUDED:ussd"
+    )
+    assert (
+        eng.evaluate("FF_CUSTOM_CANARY", channel="web", locale="ar").reason == "LOCALE_EXCLUDED:ar"
+    )
+    canary_res = eng.evaluate(
+        "FF_CUSTOM_CANARY",
+        subject_ref="sub_taxpayer_amina_01",
+        channel="web",
+        locale="en",
+    )
+    assert canary_res.reason in ("COHORT_INCLUDED", "COHORT_BUCKET_OUTSIDE_PCT")
+
+    # Restore 100% default
+    eng.set_flag_override("FF_AUTONOMOUS_GOAL_PLANNER", enabled=True, rollout_pct=100)
+
+    cx_span = build_agentic_cx_span_attributes(
+        goal_id="goal_get_balance",
+        goal_step_count=2,
+        goal_outcome="autonomous_resolved",
+        eq_emotion="frustrated",
+        eq_intensity=0.72,
+        eq_frustration_velocity=0.50,
+        eq_tone_adapted=True,
+        language_state="CODE_SWITCHING",
+        locale=LocaleCode.PGA,
+        handoff_clean=True,
+    )
+    otel = cx_span.to_otel_dict()
+    assert otel["ssra.cx.goal.step_count"] == 2
+    assert otel["ssra.cx.eq.emotion"] == "frustrated"
+    assert otel["ssra.cx.language.locale"] == "pga"

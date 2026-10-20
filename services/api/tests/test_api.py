@@ -460,3 +460,37 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
         staff_id="aud_01", office_code="JUBA_HQ", staff_role="auditor"
     )
     assert "auditor" in aud_rls.to_set_local_sql()[1]
+
+    # 7. Admin Feature-Flags API, Bidirectional Officer Hand-Back, and 2026 Agentic CX Scorecard
+    r_flags = client.get("/v1/admin/feature-flags")
+    assert r_flags.status_code == 200
+    assert len(r_flags.json()) >= 6
+
+    r_flag_upd = client.post(
+        "/v1/admin/feature-flags",
+        json={
+            "flag_name": "FF_AUTONOMOUS_GOAL_PLANNER",
+            "enabled": True,
+            "rollout_pct": 100,
+        },
+    )
+    assert r_flag_upd.status_code == 200
+    assert r_flag_upd.json()["rollout_pct"] == 100
+
+    r_scorecard = client.get("/v1/analytics/cx-scorecard")
+    assert r_scorecard.status_code == 200
+    assert r_scorecard.json()["zero_unverified_numeric_claims"] is True
+    assert r_scorecard.json()["quality_adjusted_autonomous_resolution_rate"] >= 0.78
+
+    conv_id = r_post1.json()["id"]
+    r_hb = client.post(
+        f"/v1/conversations/{conv_id}/handback",
+        json={
+            "officer_id": "stf_01",
+            "resolution_summary": "Verified e-Tax assessment slip; ready for guided payment step.",
+            "approved_next_intent": "guided_filing_and_payment",
+            "return_to_ai_step": 2,
+        },
+    )
+    assert r_hb.status_code == 200
+    assert r_hb.json()["status"] == "HANDED_BACK_TO_AI"

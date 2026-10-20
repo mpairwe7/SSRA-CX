@@ -1,6 +1,55 @@
 {
   "components": {
     "schemas": {
+      "AgenticCxScorecardResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "clean_handoff_rate": {
+            "title": "Clean Handoff Rate",
+            "type": "number"
+          },
+          "cross_session_goal_completion_rate": {
+            "title": "Cross Session Goal Completion Rate",
+            "type": "number"
+          },
+          "customer_effort_repetition_rate": {
+            "title": "Customer Effort Repetition Rate",
+            "type": "number"
+          },
+          "eq_deescalation_save_rate": {
+            "title": "Eq Deescalation Save Rate",
+            "type": "number"
+          },
+          "officer_high_eq_hours_saved_30d": {
+            "title": "Officer High Eq Hours Saved 30D",
+            "type": "number"
+          },
+          "quality_adjusted_autonomous_resolution_rate": {
+            "title": "Quality Adjusted Autonomous Resolution Rate",
+            "type": "number"
+          },
+          "vernacular_parity_gap_pct": {
+            "title": "Vernacular Parity Gap Pct",
+            "type": "number"
+          },
+          "zero_unverified_numeric_claims": {
+            "title": "Zero Unverified Numeric Claims",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "quality_adjusted_autonomous_resolution_rate",
+          "cross_session_goal_completion_rate",
+          "customer_effort_repetition_rate",
+          "eq_deescalation_save_rate",
+          "clean_handoff_rate",
+          "officer_high_eq_hours_saved_30d",
+          "vernacular_parity_gap_pct",
+          "zero_unverified_numeric_claims"
+        ],
+        "title": "AgenticCxScorecardResponse",
+        "type": "object"
+      },
       "AnalyzeDocumentRequest": {
         "additionalProperties": false,
         "properties": {
@@ -502,6 +551,51 @@
         "title": "DriftMonitorResponse",
         "type": "object"
       },
+      "FeatureFlagRuleResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_channels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Channels",
+            "type": "array"
+          },
+          "allowed_locales": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Locales",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rollout_pct": {
+            "title": "Rollout Pct",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "enabled",
+          "rollout_pct",
+          "allowed_channels",
+          "allowed_locales"
+        ],
+        "title": "FeatureFlagRuleResponse",
+        "type": "object"
+      },
       "FunnelSummaryResponse": {
         "additionalProperties": false,
         "properties": {
@@ -537,6 +631,40 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HandbackResolutionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_next_intent": {
+            "default": "guided_filing_and_payment",
+            "title": "Approved Next Intent",
+            "type": "string"
+          },
+          "officer_id": {
+            "minLength": 2,
+            "title": "Officer Id",
+            "type": "string"
+          },
+          "resolution_summary": {
+            "maxLength": 240,
+            "minLength": 3,
+            "title": "Resolution Summary",
+            "type": "string"
+          },
+          "return_to_ai_step": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Return To Ai Step",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "officer_id",
+          "resolution_summary"
+        ],
+        "title": "HandbackResolutionRequest",
         "type": "object"
       },
       "JitElevationRequest": {
@@ -1049,6 +1177,33 @@
         "title": "UpdateConsentRequest",
         "type": "object"
       },
+      "UpdateFeatureFlagRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "flag_name": {
+            "minLength": 3,
+            "title": "Flag Name",
+            "type": "string"
+          },
+          "rollout_pct": {
+            "default": 100,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Rollout Pct",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "flag_name"
+        ],
+        "title": "UpdateFeatureFlagRequest",
+        "type": "object"
+      },
       "UpdateKillSwitchRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1277,6 +1432,72 @@
         ]
       }
     },
+    "/v1/admin/feature-flags": {
+      "get": {
+        "description": "List all registered SSRA Assist cohort/percentage feature flags.",
+        "operationId": "get_feature_flags_v1_admin_feature_flags_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FeatureFlagRuleResponse"
+                  },
+                  "title": "Response Get Feature Flags V1 Admin Feature Flags Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Feature Flags",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "description": "Update a cohort/percentage feature flag and append a WORM audit event.",
+        "operationId": "set_feature_flag_v1_admin_feature_flags_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFeatureFlagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlagRuleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Feature Flag",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/v1/admin/jit-elevation": {
       "post": {
         "description": "Grant time-boxed JIT admin elevation after verifying trusted staff directory & maker-checker controls.",
@@ -1400,6 +1621,28 @@
         "summary": "Get Public Status",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/v1/analytics/cx-scorecard": {
+      "get": {
+        "description": "Return the October 2026 SSRA Agentic CX & Human-AI Workforce Scorecard.",
+        "operationId": "get_cx_scorecard_v1_analytics_cx_scorecard_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgenticCxScorecardResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Cx Scorecard",
+        "tags": [
+          "analytics_api"
         ]
       }
     },
@@ -2042,6 +2285,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/HandbackResolutionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

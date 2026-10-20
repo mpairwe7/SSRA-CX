@@ -7,9 +7,14 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from ssra_core import Intent, IntentName, LocaleCode, RiskTier
+from ssra_core import Intent, IntentName, LocaleCode, RiskTier, evaluate_flag
 from ssra_security import validate_inter_model_handoff
 
+from ssra_runtime.nodes.language_state import (
+    LanguageStateLiteral,
+    build_english_router_envelope,
+)
+from ssra_runtime.nodes.planner import build_execution_plan
 from ssra_runtime.state import ConversationGraphState
 
 _RISK_TIERS_FILE = Path(__file__).resolve().parents[5] / "ai" / "policies" / "risk-tiers.yaml"
@@ -247,13 +252,53 @@ def understand_node(state: ConversationGraphState) -> dict[str, Any]:
 
     text = state.get("redacted_user_text") or state.get("raw_user_text", "")
     locale = state.get("locale", LocaleCode.EN)
-    intent_obj = validate_inter_model_handoff(classify_intent_deterministic(text, locale))
+    subject_id = state.get("subject_ref") or state.get("thread_id", "thr_default")
+    channel_str = str(state.get("channel", "web"))
+
+    raw_lang_state = state.get("language_state", "LOCKED")
+    lang_state: LanguageStateLiteral = (
+        raw_lang_state
+        if raw_lang_state in ("LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN")
+        else "LOCKED"
+    )
+    router_env = build_english_router_envelope(
+        text,
+        source_locale=locale,
+        language_state=lang_state,
+    )
+    routing_text = (
+        router_env.canonical_en_query
+        if evaluate_flag(
+            "FF_ENGLISH_ROUTER_CANONICAL",
+            subject_ref=subject_id,
+            channel=channel_str,
+            locale=locale.value,
+        )
+        else text
+    )
+    intent_obj = validate_inter_model_handoff(classify_intent_deterministic(routing_text, locale))
+    router_env = router_env.model_copy(update={"extracted_slots": dict(intent_obj.slots)})
 
     # Risk tier NEVER comes from the model; it comes deterministically from risk-tiers.yaml
     tier = _INTENT_TIERS.get(intent_obj.intent.value, RiskTier.T0)
 
+    planner_enabled = evaluate_flag(
+        "FF_AUTONOMOUS_GOAL_PLANNER",
+        subject_ref=subject_id,
+        channel=channel_str,
+        locale=locale.value,
+    )
+    plan = build_execution_plan(
+        intent=intent_obj,
+        canonical_query=router_env.canonical_en_query,
+        tier=tier,
+        planner_enabled=planner_enabled,
+    )
+
     return {
+        "english_router_envelope": router_env,
         "intent": intent_obj,
         "slots": dict(intent_obj.slots),
         "tier": tier,
+        "plan": plan,
     }

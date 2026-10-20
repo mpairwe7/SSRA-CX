@@ -1,5 +1,10 @@
 """Runtime guardrails package."""
 
+from ssra_runtime.guardrails.eq_detector import (
+    build_empathetic_preamble,
+    compute_affective_state,
+    should_trigger_eq_escalation,
+)
 from ssra_runtime.guardrails.grounding import (
     GroundingResult,
     detect_conflicting_chunks,
@@ -24,10 +29,13 @@ __all__ = [
     "NeutralityResult",
     "NumericProvenanceResult",
     "PiiGuardResult",
+    "build_empathetic_preamble",
     "check_prompt_injection",
+    "compute_affective_state",
     "detect_conflicting_chunks",
     "mask_tin",
     "redact_pii",
+    "should_trigger_eq_escalation",
     "validate_grounding",
     "validate_neutrality_and_promises",
     "validate_numeric_provenance",

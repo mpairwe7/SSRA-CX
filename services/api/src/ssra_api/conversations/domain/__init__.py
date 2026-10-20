@@ -7,6 +7,14 @@ from datetime import datetime
 
 
 @dataclass(frozen=True)
+class OfficerResolutionArtifact:
+    officer_id: str
+    resolution_summary: str
+    approved_next_intent: str = "guided_filing_and_payment"
+    return_to_ai_step: int = 1
+
+
+@dataclass(frozen=True)
 class ConversationEntity:
     id: str
     channel: str
@@ -18,6 +26,7 @@ class ConversationEntity:
     status: str = "ACTIVE"  # ACTIVE | STAFF_TAKEOVER | HANDED_BACK_TO_AI | CLOSED
     assigned_staff_id: str | None = None
     qa_score: float | None = None
+    officer_resolution: OfficerResolutionArtifact | None = None
 
 
 @dataclass(frozen=True)

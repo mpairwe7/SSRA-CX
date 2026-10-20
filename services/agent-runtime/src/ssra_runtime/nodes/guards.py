@@ -5,16 +5,26 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ssra_core import Answer, AnswerSegment, HandoffTicket, LocaleCode, RiskTier
+from ssra_core import (
+    AffectiveSnapshot,
+    Answer,
+    AnswerSegment,
+    HandoffTicket,
+    LocaleCode,
+    RiskTier,
+    evaluate_flag,
+)
 
 from ssra_runtime.guardrails import (
     check_prompt_injection,
+    compute_affective_state,
     redact_pii,
     validate_grounding,
     validate_neutrality_and_promises,
     validate_numeric_provenance,
     verify_no_cross_subject_or_unmasked_pii,
 )
+from ssra_runtime.nodes.language_state import evaluate_language_state_transition
 from ssra_runtime.state import ConversationGraphState
 
 _WORD_SPLIT_RE = re.compile(r"[^\s,.;:!?()\"']+")
@@ -73,6 +83,33 @@ def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
     raw = state.get("raw_user_text", "")
     default_loc = state.get("locale", LocaleCode.EN)
     detected_loc = detect_language(raw, default_loc)
+    subject_id = state.get("subject_ref") or state.get("thread_id", "thr_default")
+    channel_str = str(state.get("channel", "web"))
+
+    lang_state = "LOCKED"
+    if evaluate_flag(
+        "FF_ENGLISH_ROUTER_CANONICAL",
+        subject_ref=subject_id,
+        channel=channel_str,
+        locale=detected_loc.value,
+    ):
+        detected_loc, lang_state, _ = evaluate_language_state_transition(
+            previous_locale=default_loc,
+            detected_locale=detected_loc,
+            raw_text=raw,
+        )
+
+    affective: AffectiveSnapshot | None = None
+    if evaluate_flag(
+        "FF_REALTIME_EQ_TONE_AND_ESCALATION",
+        subject_ref=subject_id,
+        channel=channel_str,
+        locale=detected_loc.value,
+    ):
+        affective = compute_affective_state(
+            raw,
+            previous=state.get("affective_state"),
+        )
 
     redaction = redact_pii(raw)
     injection = check_prompt_injection(raw)
@@ -93,6 +130,8 @@ def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
         )
         return {
             "locale": detected_loc,
+            "language_state": lang_state,
+            "affective_state": affective,
             "tier": RiskTier.T0,
             "redacted_user_text": redaction.redacted_text,
             "safety_flags": sorted(set(flags)),
@@ -119,6 +158,8 @@ def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
 
     return {
         "locale": detected_loc,
+        "language_state": lang_state,
+        "affective_state": affective,
         "redacted_user_text": redaction.redacted_text,
         "safety_flags": sorted(set(flags)),
     }

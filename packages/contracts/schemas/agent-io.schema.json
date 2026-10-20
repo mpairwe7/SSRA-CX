@@ -140,6 +140,68 @@
         "is_estimate": { "type": "boolean" },
         "abstained": { "type": "boolean" }
       }
+    },
+    "AffectiveSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_emotion",
+        "intensity",
+        "frustration_velocity",
+        "urgency_level",
+        "signals",
+        "recommended_tone"
+      ],
+      "properties": {
+        "primary_emotion": {
+          "type": "string",
+          "enum": ["calm", "confused", "frustrated", "anxious", "distressed"]
+        },
+        "intensity": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "frustration_velocity": { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+        "urgency_level": {
+          "type": "string",
+          "enum": ["low", "normal", "high", "critical"]
+        },
+        "signals": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "recommended_tone": {
+          "type": "string",
+          "enum": [
+            "standard_clear",
+            "reassuring_step_by_step",
+            "concise_urgent",
+            "empathetic_deescalation"
+          ]
+        }
+      }
+    },
+    "HandoffEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "envelope_version",
+        "source_channel",
+        "target_channel",
+        "locale",
+        "language_state",
+        "affective_state",
+        "return_to_ai_eligible"
+      ],
+      "properties": {
+        "envelope_version": { "type": "string", "enum": ["2.0"] },
+        "source_channel": { "type": "string" },
+        "target_channel": { "type": "string" },
+        "locale": { "$ref": "#/$defs/LocaleCode" },
+        "language_state": {
+          "type": "string",
+          "enum": ["LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN"]
+        },
+        "affective_state": { "$ref": "#/$defs/AffectiveSnapshot" },
+        "return_to_ai_eligible": { "type": "boolean" }
+      }
     }
   }
 }

@@ -1,0 +1,47 @@
+# SSRA Assist Feature Flag Registry (October 2026 Agentic CX Rollout)
+# Deterministic HMAC-SHA256 cohort/percentage bucketing evaluated by libs/ssra_core/src/ssra_core/flags.py
+version: "2026.10.2"
+default_salt: "ssra-sovereign-flag-salt-2026-10"
+
+flags:
+  FF_AUTONOMOUS_GOAL_PLANNER:
+    description: "Stage 5 multi-step Goal Planner DAG (max 4 steps) and Stage 9 Outcome Verifier loop"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["web", "whatsapp", "sms", "ussd", "voice", "console"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FF_COGNITIVE_MEMORY_4TIER:
+    description: "Consent-gated 4-Tier Cognitive Memory (Working, Episodic, Semantic/Preference, Procedural Goal)"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["web", "whatsapp", "sms", "ussd", "voice", "console"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FF_REALTIME_EQ_TONE_AND_ESCALATION:
+    description: "Real-time text + acoustic prosody Emotional Intelligence (EQ) detection, tone adaptation, and pre-emptive escalation"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["web", "whatsapp", "sms", "ussd", "voice", "console"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FF_ENGLISH_ROUTER_CANONICAL:
+    description: "Stage 4 English-Router canonical query normalization and 2-turn hysteretic language-state machine"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["web", "whatsapp", "sms", "ussd", "voice", "console"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FF_HANDOFF_ENVELOPE_V2_AND_WARM_RETURN:
+    description: "Unified HandoffEnvelope v2 with AffectiveSnapshot trajectory, verified artifacts, and Officer-to-AI warm return"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["web", "whatsapp", "sms", "ussd", "voice", "console"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FF_TEMPORAL_POST_INTERACTION_CONTINUATION:
+    description: "Stage 12 Temporal post-interaction autonomous goal continuation with consent-gated notifications"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["web", "whatsapp", "sms", "voice"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]

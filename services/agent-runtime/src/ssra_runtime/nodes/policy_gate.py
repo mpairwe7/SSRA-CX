@@ -77,7 +77,15 @@ def policy_gate_node(state: ConversationGraphState) -> dict[str, Any]:
     else:
         subgraph = "knowledge_qa"
 
+    existing_plan = state.get("plan")
+    updated_plan = (
+        existing_plan.model_copy(update={"subgraph": subgraph})
+        if existing_plan is not None
+        else None
+    )
+
     return {
         "policy_decision": decision,
         "selected_subgraph": subgraph,
+        "plan": updated_plan,
     }

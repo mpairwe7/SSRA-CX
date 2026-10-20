@@ -7,7 +7,11 @@ from dataclasses import replace
 from ssra_core import new_id, utc_now
 from ssra_security import redact_pii
 
-from ssra_api.conversations.domain import ConversationEntity, StaffCopilotDraft
+from ssra_api.conversations.domain import (
+    ConversationEntity,
+    OfficerResolutionArtifact,
+    StaffCopilotDraft,
+)
 from ssra_api.outbox import get_outbox_store
 
 
@@ -48,13 +52,38 @@ def staff_takeover_use_case(entity: ConversationEntity, *, staff_id: str) -> Con
     return updated
 
 
-def staff_handback_to_ai_use_case(entity: ConversationEntity) -> ConversationEntity:
-    updated = replace(entity, status="HANDED_BACK_TO_AI", assigned_staff_id=None)
+def staff_handback_to_ai_use_case(
+    entity: ConversationEntity,
+    *,
+    officer_resolution: OfficerResolutionArtifact | None = None,
+) -> ConversationEntity:
+    safe_resolution = officer_resolution
+    if officer_resolution is not None:
+        safe_resolution = OfficerResolutionArtifact(
+            officer_id=officer_resolution.officer_id,
+            resolution_summary=redact_pii(officer_resolution.resolution_summary).redacted_text[
+                :240
+            ],
+            approved_next_intent=officer_resolution.approved_next_intent,
+            return_to_ai_step=max(1, officer_resolution.return_to_ai_step),
+        )
+    updated = replace(
+        entity,
+        status="HANDED_BACK_TO_AI",
+        assigned_staff_id=None,
+        officer_resolution=safe_resolution,
+    )
     get_outbox_store().stage_domain_event(
         context_name="conversations",
         event_type="ssra.conversation.handback.v1",
         subject=entity.id,
-        data={"office_code": entity.office_code},
+        data={
+            "office_code": entity.office_code,
+            "has_officer_resolution": safe_resolution is not None,
+            "approved_next_intent": (
+                safe_resolution.approved_next_intent if safe_resolution else "none"
+            ),
+        },
     )
     return updated
 

@@ -1,18 +1,22 @@
-"""LangGraph conversation state definition (Section 6.2)."""
+"""LangGraph conversation state definition (Section 6.2 & October 2026 Agentic CX)."""
 
 from __future__ import annotations
 
 from typing import Any, TypedDict
 
 from ssra_core import (
+    AffectiveSnapshot,
     Answer,
     AuthLevel,
     ChannelCapabilities,
     ChannelName,
     Citation,
+    EnglishRouterEnvelope,
+    HandoffEnvelope,
     HandoffTicket,
     Intent,
     LocaleCode,
+    Plan,
     RiskTier,
 )
 
@@ -23,6 +27,7 @@ class ConversationGraphState(TypedDict, total=False):
     thread_id: str
     channel: ChannelName
     locale: LocaleCode
+    language_state: str
     capabilities: ChannelCapabilities
     auth_level: AuthLevel
     subject_ref: str | None
@@ -31,17 +36,23 @@ class ConversationGraphState(TypedDict, total=False):
     confirmation_token_in: str | None
     idempotency_key_in: str | None
     deterministic_handled: bool
+    affective_state: AffectiveSnapshot | None
+    english_router_envelope: EnglishRouterEnvelope | None
     intent: Intent | None
     slots: dict[str, Any]
     tier: RiskTier
+    plan: Plan | None
+    workflow_stack: list[dict[str, Any]]
     policy_decision: str  # ALLOW | DENY | STEP_UP | HANDOFF
     selected_subgraph: str
     pending_confirmation: PendingConfirmation | None
     artifacts: list[ToolArtifact]
+    outcome_verification: dict[str, Any] | None
     citations: list[Citation]
     budget: TurnBudget
     safety_flags: list[str]
     handoff_state: HandoffTicket | None
+    handoff_envelope: HandoffEnvelope | None
     answer: Answer | None
     regeneration_count: int
     validator_feedback: str | None

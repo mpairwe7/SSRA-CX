@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ssra_api.analytics_api.application import (
     evaluate_online_drift_monitors_use_case,
+    get_agentic_cx_scorecard_use_case,
     get_funnel_summary_use_case,
     get_regional_language_insights_use_case,
     record_user_feedback_use_case,
@@ -71,6 +72,19 @@ class DriftMonitorResponse(BaseModel):
     status: str
 
 
+class AgenticCxScorecardResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    quality_adjusted_autonomous_resolution_rate: float
+    cross_session_goal_completion_rate: float
+    customer_effort_repetition_rate: float
+    eq_deescalation_save_rate: float
+    clean_handoff_rate: float
+    officer_high_eq_hours_saved_30d: float
+    vernacular_parity_gap_pct: float
+    zero_unverified_numeric_claims: bool
+
+
 @router.get("/summary", response_model=FunnelSummaryResponse)
 async def get_summary() -> FunnelSummaryResponse:
     s = get_funnel_summary_use_case()
@@ -130,4 +144,20 @@ async def get_drift_monitors(
         guardrail_trigger_rate_24h=snap.guardrail_trigger_rate_24h,
         slo_burn_rate_alert=snap.slo_burn_rate_alert,
         status=snap.status,
+    )
+
+
+@router.get("/cx-scorecard", response_model=AgenticCxScorecardResponse)
+async def get_cx_scorecard() -> AgenticCxScorecardResponse:
+    """Return the October 2026 SSRA Agentic CX & Human-AI Workforce Scorecard."""
+    sc = get_agentic_cx_scorecard_use_case()
+    return AgenticCxScorecardResponse(
+        quality_adjusted_autonomous_resolution_rate=sc.quality_adjusted_autonomous_resolution_rate,
+        cross_session_goal_completion_rate=sc.cross_session_goal_completion_rate,
+        customer_effort_repetition_rate=sc.customer_effort_repetition_rate,
+        eq_deescalation_save_rate=sc.eq_deescalation_save_rate,
+        clean_handoff_rate=sc.clean_handoff_rate,
+        officer_high_eq_hours_saved_30d=sc.officer_high_eq_hours_saved_30d,
+        vernacular_parity_gap_pct=sc.vernacular_parity_gap_pct,
+        zero_unverified_numeric_claims=sc.zero_unverified_numeric_claims,
     )
