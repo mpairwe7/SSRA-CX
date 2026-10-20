@@ -41,11 +41,24 @@ def main() -> None:
     assert "focusOutlineCss:" in ui_src, (
         "WCAG 2.2 SC 2.4.13 focus indicator token missing in packages/ui"
     )
+    assert '"high-contrast"' in ui_src and "computeWcagContrastRatio" in ui_src, (
+        "High-contrast theme or WCAG contrast verifier missing in packages/ui"
+    )
+    assert "oklch(" in ui_src, "Perceptual OKLCH color tokens missing in packages/ui"
     assert 'autoComplete: "one-time-code"' in ui_comp_src, (
         "WCAG 2.2 SC 3.3.8 OTP one-time-code missing"
     )
-    assert 'role="region"' in chat_comp_src and 'aria-live="polite"' in chat_comp_src, (
-        "ARIA region/live attributes missing in packages/chat-ui/src/components.ts"
+    assert (
+        "100dvh" in ui_comp_src
+        and "env(safe-area-inset-bottom" in ui_comp_src
+        and "container-type: inline-size" in ui_comp_src
+    ), "Mobile 100dvh, safe-area-inset-bottom, or @container query primitive missing in packages/ui"
+    assert (
+        'role="region"' in chat_comp_src
+        and 'aria-live="polite"' in chat_comp_src
+        and "ssra-guided-steps" in chat_comp_src
+    ), (
+        "ARIA region/live attributes or structured guided-steps renderer missing in packages/chat-ui/src/components.ts"
     )
     assert "SSRA_LOGOUT_PURGE" in sw_src and "no-store" in sw_src, (
         "CVE-2026-50184 Service Worker logout purge & no-store guard missing in apps/web/public/sw.js"

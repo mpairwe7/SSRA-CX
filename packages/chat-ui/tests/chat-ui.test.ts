@@ -5,6 +5,7 @@ import {
   buildChatComposerState,
   buildDocumentInspectionModalView,
   buildFloatingChatHeader,
+  buildHumanSubtleMicrocopy,
   buildNarrationBarView,
   cleanMarkdownForSpeech,
   computeCallOrbFrame,
@@ -156,6 +157,64 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     );
     expect(timelineCard.mode).toBe("component");
     expect(timelineCard.safeHtml).toContain("Period 2026-09, as of 2026-10-20");
+
+    // Rich CitationList with guided_steps & HandoffCard human-reassuring header + subtle microcopy
+    const guidedCitationCard = renderGenerativeUICard(
+      {
+        name: "CitationList",
+        props: {
+          citations: [
+            {
+              id: "cit_tin_1",
+              snapshot_version: "2026.10.1",
+              doc_title: "SSRA e-Tax Portal Guide",
+              section_anchor: "Part-I-Sec-1-TIN-Registration",
+              effective_from: "2021-07-01",
+              url: "https://etax.nra.gov.ss/",
+            },
+          ],
+          guided_steps: [
+            {
+              step_number: 1,
+              title: "Select Applicant Category",
+              instruction: "Apply online at https://etax.nra.gov.ss/",
+            },
+          ],
+        },
+      },
+      "Register for TIN on e-Tax.",
+    );
+    expect(guidedCitationCard.mode).toBe("component");
+    expect(guidedCitationCard.safeHtml).toContain("ssra-guided-steps");
+    expect(guidedCitationCard.safeHtml).toContain("Step 1: Select Applicant Category");
+    expect(guidedCitationCard.safeHtml).toContain("ssra-citation-badges");
+
+    const handoffCard = renderGenerativeUICard(
+      {
+        name: "HandoffCard",
+        props: {
+          reason: "T4_POLICY",
+          queue: "DOMESTIC_TAX",
+          priority: "HIGH",
+        },
+      },
+      "Routing to SSRA Officer.",
+    );
+    expect(handoffCard.mode).toBe("component");
+    expect(handoffCard.safeHtml).toContain("SSRA Officer Assistance (DOMESTIC_TAX)");
+
+    const microAr = buildHumanSubtleMicrocopy("searching", "ar", false);
+    expect(microAr.dir).toBe("rtl");
+    expect(microAr.showPulseIndicator).toBe(true);
+    const mobileHdr = buildFloatingChatHeader({
+      hasStartedChat: true,
+      railCollapsed: false,
+      railPeekHover: true,
+      viewportWidthPx: 360,
+      locale: "en",
+    });
+    expect(mobileHdr.compactMobileMode).toBe(true);
+    expect(mobileHdr.railPeekActive).toBe(false);
 
     const outbox = new OfflineOutboxQueue(2);
     expect(() => new OfflineOutboxQueue(0)).toThrow(RangeError);

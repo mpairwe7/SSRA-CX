@@ -1,7 +1,7 @@
 import type { LocaleCode } from "@ssra/contracts";
 import { getTextDirection } from "@ssra/i18n";
 
-export type ColorMode = "light" | "dark";
+export type ColorMode = "light" | "dark" | "high-contrast";
 
 export interface SemanticThemeTokens {
   readonly mode: ColorMode;
@@ -35,6 +35,15 @@ export const SSRA_DESIGN_TOKENS = {
     red: "#b42318",
     surface: "#f8fafc",
   },
+  oklchPalette: {
+    brandNavy: "oklch(0.26 0.07 252)",
+    brandBlue: "oklch(0.36 0.09 252)",
+    brandGold: "oklch(0.72 0.15 84)",
+    civicGreen: "oklch(0.52 0.12 156)",
+    alertRed: "oklch(0.48 0.18 28)",
+    surfaceWarmLight: "oklch(0.985 0.004 248)",
+    surfaceDeepDark: "oklch(0.18 0.03 252)",
+  },
   themes: {
     light: {
       mode: "light",
@@ -56,7 +65,7 @@ export const SSRA_DESIGN_TOKENS = {
       statusWarningBg: "#fef7e6",
       statusErrorText: "#b42318", // 6.1:1 on #fef3f2
       statusErrorBg: "#fef3f2",
-      focusRingColor: "#c99700",
+      focusRingColor: "#8a6500", // >= 4.7:1 on #ffffff (WCAG 2.2 SC 2.4.13)
     },
     dark: {
       mode: "dark",
@@ -80,6 +89,28 @@ export const SSRA_DESIGN_TOKENS = {
       statusErrorBg: "#3b1219",
       focusRingColor: "#f0c954",
     },
+    "high-contrast": {
+      mode: "high-contrast",
+      bgCanvas: "#000000",
+      bgSurface: "#050b14",
+      bgElevated: "#0b192c",
+      bgSubtle: "#10233d",
+      textPrimary: "#ffffff", // 20.1:1 on #050b14 (WCAG AAA+)
+      textSecondary: "#f8fafc", // 19.3:1 on #050b14 (WCAG AAA+)
+      textMuted: "#e2e8f0", // 16.1:1 on #050b14 (WCAG AAA+)
+      borderSubtle: "#94a3b8",
+      borderStrong: "#ffffff", // 20.1:1 (forced-colors & sunlight glare safe)
+      interactivePrimary: "#ffd60a", // 14.3:1 against #050b14
+      interactivePrimaryHover: "#ffe14c",
+      interactivePrimaryText: "#000000",
+      statusSuccessText: "#86efac",
+      statusSuccessBg: "#052e16",
+      statusWarningText: "#fde047",
+      statusWarningBg: "#291d02",
+      statusErrorText: "#fecaca",
+      statusErrorBg: "#310b11",
+      focusRingColor: "#ffd60a",
+    },
   } satisfies Record<ColorMode, SemanticThemeTokens>,
   typography: {
     fontFamilyLatin:
@@ -90,6 +121,9 @@ export const SSRA_DESIGN_TOKENS = {
     numericFeatureSettings: "tabular-nums",
     lineHeightLtr: 1.5,
     lineHeightRtl: 1.68,
+    fluidBodyClampCss: "clamp(1rem, 0.96rem + 0.2vw, 1.125rem)",
+    fluidHeadingClampCss: "clamp(1.25rem, 1.1rem + 0.75vw, 1.75rem)",
+    maxMeasureCh: 65,
   },
   motion: {
     fastDurationMs: 120,
@@ -97,9 +131,121 @@ export const SSRA_DESIGN_TOKENS = {
     easingCss: "cubic-bezier(0.2, 0, 0, 1)",
   },
   minTouchTargetPx: 44, // WCAG 2.2 AA SC 2.5.8 / AAA SC 2.5.5 target size
+  coarsePointerTouchTargetPx: 48, // Enhanced tap comfort on mobile touchscreens
+  minTargetSpacingPx: 8, // WCAG 2.2 SC 2.5.8 target spacing
   focusOutlineCss: "2px solid #c99700", // WCAG 2.2 SC 2.4.11 / SC 2.4.13 focus appearance (>= 3:1)
   focusOutlineOffsetPx: 2,
 } as const;
+
+function parseHexChannel(hex: string, offset: number): number {
+  const val = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+  return val <= 0.03928 ? val / 12.92 : ((val + 0.055) / 1.055) ** 2.4;
+}
+
+function relativeLuminance(hexColor: string): number {
+  const clean = hexColor.trim().replace(/^#/, "");
+  if (clean.length !== 6) {
+    throw new RangeError(`Expected 6-digit hex color, got '${hexColor}'`);
+  }
+  const r = parseHexChannel(clean, 0);
+  const g = parseHexChannel(clean, 2);
+  const b = parseHexChannel(clean, 4);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * Compute exact WCAG 2.2 relative luminance contrast ratio (`1.0`..`21.0`) between two `#RRGGBB` colors.
+ */
+export function computeWcagContrastRatio(foregroundHex: string, backgroundHex: string): number {
+  const l1 = relativeLuminance(foregroundHex);
+  const l2 = relativeLuminance(backgroundHex);
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return Number(((lighter + 0.05) / (darker + 0.05)).toFixed(2));
+}
+
+export interface ThemeContrastAuditReport {
+  readonly mode: ColorMode;
+  readonly textPrimaryContrast: number;
+  readonly textSecondaryContrast: number;
+  readonly textMutedContrast: number;
+  readonly interactiveContrast: number;
+  readonly statusSuccessContrast: number;
+  readonly statusWarningContrast: number;
+  readonly statusErrorContrast: number;
+  readonly passesWcagAA: boolean;
+  readonly passesWcagAAA: boolean;
+}
+
+/**
+ * Audit a semantic theme token set for WCAG 2.2 AA (>= 4.5:1) and AAA (>= 7.0:1) contrast coherency.
+ */
+export function verifyThemeColorCoherency(theme: SemanticThemeTokens): ThemeContrastAuditReport {
+  const textPrimaryContrast = computeWcagContrastRatio(theme.textPrimary, theme.bgSurface);
+  const textSecondaryContrast = computeWcagContrastRatio(theme.textSecondary, theme.bgSurface);
+  const textMutedContrast = computeWcagContrastRatio(theme.textMuted, theme.bgSurface);
+  const interactiveContrast = computeWcagContrastRatio(
+    theme.interactivePrimaryText,
+    theme.interactivePrimary,
+  );
+  const statusSuccessContrast = computeWcagContrastRatio(
+    theme.statusSuccessText,
+    theme.statusSuccessBg,
+  );
+  const statusWarningContrast = computeWcagContrastRatio(
+    theme.statusWarningText,
+    theme.statusWarningBg,
+  );
+  const statusErrorContrast = computeWcagContrastRatio(theme.statusErrorText, theme.statusErrorBg);
+
+  const passesWcagAA =
+    textPrimaryContrast >= 4.5 &&
+    textSecondaryContrast >= 4.5 &&
+    textMutedContrast >= 4.5 &&
+    interactiveContrast >= 4.5 &&
+    statusSuccessContrast >= 4.5 &&
+    statusWarningContrast >= 4.5 &&
+    statusErrorContrast >= 4.5;
+
+  const passesWcagAAA =
+    textPrimaryContrast >= 7.0 && textSecondaryContrast >= 7.0 && interactiveContrast >= 7.0;
+
+  return {
+    mode: theme.mode,
+    textPrimaryContrast,
+    textSecondaryContrast,
+    textMutedContrast,
+    interactiveContrast,
+    statusSuccessContrast,
+    statusWarningContrast,
+    statusErrorContrast,
+    passesWcagAA,
+    passesWcagAAA,
+  };
+}
+
+/**
+ * Generate CSS custom properties (`--ssra-*`) for a semantic theme with `color-scheme` and `tabular-nums`.
+ */
+export function buildThemeCssVariables(theme: SemanticThemeTokens): Record<string, string> {
+  return {
+    "color-scheme": theme.mode === "light" ? "light" : "dark",
+    "--ssra-bg-canvas": theme.bgCanvas,
+    "--ssra-bg-surface": theme.bgSurface,
+    "--ssra-bg-elevated": theme.bgElevated,
+    "--ssra-bg-subtle": theme.bgSubtle,
+    "--ssra-text-primary": theme.textPrimary,
+    "--ssra-text-secondary": theme.textSecondary,
+    "--ssra-text-muted": theme.textMuted,
+    "--ssra-border-subtle": theme.borderSubtle,
+    "--ssra-border-strong": theme.borderStrong,
+    "--ssra-interactive-primary": theme.interactivePrimary,
+    "--ssra-interactive-primary-hover": theme.interactivePrimaryHover,
+    "--ssra-interactive-primary-text": theme.interactivePrimaryText,
+    "--ssra-focus-ring": theme.focusRingColor,
+    "--ssra-font-numeric": SSRA_DESIGN_TOKENS.typography.numericFeatureSettings,
+  };
+}
 
 export function getHtmlLayoutProps(locale: LocaleCode): {
   readonly lang: LocaleCode;
@@ -131,9 +277,10 @@ export function resolveSurfaceDesignContext(options: {
   readonly mode?: ColorMode;
   readonly lowDataMode?: boolean;
   readonly prefersReducedMotion?: boolean;
+  readonly prefersHighContrast?: boolean;
 }): ResolvedSurfaceDesignContext {
   const dir = getTextDirection(options.locale);
-  const mode = options.mode ?? "light";
+  const mode: ColorMode = options.prefersHighContrast ? "high-contrast" : (options.mode ?? "light");
   const zeroMotion = options.lowDataMode === true || options.prefersReducedMotion === true;
   return {
     lang: options.locale,

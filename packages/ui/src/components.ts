@@ -184,3 +184,56 @@ export function resolveMenuKeyNavigation(
       return { nextIndex: safeIndex, closeAndRestoreFocus: false, handled: false };
   }
 }
+
+export type ViewportBreakpoint = "xs_320" | "sm_mobile" | "md_tablet" | "lg_desktop";
+export type PointerModality = "coarse" | "fine";
+
+export interface ResponsiveViewportContext {
+  readonly viewportWidthPx: number;
+  readonly breakpoint: ViewportBreakpoint;
+  readonly isMobileViewport: boolean;
+  readonly reflowSafeAt320Px: true;
+  readonly viewportHeightCss: "100dvh" | "100svh";
+  readonly safeAreaBottomInsetCss: string;
+  readonly safeAreaInlinePaddingCss: string;
+  readonly containerQueryCss: "container-type: inline-size";
+  readonly effectiveTouchTargetPx: number;
+  readonly minTargetSpacingPx: number;
+  readonly navigationPattern: "bottom_sheet_rail" | "collapsible_side_rail";
+}
+
+/**
+ * Resolve October 2026 mobile responsiveness, WCAG 2.2 SC 1.4.10 Reflow (320px floor),
+ * `100dvh`/`100svh` dynamic viewport units, `env(safe-area-inset-*)` notch padding,
+ * `@container` inline-size queries, and coarse-pointer touch targets (`48px` vs `44px`).
+ */
+export function resolveResponsiveViewportContext(params: {
+  readonly viewportWidthPx: number;
+  readonly pointer?: PointerModality | undefined;
+  readonly virtualKeyboardOpen?: boolean | undefined;
+}): ResponsiveViewportContext {
+  const width = Number.isFinite(params.viewportWidthPx)
+    ? Math.max(320, Math.round(params.viewportWidthPx))
+    : 375;
+  const breakpoint: ViewportBreakpoint =
+    width < 360 ? "xs_320" : width < 640 ? "sm_mobile" : width < 1024 ? "md_tablet" : "lg_desktop";
+  const isMobileViewport = width < 768;
+  const isCoarse = params.pointer === "coarse" || isMobileViewport;
+
+  return {
+    viewportWidthPx: width,
+    breakpoint,
+    isMobileViewport,
+    reflowSafeAt320Px: true,
+    viewportHeightCss: params.virtualKeyboardOpen ? "100svh" : "100dvh",
+    safeAreaBottomInsetCss: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
+    safeAreaInlinePaddingCss:
+      "max(1rem, env(safe-area-inset-left, 0px)) max(1rem, env(safe-area-inset-right, 0px))",
+    containerQueryCss: "container-type: inline-size",
+    effectiveTouchTargetPx: isCoarse
+      ? SSRA_DESIGN_TOKENS.coarsePointerTouchTargetPx
+      : SSRA_DESIGN_TOKENS.minTouchTargetPx,
+    minTargetSpacingPx: SSRA_DESIGN_TOKENS.minTargetSpacingPx,
+    navigationPattern: isMobileViewport ? "bottom_sheet_rail" : "collapsible_side_rail",
+  };
+}

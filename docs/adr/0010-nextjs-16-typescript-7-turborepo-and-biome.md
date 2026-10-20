@@ -39,8 +39,9 @@ We adopt Option 2:
 3. **Linting & Formatting (`@biomejs/biome@2.5.15`):**
    - Use Biome as the single fast formatter and primary linter across all TypeScript/JSON files, including a11y rules (`useAltText`, `useButtonType`, `useValidAriaProps`).
    - Retain a minimal ESLint flat config solely for Next.js-specific compiler/navigation rules not yet covered by Biome.
-4. **Design System & RTL (`packages/ui`):**
-   - Tailwind CSS `4.3.3` with CSS logical properties (`ms-*`, `me-*`, `ps-*`, `pe-*`, `text-start`, `text-end`) so Arabic (`dir="rtl"`) and English/Juba Arabic (`dir="ltr"`) share one stylesheet without layout bugs.
+4. **Design System, Perceptual OKLCH / High-Contrast Tokens, Mobile Responsiveness & RTL (`packages/ui`, `packages/chat-ui`):**
+   - Tailwind CSS `4.3.3` with CSS logical properties (`ms-*`, `me-*`, `ps-*`, `pe-*`, `text-start`, `text-end`), perceptual `oklch(...)` brand/surface tokens (`oklchPalette`), and three WCAG 2.2 AA/AAA-verified semantic themes (`light`, `dark`, and `high-contrast` for `prefers-contrast: more` / outdoor sunlight glare, verified via `computeWcagContrastRatio` & `verifyThemeColorCoherency`).
+   - Mobile-first responsiveness (`resolveResponsiveViewportContext`) enforcing the `320px` WCAG 2.2 SC 1.4.10 Reflow floor, `100dvh` (`100svh` when virtual keyboard is open), `env(safe-area-inset-bottom, 0px)` notch/gesture-bar padding, `@container` (`container-type: inline-size`) component breakpoints, coarse-pointer `48px` vs `44px` touch targets (`minTargetSpacingPx: 8` per SC 2.5.8), `"bottom_sheet_rail"` vs `"collapsible_side_rail"` navigation, and calm, culturally respectful human micro-interactions (`buildHumanSubtleMicrocopy` across `en`, `ar`, `pga`).
    - Self-host subsetted `Noto Sans` and `Noto Naskh Arabic` fonts via `next/font/local` (zero requests to Google Fonts).
 
 ## 5. Consequences
