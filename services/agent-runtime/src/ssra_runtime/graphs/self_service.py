@@ -69,11 +69,57 @@ def execute_self_service_subgraph(
                     raise
                 failed_steps.append(step)
         verification = verify_plan_outcomes(plan, artifacts, failed_steps=failed_steps)
-        return {
+        staged_pending: PendingConfirmation | None = None
+        if "cases.create_case" in planned_steps:
+            case_args = {
+                "case_type": str(slots.get("case_type", "RECONCILIATION")),
+                "summary": str(
+                    slots.get("summary", "Follow-up reconciliation case from balance check")
+                ),
+            }
+            rec = gateway.confirmation_manager.issue_token(
+                conversation_id=thread_id,
+                tool_name="create_case",
+                arguments=case_args,
+                subject_ref=subject_ref,
+            )
+            staged_pending = PendingConfirmation(
+                token=rec.token,
+                idempotency_key=rec.idempotency_key,
+                server="cases",
+                tool="create_case",
+                arguments=case_args,
+                action_digest=rec.action_digest,
+                summary_text=f"Create SSRA taxpayer support case ({case_args['case_type']}).",
+            )
+        elif "appointments.book_appointment" in planned_steps:
+            appt_args = {
+                "office_code": str(slots.get("office_code", "JUBA_HQ")),
+                "slot_id": str(slots.get("slot_id", "slot_2026_10_20_0900")),
+            }
+            rec = gateway.confirmation_manager.issue_token(
+                conversation_id=thread_id,
+                tool_name="book_appointment",
+                arguments=appt_args,
+                subject_ref=subject_ref,
+            )
+            staged_pending = PendingConfirmation(
+                token=rec.token,
+                idempotency_key=rec.idempotency_key,
+                server="appointments",
+                tool="book_appointment",
+                arguments=appt_args,
+                action_digest=rec.action_digest,
+                summary_text=f"Book in-person appointment at {appt_args['office_code']} (slot {appt_args['slot_id']}).",
+            )
+        result: dict[str, Any] = {
             "artifacts": artifacts,
             "budget": budget,
             "outcome_verification": verification.model_dump(mode="json"),
         }
+        if staged_pending is not None:
+            result["pending_confirmation"] = staged_pending
+        return result
 
     if intent_name == IntentName.REPORT_SCAM:
         args = {

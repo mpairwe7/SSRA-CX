@@ -672,6 +672,7 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
     assert "SSRA" in build_empathetic_preamble(frust_snap, locale_code="en")
     assert "SSRA" in build_empathetic_preamble(frust_snap, locale_code="ar")
     assert "SSRA" in build_empathetic_preamble(frust_snap, locale_code="pga")
+    assert "SSRA" in build_empathetic_preamble(frust_snap, locale_code="din")
 
     anx_snap = compute_affective_state("Urgent deadline today, truck waiting")
     assert anx_snap.primary_emotion == "anxious"
@@ -684,6 +685,15 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
     assert build_empathetic_preamble(conf_snap, locale_code="en") != ""
     assert build_empathetic_preamble(conf_snap, locale_code="ar") != ""
     assert build_empathetic_preamble(conf_snap, locale_code="pga") != ""
+    assert build_empathetic_preamble(conf_snap, locale_code="din") != ""
+
+    # Termbase-driven Dinka (`din`) & Arabic (`ar`) English-Router normalization
+    din_env = build_english_router_envelope(
+        "Waraga de Cuɔk de Wëu ku Ajul de Rïöök de Ɣɔɔc",
+        source_locale=LocaleCode.DIN,
+    )
+    assert "tax compliance certificate" in din_env.canonical_en_query
+    assert "business profit tax" in din_env.canonical_en_query
 
     # 2. Hysteretic Language-State Machine & Canonical English-Router Envelope
     loc_exp, state_exp, _ = evaluate_language_state_transition(
@@ -824,6 +834,92 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
         )
     finally:
         rt.gateway.set_tool_kill_switch("tcc.get_tcc_status", disabled=False)
+
+    # Cross-tier Read -> Verify -> Stage-Write (`get_balance` + `create_case` and `get_balance` + `book_appointment`)
+    cross_case_ev = make_conversation_event(
+        "Check my tax balance and open a support case",
+        locale=LocaleCode.EN,
+        thread_id="thr_cross_tier_case",
+    )
+    cross_case_resp = rt.run_turn(
+        cross_case_ev,
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_amina_01",
+    )
+    assert cross_case_resp.pending_confirmation is not None
+    assert cross_case_resp.pending_confirmation.tool == "create_case"
+    assert any(a.tool == "get_balance" for a in cross_case_resp.artifacts)
+
+    cross_appt_ev = make_conversation_event(
+        "Check my tax balance and book an appointment",
+        locale=LocaleCode.EN,
+        thread_id="thr_cross_tier_appt",
+    )
+    cross_appt_resp = rt.run_turn(
+        cross_appt_ev,
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_amina_01",
+    )
+    assert cross_appt_resp.pending_confirmation is not None
+    assert cross_appt_resp.pending_confirmation.tool == "book_appointment"
+
+    # Mid-journey `workflow_stack` delegation & Officer hand-back cursor seeding
+    cursor = rt.apply_officer_handback_resolution(
+        thread_id="thr_wf_delegation",
+        approved_next_intent=IntentName.GUIDED_FILING_AND_PAYMENT,
+        return_to_ai_step=2,
+        resolution_summary="Officer verified receipt",
+    )
+    assert cursor.current_step == 2
+    delegated_qa = rt.run_turn(
+        make_conversation_event(
+            "What is the Business Profit Tax rate and advance BPT on imported goods?",
+            locale=LocaleCode.EN,
+            thread_id="thr_wf_delegation",
+        )
+    )
+    assert delegated_qa.answer.ui_component is not None
+    assert "resumable_workflow" in delegated_qa.answer.ui_component.props
+
+    # Pre-emptive EQ escalation via policy_gate + voice prosody metadata bridge
+    from ssra_voice import build_voice_prosody_eq_metadata
+
+    v_meta = build_voice_prosody_eq_metadata(
+        barge_in_count=3,
+        rms_energy_delta=0.35,
+        speech_rate_ratio=1.40,
+        consecutive_low_confidence_turns=2,
+    )
+    eq_ev = make_conversation_event(
+        "My perishable goods are seized at Nimule border!!",
+        locale=LocaleCode.EN,
+        thread_id="thr_eq_preemptive",
+    )
+    eq_ev.data.metadata.update({**v_meta, "eq_preemptive_escalate": "true"})
+    eq_resp = rt.run_turn(eq_ev)
+    assert eq_resp.policy_decision == "HANDOFF"
+    assert eq_resp.handoff_ticket is not None
+    assert eq_resp.handoff_ticket.reason == "EQ_ESCALATION"
+
+    # Proactive cross-channel goal hydration in `SSRAConversationRuntime.run_turn`
+    rt.preference_store.set_memory_continuity_consent("sub_taxpayer_amina_01", consented=True)
+    rt.preference_store.upsert_active_goal(
+        subject_ref="sub_taxpayer_amina_01",
+        goal_type=IntentName.GUIDED_TCC,
+        current_step_index=2,
+        total_steps=2,
+        status="IN_PROGRESS",
+    )
+    resumed_turn = rt.run_turn(
+        make_conversation_event(
+            "Check my TCC status",
+            locale=LocaleCode.EN,
+            thread_id="thr_compound_t1",
+        ),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_amina_01",
+    )
+    assert resumed_turn.answer.abstained is False
 
     # 5. 4-Tier Cognitive Memory (Consent-Gated Episodic + Procedural Goals + Figure Stripping + Erasure)
     mem = SubjectPreferenceMemoryStore()

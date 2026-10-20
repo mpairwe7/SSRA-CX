@@ -155,6 +155,22 @@ def synthesize_tts_speech_envelope(
     }
 
 
+def build_voice_prosody_eq_metadata(
+    *,
+    barge_in_count: int = 0,
+    rms_energy_delta: float = 0.0,
+    speech_rate_ratio: float = 1.0,
+    consecutive_low_confidence_turns: int = 0,
+) -> dict[str, str]:
+    """Serialize voice acoustic prosody features into string metadata for `ConversationEvent.data.metadata`."""
+    return {
+        "voice_barge_in_count": str(max(0, barge_in_count)),
+        "voice_rms_energy_delta": f"{max(0.0, rms_energy_delta):.2f}",
+        "voice_speech_rate_ratio": f"{max(0.5, speech_rate_ratio):.2f}",
+        "consecutive_low_confidence_turns": str(max(0, consecutive_low_confidence_turns)),
+    }
+
+
 def is_voice_language_approved(locale: LocaleCode, measured_wer: float) -> bool:
     _ = locale
     return 0.0 <= measured_wer <= MAX_VOICE_WER_GATE

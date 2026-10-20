@@ -111,9 +111,17 @@ def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
         channel=channel_str,
         locale=detected_loc.value,
     ):
+        slots_meta = state.get("slots", {})
         affective = compute_affective_state(
             raw,
             previous=state.get("affective_state"),
+            consecutive_low_confidence_turns=int(
+                slots_meta.get("consecutive_low_confidence_turns", 0)
+            ),
+            repeated_clarification_count=int(slots_meta.get("repeated_clarification_count", 0)),
+            barge_in_count=int(slots_meta.get("voice_barge_in_count", 0)),
+            rms_energy_delta=float(slots_meta.get("voice_rms_energy_delta", 0.0)),
+            speech_rate_ratio=float(slots_meta.get("voice_speech_rate_ratio", 1.0)),
         )
 
     redaction = redact_pii(raw)

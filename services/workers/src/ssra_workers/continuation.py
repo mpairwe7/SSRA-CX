@@ -155,3 +155,46 @@ def run_post_interaction_goal_continuation(
         skipped_unapproved_template_or_flag=blocked_template_or_flag,
         dispatched_messages=tuple(dispatched),
     )
+
+
+def build_continuation_candidates_from_outbox_events(
+    *,
+    outbox_events: list[dict[str, object]],
+    opted_in_subjects: set[str],
+) -> list[GoalContinuationCandidate]:
+    """Convert resolved NATS/Outbox CloudEvents (`ssra.cases.*`, `ssra.conversation.handback.v1`) into continuation candidates."""
+    candidates: list[GoalContinuationCandidate] = []
+    for ev in outbox_events:
+        ev_type = str(ev.get("type", ""))
+        subject_id = str(ev.get("subject", ""))
+        if ev_type not in (
+            "ssra.cases.maker_checker_approved.v1",
+            "ssra.conversation.handback.v1",
+        ):
+            continue
+        dep: Literal[
+            "ETAX_TCC_APPROVAL",
+            "CUSTOMS_ASSESSMENT",
+            "DOCUMENT_HUMAN_REVIEW",
+            "OFFICER_CALLBACK_READY",
+        ] = (
+            "ETAX_TCC_APPROVAL"
+            if ev_type == "ssra.cases.maker_checker_approved.v1"
+            else "OFFICER_CALLBACK_READY"
+        )
+        candidates.append(
+            GoalContinuationCandidate(
+                goal_id=f"goal_{subject_id}",
+                subject_ref=subject_id,
+                goal_type=IntentName.GUIDED_FILING_AND_PAYMENT,
+                current_step_index=2,
+                total_steps=2,
+                pending_dependency=dep,
+                dependency_resolved=True,
+                opt_in_consent_active=(subject_id in opted_in_subjects),
+                channel=ChannelName.WHATSAPP,
+                locale=LocaleCode.EN,
+                template_id="TMPL_SSRA_GOAL_CONTINUATION_2026",
+            )
+        )
+    return candidates

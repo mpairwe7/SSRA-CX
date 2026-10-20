@@ -10,7 +10,7 @@ from ssra_api.outbox import TransactionalOutboxStore
 
 def test_api_health_and_database_ddl_invariants() -> None:
     """Verify database DDL invariants, FORCE ROW LEVEL SECURITY, and recursive outbox PII redaction."""
-    assert len(Base.metadata.tables) == 11
+    assert len(Base.metadata.tables) == 13
     assert any("ENABLE ROW LEVEL SECURITY" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
     assert any("FORCE ROW LEVEL SECURITY" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
     assert any("FOR SELECT" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
@@ -490,6 +490,18 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     from ssra_core import get_default_feature_flag_engine
 
     get_default_feature_flag_engine().reset_flag_override("FF_AUTONOMOUS_GOAL_PLANNER")
+
+    from ssra_api.analytics_api.application import record_cx_turn_telemetry_use_case
+
+    counters = record_cx_turn_telemetry_use_case(
+        autonomous_resolved=True,
+        cross_session_completed=True,
+        repeated_slot=False,
+        eq_deescalated=True,
+        handoff_occurred=True,
+        handoff_clean=True,
+    )
+    assert counters["total_turns"] >= 1
 
     r_scorecard = client.get("/v1/analytics/cx-scorecard")
     assert r_scorecard.status_code == 200

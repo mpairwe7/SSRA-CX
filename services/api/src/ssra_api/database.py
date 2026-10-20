@@ -173,6 +173,45 @@ class OutboxEventORM(Base):
     )
 
 
+class EpisodicMemoryORM(Base):
+    """Tier 2 Episodic Memory ORM entity (90-day TTL, figure-stripped & OpenBao Transit encrypted)."""
+
+    __tablename__ = "episodic_memories"
+
+    episode_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    subject_ref: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    channel: Mapped[str] = mapped_column(String(32), nullable=False)
+    locale: Mapped[str] = mapped_column(String(16), nullable=False)
+    intent: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    redacted_summary_ciphertext: Mapped[str] = mapped_column(String(512), nullable=False)
+    unresolved_blocker_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ActiveGoalORM(Base):
+    """Tier 4 Procedural / Long-Horizon Goal ORM entity (14-day TTL)."""
+
+    __tablename__ = "active_goals"
+
+    goal_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    subject_ref: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    goal_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    current_step_index: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
+    total_steps: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=2)
+    completed_steps: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    pending_dependency: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resume_channel: Mapped[str] = mapped_column(String(32), nullable=False, default="web")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="IN_PROGRESS")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 POSTGRES18_RLS_AND_WORM_DDL: tuple[str, ...] = (
     "ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;",
     "ALTER TABLE conversations FORCE ROW LEVEL SECURITY;",

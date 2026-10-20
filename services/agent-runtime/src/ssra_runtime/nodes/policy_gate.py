@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from ssra_core import AuthLevel, IntentName, RiskTier
 
+from ssra_runtime.guardrails.eq_detector import should_trigger_eq_escalation
 from ssra_runtime.state import ConversationGraphState
 
 PolicyDecision = Literal["ALLOW", "DENY", "STEP_UP", "HANDOFF"]
@@ -62,6 +63,16 @@ def policy_gate_node(state: ConversationGraphState) -> dict[str, Any]:
         subject_ref=subject_ref,
         intent_name=intent_name,
     )
+
+    affective = state.get("affective_state")
+    slots = state.get("slots", {})
+    if (
+        decision == "ALLOW"
+        and affective is not None
+        and should_trigger_eq_escalation(affective)
+        and bool(slots.get("eq_preemptive_escalate"))
+    ):
+        decision = "HANDOFF"
 
     if decision in ("HANDOFF", "DENY", "STEP_UP"):
         subgraph = "handoff"

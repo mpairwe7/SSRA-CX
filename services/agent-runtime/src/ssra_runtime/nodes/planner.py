@@ -3,7 +3,8 @@
 Constructs a bounded `Plan` (`max_plan_steps=4` within `TurnBudget.max_tool_calls=16`) from the
 taxpayer's canonical English-Router query and current `Intent`, supporting:
 1. Compound multi-step T1 read / T0 verification plans (e.g., `get_balance` + `get_filing_status` + `get_tcc_status`).
-2. Mid-journey specialist delegation (`workflow_stack`) so a taxpayer in a guided journey can ask a
+2. Cross-tier Read -> Verify -> Stage-Write plans (e.g., `ledger.get_balance` -> `cases.create_case` or `appointments.book_appointment`).
+3. Mid-journey specialist delegation (`workflow_stack`) so a taxpayer in a guided journey can ask a
    statutory/calculator question and resume their exact step without losing progress.
 """
 
@@ -19,6 +20,8 @@ MAX_WORKFLOW_STACK_DEPTH: int = 2
 
 
 class ActiveWorkflowCursor(BaseModel):
+    """Serializable cursor tracking a taxpayer's position in a multi-step guided journey."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     workflow_id: str
@@ -26,10 +29,11 @@ class ActiveWorkflowCursor(BaseModel):
     current_step: int = Field(ge=1, default=1)
     total_steps: int = Field(ge=1, default=2)
     status: Literal["ACTIVE", "PAUSED_FOR_DELEGATION", "COMPLETED"] = "ACTIVE"
+    officer_note: str = ""
 
 
 def detect_compound_self_service_steps(text: str, primary_intent: IntentName) -> list[str]:
-    """Detect whether a taxpayer utterance requests multiple governed T1/T0 actions in one turn."""
+    """Detect whether a taxpayer utterance requests multiple governed T1/T2/T0 actions in one turn."""
     lower = text.lower()
     steps: list[str] = []
 
@@ -41,6 +45,13 @@ def detect_compound_self_service_steps(text: str, primary_intent: IntentName) ->
     )
     wants_tcc = primary_intent == IntentName.GET_TCC_STATUS or any(
         k in lower for k in ("tcc status", "check my tcc", "compliance certificate status")
+    )
+    wants_case = any(
+        k in lower
+        for k in ("open a case", "create a case", "open a support case", "reconciliation case")
+    )
+    wants_appointment = any(
+        k in lower for k in ("book an appointment", "book appointment", "schedule appointment")
     )
 
     if primary_intent in (
@@ -54,6 +65,10 @@ def detect_compound_self_service_steps(text: str, primary_intent: IntentName) ->
             steps.append("ledger.get_filing_status")
         if wants_tcc:
             steps.append("tcc.get_tcc_status")
+        if wants_case:
+            steps.append("cases.create_case")
+        elif wants_appointment:
+            steps.append("appointments.book_appointment")
 
     if not steps:
         if primary_intent == IntentName.GET_BALANCE:
