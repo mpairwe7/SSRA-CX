@@ -224,6 +224,40 @@ def test_rfc8693_token_exchange_enforces_audience_and_tier() -> None:
     assert outcomes.count(True) == 1
     assert outcomes.count(False) == 3
 
+    # SEC-G2: Concurrent multi-thread single-use ConfirmationTokenManager consumption behind Barrier
+    import threading
+
+    mgr = ConfirmationTokenManager(ttl_seconds=300)
+    cfm_args = {"office_code": "JUBA_HQ", "slot_id": "slot_2026_10_20_0900"}
+    issued_cfm = mgr.issue_token(
+        conversation_id="thr_race_cfm",
+        tool_name="book_appointment",
+        arguments=cfm_args,
+        subject_ref="sub_taxpayer_01",
+    )
+    barrier = threading.Barrier(8)
+
+    def _try_consume_cfm(_idx: int) -> bool:
+        """Synchronize 8 worker threads on Barrier and attempt single-use confirmation token consumption."""
+        barrier.wait()
+        try:
+            mgr.consume_token(
+                token=issued_cfm.token,
+                tool_name="book_appointment",
+                arguments=cfm_args,
+                subject_ref="sub_taxpayer_01",
+                idempotency_key=issued_cfm.idempotency_key,
+                conversation_id="thr_race_cfm",
+            )
+            return True
+        except SSRAError:
+            return False
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        cfm_outcomes = list(pool.map(_try_consume_cfm, range(8)))
+    assert cfm_outcomes.count(True) == 1
+    assert cfm_outcomes.count(False) == 7
+
 
 def test_siem_ocsf_cef_export_and_inter_model_handoff_validator() -> None:
     """Verify SIEM OCSF/CEF log-injection escaping, Bearer/JWT redaction, and inter-model handoff validation."""

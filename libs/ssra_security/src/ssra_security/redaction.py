@@ -12,8 +12,11 @@ _ARABIC_INDIC_MAP = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "0
 # Strip Unicode Bidirectional Override characters (U+202A..U+202E, U+2066..U+2069) and Zero-Width chars
 _BIDI_AND_ZW_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
 
-# South Sudan TIN: 9 to 12 digits (optionally prefixed by TIN- or NRA-/SSRA-)
-_TIN_RE = re.compile(r"\b(?:(?:TIN|NRA|SSRA)[-\s]?)?(\d{5,8})(\d{4})\b", flags=re.IGNORECASE)
+# South Sudan TIN: 9 to 12 digits (optionally prefixed by TIN- or NRA-/SSRA- or grouped as XXX-XXX-XXXX)
+_TIN_RE = re.compile(
+    r"\b(?:(?:TIN|NRA|SSRA)[-\s]?)?(?:\d{5,8}|\d{3}[-\s]\d{3}[-\s]?)(\d{4})\b",
+    flags=re.IGNORECASE,
+)
 
 # South Sudan phone numbers: +2119XXXXXXXX or 09[12578]XXXXXXX
 _PHONE_SS_RE = re.compile(
@@ -98,7 +101,7 @@ def redact_pii(text: str) -> RedactionResult:
 
     def _replace_tin(match: re.Match[str]) -> str:
         tags.append("SSRA_TIN")
-        return f"••••{match.group(2)}"
+        return f"••••{match.group(1)}"
 
     out = _TIN_RE.sub(_replace_tin, out)
 

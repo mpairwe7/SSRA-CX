@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from ssra_core import AuthLevel, ChannelName, LocaleCode, RiskTier, utc_now
+from ssra_security import redact_pii
 
 
 class ReconstructedTurnRecord(BaseModel):
@@ -83,7 +84,7 @@ class ConversationReplayStore:
             locale=locale,
             auth_level=auth_level,
             subject_ref=subject_ref,
-            redacted_input=redacted_input,
+            redacted_input=redact_pii(redacted_input).redacted_text,
             intent_name=intent_name,
             risk_tier=risk_tier,
             policy_decision=policy_decision,
@@ -93,7 +94,7 @@ class ConversationReplayStore:
             tool_calls=tool_calls,
             citations=citations,
             numbers=numbers,
-            output_text=output_text,
+            output_text=redact_pii(output_text).redacted_text,
             abstained=abstained,
             safety_flags=safety_flags,
             audit_event_hash=audit_event_hash,

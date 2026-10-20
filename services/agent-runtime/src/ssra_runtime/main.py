@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from fastapi import FastAPI, Header, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from ssra_core import (
     AuthLevel,
     ChannelName,
@@ -52,6 +52,13 @@ class AguiStreamRequest(BaseModel):
     confirmation_token: str | None = None
     idempotency_key: str | None = None
     low_data_mode: bool = False
+
+    @model_validator(mode="after")
+    def _validate_auth_subject_consistency(self) -> AguiStreamRequest:
+        """Synchronize `subject_ref` and `auth_level` at the request adapter boundary (ASI03)."""
+        if self.auth_level == AuthLevel.ANONYMOUS and self.subject_ref is not None:
+            raise ValueError("Anonymous requests cannot specify a non-null subject_ref (ASI03)")
+        return self
 
 
 async def _read_bounded_runtime_body(request: Request, max_bytes: int) -> bytes | None:

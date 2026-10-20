@@ -72,6 +72,24 @@ def validate_safe_thread_id(thread_id: str) -> str:
     return cleaned
 
 
+def validate_safe_subject_ref(subject_ref: str, *, auth_level: AuthLevel) -> str:
+    """Validate subject_ref format and block anonymous subject-binding smuggling (ASI03)."""
+    if auth_level == AuthLevel.ANONYMOUS:
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            "Anonymous turns cannot bind a non-null subject_ref (ASI03 Confused-Deputy guard)",
+            status_code=401,
+        )
+    cleaned = subject_ref.strip()
+    if not _SAFE_THREAD_ID_RE.match(cleaned):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"Unsafe or malformed subject_ref '{subject_ref[:32]}' rejected (ASI03)",
+            status_code=400,
+        )
+    return cleaned
+
+
 def verify_checkpoint_primitives_only(value: Any) -> bool:
     """Verify state values are JSON-safe primitives or Pydantic models (CVE-2026-48775 / CVE-2026-27794)."""
     if value is None or isinstance(value, (str, int, float, bool, BaseModel)):
@@ -263,6 +281,8 @@ class SSRAConversationRuntime:
     ) -> RuntimeTurnResponse:
         """Execute a full conversation turn with subject-binding, kill-switches, and forensic replay."""
         safe_thread_id = validate_safe_thread_id(event.subject)
+        if subject_ref is not None:
+            subject_ref = validate_safe_subject_ref(subject_ref, auth_level=auth_level)
 
         # ASI03 / ASI06: Prevent cross-subject thread hijacking on bound threads
         bound_subject = self._thread_subject_binding.get(safe_thread_id)

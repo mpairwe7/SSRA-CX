@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import json
+import os
 import re
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -1236,7 +1239,7 @@ def sync_affective_state_to_call_lobby(
 
 @dataclass(frozen=True)
 class CallToWebCarryover:
-    """Symmetric Voice-to-Web carryover descriptor (`VR-G3`) for continuing a voice workflow on `apps/web`."""
+    """Symmetric Voice-to-Web carryover descriptor (`VR-G3`) with HMAC-SHA256 integrity signature (`SEC-G5`)."""
 
     call_id: str
     conversation_id: str
@@ -1244,6 +1247,42 @@ class CallToWebCarryover:
     resume_step_index: int
     pending_action: str
     local_models_only: bool = True
+    carryover_hmac: str = ""
+
+
+_DEFAULT_CARRYOVER_DOMAIN_SALT = "ssra-voice-carryover-sovereign-default-2026-10"
+
+
+def _compute_carryover_hmac(
+    *,
+    call_id: str,
+    conversation_id: str,
+    owner_user_id: str,
+    active_goal_id: str,
+    resume_step_index: int,
+    pending_action: str,
+    local_models_only: bool,
+    signing_salt: str | None = None,
+) -> str:
+    """Compute an HMAC-SHA256 signature binding all CallToWebCarryover fields to the owner."""
+    key_str = (
+        signing_salt
+        or os.environ.get("SSRA_VOICE_CARRYOVER_HMAC_KEY")
+        or _DEFAULT_CARRYOVER_DOMAIN_SALT
+    )
+    msg = json.dumps(
+        [
+            call_id,
+            conversation_id,
+            owner_user_id,
+            active_goal_id,
+            resume_step_index,
+            pending_action,
+            local_models_only,
+        ],
+        separators=(",", ":"),
+    )
+    return hmac.new(key_str.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def build_call_to_web_carryover(
@@ -1255,24 +1294,59 @@ def build_call_to_web_carryover(
     active_goal_id: str = "goal_guided_tcc",
     resume_step_index: int = 2,
     pending_action: str = "upload_supporting_receipt",
+    signing_salt: str | None = None,
 ) -> CallToWebCarryover | None:
-    """Build a session-bound Voice-to-Web carryover token when caller and owner identities match."""
+    """Build a session-bound, HMAC-signed Voice-to-Web carryover token when caller and owner identities match."""
     is_valid = (
         bool(_SAFE_ID_RE.match(call_id))
         and bool(_SAFE_ID_RE.match(conversation_id))
         and bool(_SAFE_ID_RE.match(owner_user_id))
+        and bool(_SAFE_ID_RE.match(active_goal_id))
         and owner_user_id == caller_user_id
     )
     if not is_valid:
         return None
+    step_idx = max(1, resume_step_index)
+    bounded_action = pending_action[:120]
+    sig = _compute_carryover_hmac(
+        call_id=call_id,
+        conversation_id=conversation_id,
+        owner_user_id=owner_user_id,
+        active_goal_id=active_goal_id,
+        resume_step_index=step_idx,
+        pending_action=bounded_action,
+        local_models_only=True,
+        signing_salt=signing_salt,
+    )
     return CallToWebCarryover(
         call_id=call_id,
         conversation_id=conversation_id,
         active_goal_id=active_goal_id,
-        resume_step_index=max(1, resume_step_index),
-        pending_action=pending_action[:120],
+        resume_step_index=step_idx,
+        pending_action=bounded_action,
         local_models_only=True,
+        carryover_hmac=sig,
     )
+
+
+def verify_call_to_web_carryover(
+    carryover: CallToWebCarryover,
+    *,
+    caller_user_id: str,
+    signing_salt: str | None = None,
+) -> bool:
+    """Verify the HMAC signature (`hmac.compare_digest`) and caller ownership of a `CallToWebCarryover` token (`SEC-G5`)."""
+    expected = _compute_carryover_hmac(
+        call_id=carryover.call_id,
+        conversation_id=carryover.conversation_id,
+        owner_user_id=caller_user_id,
+        active_goal_id=carryover.active_goal_id,
+        resume_step_index=carryover.resume_step_index,
+        pending_action=carryover.pending_action[:120],
+        local_models_only=carryover.local_models_only,
+        signing_salt=signing_salt,
+    )
+    return hmac.compare_digest(carryover.carryover_hmac, expected)
 
 
 __all__ = [
@@ -1325,6 +1399,7 @@ __all__ = [
     "validate_audio_pcm_expansion_budget",
     "validate_call_wrap_up",
     "verbalize_statutory_figures_for_tts",
+    "verify_call_to_web_carryover",
     "verify_spoken_figure_fidelity",
     "verify_voice_dtmf_step_up",
 ]
