@@ -245,7 +245,11 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "POST" && pathname === "/api/chat/stream") {
     const ac = new AbortController();
-    req.on("close", () => ac.abort());
+    res.on("close", () => {
+      if (!res.writableEnded) {
+        ac.abort();
+      }
+    });
     try {
       const safeBody = sanitizeBrowserTurnBody(await readRequestBody(req));
       const upstream = await fetch(`${INTERNAL_RUNTIME_URL}/v1/agui/stream`, {
