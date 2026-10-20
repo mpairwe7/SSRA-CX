@@ -2,7 +2,8 @@
  * Production Node.js HTTP & BFF Server for SSRA Assist Staff, Admin & Auditor Console (`apps/console/server.js`).
  *
  * Uses the unified `FinalYearProject`-inspired Operations Console & `.staff-rail` Sidebar design system
- * (`packages/ui/ops-console.js`).
+ * (`packages/ui/ops-console.js`) with OWASP ASVS 5.0 Level 3 headers, method allowlisting, W3C traceparent,
+ * and upstream timeout bounds.
  */
 
 import crypto from "node:crypto";
@@ -19,15 +20,29 @@ const INTERNAL_RUNTIME_URL = (
   process.env.INTERNAL_RUNTIME_URL ?? "http://ssra-agent-runtime:8001"
 ).replace(/\/$/, "");
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
+const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "OPTIONS"]);
+
+function createTraceparent(existing) {
+  if (typeof existing === "string" && /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/.test(existing)) {
+    return existing;
+  }
+  const traceId = crypto.randomBytes(16).toString("hex");
+  const spanId = crypto.randomBytes(8).toString("hex");
+  return `00-${traceId}-${spanId}-01`;
+}
 
 function buildConsoleHeaders(nonce) {
   return {
-    "Content-Security-Policy": `default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; connect-src 'self'; frame-ancestors 'none'`,
+    "Content-Security-Policy": `default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
     "X-Nonce": nonce,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "X-Permitted-Cross-Domain-Policies": "none",
     "Referrer-Policy": "no-referrer",
-    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+    "Permissions-Policy": "camera=(), geolocation=(), payment=(), usb=()",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
     "Cache-Control": "private, no-cache, no-store, must-revalidate",
   };
 }
@@ -35,6 +50,17 @@ function buildConsoleHeaders(nonce) {
 const server = http.createServer(async (req, res) => {
   const nonce = crypto.randomBytes(16).toString("base64");
   const secHeaders = buildConsoleHeaders(nonce);
+  const method = String(req.method ?? "GET").toUpperCase();
+  if (!ALLOWED_METHODS.has(method)) {
+    res.writeHead(405, {
+      "Content-Type": "application/json",
+      Allow: "GET, HEAD, POST, OPTIONS",
+      ...secHeaders,
+    });
+    res.end(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }));
+    return;
+  }
+
   const hostHeader = String(req.headers.host ?? "localhost");
   if (!VALID_HOST_RE.test(hostHeader)) {
     res.writeHead(400, { "Content-Type": "application/json", ...secHeaders });
@@ -55,7 +81,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const isGetOrHead = req.method === "GET" || req.method === "HEAD";
+  const isGetOrHead = method === "GET" || method === "HEAD";
+  const traceparent = createTraceparent(req.headers.traceparent);
 
   if (isGetOrHead && (pathname === "/healthz" || pathname === "/health")) {
     res.writeHead(200, { "Content-Type": "application/json", ...secHeaders });
@@ -72,7 +99,26 @@ const server = http.createServer(async (req, res) => {
 
   if (isGetOrHead && pathname === "/api/scorecard") {
     try {
-      const upstream = await fetch(`${INTERNAL_API_URL}/v1/analytics/cx-scorecard`);
+      const upstream = await fetch(`${INTERNAL_API_URL}/v1/analytics/cx-scorecard`, {
+        headers: { Accept: "application/json", traceparent },
+        signal: AbortSignal.timeout(15_000),
+      });
+      const text = await upstream.text();
+      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
+      res.end(text);
+    } catch {
+      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ status: "unavailable" }));
+    }
+    return;
+  }
+
+  if (isGetOrHead && pathname === "/api/flags") {
+    try {
+      const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/feature-flags`, {
+        headers: { Accept: "application/json", traceparent },
+        signal: AbortSignal.timeout(15_000),
+      });
       const text = await upstream.text();
       res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
       res.end(text);
@@ -85,7 +131,10 @@ const server = http.createServer(async (req, res) => {
 
   if (isGetOrHead && pathname === "/v1/runtime/stack-status") {
     try {
-      const upstream = await fetch(`${INTERNAL_RUNTIME_URL}/v1/runtime/stack-status`);
+      const upstream = await fetch(`${INTERNAL_RUNTIME_URL}/v1/runtime/stack-status`, {
+        headers: { Accept: "application/json", traceparent },
+        signal: AbortSignal.timeout(15_000),
+      });
       const text = await upstream.text();
       res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
       res.end(text);

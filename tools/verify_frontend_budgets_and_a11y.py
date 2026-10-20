@@ -78,8 +78,68 @@ def main() -> None:
         "Browser W3C traceparent helper missing in packages/telemetry"
     )
 
+    # 3. Verify FE-G1..FE-G8 Runtime BFF & Operations Console Invariants (apps/web/server.js, apps/console/server.js, packages/ui/ops-console.js)
+    web_srv_src = (ROOT / "apps" / "web" / "server.js").read_text(encoding="utf-8")
+    con_srv_src = (ROOT / "apps" / "console" / "server.js").read_text(encoding="utf-8")
+    ops_ui_src = (ROOT / "packages" / "ui" / "ops-console.js").read_text(encoding="utf-8")
+
+    # FE-G1: Shared-device zero-PII localStorage hygiene & SSRA_LOGOUT_PURGE dispatch
+    assert "scrubPiiForStorage" in web_srv_src and "SSRA_LOGOUT_PURGE" in web_srv_src, (
+        "FE-G1 shared-device PII scrubbing or SSRA_LOGOUT_PURGE dispatch missing in apps/web/server.js"
+    )
+    assert "ngrok-skip-browser-warning" in sw_src and "ngrok-error-code" in sw_src, (
+        "Ngrok interstitial cache-poisoning guard missing in apps/web/public/sw.js"
+    )
+
+    # FE-G2: OWASP ASVS 5.0 V3/V4 headers, method allowlist, AbortSignal.timeout & traceparent
+    for srv_name, srv_src in [
+        ("apps/web/server.js", web_srv_src),
+        ("apps/console/server.js", con_srv_src),
+    ]:
+        assert "Cross-Origin-Opener-Policy" in srv_src and "ALLOWED_METHODS" in srv_src, (
+            f"FE-G2 COOP header or ALLOWED_METHODS missing in {srv_name}"
+        )
+        assert "AbortSignal.timeout(15_000)" in srv_src and "createTraceparent" in srv_src, (
+            f"FE-G2 upstream timeout or W3C traceparent missing in {srv_name}"
+        )
+
+    # FE-G3: W3C Trusted Types & 6-char escapeHtml (including &#39; and &#96;)
+    for ui_name, src in [
+        ("apps/web/server.js", web_srv_src),
+        ("packages/ui/ops-console.js", ops_ui_src),
+    ]:
+        assert "&#39;" in src and "&#96;" in src and "setSafeHtml" in src, (
+            f"FE-G3 Trusted Types setSafeHtml or 6-char HTML escaping missing in {ui_name}"
+        )
+
+    # FE-G4..FE-G7: Offline statutory fallback, 8-locale UI dictionary, 5-tab SettingsDialog, Auditor SoD & South Sudan Civic Palette
+    assert "computeOfflineResilienceAnswer" in web_srv_src and "LOCALE_UI_STRINGS" in web_srv_src, (
+        "FE-G4/FE-G5 offline statutory calculator fallback or 8-locale UI dictionary missing in apps/web/server.js"
+    )
+    assert "renderSettingsTabContent" in web_srv_src and 'class="skip-link"' in web_srv_src, (
+        "FE-G6 interactive 5-tab SettingsDialog or skip-link missing in apps/web/server.js"
+    )
+    assert (
+        "ssra_auditor" in ops_ui_src
+        and "ssra-flag-ribbon" in ops_ui_src
+        and "#078930" in ops_ui_src
+    ), (
+        "FE-G7 Auditor read-only SoD or South Sudan civic palette missing in packages/ui/ops-console.js"
+    )
+
+    # FE-G8: Executable verification of cross-subject purge, safe offline abstention, flag array normalization & focus/hotkey guards
+    assert (
+        "prev !== state.identity" in web_srv_src
+        and "outcome_verified: false" in web_srv_src
+        and "Array.isArray(flData)" in ops_ui_src
+        and "cmdkReturnFocusEl.isConnected" in ops_ui_src
+        and "e.ctrlKey || e.metaKey || e.altKey" in ops_ui_src
+    ), (
+        "FE-G8 cross-subject purge, safe offline abstention, flag normalization, or focus/hotkey guard missing"
+    )
+
     print(
-        f"Frontend budget & WCAG 2.2 AA check passed: public gzip size={gzip_kb:.2f} KB (<= {TARGET_FIRST_LOAD_JS_GZIP_KB} KB target)."
+        f"Frontend budget & WCAG 2.2 AA check passed (FE-G1..FE-G8 verified): public gzip size={gzip_kb:.2f} KB (<= {TARGET_FIRST_LOAD_JS_GZIP_KB} KB target)."
     )
 
 

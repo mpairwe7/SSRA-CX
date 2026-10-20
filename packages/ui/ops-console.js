@@ -718,7 +718,17 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           .replace(/&/g, "&amp;")
           .replace(/</g, "&lt;")
           .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;");
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;")
+          .replace(/\x60/g, "&#96;");
+      }
+
+      const ttPolicy = window.trustedTypes?.createPolicy
+        ? window.trustedTypes.createPolicy("ssra-ops-html", { createHTML: (h) => h })
+        : null;
+      function setSafeHtml(el, htmlStr) {
+        if (!el) return;
+        el.innerHTML = ttPolicy ? ttPolicy.createHTML(htmlStr) : htmlStr;
       }
 
       function renderSparklineSvg(points, color = "var(--ssra-teal-light)") {
@@ -775,19 +785,22 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         // Render grouped navigation in rail
         const groups = ["Work", "Audit", "Configure", "Observe"];
         if (railGroupsEl) {
-          railGroupsEl.innerHTML = groups.map((g) => {
-            const items = DESTINATIONS.filter((d) => d.group === g && d.roles.includes(state.role));
-            if (!items.length) return "";
-            return '<div class="staff-rail-group">' +
-              '<p class="staff-rail-group-label">' + escapeHtml(g) + "</p>" +
-              "<ul>" + items.map((item) => {
-                const active = item.href === state.route;
-                return '<li><a href="' + escapeHtml(item.href) + '" data-nav="' + escapeHtml(item.href) + '" class="nav-item' + (active ? " active" : "") + '" title="' + escapeHtml(item.label) + '">' +
-                  '<span class="staff-rail-icon" aria-hidden="true">' + item.icon + "</span>" +
-                  '<span class="staff-rail-label">' + escapeHtml(item.navLabel) + "</span>" +
-                "</a></li>";
-              }).join("") + "</ul></div>";
-          }).join("");
+          setSafeHtml(
+            railGroupsEl,
+            groups.map((g) => {
+              const items = DESTINATIONS.filter((d) => d.group === g && d.roles.includes(state.role));
+              if (!items.length) return "";
+              return '<div class="staff-rail-group">' +
+                '<p class="staff-rail-group-label">' + escapeHtml(g) + "</p>" +
+                "<ul>" + items.map((item) => {
+                  const active = item.href === state.route;
+                  return '<li><a href="' + escapeHtml(item.href) + '" data-nav="' + escapeHtml(item.href) + '" class="nav-item' + (active ? " active" : "") + '" title="' + escapeHtml(item.label) + '">' +
+                    '<span class="staff-rail-icon" aria-hidden="true">' + item.icon + "</span>" +
+                    '<span class="staff-rail-label">' + escapeHtml(item.navLabel) + "</span>" +
+                  "</a></li>";
+                }).join("") + "</ul></div>";
+            }).join("")
+          );
         }
       }
 
@@ -1082,7 +1095,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
                 '<div><dt>Voice Consent Audit</dt><dd>SHA-256 Hash Only (<code>store_raw_audio=false</code>)</dd></div>' +
               "</dl>" +
               '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
-                '<button type="button" class="ops-btn gold" id="takeover-call-btn">📞 Take Over Audio Stream</button>' +
+                (state.role === "ssra_auditor"
+                  ? '<span class="ops-chip warn">🔒 Auditor Read-Only: Live audio takeover disabled</span>'
+                  : '<button type="button" class="ops-btn gold" id="takeover-call-btn">📞 Take Over Audio Stream</button>'
+                ) +
                 '<a href="/en" class="ops-btn">Open Taxpayer Voice Modal ↗</a>' +
               "</div>" +
             "</div>" +
@@ -1181,7 +1197,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
               '<table class="ops-table"><thead><tr><th>Flag Key</th><th>Purpose</th><th>State</th></tr></thead><tbody>' +
                 Object.entries(state.flagOverrides).map(([k, v]) =>
                   "<tr><td><code>" + escapeHtml(k) + "</code></td><td>Runtime safety / capability toggle</td>" +
-                  '<td><button type="button" class="ops-btn ' + (v ? "gold" : "") + '" data-toggle-flag="' + escapeHtml(k) + '">' + (v ? "ON (Enabled)" : "OFF (Disabled)") + "</button></td></tr>"
+                  "<td>" +
+                  (state.role === "ssra_auditor"
+                    ? '<span class="ops-chip">' + (v ? "ON (Read-Only)" : "OFF (Read-Only)") + "</span>"
+                    : '<button type="button" class="ops-btn ' + (v ? "gold" : "") + '" data-toggle-flag="' + escapeHtml(k) + '">' + (v ? "ON (Enabled)" : "OFF (Disabled)") + "</button>"
+                  ) +
+                  "</td></tr>"
                 ).join("") +
               "</tbody></table>" +
             "</div>" +
@@ -1240,12 +1261,13 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         applyChrome();
         if (!mainEl) return;
         const r = state.route;
+        let html = "";
         if (r === "/agent" || r === "/admin/tickets") {
-          mainEl.innerHTML = renderAgentQueue();
+          html = renderAgentQueue();
         } else if (r === "/calls") {
-          mainEl.innerHTML = renderCallsDesk();
+          html = renderCallsDesk();
         } else if (r === "/analytics" || r === "/analytics/evaluation") {
-          mainEl.innerHTML = renderAnalyticsOrEval(r === "/analytics/evaluation");
+          html = renderAnalyticsOrEval(r === "/analytics/evaluation");
         } else if (
           r === "/admin/flags" ||
           r === "/admin/overrides" ||
@@ -1253,25 +1275,47 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           r === "/admin/outbox" ||
           r === "/admin/connectors"
         ) {
-          mainEl.innerHTML = renderConfigureView();
+          html = renderConfigureView();
         } else if (r === "/admin/audit" || r === "/admin/replay") {
-          mainEl.innerHTML = renderAuditOrReplay(r === "/admin/replay");
+          html = renderAuditOrReplay(r === "/admin/replay");
         } else {
-          mainEl.innerHTML = renderOverviewOrQuality(r === "/admin/quality");
+          html = renderOverviewOrQuality(r === "/admin/quality");
         }
+        setSafeHtml(mainEl, html);
       }
 
       async function fetchLiveTelemetry() {
         try {
-          const [scRes, stRes] = await Promise.allSettled([
+          const [scRes, stRes, flRes] = await Promise.allSettled([
             fetch("/api/scorecard", { headers: { "ngrok-skip-browser-warning": "true" } }),
             fetch("/v1/runtime/stack-status", { headers: { "ngrok-skip-browser-warning": "true" } }),
+            fetch("/api/flags", { headers: { "ngrok-skip-browser-warning": "true" } }),
           ]);
           if (scRes.status === "fulfilled" && scRes.value.ok) {
             state.scorecard = await scRes.value.json();
           }
           if (stRes.status === "fulfilled" && stRes.value.ok) {
             state.stackStatus = await stRes.value.json();
+          }
+          if (flRes.status === "fulfilled" && flRes.value.ok) {
+            const flData = await flRes.value.json();
+            if (Array.isArray(flData)) {
+              const liveFlags = Object.fromEntries(
+                flData
+                  .filter(
+                    (flag) =>
+                      flag &&
+                      typeof flag.name === "string" &&
+                      typeof flag.enabled === "boolean",
+                  )
+                  .map((flag) => [flag.name, flag.enabled]),
+              );
+              if (Object.keys(liveFlags).length > 0) {
+                state.flagOverrides = liveFlags;
+              }
+            } else if (flData && typeof flData.flags === "object" && flData.flags !== null) {
+              state.flagOverrides = { ...state.flagOverrides, ...flData.flags };
+            }
           }
         } catch {}
         renderCurrentRoute();
@@ -1413,21 +1457,27 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         return base.filter((c) => c.label.toLowerCase().includes(needle) || c.hint.toLowerCase().includes(needle));
       }
 
+      let cmdkReturnFocusEl = null;
+
       function renderCmdkList() {
         const cmds = getFilteredCommands(cmdkInput?.value || "");
         if (cmdkActiveIdx >= cmds.length) cmdkActiveIdx = 0;
         if (cmdkList) {
-          cmdkList.innerHTML = cmds.map((c, idx) =>
-            '<li class="ops-cmdk-item" role="option" data-cmd-idx="' + idx + '" data-active="' + (idx === cmdkActiveIdx) + '">' +
-              "<span>" + escapeHtml(c.label) + "</span>" +
-              '<span class="ops-kbd">' + escapeHtml(c.hint) + "</span>" +
-            "</li>"
-          ).join("");
+          setSafeHtml(
+            cmdkList,
+            cmds.map((c, idx) =>
+              '<li class="ops-cmdk-item" role="option" data-cmd-idx="' + idx + '" data-active="' + (idx === cmdkActiveIdx) + '">' +
+                "<span>" + escapeHtml(c.label) + "</span>" +
+                '<span class="ops-kbd">' + escapeHtml(c.hint) + "</span>" +
+              "</li>"
+            ).join("")
+          );
         }
         return cmds;
       }
 
       function openCmdk() {
+        cmdkReturnFocusEl = document.activeElement;
         cmdkBackdrop?.classList.add("open");
         if (cmdkInput) {
           cmdkInput.value = "";
@@ -1438,6 +1488,15 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       }
       function closeCmdk() {
         cmdkBackdrop?.classList.remove("open");
+        if (
+          cmdkReturnFocusEl &&
+          cmdkReturnFocusEl.isConnected &&
+          typeof cmdkReturnFocusEl.focus === "function"
+        ) {
+          cmdkReturnFocusEl.focus();
+        } else if (mainEl && typeof mainEl.focus === "function") {
+          mainEl.focus();
+        }
       }
 
       document.getElementById("cmdk-open-btn")?.addEventListener("click", openCmdk);
@@ -1471,6 +1530,15 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           else if (e.key === "ArrowDown" && cmds.length) { e.preventDefault(); cmdkActiveIdx = (cmdkActiveIdx + 1) % cmds.length; renderCmdkList(); }
           else if (e.key === "ArrowUp" && cmds.length) { e.preventDefault(); cmdkActiveIdx = (cmdkActiveIdx - 1 + cmds.length) % cmds.length; renderCmdkList(); }
           else if (e.key === "Enter" && cmds.length) { e.preventDefault(); closeCmdk(); cmds[cmdkActiveIdx]?.run(); }
+          return;
+        }
+        const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+        if (tag === "input" || tag === "textarea" || tag === "select") return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (state.route === "/agent" || state.route === "/admin/tickets") {
+          if (e.key === "j") { e.preventDefault(); state.selectedTicketIdx = (state.selectedTicketIdx + 1) % 3; renderCurrentRoute(); }
+          else if (e.key === "k") { e.preventDefault(); state.selectedTicketIdx = (state.selectedTicketIdx + 2) % 3; renderCurrentRoute(); }
+          else if (e.key === "r") { e.preventDefault(); document.getElementById("copilot-draft-box")?.focus(); }
         }
       });
 
