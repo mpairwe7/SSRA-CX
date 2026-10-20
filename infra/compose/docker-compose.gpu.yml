@@ -345,6 +345,7 @@ services:
     environment:
       NODE_ENV: production
       INTERNAL_API_URL: http://ssra-api:8000
+      INTERNAL_RUNTIME_URL: http://ssra-agent-runtime:8001
     ports:
       - "127.0.0.1:${SSRA_CONSOLE_PORT:-3034}:3001"
     networks:
