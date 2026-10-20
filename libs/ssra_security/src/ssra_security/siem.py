@@ -41,7 +41,30 @@ class OcsfSecurityEvent(BaseModel):
     chain_hash: str
 
 
+def _escape_cef_header(val: str) -> str:
+    """Escape CEF header fields per OWASP ASVS 5.0 V16.4.1 to prevent SIEM log/delimiter injection."""
+    return (
+        val.replace("\x00", "")
+        .replace("\r", " ")
+        .replace("\n", " ")
+        .replace("\\", "\\\\")
+        .replace("|", "\\|")
+    )
+
+
+def _escape_cef_extension(val: str) -> str:
+    """Escape CEF extension key-value fields (`=`, `\\`, CR/LF) per ArcSight CEF & ASVS V16.4.1."""
+    return (
+        val.replace("\x00", "")
+        .replace("\r", " ")
+        .replace("\n", " ")
+        .replace("\\", "\\\\")
+        .replace("=", "\\=")
+    )
+
+
 def classify_siem_severity(action: str, safety_flags: list[str] | None = None) -> SiemSeverity:
+    """Classify SIEM event severity (SEV-1..SEV-4) from audit action and guardrail safety flags."""
     flags = safety_flags or []
     if any("CROSS_SUBJECT" in f or "PII_GUARD_FAILED" in f or "GOAL_HIJACK" in f for f in flags):
         return "SEV-1"
@@ -55,27 +78,33 @@ def classify_siem_severity(action: str, safety_flags: list[str] | None = None) -
 def format_audit_event_as_ocsf(
     event: AuditEvent, *, safety_flags: list[str] | None = None
 ) -> OcsfSecurityEvent:
+    """Format an AuditEvent into an OCSF v1.3 Account/Access Activity security event with PII redaction."""
     severity = classify_siem_severity(event.action, safety_flags)
     masked_sub = redact_pii(event.on_behalf_of).redacted_text if event.on_behalf_of else None
+    actor_clean = redact_pii(event.actor).redacted_text
+    resource_clean = redact_pii(event.resource).redacted_text
     return OcsfSecurityEvent(
         severity=severity,
         time=event.at.isoformat(),
-        actor_id=event.actor,
+        actor_id=actor_clean,
         on_behalf_of_masked=masked_sub,
         action=event.action,
-        resource=event.resource,
+        resource=resource_clean,
         digest=event.digest,
         chain_hash=event.hash,
     )
 
 
 def format_audit_event_as_cef(event: AuditEvent, *, safety_flags: list[str] | None = None) -> str:
+    """Format an AuditEvent as a log-injection-safe Common Event Format (CEF) SIEM record."""
     ocsf = format_audit_event_as_ocsf(event, safety_flags=safety_flags)
     sev_num = {"SEV-1": 10, "SEV-2": 8, "SEV-3": 5, "SEV-4": 3}[ocsf.severity]
     return (
-        f"CEF:0|SSRA|SSRAAssist|2026.10.1|{ocsf.action}|{ocsf.action}|{sev_num}|"
-        f"act={ocsf.actor_id} suser={ocsf.on_behalf_of_masked or 'anonymous'} "
-        f"cs1={ocsf.resource} cs2={ocsf.chain_hash}"
+        f"CEF:0|SSRA|SSRAAssist|2026.10.1|{_escape_cef_header(ocsf.action)}|"
+        f"{_escape_cef_header(ocsf.action)}|{sev_num}|"
+        f"act={_escape_cef_extension(ocsf.actor_id)} "
+        f"suser={_escape_cef_extension(ocsf.on_behalf_of_masked or 'anonymous')} "
+        f"cs1={_escape_cef_extension(ocsf.resource)} cs2={ocsf.chain_hash}"
     )
 
 

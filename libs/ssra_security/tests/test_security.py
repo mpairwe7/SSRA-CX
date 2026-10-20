@@ -59,10 +59,10 @@ def test_hash_chained_audit_ledger_detects_tampering() -> None:
     assert e2.prev_hash == e1.hash
     assert ledger.verify_integrity() is True
 
-    # Simulate tampering with event 1
+    # Simulate tampering with event 1 (including replacing "a b" with "a\nb")
     tampered = AuditEvent(
         id=e1.id,
-        actor="attacker",
+        actor="ssra-agent\nruntime",
         on_behalf_of=e1.on_behalf_of,
         action=e1.action,
         resource=e1.resource,
@@ -145,6 +145,7 @@ def test_confirmation_token_single_use_and_argument_hash_binding() -> None:
 
 
 def test_rfc8693_token_exchange_enforces_audience_and_tier() -> None:
+    """Verify RFC 8693 token exchange audience, tier, RFC 9449 DPoP cnf.jkt, and single-use jti replay guards."""
     svc = TokenExchangeService()
     t1_tok = svc.mint_exchanged_token(
         audience="mcp-ledger",
@@ -163,21 +164,91 @@ def test_rfc8693_token_exchange_enforces_audience_and_tier() -> None:
         )
     assert step_exc.value.code == McpErrorCode.STEP_UP_REQUIRED
 
+    # RFC 9449 DPoP cnf_jkt sender-constrained thumbprint binding & single-use JTI replay check
+    dpop_tok = svc.mint_exchanged_token(
+        audience="mcp-ledger",
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_01",
+        cnf_jkt="jkt_thumbprint_sha256_abc123",
+    )
+    verified_dpop = svc.verify_exchanged_token(
+        dpop_tok,
+        expected_audience="mcp-ledger",
+        required_tier=RiskTier.T1,
+        expected_dpop_jkt="jkt_thumbprint_sha256_abc123",
+        enforce_single_use_jti=True,
+    )
+    assert verified_dpop.cnf_jkt == "jkt_thumbprint_sha256_abc123"
+    # Replay of single-use JTI is rejected
+    with pytest.raises(SSRAError):
+        svc.verify_exchanged_token(
+            dpop_tok,
+            expected_audience="mcp-ledger",
+            required_tier=RiskTier.T1,
+            expected_dpop_jkt="jkt_thumbprint_sha256_abc123",
+            enforce_single_use_jti=True,
+        )
+    # Wrong DPoP JKT thumbprint is rejected
+    with pytest.raises(SSRAError):
+        svc.verify_exchanged_token(
+            dpop_tok,
+            expected_audience="mcp-ledger",
+            required_tier=RiskTier.T1,
+            expected_dpop_jkt="wrong_thumbprint",
+        )
+
+    # Concurrent multi-thread & cross-instance single-use JTI redemption: exactly 1 succeeds
+    from concurrent.futures import ThreadPoolExecutor
+
+    race_tok = svc.mint_exchanged_token(
+        audience="mcp-ledger",
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_01",
+    )
+
+    def _try_redeem(_idx: int) -> bool:
+        """Attempt concurrent single-use JTI redemption across verifier threads."""
+        try:
+            TokenExchangeService().verify_exchanged_token(
+                race_tok,
+                expected_audience="mcp-ledger",
+                required_tier=RiskTier.T1,
+                enforce_single_use_jti=True,
+            )
+            return True
+        except SSRAError:
+            return False
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        outcomes = list(pool.map(_try_redeem, range(4)))
+    assert outcomes.count(True) == 1
+    assert outcomes.count(False) == 3
+
 
 def test_siem_ocsf_cef_export_and_inter_model_handoff_validator() -> None:
+    """Verify SIEM OCSF/CEF log-injection escaping, Bearer/JWT redaction, and inter-model handoff validation."""
     ledger = HashChainedAuditLedger()
     ev = ledger.append(
-        actor="ssra-agent-runtime",
-        on_behalf_of="sub_01",
-        action="guardrail.trigger",
-        resource="thr_01",
+        actor="ssra-agent-runtime|injected\nCEF:0|FAKE",
+        on_behalf_of="sub_01=evil",
+        action="guardrail.trigger|pipe",
+        resource="thr_01\r\nfake=1",
         payload={"guard": "cross_subject"},
     )
+    assert ledger.verify_integrity() is True
     ocsf = format_audit_event_as_ocsf(ev, safety_flags=["CROSS_SUBJECT_IDOR_ATTEMPT"])
     assert ocsf.severity == "SEV-1"
     cef = format_audit_event_as_cef(ev, safety_flags=["CROSS_SUBJECT_IDOR_ATTEMPT"])
     assert cef.startswith("CEF:0|SSRA|SSRAAssist|")
+    assert "\n" not in cef and "\r" not in cef
+    assert "\\=" in cef
     assert "|10|" in cef
+
+    # Bearer / JWT / API secret token redaction (MCP01:2025 / ASVS 5.0 V16.2.5)
+    sample_bearer = "Bearer " + "tok_secret_value_1234567890"
+    sec_res = redact_pii(f"Authorization: {sample_bearer}")
+    assert "[REDACTED_SECRET_TOKEN]" in sec_res.redacted_text
+    assert "SECRET_OR_BEARER_TOKEN" in sec_res.pii_tags
 
     clean_intent = Intent(
         intent=IntentName.CALCULATE_PAYE,
@@ -243,8 +314,14 @@ def test_blind_index_normalizes_arabic_indic_digits() -> None:
     other = OpenBaoTransitEncryptor("other-key")
     assert enc.blind_index("1002001234") != other.blind_index("1002001234")
 
-    # Exercise expired JTI eviction in KeycloakOidcSecurityService.consume_single_use_jti
+    # Exercise expired JTI eviction and WebAuthn Level 3 signCount clone detection in KeycloakOidcSecurityService
     kc = KeycloakOidcSecurityService()
     past = utc_now() - timedelta(seconds=60)
     kc.consume_single_use_jti("jti_expired_1", exp=past)
     kc.consume_single_use_jti("jti_fresh_1")
+    assert kc.verify_webauthn_sign_count("cred_staff_01", 1, user_verified=True) == 1
+    assert kc.verify_webauthn_sign_count("cred_staff_01", 2, user_verified=True) == 2
+    with pytest.raises(SSRAError):
+        kc.verify_webauthn_sign_count("cred_staff_01", 2, user_verified=True)
+    with pytest.raises(SSRAError):
+        kc.verify_webauthn_sign_count("cred_staff_01", 3, user_verified=False)

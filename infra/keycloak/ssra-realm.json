@@ -38,7 +38,8 @@
       { "name": "qa", "description": "SSRA Quality Assurance Reviewer" },
       { "name": "legal_approver", "description": "SSRA Legal & Policy Snapshot Approver" },
       { "name": "secops", "description": "SSRA Security Operations & Audit Officer" },
-      { "name": "admin", "description": "SSRA Platform Administrator (JIT Elevated)" }
+      { "name": "admin", "description": "SSRA Platform Administrator (JIT Elevated)" },
+      { "name": "auditor", "description": "SSRA Read-Only Forensic & ISO/IEC 42001 Auditor" }
     ]
   },
   "clientScopes": [

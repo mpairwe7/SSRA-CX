@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import threading
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -30,6 +31,7 @@ class SubjectTokenClaims(BaseModel):
     caller_workload: str = "ssra-agent-runtime"
     auth_level: AuthLevel = AuthLevel.ANONYMOUS
     step_up_verified_at: datetime | None = None
+    cnf_jkt: str | None = None  # RFC 9449 DPoP JWK SHA-256 thumbprint binding (ASVS 5.0 V10.3.5 L3)
     exp: datetime
 
 
@@ -117,6 +119,8 @@ def compute_action_digest(
 
 MAX_CONFIRMATION_RECORDS = 2048
 MAX_STEP_UP_AGE_SECONDS = 300
+_SHARED_JTI_LOCK = threading.Lock()
+_SHARED_CONSUMED_JTIS: dict[str, datetime] = {}
 
 
 class ConfirmationTokenManager:
@@ -221,11 +225,13 @@ class ConfirmationTokenManager:
 
 
 class TokenExchangeService:
-    """RFC 8693 OAuth 2.1 Token Exchange helper used by agentgateway and MCP servers."""
+    """RFC 8693 OAuth 2.1 Token Exchange & RFC 9449 DPoP thumbprint helper used by agentgateway and MCP servers."""
 
     def __init__(self, signing_secret: str | None = None) -> None:
+        """Initialise the token exchange service with an HMAC signing secret and shared JTI replay cache."""
         raw_secret = signing_secret or "ssra-dev-hmac-key"
         self._secret = raw_secret.encode("utf-8")
+        self._consumed_jtis = _SHARED_CONSUMED_JTIS
 
     def mint_exchanged_token(
         self,
@@ -237,9 +243,10 @@ class TokenExchangeService:
         scope: str | None = None,
         caller_workload: str = "ssra-agent-runtime",
         step_up_verified_at: datetime | None = None,
+        cnf_jkt: str | None = None,
         ttl_seconds: int = 60,
     ) -> str:
-        """Mint an RFC 8693 audience-, resource-, and least-privilege-scope-bound JWT."""
+        """Mint an RFC 8693 audience-, resource-, least-privilege-scope-, and optional RFC 9449 DPoP-bound JWT."""
         now = utc_now()
         srv = audience.removeprefix("mcp-")
         if scope is not None:
@@ -264,6 +271,7 @@ class TokenExchangeService:
             caller_workload=caller_workload,
             auth_level=auth_level,
             step_up_verified_at=resolved_step_up,
+            cnf_jkt=cnf_jkt,
             exp=now + timedelta(seconds=ttl_seconds),
         )
         payload_json = claims.model_dump_json()
@@ -277,8 +285,10 @@ class TokenExchangeService:
         expected_audience: str,
         required_tier: RiskTier,
         expected_resource: str | None = None,
+        expected_dpop_jkt: str | None = None,
+        enforce_single_use_jti: bool = False,
     ) -> SubjectTokenClaims:
-        """Verify RFC 8693 token signature, audience, RFC 8707 resource, scope, and T3 step-up freshness."""
+        """Verify RFC 8693 token signature, audience, RFC 8707 resource, scope, RFC 9449 DPoP thumbprint, and T3 step-up freshness."""
         if "." not in token:
             raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Malformed bearer token", status_code=401)
         payload_json, sig = token.rsplit(".", 1)
@@ -302,6 +312,19 @@ class TokenExchangeService:
             )
         if utc_now() > claims.exp:
             raise SSRAError(McpErrorCode.NOT_AUTHORIZED, "Bearer token expired", status_code=401)
+
+        if expected_dpop_jkt is not None or claims.cnf_jkt is not None:
+            dpop_ok = bool(
+                claims.cnf_jkt
+                and expected_dpop_jkt
+                and hmac.compare_digest(claims.cnf_jkt, expected_dpop_jkt)
+            )
+            if not dpop_ok:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "RFC 9449 DPoP sender-constrained cnf.jkt thumbprint mismatch (ASVS 5.0 V10.3.5)",
+                    status_code=401,
+                )
 
         if required_tier in (RiskTier.T1, RiskTier.T2, RiskTier.T3):
             if not claims.sub or claims.auth_level not in (
@@ -345,4 +368,26 @@ class TokenExchangeService:
                 f"Insufficient OAuth 2.1 scope '{claims.scope}'; operation requires '{req_scope}'",
                 status_code=403,
             )
+
+        if enforce_single_use_jti:
+            with _SHARED_JTI_LOCK:
+                now_dt = utc_now()
+                active = {
+                    k: exp_dt for k, exp_dt in self._consumed_jtis.items() if now_dt <= exp_dt
+                }
+                self._consumed_jtis.clear()
+                self._consumed_jtis.update(active)
+                is_replayed_or_full = (
+                    claims.jti in self._consumed_jtis
+                    or len(self._consumed_jtis) >= MAX_CONFIRMATION_RECORDS
+                )
+                if is_replayed_or_full:
+                    raise SSRAError(
+                        McpErrorCode.NOT_AUTHORIZED
+                        if claims.jti in self._consumed_jtis
+                        else McpErrorCode.RATE_LIMITED,
+                        f"Single-use exchanged token jti '{claims.jti}' replay or capacity blocked",
+                        status_code=401 if claims.jti in self._consumed_jtis else 429,
+                    )
+                self._consumed_jtis[claims.jti] = claims.exp
         return claims

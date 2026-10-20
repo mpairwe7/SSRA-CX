@@ -29,6 +29,13 @@ _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 # South Sudan Passport number (R or P followed by 7-8 digits)
 _PASSPORT_SS_RE = re.compile(r"\b[RP]\d{7,8}\b")
 
+# OAuth Bearer tokens, raw JWTs, and API secret keys (MCP01:2025 & OWASP ASVS 5.0 V16.2.5)
+_SECRET_TOKEN_RE = re.compile(
+    r"(?:\bBearer\s+[A-Za-z0-9._~+/=-]{12,}\b|"
+    r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|"
+    r"\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,})\b)"
+)
+
 
 @dataclass(frozen=True)
 class RedactionResult:
@@ -53,12 +60,21 @@ def redact_pii(text: str) -> RedactionResult:
     out = _BIDI_AND_ZW_RE.sub("", unicodedata.normalize("NFKC", text)).translate(_ARABIC_INDIC_MAP)
 
     def _replace_otp(match: re.Match[str]) -> str:
+        """Mask 6-digit OTP codes preceded by OTP/code/PIN keywords."""
         tags.append("OTP_SECRET")
         return f"{match.group(1)} [REDACTED_OTP]"
 
     out = _OTP_RE.sub(_replace_otp, out)
 
+    def _replace_secret_token(_match: re.Match[str]) -> str:
+        """Mask leaked Bearer tokens, JWTs, and API keys (MCP01:2025 / ASVS V16.2.5)."""
+        tags.append("SECRET_OR_BEARER_TOKEN")
+        return "[REDACTED_SECRET_TOKEN]"
+
+    out = _SECRET_TOKEN_RE.sub(_replace_secret_token, out)
+
     def _replace_email(match: re.Match[str]) -> str:
+        """Mask personal email addresses while preserving official support@nra.gov.ss."""
         candidate = match.group(0)
         if candidate.lower() == "support@nra.gov.ss":
             return candidate

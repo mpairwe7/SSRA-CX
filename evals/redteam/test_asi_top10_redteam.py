@@ -24,6 +24,7 @@ from ssra_api import create_api_app
 from ssra_core import (
     AuthLevel,
     McpErrorCode,
+    RiskTier,
     SSRAError,
     UpstreamCircuitBreaker,
 )
@@ -95,7 +96,7 @@ def test_asi02_tool_misuse_zero_cross_subject_data_leakage() -> None:
     assert "5678" not in turn.answer.segments[0].text
     assert "1450000" not in turn.answer.segments[0].text
 
-    # Case 2: Cross-subject output validator blocks any mismatched masked TIN, Arabic-Indic TIN, or National ID
+    # Case 2: Cross-subject output validator blocks any mismatched masked TIN, Arabic-Indic TIN, National ID, personal +211 phone, or leaked Bearer token
     leak_check = verify_no_cross_subject_or_unmasked_pii(
         "TIN ••••5678 owes 1,450,000 SSP",
         allowed_masked_tin="••••1234",
@@ -104,6 +105,22 @@ def test_asi02_tool_misuse_zero_cross_subject_data_leakage() -> None:
     assert verify_no_cross_subject_or_unmasked_pii("Your TIN ١٠٠٢٠٠١٢٣٤ is active").passed is False
     assert verify_no_cross_subject_or_unmasked_pii("National ID R12345678 verified").passed is False
     assert verify_no_cross_subject_or_unmasked_pii("National ID r1234567 verified").passed is False
+    assert (
+        verify_no_cross_subject_or_unmasked_pii("Call personal number +211912345678").passed
+        is False
+    )
+    sample_leak = "Bearer " + "tok_secret_value_1234567890"
+    assert verify_no_cross_subject_or_unmasked_pii(f"Leaked {sample_leak}").passed is False
+    assert (
+        verify_no_cross_subject_or_unmasked_pii("Call personal number +211 912 345 678").passed
+        is False
+    )
+    assert (
+        verify_no_cross_subject_or_unmasked_pii(
+            "Official SSRA helpdesk is +211 918806493 or +211-918806493"
+        ).passed
+        is True
+    )
 
 
 def test_asi03_confused_deputy_and_sim_swap_account_takeover_blocked() -> None:
@@ -226,6 +243,19 @@ def test_asi08_cascading_failure_circuit_breaker_and_denial_of_wallet_cap() -> N
     with pytest.raises(SSRAError) as cb_exc:
         cb.call(lambda: "should_not_run")
     assert cb_exc.value.code == McpErrorCode.UPSTREAM_UNAVAILABLE
+
+    from ssra_runtime.nodes.policy_gate import evaluate_opa_policy
+
+    assert (
+        evaluate_opa_policy(
+            tier=RiskTier.T0,
+            auth_level=AuthLevel.ANONYMOUS,
+            subject_ref=None,
+            intent_name=None,
+            rate_limited=True,
+        )
+        == "DENY"
+    )
 
     gw = TestClient(create_agentgateway_app(daily_usd_cap=5.0))
     r_spend = gw.post("/v1/spend/record", json={"cost_usd": 6.0})
