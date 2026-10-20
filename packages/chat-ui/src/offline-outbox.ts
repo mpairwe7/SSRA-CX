@@ -105,10 +105,18 @@ export class OfflineOutboxQueue {
     if (!note.recordingConsentGranted) {
       return { queued: false, reason: "VOICE_RECORDING_CONSENT_REQUIRED" };
     }
-    if (note.durationSeconds <= 0 || note.durationSeconds > MAX_OFFLINE_VOICE_NOTE_SECONDS) {
+    if (
+      !Number.isFinite(note.durationSeconds) ||
+      note.durationSeconds <= 0 ||
+      note.durationSeconds > MAX_OFFLINE_VOICE_NOTE_SECONDS
+    ) {
       return { queued: false, reason: "EXCEEDS_30S_OFFLINE_VOICE_NOTE_CAP" };
     }
-    if (note.sizeBytes <= 0 || note.sizeBytes > MAX_OFFLINE_VOICE_NOTE_BYTES) {
+    if (
+      !Number.isFinite(note.sizeBytes) ||
+      note.sizeBytes <= 0 ||
+      note.sizeBytes > MAX_OFFLINE_VOICE_NOTE_BYTES
+    ) {
       return { queued: false, reason: "EXCEEDS_64KB_OFFLINE_VOICE_NOTE_CAP" };
     }
     if (this.voiceNotes.length >= this.maxItems) {

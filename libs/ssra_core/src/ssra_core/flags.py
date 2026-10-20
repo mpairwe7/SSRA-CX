@@ -44,6 +44,12 @@ KNOWN_FEATURE_FLAGS: tuple[str, ...] = (
     "FLAG_SPOKEN_FIGURE_GUARD",
 )
 
+FLAG_ALIASES: dict[str, str] = {
+    "FLAG_HYBRID_SPEECH_S2S": "FF_HYBRID_VOICE_FAST_ACK_AND_SEMANTIC_EOT",
+    "FLAG_EMOTION_AWARE_PROSODY": "FF_REALTIME_EQ_TONE_AND_ESCALATION",
+    "FLAG_CONTINUOUS_RELATIONSHIP_MEMORY": "FF_COGNITIVE_MEMORY_4TIER",
+}
+
 SSRA_SUPPORTED_LOCALES: tuple[str, ...] = (
     "en",
     "pga",
@@ -192,8 +198,9 @@ class FeatureFlagEngine:
         return [merged[k] for k in sorted(merged)]
 
     def get_rule(self, flag_name: str) -> FeatureFlagRule | None:
-        """Look up a single feature-flag rule by name."""
-        return self._effective_rules().get(flag_name)
+        """Look up a single feature-flag rule by name (resolving runbook aliases to canonical rules)."""
+        canonical = FLAG_ALIASES.get(flag_name, flag_name)
+        return self._effective_rules().get(canonical)
 
     def set_flag_override(
         self,
@@ -205,10 +212,11 @@ class FeatureFlagEngine:
         allowed_locales: list[str] | tuple[str, ...] | None = None,
     ) -> FeatureFlagRule:
         """Update or register a feature-flag state at runtime and persist across local workers."""
+        canonical = FLAG_ALIASES.get(flag_name, flag_name)
         self._sync_shared_overrides_from_disk()
         bounded_pct = max(0, min(100, int(rollout_pct)))
-        existing = self._overrides.get(flag_name) or self._base_rules.get(flag_name)
-        desc = existing.description if existing else f"Runtime override for {flag_name}"
+        existing = self._overrides.get(canonical) or self._base_rules.get(canonical)
+        desc = existing.description if existing else f"Runtime override for {canonical}"
         chans = (
             tuple(str(c).lower() for c in allowed_channels)
             if allowed_channels is not None
@@ -224,14 +232,14 @@ class FeatureFlagEngine:
             else (existing.allowed_locales if existing else SSRA_SUPPORTED_LOCALES)
         )
         rule = FeatureFlagRule(
-            name=flag_name,
+            name=canonical,
             description=desc,
             enabled=bool(enabled),
             rollout_pct=bounded_pct,
             allowed_channels=chans,
             allowed_locales=locs,
         )
-        self._overrides[flag_name] = rule
+        self._overrides[canonical] = rule
         self._persist_shared_overrides_to_disk()
         return rule
 
@@ -241,7 +249,8 @@ class FeatureFlagEngine:
         if flag_name is None:
             self._overrides.clear()
         else:
-            self._overrides.pop(flag_name, None)
+            canonical = FLAG_ALIASES.get(flag_name, flag_name)
+            self._overrides.pop(canonical, None)
         self._persist_shared_overrides_to_disk()
 
     def evaluate(
@@ -253,8 +262,9 @@ class FeatureFlagEngine:
         locale: str = "en",
     ) -> FeatureFlagEvaluation:
         """Deterministically evaluate whether `flag_name` is active for `(subject_ref, channel, locale)`."""
-        rule = self._effective_rules().get(flag_name)
-        bucket = compute_deterministic_flag_bucket(flag_name, subject_ref, salt=self.salt)
+        canonical = FLAG_ALIASES.get(flag_name, flag_name)
+        rule = self._effective_rules().get(canonical)
+        bucket = compute_deterministic_flag_bucket(canonical, subject_ref, salt=self.salt)
         if rule is None:
             return FeatureFlagEvaluation(
                 flag_name=flag_name,

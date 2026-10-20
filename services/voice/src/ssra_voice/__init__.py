@@ -1173,9 +1173,15 @@ def verbalize_statutory_figures_for_tts(
     *,
     locale: LocaleCode = LocaleCode.EN,
     expected_numeric_values: list[str] | tuple[str, ...] = (),
+    allowed_context_numbers: list[str] | tuple[str, ...] = (),
 ) -> SpokenNumberVerbalization:
-    """Enforce `FLAG_SPOKEN_FIGURE_GUARD` and produce dual canonical-digit + phonetic-currency TTS text."""
-    verified = verify_spoken_figure_fidelity(text, expected_numeric_values)
+    """Enforce `FLAG_SPOKEN_FIGURE_GUARD` (`strict_no_extra_numbers=True`) and produce dual canonical-digit + phonetic-currency TTS text."""
+    verified = verify_spoken_figure_fidelity(
+        text,
+        expected_numeric_values,
+        strict_no_extra_numbers=True,
+        allowed_context_numbers=allowed_context_numbers,
+    )
     if not verified:
         raise SSRAError(
             McpErrorCode.VALIDATION_FAILED,
@@ -1205,10 +1211,14 @@ def sync_affective_state_to_call_lobby(
 ) -> LobbyCallEntry:
     """Push real-time acoustic/text emotion spikes into `CallLobbyManager` (`at_risk` / `watch` + priority raise)."""
     if primary_emotion == "distressed" or intensity >= 0.80 or frustration_velocity >= 0.45:
-        lobby.apply_event(
+        previous = lobby.calls.get(call_id)
+        was_at_risk = previous is not None and previous.risk_level == "at_risk"
+        entry = lobby.apply_event(
             "call.risk",
             {"call_id": call_id, "level": "at_risk", "signals": list(signals)},
         )
+        if was_at_risk:
+            return entry
         return lobby.apply_event(
             "call.priority_raised",
             {"call_id": call_id, "priority": "urgent", "reason": f"eq_{primary_emotion}"},

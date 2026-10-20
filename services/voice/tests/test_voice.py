@@ -357,6 +357,15 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     )
     assert risk_entry.risk_level == "at_risk"
     assert risk_entry.priority == "urgent"
+    repeat_risk = sync_affective_state_to_call_lobby(
+        lobby_eq,
+        call_id="c_eq",
+        primary_emotion="distressed",
+        intensity=0.90,
+        frustration_velocity=0.10,
+        signals=["distress_lexical:seized"],
+    )
+    assert repeat_risk.risk_level == "at_risk"
     watch_entry = sync_affective_state_to_call_lobby(
         lobby_eq,
         call_id="c_eq",

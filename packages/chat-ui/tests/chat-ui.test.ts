@@ -561,7 +561,7 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(resolveAdaptiveVoiceNetworkProfile({ effectiveType: "4g" }).opusBitrateKbps).toBe(24);
 
     // VR-AR1: Offline T0 Opus Voice-Note Outbox Queue (<= 64 KB, <= 30s, consent-gated)
-    const vnOutbox = new OfflineOutboxQueue(5);
+    const vnOutbox = new OfflineOutboxQueue(1);
     expect(
       vnOutbox.enqueueVoiceNote({
         id: "vn_t1_rejected",
@@ -576,16 +576,76 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     ).toBe("SECURITY_POLICY_T0_ONLY_OFFLINE_QUEUE");
     expect(
       vnOutbox.enqueueVoiceNote({
-        id: "vn_t0_ok",
+        id: "vn_no_consent",
         locale: "pga",
         tier: "T0",
         mimeType: "audio/webm;codecs=opus",
         durationSeconds: 15,
         sizeBytes: 24_000,
+        recordingConsentGranted: false,
+        queuedAtIso: "2026-10-20T10:00:00Z",
+      }).reason,
+    ).toBe("VOICE_RECORDING_CONSENT_REQUIRED");
+    expect(
+      vnOutbox.enqueueVoiceNote({
+        id: "vn_nan_dur",
+        locale: "pga",
+        tier: "T0",
+        mimeType: "audio/webm;codecs=opus",
+        durationSeconds: Number.NaN,
+        sizeBytes: 24_000,
+        recordingConsentGranted: true,
+        queuedAtIso: "2026-10-20T10:00:00Z",
+      }).reason,
+    ).toBe("EXCEEDS_30S_OFFLINE_VOICE_NOTE_CAP");
+    expect(
+      vnOutbox.enqueueVoiceNote({
+        id: "vn_zero_dur",
+        locale: "pga",
+        tier: "T0",
+        mimeType: "audio/webm;codecs=opus",
+        durationSeconds: 0,
+        sizeBytes: 24_000,
+        recordingConsentGranted: true,
+        queuedAtIso: "2026-10-20T10:00:00Z",
+      }).reason,
+    ).toBe("EXCEEDS_30S_OFFLINE_VOICE_NOTE_CAP");
+    expect(
+      vnOutbox.enqueueVoiceNote({
+        id: "vn_nan_size",
+        locale: "pga",
+        tier: "T0",
+        mimeType: "audio/webm;codecs=opus",
+        durationSeconds: 30,
+        sizeBytes: Number.NaN,
+        recordingConsentGranted: true,
+        queuedAtIso: "2026-10-20T10:00:00Z",
+      }).reason,
+    ).toBe("EXCEEDS_64KB_OFFLINE_VOICE_NOTE_CAP");
+    expect(
+      vnOutbox.enqueueVoiceNote({
+        id: "vn_t0_ok",
+        locale: "pga",
+        tier: "T0",
+        mimeType: "audio/webm;codecs=opus",
+        durationSeconds: 30,
+        sizeBytes: 65_536,
         recordingConsentGranted: true,
         queuedAtIso: "2026-10-20T10:00:00Z",
       }).queued,
     ).toBe(true);
+    expect(
+      vnOutbox.enqueueVoiceNote({
+        id: "vn_cap_exceeded",
+        locale: "pga",
+        tier: "T0",
+        mimeType: "audio/webm;codecs=opus",
+        durationSeconds: 10,
+        sizeBytes: 12_000,
+        recordingConsentGranted: true,
+        queuedAtIso: "2026-10-20T10:00:00Z",
+      }).reason,
+    ).toBe("OFFLINE_OUTBOX_CAPACITY_EXCEEDED");
     expect(vnOutbox.drainVoiceNotes()).toHaveLength(1);
   });
 });
