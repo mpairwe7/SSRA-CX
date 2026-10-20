@@ -61,9 +61,13 @@ class AguiStreamRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_auth_subject_consistency(self) -> AguiStreamRequest:
-        """Synchronize `subject_ref` and `auth_level` at the request adapter boundary (ASI03)."""
+        """Synchronize `subject_ref` and `auth_level` and bound `metadata` at the request adapter boundary (ASI03)."""
         if self.auth_level == AuthLevel.ANONYMOUS and self.subject_ref is not None:
             raise ValueError("Anonymous requests cannot specify a non-null subject_ref (ASI03)")
+        if len(self.metadata) > 16 or any(
+            len(k) > 64 or len(v) > 128 for k, v in self.metadata.items()
+        ):
+            raise ValueError("Request metadata exceeds entry count (16) or key/value length bounds")
         return self
 
 
@@ -71,7 +75,6 @@ class MemoryConsentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     consented: bool
-    auth_level: AuthLevel = AuthLevel.T1_TIN_BOUND
     preferred_locale: LocaleCode = LocaleCode.EN
     preferred_channel: ChannelName = ChannelName.WEB
     low_data_mode: bool = False
@@ -102,10 +105,10 @@ def _collect_runtime_stack_status(active_runtime: SSRAConversationRuntime) -> di
     sunflower_models = [name for name in cached_entries if "Sunflower" in name]
     gpu_devs = sorted(p.name for p in Path("/dev").glob("nvidia[0-9]*"))
     qdrant_url = os.environ.get("SSRA_QDRANT_URL", "").strip().rstrip("/")
-    qdrant_points = active_runtime.preference_store.qdrant_episodic_points_count()
+    qdrant_points = active_runtime.preference_store.qdrant_episodic_points_count(force_probe=True)
     qdrant_status = (
         "healthy"
-        if (qdrant_url and active_runtime.preference_store._qdrant_collection_ready)  # pyright: ignore[reportPrivateUsage]
+        if (qdrant_url and qdrant_points is not None)
         else ("unreachable" if qdrant_url else "in_memory_fallback")
     )
     return {
@@ -115,7 +118,7 @@ def _collect_runtime_stack_status(active_runtime: SSRAConversationRuntime) -> di
         "sunflower_models": sunflower_models,
         "gpu_devices": gpu_devs,
         "qdrant_status": qdrant_status,
-        "qdrant_episodic_points": qdrant_points,
+        "qdrant_episodic_points": qdrant_points or 0,
         "valkey_status": probe_valkey_redis(os.environ.get("SSRA_REDIS_URL", "")),
     }
 
@@ -229,17 +232,29 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         return {"status": "ok", "service": "ssra-agent-runtime"}
 
     @app.get("/v1/runtime/stack-status")
-    async def runtime_stack_status() -> dict[str, object]:
+    def runtime_stack_status() -> dict[str, object]:
         """Return sovereign GPU, local HF cache models, Qdrant vector store, and Valkey/Redis health."""
         return _collect_runtime_stack_status(active_runtime)
 
+    def _verify_subject_header(subject_ref: str, x_ssra_subject_ref: str | None) -> str:
+        """Validate `subject_ref` and enforce `X-SSRA-Subject-Ref` header parity when present."""
+        safe_sub = validate_safe_subject_ref(subject_ref, auth_level=AuthLevel.T1_TIN_BOUND)
+        if x_ssra_subject_ref is not None and x_ssra_subject_ref.strip() != safe_sub:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "X-SSRA-Subject-Ref header mismatch with path subject_ref (ASI03)",
+                status_code=403,
+            )
+        return safe_sub
+
     @app.post("/v1/memory/{subject_ref}/consent", response_model=HydratedCognitiveContext)
-    async def configure_memory_consent(
+    def configure_memory_consent(
         subject_ref: str,
         body: MemoryConsentRequest,
+        x_ssra_subject_ref: str | None = Header(default=None, alias="X-SSRA-Subject-Ref"),
     ) -> HydratedCognitiveContext:
         """Configure Tier 2/4 memory continuity consent and Tier 3 accessibility/channel preferences."""
-        safe_sub = validate_safe_subject_ref(subject_ref, auth_level=body.auth_level)
+        safe_sub = _verify_subject_header(subject_ref, x_ssra_subject_ref)
         active_runtime.preference_store.upsert_preferences(
             subject_ref=safe_sub,
             preferred_locale=body.preferred_locale,
@@ -255,16 +270,29 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         return active_runtime.preference_store.hydrate_subject_context(safe_sub)
 
     @app.get("/v1/memory/{subject_ref}", response_model=HydratedCognitiveContext)
-    async def get_hydrated_memory(subject_ref: str) -> HydratedCognitiveContext:
+    def get_hydrated_memory(
+        subject_ref: str,
+        x_ssra_subject_ref: str | None = Header(default=None, alias="X-SSRA-Subject-Ref"),
+    ) -> HydratedCognitiveContext:
         """Hydrate Tiers 2, 3, and 4 cognitive memory snapshot for a validated `subject_ref`."""
-        safe_sub = validate_safe_subject_ref(subject_ref, auth_level=AuthLevel.T1_TIN_BOUND)
+        safe_sub = _verify_subject_header(subject_ref, x_ssra_subject_ref)
         return active_runtime.preference_store.hydrate_subject_context(safe_sub)
 
     @app.delete("/v1/memory/{subject_ref}")
-    async def erase_subject_memory(subject_ref: str) -> dict[str, object]:
+    def erase_subject_memory(
+        subject_ref: str,
+        x_ssra_subject_ref: str | None = Header(default=None, alias="X-SSRA-Subject-Ref"),
+    ) -> dict[str, object]:
         """Execute immediate Right-to-Erasure across Tiers 2, 3, 4 and Qdrant vector store."""
-        safe_sub = validate_safe_subject_ref(subject_ref, auth_level=AuthLevel.T1_TIN_BOUND)
+        safe_sub = _verify_subject_header(subject_ref, x_ssra_subject_ref)
         erased = active_runtime.preference_store.delete_subject_preferences(safe_sub)
+        remaining = active_runtime.preference_store.qdrant_episodic_points_count(safe_sub)
+        if remaining is None or (os.environ.get("SSRA_QDRANT_URL") and not erased):
+            raise SSRAError(
+                McpErrorCode.UPSTREAM_UNAVAILABLE,
+                "Qdrant vector store erasure failed; Right-to-Erasure incomplete",
+                status_code=503,
+            )
         aud = active_runtime.audit_ledger.append(
             actor="ssra-agent-runtime",
             on_behalf_of=safe_sub,
@@ -275,9 +303,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         return {
             "subject_ref": safe_sub,
             "erased": erased,
-            "qdrant_remaining_points": active_runtime.preference_store.qdrant_episodic_points_count(
-                safe_sub
-            ),
+            "qdrant_remaining_points": remaining,
             "audit_event_hash": aud.hash,
         }
 

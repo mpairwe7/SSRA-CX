@@ -546,9 +546,19 @@ class SSRAConversationRuntime:
                     status="IN_PROGRESS",
                 )
             elif resp.pending_confirmation is not None:
+                tool_goal_map = {
+                    "create_case": IntentName.CREATE_CASE,
+                    "book_appointment": IntentName.BOOK_APPOINTMENT,
+                    "report_scam": IntentName.REPORT_SCAM,
+                }
+                pending_goal_type = tool_goal_map.get(
+                    resp.pending_confirmation.tool,
+                    resp.intent.intent,
+                )
                 self.preference_store.upsert_active_goal(
                     subject_ref=subject_ref,
-                    goal_type=resp.intent.intent,
+                    goal_type=pending_goal_type,
+                    goal_id=f"goal_{pending_goal_type.value}",
                     current_step_index=1,
                     total_steps=2,
                     completed_steps=[a.tool for a in resp.artifacts],
@@ -556,15 +566,26 @@ class SSRAConversationRuntime:
                     status="WAITING_ASYNC",
                 )
             elif confirmation_token is not None and resp.artifacts:
+                target_gid = f"goal_{resp.intent.intent.value}"
                 for active_g in self.preference_store.list_active_goals(subject_ref):
-                    if active_g.status == "WAITING_ASYNC":
+                    if active_g.status == "WAITING_ASYNC" and (
+                        active_g.goal_id == target_gid or active_g.goal_type == resp.intent.intent
+                    ):
+                        merged_steps = [
+                            *active_g.completed_steps,
+                            *(
+                                a.tool
+                                for a in resp.artifacts
+                                if a.tool not in active_g.completed_steps
+                            ),
+                        ]
                         self.preference_store.upsert_active_goal(
                             subject_ref=subject_ref,
                             goal_type=active_g.goal_type,
                             goal_id=active_g.goal_id,
                             current_step_index=active_g.total_steps,
                             total_steps=active_g.total_steps,
-                            completed_steps=[a.tool for a in resp.artifacts],
+                            completed_steps=merged_steps,
                             resume_channel=resp.channel,
                             status="COMPLETED",
                         )

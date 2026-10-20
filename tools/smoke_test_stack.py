@@ -68,132 +68,141 @@ def run_regression_assertions(
 
     # 3. 4-Tier Cognitive Memory Consent + Long-Horizon Multi-Turn Session, Workflow Stack & Compound Execution
     subject_ref = "sub_taxpayer_amina_01"
-    r_consent = rt_client.post(
-        f"/v1/memory/{subject_ref}/consent",
-        json={
-            "consented": True,
-            "auth_level": "T1_TIN_BOUND",
-            "preferred_locale": "en",
-            "preferred_channel": "whatsapp",
-            "low_data_mode": False,
-        },
-    )
-    assert r_consent.status_code == 200
-    assert r_consent.json()["memory_continuity_consented"] is True
+    mem_headers = {"X-SSRA-Subject-Ref": subject_ref}
+    rt_client.delete(f"/v1/memory/{subject_ref}", headers=mem_headers)
+    try:
+        r_consent = rt_client.post(
+            f"/v1/memory/{subject_ref}/consent",
+            headers=mem_headers,
+            json={
+                "consented": True,
+                "preferred_locale": "en",
+                "preferred_channel": "whatsapp",
+                "low_data_mode": False,
+            },
+        )
+        assert r_consent.status_code == 200
+        assert r_consent.json()["memory_continuity_consented"] is True
+        assert (
+            rt_client.get(
+                f"/v1/memory/{subject_ref}",
+                headers={"X-SSRA-Subject-Ref": "sub_other_attacker"},
+            ).status_code
+            == 403
+        )
 
-    run_id = uuid.uuid4().hex[:8]
-    thread_id = f"thr_regression_long_horizon_{run_id}"
-    # Turn 1: Start Guided TIN Registration (pushes ActiveWorkflowCursor onto thread workflow_stack)
-    t1 = rt_client.post(
-        "/v1/turns",
-        json={
-            "message": "How do I register for a TIN?",
-            "thread_id": thread_id,
-            "locale": "en",
-            "channel": "web",
-        },
-    )
-    assert t1.status_code == 200
-    t1_json = t1.json()
-    assert t1_json["intent"]["intent"] == "guided_tin_registration"
-    assert len(t1_json["answer"]["ui_component"]["props"]["guided_steps"]) == 3
+        run_id = uuid.uuid4().hex[:8]
+        thread_id = f"thr_regression_long_horizon_{run_id}"
+        # Turn 1: Start Guided TIN Registration (pushes ActiveWorkflowCursor onto thread workflow_stack)
+        t1 = rt_client.post(
+            "/v1/turns",
+            json={
+                "message": "How do I register for a TIN?",
+                "thread_id": thread_id,
+                "locale": "en",
+                "channel": "web",
+            },
+        )
+        assert t1.status_code == 200
+        t1_json = t1.json()
+        assert t1_json["intent"]["intent"] == "guided_tin_registration"
+        assert len(t1_json["answer"]["ui_component"]["props"]["guided_steps"]) == 3
 
-    # Turn 2: Mid-journey clarifying question on Business Profit Tax (preserves resumable_workflow on CitationList)
-    t2 = rt_client.post(
-        "/v1/turns",
-        json={
-            "message": "What is the Business Profit Tax rate and advance BPT on imported goods?",
-            "thread_id": thread_id,
-            "locale": "en",
-            "channel": "web",
-        },
-    )
-    assert t2.status_code == 200
-    t2_json = t2.json()
-    assert t2_json["answer"]["abstained"] is False
-    assert (
-        t2_json["answer"]["ui_component"]["props"]["resumable_workflow"]["journey_intent"]
-        == "guided_tin_registration"
-    )
+        # Turn 2: Mid-journey clarifying question on Business Profit Tax (preserves resumable_workflow on CitationList)
+        t2 = rt_client.post(
+            "/v1/turns",
+            json={
+                "message": "What is the Business Profit Tax rate and advance BPT on imported goods?",
+                "thread_id": thread_id,
+                "locale": "en",
+                "channel": "web",
+            },
+        )
+        assert t2.status_code == 200
+        t2_json = t2.json()
+        assert t2_json["answer"]["abstained"] is False
+        assert (
+            t2_json["answer"]["ui_component"]["props"]["resumable_workflow"]["journey_intent"]
+            == "guided_tin_registration"
+        )
 
-    # Turn 3: Authenticated T1_TIN_BOUND compound goal (`get_balance` + `get_tcc_status` + `create_case` confirmation staging)
-    t3 = rt_client.post(
-        "/v1/turns",
-        json={
-            "message": "Check my tax balance and check my TCC status and open a support case",
-            "thread_id": thread_id,
-            "locale": "en",
-            "channel": "web",
-            "auth_level": "T1_TIN_BOUND",
-            "subject_ref": subject_ref,
-        },
-    )
-    assert t3.status_code == 200
-    t3_json = t3.json()
-    assert t3_json["outcome_verified"] is True
-    assert "ledger.get_balance" in t3_json["plan"]["steps"]
-    assert "tcc.get_tcc_status" in t3_json["plan"]["steps"]
-    assert "cases.create_case" in t3_json["plan"]["steps"]
-    assert t3_json["pending_confirmation"] is not None
-    cfm_token = t3_json["pending_confirmation"]["token"]
-    idem_key = t3_json["pending_confirmation"]["idempotency_key"]
+        # Turn 3: Authenticated T1_TIN_BOUND compound goal (`get_balance` + `get_tcc_status` + `create_case` confirmation staging)
+        t3 = rt_client.post(
+            "/v1/turns",
+            json={
+                "message": "Check my tax balance and check my TCC status and open a support case",
+                "thread_id": thread_id,
+                "locale": "en",
+                "channel": "web",
+                "auth_level": "T1_TIN_BOUND",
+                "subject_ref": subject_ref,
+            },
+        )
+        assert t3.status_code == 200
+        t3_json = t3.json()
+        assert t3_json["outcome_verified"] is True
+        assert "ledger.get_balance" in t3_json["plan"]["steps"]
+        assert "tcc.get_tcc_status" in t3_json["plan"]["steps"]
+        assert "cases.create_case" in t3_json["plan"]["steps"]
+        assert t3_json["pending_confirmation"] is not None
+        cfm_token = t3_json["pending_confirmation"]["token"]
+        idem_key = t3_json["pending_confirmation"]["idempotency_key"]
 
-    # Verify Tier 2 Episodic Memory & Tier 4 Procedural Goal Memory before confirmation
-    r_mem_mid = rt_client.get(f"/v1/memory/{subject_ref}")
-    assert r_mem_mid.status_code == 200
-    mem_mid = r_mem_mid.json()
-    assert len(mem_mid["recent_episodes"]) >= 1
-    assert "[REDACTED_FIGURE]" in mem_mid["recent_episodes"][-1]["redacted_summary"]
-    assert len(mem_mid["active_goals"]) == 1
-    assert mem_mid["active_goals"][0]["status"] == "WAITING_ASYNC"
+        # Verify Tier 2 Episodic Memory & Tier 4 Procedural Goal Memory before confirmation
+        r_mem_mid = rt_client.get(f"/v1/memory/{subject_ref}", headers=mem_headers)
+        assert r_mem_mid.status_code == 200
+        mem_mid = r_mem_mid.json()
+        assert len(mem_mid["recent_episodes"]) >= 1
+        assert "[REDACTED_FIGURE]" in mem_mid["recent_episodes"][-1]["redacted_summary"]
+        assert len(mem_mid["active_goals"]) == 1
+        assert mem_mid["active_goals"][0]["status"] == "WAITING_ASYNC"
 
-    # Turn 4: Confirm the staged T2 `create_case` write action using single-use `confirmation_token`
-    t4 = rt_client.post(
-        "/v1/turns",
-        json={
-            "message": "Confirm case creation",
-            "thread_id": thread_id,
-            "locale": "en",
-            "channel": "web",
-            "auth_level": "T1_TIN_BOUND",
-            "subject_ref": subject_ref,
-            "confirmation_token": cfm_token,
-            "idempotency_key": idem_key,
-        },
-    )
-    assert t4.status_code == 200
-    t4_json = t4.json()
-    assert any(a["tool"] == "create_case" for a in t4_json["artifacts"])
+        # Turn 4: Confirm the staged T2 `create_case` write action using single-use `confirmation_token`
+        t4 = rt_client.post(
+            "/v1/turns",
+            json={
+                "message": "Confirm case creation",
+                "thread_id": thread_id,
+                "locale": "en",
+                "channel": "web",
+                "auth_level": "T1_TIN_BOUND",
+                "subject_ref": subject_ref,
+                "confirmation_token": cfm_token,
+                "idempotency_key": idem_key,
+            },
+        )
+        assert t4.status_code == 200
+        t4_json = t4.json()
+        assert any(a["tool"] == "create_case" for a in t4_json["artifacts"])
 
-    # Verify single-use confirmation token replay is rejected (`SEC-G2`)
-    t4_replay = rt_client.post(
-        "/v1/turns",
-        json={
-            "message": "Open a support case",
-            "thread_id": thread_id,
-            "locale": "en",
-            "channel": "web",
-            "auth_level": "T1_TIN_BOUND",
-            "subject_ref": subject_ref,
-            "confirmation_token": cfm_token,
-            "idempotency_key": idem_key,
-        },
-    )
-    assert t4_replay.status_code in (403, 422)
+        # Verify single-use confirmation token replay is rejected (`SEC-G2`)
+        t4_replay = rt_client.post(
+            "/v1/turns",
+            json={
+                "message": "Open a support case",
+                "thread_id": thread_id,
+                "locale": "en",
+                "channel": "web",
+                "auth_level": "T1_TIN_BOUND",
+                "subject_ref": subject_ref,
+                "confirmation_token": cfm_token,
+                "idempotency_key": idem_key,
+            },
+        )
+        assert t4_replay.status_code in (403, 422)
 
-    # Verify Tier 4 Active Goal completed & Qdrant episodic vector sync + Right-to-Erasure
-    r_mem_after = rt_client.get(f"/v1/memory/{subject_ref}")
-    assert r_mem_after.status_code == 200
-    assert len(r_mem_after.json()["active_goals"]) == 0
-    if expect_live_docker_stack:
-        assert rt_client.get("/v1/runtime/stack-status").json()["qdrant_episodic_points"] >= 1
-
-    r_erase = rt_client.delete(f"/v1/memory/{subject_ref}")
-    assert r_erase.status_code == 200
-    assert r_erase.json()["erased"] is True
-    assert r_erase.json()["qdrant_remaining_points"] == 0
-    r_mem_wiped = rt_client.get(f"/v1/memory/{subject_ref}")
-    assert r_mem_wiped.json()["recent_episodes"] == []
+        # Verify Tier 4 Active Goal completed & Qdrant episodic vector sync + Right-to-Erasure
+        r_mem_after = rt_client.get(f"/v1/memory/{subject_ref}", headers=mem_headers)
+        assert r_mem_after.status_code == 200
+        assert len(r_mem_after.json()["active_goals"]) == 0
+        if expect_live_docker_stack:
+            assert rt_client.get("/v1/runtime/stack-status").json()["qdrant_episodic_points"] >= 1
+    finally:
+        r_erase = rt_client.delete(f"/v1/memory/{subject_ref}", headers=mem_headers)
+        assert r_erase.status_code == 200
+        assert r_erase.json()["qdrant_remaining_points"] == 0
+        r_mem_wiped = rt_client.get(f"/v1/memory/{subject_ref}", headers=mem_headers)
+        assert r_mem_wiped.json()["recent_episodes"] == []
 
     # 4. Multimodal Pre-Emptive `EQ_ESCALATION` & `HandoffEnvelope` v2
     t_eq = rt_client.post(
@@ -343,6 +352,11 @@ def main() -> None:
     )
     parser.add_argument("--qdrant-url", default="", help="Optional live Qdrant base URL")
     args = parser.parse_args()
+
+    if (args.api_url or args.runtime_url or args.qdrant_url) and not (
+        args.api_url and args.runtime_url
+    ):
+        parser.error("--api-url and --runtime-url are both required for live mode")
 
     if args.api_url and args.runtime_url:
         headers = {"ngrok-skip-browser-warning": "true"}

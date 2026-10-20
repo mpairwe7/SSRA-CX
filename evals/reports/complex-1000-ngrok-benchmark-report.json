@@ -1,6 +1,6 @@
 {
   "benchmark_version": "2026.10.21",
-  "target_ngrok_url": "https://struttingly-nongeological-briella.ngrok-free.dev",
+  "target_ngrok_url": "https://<redacted-ngrok-tunnel>",
   "total_scenarios": 1000,
   "total_turns_executed": 1060,
   "total_http_requests_over_ngrok": 1059,

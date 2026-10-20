@@ -1,5 +1,5 @@
 # Hardened Multi-Stage Python 3.14 Container for SSRA Assist Agent Runtime (CIS Docker Benchmark v1.7)
-FROM python:3.14.7-slim-bookworm AS runtime
+FROM python:3.14.7-slim-bookworm@sha256:82bc3c539b8813ada9d68c63b40158fa002f7f33de9bf3312a3dfdc0620dff56 AS runtime
 
 LABEL org.opencontainers.image.title="ssra-agent-runtime" \
       org.opencontainers.image.vendor="South Sudan Revenue Authority (SSRA)" \
@@ -15,7 +15,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN groupadd --gid 10001 ssra && \
     useradd --uid 10001 --gid 10001 --shell /usr/sbin/nologin --no-create-home ssra && \
-    pip install --no-cache-dir "fastapi==0.139.2" "uvicorn==0.54.0" "pydantic==2.14.0" "pydantic-settings==2.15.0" "pyyaml==6.0.2" "langgraph==1.2.14" "httpx==0.28.1" "jsonschema==4.25.1" "sqlalchemy==2.1.4" "structlog==26.1.0" "stamina==26.1.0" "tenacity==9.2.1" "orjson==3.13.0" cryptography
+    pip install --no-cache-dir "fastapi==0.139.2" "uvicorn==0.54.0" "pydantic==2.14.0" "pydantic-settings==2.15.0" "pyyaml==6.0.2" "langgraph==1.2.14" "httpx==0.28.1" "jsonschema==4.25.1" "sqlalchemy==2.1.4" "structlog==26.1.0" "stamina==26.1.0" "tenacity==9.2.1" "orjson==3.13.0" "cryptography==50.0.2"
 
 WORKDIR /app
 COPY --chown=10001:10001 pyproject.toml uv.lock ./

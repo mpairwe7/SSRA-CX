@@ -1073,6 +1073,7 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
             outcome_status="RESOLVED",
             raw_summary="Checked balance 100 SSP",
         )
+        q_mem._delete_episodes_from_qdrant(["ep_trim_01"])  # pyright: ignore[reportPrivateUsage]
         assert q_mem.qdrant_episodic_points_count("sub_qdrant_test") == 1
         assert q_mem.delete_subject_preferences("sub_qdrant_test") is True
     with (
@@ -1082,7 +1083,7 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
         patch("httpx.post", side_effect=httpx.ConnectError("offline")),
     ):
         q_mem._qdrant_collection_ready = False  # pyright: ignore[reportPrivateUsage]
-        assert q_mem.qdrant_episodic_points_count() == 0
+        assert q_mem.qdrant_episodic_points_count() is None
         q_mem._qdrant_collection_ready = True  # pyright: ignore[reportPrivateUsage]
         q_mem.set_memory_continuity_consent("sub_qdrant_test", consented=True)
         q_mem.record_episode(
@@ -1093,7 +1094,8 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
             outcome_status="RESOLVED",
             raw_summary="Offline fallback",
         )
-        assert q_mem.qdrant_episodic_points_count() == 0
+        q_mem._delete_episodes_from_qdrant(["ep_trim_01"])  # pyright: ignore[reportPrivateUsage]
+        assert q_mem.qdrant_episodic_points_count() is None
         q_mem.delete_subject_preferences("sub_qdrant_test")
 
     client = TestClient(create_runtime_app(rt))
@@ -1106,12 +1108,28 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
         patch("httpx.post", return_value=mock_resp_200),
     ):
         assert client.get("/v1/runtime/stack-status").json()["qdrant_status"] == "healthy"
+    with (
+        patch.dict(os.environ, {"SSRA_QDRANT_URL": "http://127.0.0.1:26333"}),
+        patch("httpx.get", side_effect=httpx.ConnectError("offline")),
+        patch("httpx.post", side_effect=httpx.ConnectError("offline")),
+    ):
+        assert client.delete("/v1/memory/sub_taxpayer_amina_01").status_code == 503
+    assert (
+        client.post(
+            "/v1/turns",
+            json={
+                "message": "Hi",
+                "metadata": {f"k{i}": "v" for i in range(18)},
+            },
+        ).status_code
+        == 422
+    )
 
     consent_res = client.post(
         "/v1/memory/sub_taxpayer_amina_01/consent",
+        headers={"X-SSRA-Subject-Ref": "sub_taxpayer_amina_01"},
         json={
             "consented": True,
-            "auth_level": "T1_TIN_BOUND",
             "preferred_locale": "en",
             "preferred_channel": "whatsapp",
             "low_data_mode": False,
@@ -1119,6 +1137,13 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
     )
     assert consent_res.status_code == 200
     assert consent_res.json()["memory_continuity_consented"] is True
+    assert (
+        client.get(
+            "/v1/memory/sub_taxpayer_amina_01",
+            headers={"X-SSRA-Subject-Ref": "sub_other_attacker"},
+        ).status_code
+        == 403
+    )
 
     # Guided journey creates IN_PROGRESS Tier 4 ActiveGoalRecord when consented
     g_res = client.post(

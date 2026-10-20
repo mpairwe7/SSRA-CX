@@ -513,7 +513,25 @@ async def execute_single_scenario(
             "subject_ref": scen.subject_ref,
             "metadata": scen.metadata,
         }
-        resp = await client.post("/v1/turns", json=req_payload)
+        try:
+            resp = await client.post("/v1/turns", json=req_payload)
+        except httpx.HTTPError as exc:
+            return {
+                "scenario_id": scen.scenario_id,
+                "modality": scen.modality,
+                "language_group": scen.language_group,
+                "locale": scen.locale,
+                "category": scen.category,
+                "passed": False,
+                "latency_ms": round((time.perf_counter() - t0) * 1000.0, 2),
+                "http_requests": 1,
+                "turns_executed": 1,
+                "intent_matched": False,
+                "objective_resolved": False,
+                "eq_verified": False,
+                "numeric_fidelity_verified": False,
+                "transport_error": type(exc).__name__,
+            }
         http_calls = 1
         turns_done = 1
 
@@ -588,6 +606,27 @@ async def execute_single_scenario(
                 if not pending:
                     followup_ok = False
                 else:
+                    try:
+                        r2 = await client.post(
+                            "/v1/turns",
+                            json={
+                                "message": scen.followup_message,
+                                "thread_id": thread_id,
+                                "locale": scen.locale,
+                                "channel": scen.channel,
+                                "auth_level": scen.auth_level,
+                                "subject_ref": scen.subject_ref,
+                                "confirmation_token": pending["token"],
+                                "idempotency_key": pending["idempotency_key"],
+                            },
+                        )
+                        followup_ok = r2.status_code == 200 and any(
+                            a["tool"] == "create_case" for a in r2.json().get("artifacts", [])
+                        )
+                    except httpx.HTTPError:
+                        followup_ok = False
+            elif scen.category == "LONG_HORIZON_WORKFLOW_DELEGATION":
+                try:
                     r2 = await client.post(
                         "/v1/turns",
                         json={
@@ -595,34 +634,19 @@ async def execute_single_scenario(
                             "thread_id": thread_id,
                             "locale": scen.locale,
                             "channel": scen.channel,
-                            "auth_level": scen.auth_level,
-                            "subject_ref": scen.subject_ref,
-                            "confirmation_token": pending["token"],
-                            "idempotency_key": pending["idempotency_key"],
                         },
                     )
-                    followup_ok = r2.status_code == 200 and any(
-                        a["tool"] == "create_case" for a in r2.json().get("artifacts", [])
-                    )
-            elif scen.category == "LONG_HORIZON_WORKFLOW_DELEGATION":
-                r2 = await client.post(
-                    "/v1/turns",
-                    json={
-                        "message": scen.followup_message,
-                        "thread_id": thread_id,
-                        "locale": scen.locale,
-                        "channel": scen.channel,
-                    },
-                )
-                if r2.status_code != 200:
+                    if r2.status_code != 200:
+                        followup_ok = False
+                    else:
+                        ui_props = ((r2.json().get("answer") or {}).get("ui_component") or {}).get(
+                            "props"
+                        ) or {}
+                        followup_ok = (ui_props.get("resumable_workflow") or {}).get(
+                            "journey_intent"
+                        ) == "guided_tin_registration"
+                except httpx.HTTPError:
                     followup_ok = False
-                else:
-                    ui_props = ((r2.json().get("answer") or {}).get("ui_component") or {}).get(
-                        "props"
-                    ) or {}
-                    followup_ok = (ui_props.get("resumable_workflow") or {}).get(
-                        "journey_intent"
-                    ) == "guided_tin_registration"
 
         # 4. TTS Modality Post-Processing (Hybrid Speech Router + Verbalizer + Spoken Figure Fidelity + Barge-In)
         numeric_fidelity_ok = True
@@ -747,9 +771,9 @@ async def run_benchmark_async(
         for sub in consent_subjects:
             rc = await client.post(
                 f"/v1/memory/{sub}/consent",
+                headers={"X-SSRA-Subject-Ref": sub},
                 json={
                     "consented": True,
-                    "auth_level": "T1_TIN_BOUND",
                     "preferred_locale": "en",
                     "preferred_channel": "whatsapp",
                     "low_data_mode": False,
@@ -768,12 +792,13 @@ async def run_benchmark_async(
         qdrant_points_peak = int(stack_status_mid.get("qdrant_episodic_points", 0))
 
         for sub in consent_subjects:
-            rm = await client.get(f"/v1/memory/{sub}")
+            sub_hdr = {"X-SSRA-Subject-Ref": sub}
+            rm = await client.get(f"/v1/memory/{sub}", headers=sub_hdr)
             assert rm.status_code == 200
             m_json = rm.json()
             if len(m_json.get("recent_episodes", [])) >= 1:
                 hydrated_verified += 1
-            rd = await client.delete(f"/v1/memory/{sub}")
+            rd = await client.delete(f"/v1/memory/{sub}", headers=sub_hdr)
             assert rd.status_code == 200
             if rd.json().get("erased") is True and rd.json().get("qdrant_remaining_points") == 0:
                 erased_verified += 1
@@ -815,9 +840,15 @@ async def run_benchmark_async(
             "accuracy_pct": round(100.0 * sum(1 for r in sub_r if r["passed"]) / len(sub_r), 2),
         }
 
+    from urllib.parse import urlsplit
+
+    _parts = urlsplit(ngrok_url)
+    target_label = (
+        f"{_parts.scheme}://<redacted-ngrok-tunnel>" if "ngrok" in _parts.netloc else ngrok_url
+    )
     summary: dict[str, Any] = {
         "benchmark_version": "2026.10.21",
-        "target_ngrok_url": ngrok_url,
+        "target_ngrok_url": target_label,
         "total_scenarios": len(results),
         "total_turns_executed": total_turns,
         "total_http_requests_over_ngrok": total_http,
@@ -864,7 +895,7 @@ async def run_benchmark_async(
         "# SSRA Assist — 1,000-Scenario Complex Multimodal (`TTT`, `STT`, `TTS`) Live Ngrok Stress & Load Report",
         "",
         "- **Date:** 2026-10-21",
-        f"- **Live Ngrok Endpoint:** `{ngrok_url}`",
+        f"- **Live Ngrok Endpoint:** `{target_label}`",
         f"- **Total Complex Scenarios Formulated & Executed:** `{summary['total_scenarios']}` (`340 en`, `330 ar/pga`, `330 din`)",
         f"- **Total Conversational Turns Executed:** `{summary['total_turns_executed']}`",
         f"- **Total Live HTTP Requests Over Ngrok:** `{summary['total_http_requests_over_ngrok']}`",

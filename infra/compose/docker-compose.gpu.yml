@@ -13,7 +13,7 @@ x-hardened-gpu-defaults: &hardened-gpu-defaults
 
 services:
   ssra-postgres:
-    image: bsms-postgres:18-pgaudit
+    image: ${SSRA_POSTGRES_IMAGE:-bsms-postgres:18-pgaudit}
     environment:
       POSTGRES_USER: ssra
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
@@ -32,7 +32,7 @@ services:
 
   ssra-valkey:
     <<: *hardened-gpu-defaults
-    image: redis:8-alpine
+    image: redis:8-alpine@sha256:c5e375abb885e6b2021c0377879e4890bf76f9065b8922ffc113f2b226b9fc17
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m
@@ -49,7 +49,7 @@ services:
 
   ssra-qdrant:
     <<: *hardened-gpu-defaults
-    image: qdrant/qdrant:v1.19.0
+    image: qdrant/qdrant:v1.19.0@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc
     ports:
       - "127.0.0.1:26333:6333"
     volumes:
@@ -77,7 +77,7 @@ services:
       SSRA_FEATURE_FLAGS_OVERRIDE_FILE: /tmp/ssra_feature_flag_overrides.json
     volumes:
       - type: bind
-        source: /home/developer/huggingface_cache
+        source: ${SSRA_HF_CACHE_DIR:-/home/developer/huggingface_cache}
         target: /home/developer/huggingface_cache
         read_only: true
     ports:
@@ -110,7 +110,7 @@ services:
       SSRA_FEATURE_FLAGS_OVERRIDE_FILE: /tmp/ssra_feature_flag_overrides.json
     volumes:
       - type: bind
-        source: /home/developer/huggingface_cache
+        source: ${SSRA_HF_CACHE_DIR:-/home/developer/huggingface_cache}
         target: /home/developer/huggingface_cache
         read_only: true
     ports:
@@ -129,7 +129,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ["5"]
+              device_ids: ["${SSRA_GPU_DEVICE_ID:-5}"]
               capabilities: [gpu]
 
 networks:

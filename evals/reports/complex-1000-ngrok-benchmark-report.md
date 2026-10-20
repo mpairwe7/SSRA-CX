@@ -1,7 +1,7 @@
 # SSRA Assist — 1,000-Scenario Complex Multimodal (`TTT`, `STT`, `TTS`) Live Ngrok Stress & Load Report
 
 - **Date:** 2026-10-21
-- **Live Ngrok Endpoint:** `https://struttingly-nongeological-briella.ngrok-free.dev`
+- **Live Ngrok Endpoint:** `https://<redacted-ngrok-tunnel>`
 - **Total Complex Scenarios Formulated & Executed:** `1000` (`340 en`, `330 ar/pga`, `330 din`)
 - **Total Conversational Turns Executed:** `1060`
 - **Total Live HTTP Requests Over Ngrok:** `1059`
