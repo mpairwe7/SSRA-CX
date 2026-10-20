@@ -29,20 +29,21 @@ export interface SemanticThemeTokens {
 export const SSRA_DESIGN_TOKENS = {
   colors: {
     navy: "#0b2545",
-    blue: "#134074",
-    gold: "#c99700",
-    green: "#1b7f4c",
-    red: "#b42318",
-    surface: "#f8fafc",
+    blue: "#0f47af", // White Nile Azure (Republic of South Sudan flag chevron)
+    gold: "#c99700", // Guiding Star & Savanna Acacia Gold
+    green: "#078930", // Equatoria Forest & Agriculture Green
+    red: "#b42318", // Sovereign Crimson
+    surface: "#f6f7f2", // Warm Savanna Cotton Paper
+    nileDusk: "#091310", // Natural Nile & Canopy Dusk
   },
   oklchPalette: {
     brandNavy: "oklch(0.26 0.07 252)",
-    brandBlue: "oklch(0.36 0.09 252)",
+    brandBlue: "oklch(0.42 0.16 258)",
     brandGold: "oklch(0.72 0.15 84)",
-    civicGreen: "oklch(0.52 0.12 156)",
+    civicGreen: "oklch(0.54 0.16 148)",
     alertRed: "oklch(0.48 0.18 28)",
-    surfaceWarmLight: "oklch(0.985 0.004 248)",
-    surfaceDeepDark: "oklch(0.18 0.03 252)",
+    surfaceWarmLight: "oklch(0.978 0.008 115)",
+    surfaceDeepDark: "oklch(0.17 0.025 162)",
   },
   themes: {
     light: {
