@@ -4,7 +4,11 @@ from ssra_runtime.graphs.complaint_intake import (
     MinimalComplaintTicket,
     build_minimal_complaint_ticket,
 )
-from ssra_runtime.graphs.conversation import SSRAConversationRuntime
+from ssra_runtime.graphs.conversation import (
+    SSRAConversationRuntime,
+    validate_safe_subject_ref,
+    validate_safe_thread_id,
+)
 from ssra_runtime.graphs.guided_journey import GuidedJourneyStep, get_guided_journey_steps
 from ssra_runtime.graphs.handoff import execute_handoff_subgraph
 from ssra_runtime.graphs.knowledge_qa import execute_knowledge_qa_subgraph
@@ -19,4 +23,6 @@ __all__ = [
     "execute_knowledge_qa_subgraph",
     "execute_self_service_subgraph",
     "get_guided_journey_steps",
+    "validate_safe_subject_ref",
+    "validate_safe_thread_id",
 ]

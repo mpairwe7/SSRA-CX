@@ -72,7 +72,7 @@ def execute_self_service_subgraph(
         staged_pending: PendingConfirmation | None = None
         if "cases.create_case" in planned_steps:
             case_args = {
-                "case_type": str(slots.get("case_type", "RECONCILIATION")),
+                "case_type": str(slots.get("case_type", "INQUIRY")),
                 "summary": str(
                     slots.get("summary", "Follow-up reconciliation case from balance check")
                 ),

@@ -15,13 +15,28 @@ Non-Negotiable Invariants:
 
 from __future__ import annotations
 
+import hashlib
+import os
 import re
+import uuid
 from datetime import datetime, timedelta
 from typing import Literal
 
+import httpx
 from pydantic import BaseModel, ConfigDict, Field
 from ssra_core import ChannelName, IntentName, LocaleCode, new_id, utc_now
 from ssra_security import redact_pii
+
+QDRANT_EPISODIC_COLLECTION: str = "ssra_episodic_memory_v1"
+
+
+def deterministic_16d_vector(text: str) -> list[float]:
+    """Compute a normalized deterministic 16-dimensional embedding vector from redacted text."""
+    digest = hashlib.sha256(text.encode("utf-8")).digest()
+    raw = [((digest[i] / 127.5) - 1.0) for i in range(16)]
+    norm = sum(v * v for v in raw) ** 0.5 or 1.0
+    return [round(v / norm, 6) for v in raw]
+
 
 _CURRENCY_OR_LONG_DIGIT_RE = re.compile(
     r"(?:(?:SSP|USD)\s*)?[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,][\d\u0660-\u0669\u06F0-\u06F9]+)*(?:\s*(?:SSP|USD|%))?",
@@ -121,6 +136,127 @@ class SubjectPreferenceMemoryStore:
         self._continuity_consent: dict[str, bool] = {}
         self._episodes: dict[str, list[EpisodicMemoryRecord]] = {}
         self._goals: dict[str, dict[str, ActiveGoalRecord]] = {}
+        self._qdrant_collection_ready: bool = False
+
+    def _qdrant_base_url(self) -> str:
+        """Return the configured Qdrant HTTP URL or empty string if in-memory only."""
+        return os.environ.get("SSRA_QDRANT_URL", "").strip().rstrip("/")
+
+    def _ensure_qdrant_collection(self, base_url: str) -> bool:
+        """Ensure the `ssra_episodic_memory_v1` collection exists in Qdrant."""
+        if self._qdrant_collection_ready:
+            return True
+        try:
+            r = httpx.get(f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}", timeout=3.0)
+            if r.status_code != 200:
+                r = httpx.put(
+                    f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}",
+                    json={"vectors": {"size": 16, "distance": "Cosine"}},
+                    timeout=3.0,
+                )
+            self._qdrant_collection_ready = r.status_code in (200, 201)
+            return self._qdrant_collection_ready
+        except httpx.HTTPError:
+            return False
+
+    def _sync_episode_to_qdrant(self, rec: EpisodicMemoryRecord) -> None:
+        """Upsert a PII-redacted and figure-stripped episodic memory point into Qdrant if configured."""
+        base_url = self._qdrant_base_url()
+        if not base_url or not self._ensure_qdrant_collection(base_url):
+            return
+        point_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, rec.episode_id))
+        try:
+            httpx.put(
+                f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}/points?wait=true",
+                json={
+                    "points": [
+                        {
+                            "id": point_uuid,
+                            "vector": deterministic_16d_vector(rec.redacted_summary),
+                            "payload": {
+                                "episode_id": rec.episode_id,
+                                "subject_ref": rec.subject_ref,
+                                "intent": rec.intent.value,
+                                "outcome_status": rec.outcome_status,
+                                "redacted_summary": rec.redacted_summary,
+                                "locale": rec.locale.value,
+                                "channel": rec.channel.value,
+                                "expires_at": rec.expires_at.isoformat(),
+                            },
+                        }
+                    ]
+                },
+                timeout=3.0,
+            )
+        except httpx.HTTPError:
+            return
+
+    def _delete_episodes_from_qdrant(self, episode_ids: list[str]) -> None:
+        """Delete trimmed or expired episodic point UUIDs from Qdrant when configured."""
+        base_url = self._qdrant_base_url()
+        if not episode_ids or not base_url or not self._ensure_qdrant_collection(base_url):
+            return
+        point_uuids = [str(uuid.uuid5(uuid.NAMESPACE_DNS, eid)) for eid in episode_ids]
+        try:
+            httpx.post(
+                f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}/points/delete?wait=true",
+                json={"points": point_uuids},
+                timeout=3.0,
+            )
+        except httpx.HTTPError:
+            return
+
+    def _delete_subject_from_qdrant(self, subject_ref: str) -> bool:
+        """Delete all Qdrant episodic points belonging to `subject_ref` for Right-to-Erasure."""
+        base_url = self._qdrant_base_url()
+        if not base_url:
+            return True
+        if not self._ensure_qdrant_collection(base_url):
+            return False
+        try:
+            r = httpx.post(
+                f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}/points/delete?wait=true",
+                json={
+                    "filter": {
+                        "must": [
+                            {"key": "subject_ref", "match": {"value": subject_ref}},
+                        ]
+                    }
+                },
+                timeout=3.0,
+            )
+            return r.status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    def qdrant_episodic_points_count(
+        self,
+        subject_ref: str | None = None,
+        *,
+        force_probe: bool = False,
+    ) -> int | None:
+        """Return the number of episodic memory points stored in Qdrant, or `None` if Qdrant is unreachable."""
+        base_url = self._qdrant_base_url()
+        if not base_url:
+            return 0
+        if force_probe:
+            self._qdrant_collection_ready = False
+        if not self._ensure_qdrant_collection(base_url):
+            return None
+        body: dict[str, object] = {"exact": True}
+        if subject_ref is not None:
+            body["filter"] = {
+                "must": [{"key": "subject_ref", "match": {"value": subject_ref}}],
+            }
+        try:
+            r = httpx.post(
+                f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}/points/count",
+                json=body,
+                timeout=3.0,
+            )
+            return int(r.json().get("result", {}).get("count", 0)) if r.status_code == 200 else None
+        except (httpx.HTTPError, ValueError, TypeError):
+            return None
 
     def upsert_preferences(
         self,
@@ -155,6 +291,7 @@ class SubjectPreferenceMemoryStore:
         if not consented:
             self._episodes.pop(subject_ref, None)
             self._goals.pop(subject_ref, None)
+            self._delete_subject_from_qdrant(subject_ref)
 
     def has_memory_continuity_consent(self, subject_ref: str) -> bool:
         """Return True if `subject_ref` has active opt-in consent for Tier 2/4 memory continuity."""
@@ -191,13 +328,19 @@ class SubjectPreferenceMemoryStore:
         bucket = self._episodes.setdefault(subject_ref, [])
         bucket.append(rec)
         if len(bucket) > MAX_EPISODES_PER_SUBJECT:
+            trimmed = [ep.episode_id for ep in bucket[:-MAX_EPISODES_PER_SUBJECT]]
             del bucket[:-MAX_EPISODES_PER_SUBJECT]
+            self._delete_episodes_from_qdrant(trimmed)
+        self._sync_episode_to_qdrant(rec)
         return rec
 
     def list_episodes(self, subject_ref: str) -> list[EpisodicMemoryRecord]:
         """List non-expired Tier 2 episodic records for `subject_ref`."""
         now = utc_now()
         items = self._episodes.get(subject_ref, [])
+        expired = [ep.episode_id for ep in items if ep.expires_at <= now]
+        if expired:
+            self._delete_episodes_from_qdrant(expired)
         valid = [ep for ep in items if ep.expires_at > now]
         self._episodes[subject_ref] = valid
         return list(valid)
@@ -277,4 +420,5 @@ class SubjectPreferenceMemoryStore:
         had_ep = self._episodes.pop(subject_ref, None) is not None
         had_goals = self._goals.pop(subject_ref, None) is not None
         self._continuity_consent.pop(subject_ref, None)
-        return had_prefs or had_ep or had_goals
+        qdrant_ok = self._delete_subject_from_qdrant(subject_ref)
+        return (had_prefs or had_ep or had_goals or bool(self._qdrant_base_url())) and qdrant_ok

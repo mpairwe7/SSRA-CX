@@ -1,0 +1,143 @@
+# SSRA Assist Local Sovereign GPU + Local HF Cache + Qdrant + Valkey/Redis + PostgreSQL 18 Stack
+# Usage:
+#   docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait
+name: ssra-cx-gpu
+
+x-hardened-gpu-defaults: &hardened-gpu-defaults
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  pids_limit: 256
+  restart: on-failure:5
+
+services:
+  ssra-postgres:
+    image: ${SSRA_POSTGRES_IMAGE:-bsms-postgres:18-pgaudit}
+    environment:
+      POSTGRES_USER: ssra
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ssra_cx
+    ports:
+      - "127.0.0.1:25432:5432"
+    volumes:
+      - ssra_pgdata:/var/lib/postgresql:rw
+    networks:
+      - ssra_sovereign_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ssra -d ssra_cx"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ssra-valkey:
+    <<: *hardened-gpu-defaults
+    image: redis:8-alpine@sha256:c5e375abb885e6b2021c0377879e4890bf76f9065b8922ffc113f2b226b9fc17
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+      - /data:rw,noexec,nosuid,size=128m
+    ports:
+      - "127.0.0.1:26379:6379"
+    networks:
+      - ssra_sovereign_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  ssra-qdrant:
+    <<: *hardened-gpu-defaults
+    image: qdrant/qdrant:v1.19.0@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc
+    ports:
+      - "127.0.0.1:26333:6333"
+    volumes:
+      - ssra_qdrant_data:/qdrant/storage:rw
+    networks:
+      - ssra_sovereign_net
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333 && printf \"GET /healthz HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q 200 <&3'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ssra-api:
+    <<: *hardened-gpu-defaults
+    build:
+      context: ../..
+      dockerfile: services/api/Dockerfile
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    environment:
+      HF_HOME: /home/developer/huggingface_cache
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      SSRA_FEATURE_FLAGS_OVERRIDE_FILE: /tmp/ssra_feature_flag_overrides.json
+    volumes:
+      - type: bind
+        source: ${SSRA_HF_CACHE_DIR:-/home/developer/huggingface_cache}
+        target: /home/developer/huggingface_cache
+        read_only: true
+    ports:
+      - "127.0.0.1:18000:8000"
+    networks:
+      - ssra_sovereign_net
+    depends_on:
+      ssra-postgres:
+        condition: service_healthy
+      ssra-valkey:
+        condition: service_healthy
+      ssra-qdrant:
+        condition: service_healthy
+
+  ssra-agent-runtime:
+    <<: *hardened-gpu-defaults
+    build:
+      context: ../..
+      dockerfile: services/agent-runtime/Dockerfile
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    environment:
+      HF_HOME: /home/developer/huggingface_cache
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      SSRA_MEMORY_VECTOR_BACKEND: qdrant
+      SSRA_QDRANT_URL: http://ssra-qdrant:6333
+      SSRA_REDIS_URL: redis://ssra-valkey:6379/0
+      SSRA_FEATURE_FLAGS_OVERRIDE_FILE: /tmp/ssra_feature_flag_overrides.json
+    volumes:
+      - type: bind
+        source: ${SSRA_HF_CACHE_DIR:-/home/developer/huggingface_cache}
+        target: /home/developer/huggingface_cache
+        read_only: true
+    ports:
+      - "127.0.0.1:18001:8001"
+    networks:
+      - ssra_sovereign_net
+    depends_on:
+      ssra-api:
+        condition: service_healthy
+      ssra-qdrant:
+        condition: service_healthy
+      ssra-valkey:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${SSRA_GPU_DEVICE_ID:-5}"]
+              capabilities: [gpu]
+
+networks:
+  ssra_sovereign_net:
+    driver: bridge
+
+volumes:
+  ssra_pgdata:
+    driver: local
+  ssra_qdrant_data:
+    driver: local

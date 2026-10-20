@@ -1,0 +1,157 @@
+{
+  "benchmark_version": "2026.10.21",
+  "target_ngrok_url": "https://<redacted-ngrok-tunnel>",
+  "total_scenarios": 1000,
+  "total_turns_executed": 1060,
+  "total_http_requests_over_ngrok": 1059,
+  "scenarios_passed": 1000,
+  "overall_accuracy_pct": 100.0,
+  "intent_identification_accuracy_pct": 100.0,
+  "objective_and_issue_resolution_rate_pct": 100.0,
+  "emotional_intelligence_accuracy_pct": 100.0,
+  "spoken_and_written_numeric_fidelity_pct": 100.0,
+  "long_horizon_memory_subjects_hydrated": "2/2",
+  "right_to_erasure_subjects_verified": "2/2",
+  "qdrant_episodic_points_indexed_at_peak": 230,
+  "performance_metrics": {
+    "concurrency": 16,
+    "wall_clock_seconds": 32.45,
+    "throughput_scenarios_per_sec": 30.81,
+    "conversational_rate_turns_per_sec": 32.66,
+    "conversational_rate_turns_per_min": 1959.8,
+    "http_requests_per_sec": 32.63,
+    "latency_p50_ms": 430.46,
+    "latency_p90_ms": 576.58,
+    "latency_p95_ms": 883.47,
+    "latency_p99_ms": 1084.13,
+    "latency_mean_ms": 465.11
+  },
+  "stack_status": {
+    "service": "ssra-agent-runtime",
+    "hf_offline_mode": true,
+    "hf_cached_entries_count": 28,
+    "sunflower_models": [
+      "models--Sunbird--Sunflower-Qwen3.5-9B",
+      "models--Sunbird--Sunflower-Qwen3.8-27B",
+      "models--Sunbird--SunflowerASR-51-african-languages"
+    ],
+    "gpu_devices": [
+      "nvidia6"
+    ],
+    "qdrant_status": "healthy",
+    "qdrant_episodic_points": 0,
+    "valkey_status": "healthy"
+  },
+  "by_language_group": {
+    "en": {
+      "total": 340,
+      "passed": 340,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 469.71
+    },
+    "ar": {
+      "total": 330,
+      "passed": 330,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 443.58
+    },
+    "din": {
+      "total": 330,
+      "passed": 330,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 481.89
+    }
+  },
+  "by_modality": {
+    "TTT": {
+      "total": 400,
+      "passed": 400,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 546.39
+    },
+    "STT": {
+      "total": 300,
+      "passed": 300,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 414.61
+    },
+    "TTS": {
+      "total": 300,
+      "passed": 300,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 407.24
+    }
+  },
+  "by_category": {
+    "AUTHENTICATED_T1_SELF_SERVICE": {
+      "total": 100,
+      "passed": 100,
+      "accuracy_pct": 100.0
+    },
+    "FUZZY_GROUPED_TIN_AND_FILING": {
+      "total": 24,
+      "passed": 24,
+      "accuracy_pct": 100.0
+    },
+    "FUZZY_SECURITY_HOMOGLYPH_INJECTION": {
+      "total": 27,
+      "passed": 27,
+      "accuracy_pct": 100.0
+    },
+    "FUZZY_SECURITY_MULTILINGUAL_INJECTION": {
+      "total": 25,
+      "passed": 25,
+      "accuracy_pct": 100.0
+    },
+    "FUZZY_SECURITY_SUBJECT_SMUGGLE": {
+      "total": 24,
+      "passed": 24,
+      "accuracy_pct": 100.0
+    },
+    "LONG_HORIZON_COMPOUND_PLANNER": {
+      "total": 100,
+      "passed": 100,
+      "accuracy_pct": 100.0
+    },
+    "LONG_HORIZON_WORKFLOW_DELEGATION": {
+      "total": 100,
+      "passed": 100,
+      "accuracy_pct": 100.0
+    },
+    "MULTILINGUAL_TCC_JOURNEY": {
+      "total": 100,
+      "passed": 100,
+      "accuracy_pct": 100.0
+    },
+    "MULTIMODAL_EQ_DEESCALATION": {
+      "total": 49,
+      "passed": 49,
+      "accuracy_pct": 100.0
+    },
+    "MULTIMODAL_EQ_ESCALATION": {
+      "total": 51,
+      "passed": 51,
+      "accuracy_pct": 100.0
+    },
+    "OFFICIAL_CHANNEL_VERIFICATION": {
+      "total": 100,
+      "passed": 100,
+      "accuracy_pct": 100.0
+    },
+    "STATUTORY_NUMERIC_PAYE": {
+      "total": 100,
+      "passed": 100,
+      "accuracy_pct": 100.0
+    },
+    "STATUTORY_NUMERIC_WHT": {
+      "total": 100,
+      "passed": 100,
+      "accuracy_pct": 100.0
+    },
+    "T4_AND_OOS_GOVERNANCE_GATE": {
+      "total": 100,
+      "passed": 100,
+      "accuracy_pct": 100.0
+    }
+  }
+}

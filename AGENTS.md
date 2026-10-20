@@ -42,7 +42,8 @@ This file is the authoritative engineering and safety rulebook for all coding ag
 - **Keep Living Docs, ADRs & Runbooks Current (`living-docs-adr-runbooks-traceability` & `keep-docs-current` skills):** Update `AGENTS.md`, `docs/PROGRESS.md`, affected ADR(s) in `docs/adr/`, `docs/ai-governance/model-cards-and-datasheet.md`, `docs/open-questions.md`, and affected runbooks (`docs/runbooks/`) in the **same commit and PR** as any architectural, model, config, or code update, and run `task gen` + `task lint` (`tools/verify_supply_chain_and_signatures.py`) to enforce traceability.
 - **Codebase Knowledge Graph (`graphify`):** Once the repository scaffold is created, maintain and query `graphify-out/GRAPH_REPORT.md` before broad file exploration, using only SSRA-approved local/configured backends with zero secrets or PII.
 - **Commands:** Use `Taskfile.yml` as the single entry point:
-  - `task up` — start local stack with mock upstreams
+  - `task up` — start local stack with mock upstreams (`infra/compose/docker-compose.yml` & `tools/smoke_test_stack.py`)
+  - `docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait` — start sovereign GPU + local HF cache + Qdrant + Valkey + PostgreSQL 18 stack (`tools/run_1000_complex_ngrok_benchmark.py` for 1,000-scenario live Ngrok stress/load verification)
   - `task lint` — run Biome, TypeScript `tsc`, Ruff, `basedpyright` (strict), and `import-linter`
   - `task test` — run Vitest, pytest, Hypothesis property tests, and contract tests
   - `task eval` — run deterministic and golden evaluation slices

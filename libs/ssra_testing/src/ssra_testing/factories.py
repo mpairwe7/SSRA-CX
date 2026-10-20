@@ -22,6 +22,7 @@ def make_conversation_event(
     thread_id: str | None = None,
     max_len: int = 4096,
     rich_ui: bool = True,
+    metadata: dict[str, str] | None = None,
 ) -> ConversationEvent:
     source_map = {
         ChannelName.WEB: "urn:ssra:channel:web",
@@ -49,5 +50,6 @@ def make_conversation_event(
                 latency_budget_ms=2000 if channel == ChannelName.USSD else 6000,
                 async_only=channel == ChannelName.SMS,
             ),
+            metadata=dict(metadata or {}),
         ),
     )
