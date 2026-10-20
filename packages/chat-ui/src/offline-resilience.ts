@@ -76,29 +76,34 @@ export interface OfflinePayeEstimateResult {
 }
 
 /**
+ * Deterministic `ROUND_HALF_UP` to 2 decimal places matching Python `Decimal.quantize(Decimal("0.01"), ROUND_HALF_UP)`.
+ */
+export function roundHalfUpTwoDecimals(value: number): number {
+  const scaled = Math.abs(value) * 100 + 1e-9;
+  const rounded = Math.floor(scaled + 0.5) / 100;
+  return value < 0 ? -rounded : rounded;
+}
+
+/**
  * Compute a deterministic offline monthly PAYE estimate matching `libs/ssra_rules/src/ssra_rules/engine.py` (`seed-2026.10.1.yaml`).
  */
 export function calculateOfflinePayeEstimate(grossMonthlySsp: number): OfflinePayeEstimateResult {
   if (!Number.isFinite(grossMonthlySsp) || grossMonthlySsp < 0) {
     throw new RangeError("grossMonthlySsp must be a finite non-negative number");
   }
-  const gross = Math.round(grossMonthlySsp * 100) / 100;
+  const gross = roundHalfUpTwoDecimals(grossMonthlySsp);
   const { b1MaxSsp, b2MaxSsp, b3MaxSsp, b2RatePct, b3RatePct, b4RatePct } =
     OFFLINE_PAYE_BRACKETS_2026_10_1;
-  let tax = 0;
-  if (gross > b3MaxSsp) {
-    tax =
-      (gross - b3MaxSsp) * (b4RatePct / 100) +
-      (b3MaxSsp - b2MaxSsp) * (b3RatePct / 100) +
-      (b2MaxSsp - b1MaxSsp) * (b2RatePct / 100);
-  } else if (gross > b2MaxSsp) {
-    tax = (gross - b2MaxSsp) * (b3RatePct / 100) + (b2MaxSsp - b1MaxSsp) * (b2RatePct / 100);
-  } else if (gross > b1MaxSsp) {
-    tax = (gross - b1MaxSsp) * (b2RatePct / 100);
-  }
-  const roundedTax = Math.round(tax * 100) / 100;
-  const net = Math.round((gross - roundedTax) * 100) / 100;
-  const effRate = gross > 0 ? Math.round((roundedTax / gross) * 10000) / 100 : 0;
+  const band2Taxable = Math.max(0, Math.min(gross, b2MaxSsp) - b1MaxSsp);
+  const band3Taxable = Math.max(0, Math.min(gross, b3MaxSsp) - b2MaxSsp);
+  const band4Taxable = Math.max(0, gross - b3MaxSsp);
+  const roundedTax = roundHalfUpTwoDecimals(
+    roundHalfUpTwoDecimals((band2Taxable * b2RatePct) / 100) +
+      roundHalfUpTwoDecimals((band3Taxable * b3RatePct) / 100) +
+      roundHalfUpTwoDecimals((band4Taxable * b4RatePct) / 100),
+  );
+  const net = roundHalfUpTwoDecimals(gross - roundedTax);
+  const effRate = gross > 0 ? roundHalfUpTwoDecimals((roundedTax / gross) * 100) : 0;
   return {
     grossMonthlySsp: gross,
     estimatedTaxSsp: roundedTax,
@@ -125,7 +130,7 @@ export type OfflineWithholdingCategory =
   | "end_of_service_benefits";
 
 export const OFFLINE_WHT_RATES_2026_10_1: Record<OfflineWithholdingCategory, number> = {
-  goods_and_services: 20,
+  goods_and_services: 10,
   rent: 10,
   technical_fees: 15,
   government_contractors_resident: 15,
@@ -157,9 +162,9 @@ export function calculateOfflineWithholdingEstimate(
     throw new RangeError("grossAmountSsp must be a finite non-negative number");
   }
   const ratePercent = OFFLINE_WHT_RATES_2026_10_1[category] ?? 20;
-  const gross = Math.round(grossAmountSsp * 100) / 100;
-  const wht = Math.round(gross * (ratePercent / 100) * 100) / 100;
-  const net = Math.round((gross - wht) * 100) / 100;
+  const gross = roundHalfUpTwoDecimals(grossAmountSsp);
+  const wht = roundHalfUpTwoDecimals((gross * ratePercent) / 100);
+  const net = roundHalfUpTwoDecimals(gross - wht);
   return {
     category,
     grossAmountSsp: gross,

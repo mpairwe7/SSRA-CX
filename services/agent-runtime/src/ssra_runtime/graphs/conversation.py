@@ -57,6 +57,7 @@ from ssra_runtime.state import ConversationGraphState
 from ssra_runtime.tools import GovernedMcpGatewayClient
 
 _SAFE_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_:-]{1,128}$")
+MAX_TRACKED_RUNTIME_THREADS: int = 2048
 
 
 def validate_safe_thread_id(thread_id: str) -> str:
