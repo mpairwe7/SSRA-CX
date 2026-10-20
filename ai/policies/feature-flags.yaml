@@ -45,3 +45,25 @@ flags:
     rollout_pct: 100
     allowed_channels: ["web", "whatsapp", "sms", "voice"]
     allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FF_HYBRID_VOICE_FAST_ACK_AND_SEMANTIC_EOT:
+    description: "Hybrid Speech Router (S2S/cached fast-ack fillers <250ms TTFA + Cascaded Governed STT->LLM->TTS) and semantic endpointing"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["voice", "web", "console"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FF_VOICE_TO_SMS_CONTINUATION:
+    description: "Enforces <=3 spoken sentences on voice turns and packages full citations/links into a consent-gated SMS/WhatsApp continuation"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["voice", "sms", "whatsapp"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FF_OFFLINE_PWA_CALCULATORS_AND_EDGE_PACK:
+    description: "Offline client-side PAYE/WHT calculators, anti-impersonation verifier, and adaptive 12kbps Opus 2G resilience pack"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["web", "voice", "ussd", "sms"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+

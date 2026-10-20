@@ -247,6 +247,9 @@ class AgenticCxSpanAttributes:
     language_state: str
     locale: str
     handoff_clean: bool
+    voice_ttfa_ms: float = 0.0
+    hybrid_voice_mode: Literal["none", "s2s_fast_ack", "cascaded_governed"] = "none"
+    offline_pack_used: bool = False
 
     def to_otel_dict(self) -> dict[str, Any]:
         """Serialize Agentic CX and EQ span attributes to an OpenTelemetry attribute dictionary."""
@@ -261,6 +264,9 @@ class AgenticCxSpanAttributes:
             "ssra.cx.language.state": self.language_state,
             "ssra.cx.language.locale": self.locale,
             "ssra.cx.handoff.clean": self.handoff_clean,
+            "ssra.cx.voice.ttfa_ms": self.voice_ttfa_ms,
+            "ssra.cx.voice.hybrid_mode": self.hybrid_voice_mode,
+            "ssra.cx.offline.pack_used": self.offline_pack_used,
         }
 
 
@@ -282,6 +288,9 @@ def build_agentic_cx_span_attributes(
     language_state: str = "LOCKED",
     locale: LocaleCode = LocaleCode.EN,
     handoff_clean: bool = True,
+    voice_ttfa_ms: float = 0.0,
+    hybrid_voice_mode: Literal["none", "s2s_fast_ack", "cascaded_governed"] = "none",
+    offline_pack_used: bool = False,
 ) -> AgenticCxSpanAttributes:
     """Construct validated OpenTelemetry Agentic CX and EQ span attributes."""
     return AgenticCxSpanAttributes(
@@ -295,4 +304,7 @@ def build_agentic_cx_span_attributes(
         language_state=language_state,
         locale=locale.value,
         handoff_clean=handoff_clean,
+        voice_ttfa_ms=round(max(0.0, voice_ttfa_ms), 2) if math.isfinite(voice_ttfa_ms) else 0.0,
+        hybrid_voice_mode=hybrid_voice_mode,
+        offline_pack_used=offline_pack_used,
     )

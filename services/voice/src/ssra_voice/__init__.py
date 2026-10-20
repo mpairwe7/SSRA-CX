@@ -591,7 +591,7 @@ def split_tts_sentences(text: str) -> list[str]:
 
 
 class VoiceStreamSession:
-    """V2 Streaming Voice Session (`voice_stream_v2.py`): sentence-chunked TTS, barge-in & speculative prefetch."""
+    """V2 Streaming Voice Session (`voice_stream_v2.py`): sentence-chunked TTS, full-duplex barge-in & speculative prefetch."""
 
     def __init__(
         self, *, session_id: str, locale: LocaleCode, vad: VADConfig | None = None
@@ -600,10 +600,14 @@ class VoiceStreamSession:
         self.locale = locale
         self.vad = vad or VADConfig.from_sensitivity("medium")
         self.barge_in_cancelled = False
+        self.interrupted_at_sentence_index: int | None = None
+        self.unspoken_sentences: list[str] = []
         self.speculative_prefetches: list[str] = []
 
-    def trigger_barge_in(self) -> None:
-        self.barge_in_cancelled = True
+    def trigger_barge_in(self, *, sentence_index: int | None = None) -> None:
+        """Cancel active TTS playback immediately (<80ms) on caller barge-in and record interrupt index."""
+        self.barge_in_cancelled = sentence_index is None
+        self.interrupted_at_sentence_index = sentence_index
 
     def record_partial_transcript(self, partial_text: str) -> str | None:
         words = [w for w in partial_text.strip().split() if w]
@@ -614,9 +618,14 @@ class VoiceStreamSession:
         return None
 
     def stream_tts_sentences(self, text: str, *, voice: str | None = None) -> list[dict[str, Any]]:
+        sentences = split_tts_sentences(text)
         chunks: list[dict[str, Any]] = []
-        for idx, sentence in enumerate(split_tts_sentences(text)):
-            if self.barge_in_cancelled:
+        for idx, sentence in enumerate(sentences):
+            if self.barge_in_cancelled or (
+                self.interrupted_at_sentence_index is not None
+                and idx >= self.interrupted_at_sentence_index
+            ):
+                self.unspoken_sentences = sentences[idx:]
                 break
             env = synthesize_tts_speech_envelope(text=sentence, locale=self.locale, voice=voice)
             env["sentence_index"] = idx
@@ -924,6 +933,144 @@ def build_voice_spoken_turn_and_sms_followup(
     }
 
 
+_TOOL_WAIT_FILLERS: dict[LocaleCode, str] = {
+    LocaleCode.EN: "One moment while I check the official SSRA records.",
+    LocaleCode.AR: "لحظة واحدة، أتحقق الآن من سجلات هيئة الإيرادات الرسمية.",
+    LocaleCode.PGA: "Sabur shwaya, ana bishuf سجلات SSRA al-rasmiya.",
+    LocaleCode.DIN: "Tiit nyin tök, ɣɛn caar athör ke SSRA.",
+    LocaleCode.NUS: "Tiit tëët, ɣän caar waraga SSRA.",
+    LocaleCode.BFA: "Titit na'dit, nan mede waraga lo SSRA.",
+    LocaleCode.ZNE: "Mo sungu toni, miertingo waraga SSRA.",
+    LocaleCode.SHK: "Kürityen, aneno waraga SSRA.",
+}
+
+
+def get_localized_tool_wait_filler(locale: LocaleCode = LocaleCode.EN) -> str:
+    """Return a zero-digit, pre-cacheable filler utterance (`<250ms` TTFA) spoken while MCP tools execute."""
+    return _TOOL_WAIT_FILLERS.get(locale, _TOOL_WAIT_FILLERS[LocaleCode.EN])
+
+
+@dataclass(frozen=True)
+class HybridVoiceRouteDecision:
+    """Decision from the October 2026 Hybrid Speech Router."""
+
+    mode: Literal["S2S_FAST_ACK_CACHED", "CASCADED_GOVERNED_STT_LLM_TTS"]
+    emit_tool_wait_filler: bool
+    filler_text: str | None
+    target_ttfa_ms: int
+    requires_numeric_provenance: bool
+
+
+def select_hybrid_voice_execution_mode(
+    *,
+    locale: LocaleCode = LocaleCode.EN,
+    requires_tool_call: bool = True,
+    contains_statutory_figures: bool = True,
+    is_pure_greeting_or_backchannel: bool = False,
+) -> HybridVoiceRouteDecision:
+    """Select between `S2S_FAST_ACK_CACHED` (<250ms TTFA) and `CASCADED_GOVERNED_STT_LLM_TTS`.
+
+    Invariant: Any turn involving MCP tools, OPA policies, or statutory figures MUST use
+    `CASCADED_GOVERNED_STT_LLM_TTS` (optionally preceded by a pre-cached tool-wait filler).
+    """
+    is_fast_ack = (
+        is_pure_greeting_or_backchannel
+        and not requires_tool_call
+        and not contains_statutory_figures
+    )
+    if is_fast_ack:
+        return HybridVoiceRouteDecision(
+            mode="S2S_FAST_ACK_CACHED",
+            emit_tool_wait_filler=False,
+            filler_text=None,
+            target_ttfa_ms=220,
+            requires_numeric_provenance=False,
+        )
+    filler = get_localized_tool_wait_filler(locale) if requires_tool_call else None
+    return HybridVoiceRouteDecision(
+        mode="CASCADED_GOVERNED_STT_LLM_TTS",
+        emit_tool_wait_filler=requires_tool_call,
+        filler_text=filler,
+        target_ttfa_ms=240 if requires_tool_call else 380,
+        requires_numeric_provenance=True,
+    )
+
+
+_MASKED_TIN_SPEECH_RE = re.compile(r"••••(\d{4})")
+_SEC_ANCHOR_SPEECH_RE = re.compile(r"\bPart-([IVX]+)-Sec-(\d+)\b", flags=re.IGNORECASE)
+
+
+def normalize_statutory_text_for_speech(text: str, locale: LocaleCode = LocaleCode.EN) -> str:
+    """Expand statutory anchors, masked TINs, and portal URLs for natural TTS pronunciation without altering numbers."""
+    _ = locale
+    out = _MASKED_TIN_SPEECH_RE.sub(
+        lambda m: f"T I N ending in {' '.join(m.group(1))}",
+        text,
+    )
+    out = _SEC_ANCHOR_SPEECH_RE.sub(
+        lambda m: f"Part {m.group(1)}, Section {m.group(2)}",
+        out,
+    )
+    out = out.replace("https://etax.nra.gov.ss/", "e-tax dot n r a dot gov dot s s")
+    return out
+
+
+def verify_spoken_figure_fidelity(
+    spoken_text: str,
+    expected_numeric_values: list[str] | tuple[str, ...],
+) -> bool:
+    """Verify that every required `NumericClaim` value appears intact in the TTS-prepared text."""
+    normalized_spoken = spoken_text.replace(",", "")
+    for val in expected_numeric_values:
+        clean_val = str(val).replace(",", "").strip()
+        if clean_val and clean_val not in normalized_spoken:
+            return False
+    return True
+
+
+@dataclass(frozen=True)
+class EdgeFieldApplianceProfile:
+    """Offline/intermittent Edge Field-Office Appliance Profile for SSRA border posts (`NIMULE_CUSTOMS`, `WAU_BRANCH`, `MALAKAL_BRANCH`)."""
+
+    office_code: str
+    backhaul_online: bool
+    llm_model: str
+    asr_backend: str
+    tts_backend: str
+    opus_bitrate_kbps: int
+    allowed_tiers: tuple[str, ...]
+    store_and_forward_outbox_enabled: bool
+
+
+def resolve_edge_appliance_profile(
+    *,
+    office_code: str = "NIMULE_CUSTOMS",
+    backhaul_online: bool = False,
+) -> EdgeFieldApplianceProfile:
+    """Select the quantized on-premises edge voice/LLM profile when NCA backhaul is offline or constrained."""
+    if backhaul_online:
+        return EdgeFieldApplianceProfile(
+            office_code=office_code,
+            backhaul_online=True,
+            llm_model="ssra-sovereign/sunflower-qwen3.5-9b",
+            asr_backend="vllm-audio-transcriptions",
+            tts_backend="orpheus-3b-tts-multilingual",
+            opus_bitrate_kbps=24,
+            allowed_tiers=("T0", "T1", "T2", "T3"),
+            store_and_forward_outbox_enabled=False,
+        )
+    return EdgeFieldApplianceProfile(
+        office_code=office_code,
+        backhaul_online=False,
+        llm_model="ssra-sovereign/qwen2.5-3b-cpu-gguf",
+        asr_backend="hf-mms-offline-int8",
+        tts_backend="hf-mms-tts-offline-int8",
+        opus_bitrate_kbps=12,
+        allowed_tiers=("T0",),
+        store_and_forward_outbox_enabled=True,
+    )
+
+
 __all__ = [
     "ASR_MODEL_BY_LOCALE",
     "MAX_CARRYOVER_CONTEXT_CHARS",
@@ -937,7 +1084,9 @@ __all__ = [
     "BriefClaim",
     "CallLobbyManager",
     "ChatToCallCarryover",
+    "EdgeFieldApplianceProfile",
     "HfVoiceModelDescriptor",
+    "HybridVoiceRouteDecision",
     "LobbyCallEntry",
     "OfficerCallBrief",
     "TtsCachedAudio",
@@ -949,16 +1098,24 @@ __all__ = [
     "VoiceWebSocketConcurrencyGuard",
     "build_chat_to_call_carryover",
     "build_voice_consent_audit_entry",
+    "build_voice_prosody_eq_metadata",
+    "build_voice_spoken_turn_and_sms_followup",
     "generate_officer_call_brief",
+    "get_localized_tool_wait_filler",
     "is_voice_language_approved",
     "is_ws_origin_allowed",
     "looks_like_valid_audio_bytes",
+    "normalize_statutory_text_for_speech",
+    "resolve_edge_appliance_profile",
     "resolve_hf_voice_model_cache",
     "resolve_mt_and_tts_turn_plan",
     "resolve_tts_voice",
     "route_voice_turn",
+    "select_hybrid_voice_execution_mode",
     "split_tts_sentences",
     "synthesize_tts_speech_envelope",
     "validate_audio_pcm_expansion_budget",
     "validate_call_wrap_up",
+    "verify_spoken_figure_fidelity",
+    "verify_voice_dtmf_step_up",
 ]

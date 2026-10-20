@@ -39,6 +39,8 @@ We adopt Option 2:
 4. **4-Tier Cognitive Memory, `HandoffEnvelope` v2 & Temporal Continuation (`memory.py`, `handoff.py`, `continuation.py`, `conversations` API, `database.py`):**
    - Adds consent-gated `EpisodicMemoryRecord` (Tier 2) and `ActiveGoalRecord` (Tier 4) with mandatory `strip_financial_figures_for_memory`, `EpisodicMemoryORM`/`ActiveGoalORM` DDL, and instant single-call Right-to-Erasure.
    - Emits `HandoffEnvelope` v2 on officer escalations, supports `OfficerResolutionArtifact` on `POST /v1/conversations/{id}/handback` + `apply_officer_handback_resolution`, supports mid-journey `workflow_stack` delegation and Cross-Tier Read -> Stage-Write planning, and dispatches consent-checked post-interaction goal continuations (`run_post_interaction_goal_continuation`, `build_continuation_candidates_from_outbox_events`).
+5. **Hybrid Speech Architecture, Semantic Endpointing & Offline Statutory Resilience Pack (`services/voice`, `packages/chat-ui/src/voice-notes.ts`, `offline-resilience.ts`, `apps/web/public/sw.js`):**
+   - Implements `select_hybrid_voice_execution_mode` (`S2S_FAST_ACK_CACHED` `<250ms` TTFA tool-wait fillers + `CASCADED_GOVERNED_STT_LLM_TTS`), `normalize_statutory_text_for_speech`, `verify_spoken_figure_fidelity`, `evaluateSemanticEndpointing` (`420ms..1100ms`), `calculateOfflinePayeEstimate`, `verifyOfflineOfficialChannel`, and `resolveAdaptiveVoiceNetworkProfile` (`12 kbps` Opus on 2G).
 
 ## 5. Consequences
 
