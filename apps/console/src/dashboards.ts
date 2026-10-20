@@ -124,6 +124,7 @@ export function buildAgentQueueWorkbench(params: {
   readonly view: AgentQueueViewState;
   readonly officerHandle: string;
   readonly nowMs?: number | undefined;
+  readonly viewportWidthPx?: number | undefined;
 }) {
   const nowMs = params.nowMs ?? Date.now();
   const openedId = params.view.ticket;
@@ -151,6 +152,15 @@ export function buildAgentQueueWorkbench(params: {
       waitTone(t.created_at, t.first_response_at, t.reply_at, nowMs, t.status, t.priority) ===
       "breach",
   ).length;
+  const isCompactViewport =
+    params.viewportWidthPx !== undefined && Number.isFinite(params.viewportWidthPx)
+      ? params.viewportWidthPx < 768
+      : false;
+  const mobileActivePane: "queue_list" | "case_detail" | "split_both" = !isCompactViewport
+    ? "split_both"
+    : openedId
+      ? "case_detail"
+      : "queue_list";
 
   return {
     tab: (params.view.status === "resolved"
@@ -163,6 +173,8 @@ export function buildAgentQueueWorkbench(params: {
     activeId,
     urgentCount,
     breachingCount,
+    isCompactViewport,
+    mobileActivePane,
     hotkeys: ["j/k: navigate", "a: assign to me", "r: focus reply"] as const,
     claimCaseTransition: (claimId: string): AgentQueueViewState => ({
       status: "assigned",

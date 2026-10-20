@@ -29,6 +29,7 @@ export interface ConnectorNotice {
 export interface FloatingChatHeaderDescriptor {
   readonly showCollapsedRailToggle: boolean;
   readonly railPeekActive: boolean;
+  readonly compactMobileMode: boolean;
   readonly conversationTitle: string | null;
   readonly conversationPinned: boolean;
   readonly locale: LocaleCode;
@@ -41,14 +42,20 @@ export function buildFloatingChatHeader(params: {
   readonly hasStartedChat: boolean;
   readonly railCollapsed: boolean;
   readonly railPeekHover: boolean;
+  readonly viewportWidthPx?: number | undefined;
   readonly conversationTitle?: string | undefined;
   readonly conversationPinned?: boolean | undefined;
   readonly locale: LocaleCode;
   readonly localeAutoDetect?: boolean | undefined;
 }): FloatingChatHeaderDescriptor {
+  const compactMobileMode =
+    params.viewportWidthPx !== undefined && Number.isFinite(params.viewportWidthPx)
+      ? params.viewportWidthPx < 768
+      : false;
   return {
-    showCollapsedRailToggle: params.railCollapsed,
-    railPeekActive: params.railCollapsed && params.railPeekHover,
+    showCollapsedRailToggle: params.railCollapsed || compactMobileMode,
+    railPeekActive: !compactMobileMode && params.railCollapsed && params.railPeekHover,
+    compactMobileMode,
     conversationTitle: params.hasStartedChat ? (params.conversationTitle ?? "New chat") : null,
     conversationPinned: Boolean(params.conversationPinned),
     locale: params.locale,
@@ -92,6 +99,7 @@ export interface ChatComposerStateDescriptor {
   readonly waveformBars: readonly number[];
   readonly dictationNotice: string | null;
   readonly placeholder: string;
+  readonly safeAreaBottomInsetCss: string;
 }
 
 /**
@@ -121,6 +129,67 @@ export function buildChatComposerState(params: {
     placeholder: params.officerLiveChat
       ? "Message the SSRA officer…"
       : "Ask SSRA Assist about TIN, PAYE, customs, or e-Tax…",
+    safeAreaBottomInsetCss: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
+  };
+}
+
+export interface HumanSubtleMicrocopyDescriptor {
+  readonly phase: AssistantPhase;
+  readonly locale: LocaleCode;
+  readonly dir: "ltr" | "rtl";
+  readonly statusText: string;
+  readonly ariaLive: "polite";
+  readonly showPulseIndicator: boolean;
+}
+
+const MICROCOPY_BY_PHASE: Readonly<
+  Record<AssistantPhase, { readonly en: string; readonly ar: string; readonly pga: string }>
+> = {
+  idle: {
+    en: "Ready — all tax figures verified against official SSRA sources.",
+    ar: "جاهز — جميع الأرقام الضريبية موثقة من مصادر هيئة الإيرادات الرسمية.",
+    pga: "Jahiz — kullu hisabat muwathaq min SSRA.",
+  },
+  thinking: {
+    en: "Reviewing your question…",
+    ar: "جاري مراجعة سؤالك…",
+    pga: "Gaaid yراجع sual بتاعك…",
+  },
+  searching: {
+    en: "Checking published South Sudan tax laws and e-Tax guides…",
+    ar: "جاري التحقق من القوانين الضريبية المعتمدة وأدلة بوابة الضرائب…",
+    pga: "Gaaid yafhas qawanin ta dariba wa dalil e-Tax…",
+  },
+  churning: {
+    en: "Verifying rates and statutory citations…",
+    ar: "جاري التحقق من النسب والمراجع القانونية…",
+    pga: "Gaaid yat'akkad min nisba wa qanun…",
+  },
+  streaming: {
+    en: "Preparing your cited response…",
+    ar: "جاري إعداد الإجابة الموثقة بالمراجع…",
+    pga: "Gaaid yajahiz ijaba bil maraji…",
+  },
+};
+
+/**
+ * Build calm, non-robotic, culturally respectful micro-interaction status text
+ * across assistant lifecycle phases (`idle`, `thinking`, `searching`, `churning`, `streaming`).
+ */
+export function buildHumanSubtleMicrocopy(
+  phase: AssistantPhase,
+  locale: LocaleCode,
+  lowDataMode = false,
+): HumanSubtleMicrocopyDescriptor {
+  const row = MICROCOPY_BY_PHASE[phase];
+  const statusText = locale === "ar" ? row.ar : locale === "pga" ? row.pga : row.en;
+  return {
+    phase,
+    locale,
+    dir: locale === "ar" ? "rtl" : "ltr",
+    statusText,
+    ariaLive: "polite",
+    showPulseIndicator: !lowDataMode && phase !== "idle",
   };
 }
 

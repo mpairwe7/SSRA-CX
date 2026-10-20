@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAccessibleOtpInputProps,
+  buildThemeCssVariables,
   computeJubaMonthlyFilingDeadline,
+  computeWcagContrastRatio,
   extractOfficerHours,
   formatNextShiftJuba,
   getHtmlLayoutProps,
   getSouthSudanFiscalYear,
   resolveMenuKeyNavigation,
+  resolveResponsiveViewportContext,
   resolveSurfaceDesignContext,
   SSRA_DESIGN_TOKENS,
   shouldEnableLowDataMode,
+  verifyThemeColorCoherency,
 } from "../src/index.js";
 
 describe("@ssra/ui design tokens and RTL layout", () => {
@@ -72,5 +76,38 @@ describe("@ssra/ui design tokens and RTL layout", () => {
     expect(enLight.dir).toBe("ltr");
     expect(enLight.theme.mode).toBe("light");
     expect(enLight.transitionDurationMs).toBe(120);
+
+    // High-contrast mode & WCAG 2.2 AA/AAA contrast coherency across all 3 themes
+    const hcCtx = resolveSurfaceDesignContext({ locale: "en", prefersHighContrast: true });
+    expect(hcCtx.theme.mode).toBe("high-contrast");
+    for (const mode of ["light", "dark", "high-contrast"] as const) {
+      const report = verifyThemeColorCoherency(SSRA_DESIGN_TOKENS.themes[mode]);
+      expect(report.passesWcagAA).toBe(true);
+      expect(report.passesWcagAAA).toBe(true);
+      const cssVars = buildThemeCssVariables(SSRA_DESIGN_TOKENS.themes[mode]);
+      expect(cssVars["--ssra-font-numeric"]).toBe("tabular-nums");
+    }
+    expect(computeWcagContrastRatio("#ffffff", "#000000")).toBe(21);
+
+    // Mobile responsiveness: 320px WCAG Reflow floor, 100dvh/100svh, safe-area insets & coarse pointer targets
+    const mobile320 = resolveResponsiveViewportContext({
+      viewportWidthPx: 320,
+      pointer: "coarse",
+      virtualKeyboardOpen: true,
+    });
+    expect(mobile320.breakpoint).toBe("xs_320");
+    expect(mobile320.reflowSafeAt320Px).toBe(true);
+    expect(mobile320.viewportHeightCss).toBe("100svh");
+    expect(mobile320.effectiveTouchTargetPx).toBe(48);
+    expect(mobile320.navigationPattern).toBe("bottom_sheet_rail");
+
+    const desktop1280 = resolveResponsiveViewportContext({
+      viewportWidthPx: 1280,
+      pointer: "fine",
+    });
+    expect(desktop1280.breakpoint).toBe("lg_desktop");
+    expect(desktop1280.viewportHeightCss).toBe("100dvh");
+    expect(desktop1280.effectiveTouchTargetPx).toBe(44);
+    expect(desktop1280.navigationPattern).toBe("collapsible_side_rail");
   });
 });

@@ -123,17 +123,53 @@ export function renderGenerativeUICard(
         safeHtml: `<section role="region" aria-label="FilingStatusTimeline" dir="${dir}" data-component="FilingStatusTimeline" data-numeric="tabular-nums"><strong>TIN ${tin}</strong>: ${status} (Period ${period}${asOfSuffix})</section>`,
       };
     }
-    case "CitationList":
-    case "HandoffCard": {
-      const name = resolved.componentName;
+    case "CitationList": {
       const safeFallback = escapeHtmlStrict(fallbackText);
+      const rawCitations = Array.isArray(p.citations)
+        ? (p.citations as Array<Record<string, unknown>>)
+        : [];
+      const rawSteps = Array.isArray(p.guided_steps)
+        ? (p.guided_steps as Array<Record<string, unknown>>)
+        : [];
+      const stepsMarkup =
+        rawSteps.length > 0
+          ? `<ol class="ssra-guided-steps" aria-label="Guided Steps">${rawSteps
+              .map(
+                (s) =>
+                  `<li><strong>Step ${escapeHtmlStrict(String(s.step_number ?? ""))}: ${escapeHtmlStrict(String(s.title ?? ""))}</strong> — ${escapeHtmlStrict(String(s.instruction ?? ""))}</li>`,
+              )
+              .join("")}</ol>`
+          : "";
+      const citationsMarkup =
+        rawCitations.length > 0
+          ? `<ul class="ssra-citation-badges" aria-label="Approved Sources">${rawCitations
+              .map(
+                (c) =>
+                  `<li data-anchor="${escapeHtmlStrict(String(c.section_anchor ?? ""))}">${escapeHtmlStrict(String(c.doc_title ?? ""))} (${escapeHtmlStrict(String(c.section_anchor ?? ""))})</li>`,
+              )
+              .join("")}</ul>`
+          : "";
       return {
         mode: "component",
-        componentName: name,
+        componentName: "CitationList",
         ariaRole: "region",
         dir,
         numericFontVariant: "tabular-nums",
-        safeHtml: `<section role="region" aria-label="${name}" dir="${dir}" data-component="${name}">${safeFallback}</section>`,
+        safeHtml: `<section role="region" aria-label="CitationList" dir="${dir}" data-component="CitationList" data-container="inline-size"><p class="ssra-card-body">${safeFallback}</p>${stepsMarkup}${citationsMarkup}</section>`,
+      };
+    }
+    case "HandoffCard": {
+      const safeFallback = escapeHtmlStrict(fallbackText);
+      const safeReason = escapeHtmlStrict(String(p.reason ?? "USER_REQUEST"));
+      const safeQueue = escapeHtmlStrict(String(p.queue ?? "DOMESTIC_TAX"));
+      const safePriority = escapeHtmlStrict(String(p.priority ?? "NORMAL"));
+      return {
+        mode: "component",
+        componentName: "HandoffCard",
+        ariaRole: "region",
+        dir,
+        numericFontVariant: "tabular-nums",
+        safeHtml: `<section role="region" aria-label="HandoffCard" dir="${dir}" data-component="HandoffCard" data-reason="${safeReason}" data-queue="${safeQueue}" data-priority="${safePriority}"><header class="ssra-handoff-header"><strong>SSRA Officer Assistance (${safeQueue})</strong></header><p class="ssra-card-body">${safeFallback}</p></section>`,
       };
     }
   }

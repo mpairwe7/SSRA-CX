@@ -62,8 +62,18 @@ export const CalculatorFormPropsSchema = z
     { message: "CalculatorForm props must not mix PAYE and WHT tax amounts" },
   );
 
+export const GuidedJourneyStepSchema = z.object({
+  journey_id: z.string().optional(),
+  step_number: z.number().int().min(1),
+  total_steps: z.number().int().min(1).optional(),
+  title: z.string().min(1),
+  instruction: z.string().min(1),
+  official_portal: z.string().optional(),
+});
+
 export const CitationListPropsSchema = z.object({
   citations: z.array(CitationSchema),
+  guided_steps: z.array(GuidedJourneyStepSchema).optional(),
 });
 
 export const ConfirmActionSheetPropsSchema = z.object({
