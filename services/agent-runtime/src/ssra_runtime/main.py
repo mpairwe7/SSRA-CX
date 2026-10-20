@@ -20,6 +20,11 @@ from ssra_core import (
     McpErrorCode,
     SSRAError,
     ensure_w3c_traceparent,
+    get_default_feature_flag_engine,
+)
+from ssra_security import (
+    assert_sovereign_and_production_readiness,
+    evaluate_sovereign_and_production_readiness,
 )
 from ssra_testing import make_conversation_event
 
@@ -28,7 +33,11 @@ from ssra_runtime.field_officer import (
     FieldOfficerAssistResponse,
     execute_field_officer_assist,
 )
-from ssra_runtime.graphs import SSRAConversationRuntime, validate_safe_subject_ref
+from ssra_runtime.graphs import (
+    SSRAConversationRuntime,
+    validate_safe_subject_ref,
+    validate_safe_thread_id,
+)
 from ssra_runtime.memory import HydratedCognitiveContext
 from ssra_runtime.replay import ReconstructedTurnRecord
 from ssra_runtime.schemas import RuntimeTurnResponse
@@ -126,6 +135,7 @@ def _collect_runtime_stack_status(active_runtime: SSRAConversationRuntime) -> di
         "qdrant_status": qdrant_status,
         "qdrant_episodic_points": qdrant_points or 0,
         "valkey_status": probe_valkey_redis(os.environ.get("SSRA_REDIS_URL", "")),
+        "sovereign_readiness_errors": evaluate_sovereign_and_production_readiness(),
     }
 
 
@@ -150,6 +160,11 @@ async def _read_bounded_runtime_body(request: Request, max_bytes: int) -> bytes 
 
 def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAPI:
     """Create the FastAPI application for services/agent-runtime with security middleware and SSE streaming."""
+    assert_sovereign_and_production_readiness(
+        persisted_flag_overrides={
+            r.name: r.enabled for r in get_default_feature_flag_engine().list_rules()
+        }
+    )
     app = FastAPI(
         title="SSRA Assist Agent Runtime",
         version="0.1.0",
@@ -314,22 +329,29 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
             "audit_event_hash": aud.hash,
         }
 
+    def _verify_turn_subject_consistency(
+        item: AguiStreamRequest, x_ssra_subject_ref: str | None
+    ) -> None:
+        """Enforce symmetric X-SSRA-Subject-Ref header and body subject_ref consistency (ASI03)."""
+        if item.subject_ref is not None:
+            validate_safe_subject_ref(item.subject_ref, auth_level=item.auth_level)
+        if x_ssra_subject_ref is not None:
+            hdr_sub = x_ssra_subject_ref.strip()
+            body_sub = (item.subject_ref or "").strip()
+            if not body_sub or hdr_sub != body_sub:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "X-SSRA-Subject-Ref header mismatch with body subject_ref (ASI03)",
+                    status_code=403,
+                )
+
     @app.post("/v1/turns", response_model=RuntimeTurnResponse)
     def execute_turn(
         body: AguiStreamRequest,
         x_ssra_subject_ref: str | None = Header(default=None, alias="X-SSRA-Subject-Ref"),
     ) -> RuntimeTurnResponse:
         """Execute a synchronous 11-node LangGraph conversation turn on the worker threadpool."""
-        if (
-            x_ssra_subject_ref is not None
-            and body.subject_ref is not None
-            and x_ssra_subject_ref.strip() != body.subject_ref.strip()
-        ):
-            raise SSRAError(
-                McpErrorCode.NOT_AUTHORIZED,
-                "X-SSRA-Subject-Ref header mismatch with body subject_ref (ASI03)",
-                status_code=403,
-            )
+        _verify_turn_subject_consistency(body, x_ssra_subject_ref)
         event = make_conversation_event(
             body.message,
             locale=body.locale,
@@ -347,8 +369,13 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         )
 
     @app.post("/v1/turns/batch", response_model=list[RuntimeTurnResponse])
-    def execute_turn_batch(body: BatchAguiTurnRequest) -> list[RuntimeTurnResponse]:
+    def execute_turn_batch(
+        body: BatchAguiTurnRequest,
+        x_ssra_subject_ref: str | None = Header(default=None, alias="X-SSRA-Subject-Ref"),
+    ) -> list[RuntimeTurnResponse]:
         """Execute a batch of up to 100 synchronous 11-node conversation turns for high-volume stress/load evaluation."""
+        for item in body.items:
+            _verify_turn_subject_consistency(item, x_ssra_subject_ref)
         out: list[RuntimeTurnResponse] = []
         for item in body.items:
             ev = make_conversation_event(
@@ -372,8 +399,9 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
 
     @app.get("/v1/turns/{thread_id}/replay", response_model=list[ReconstructedTurnRecord])
     def replay_thread(thread_id: str) -> list[ReconstructedTurnRecord]:
-        """Reconstruct turn-by-turn forensic replay records for a conversation thread."""
-        return active_runtime.reconstruct_conversation(thread_id)
+        """Reconstruct turn-by-turn forensic replay records for a validated conversation thread."""
+        safe_tid = validate_safe_thread_id(thread_id)
+        return active_runtime.reconstruct_conversation(safe_tid)
 
     @app.post("/v1/field-officer/assist", response_model=FieldOfficerAssistResponse)
     def field_officer_assist(
@@ -390,8 +418,10 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
     async def agui_stream(
         body: AguiStreamRequest,
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+        x_ssra_subject_ref: str | None = Header(default=None, alias="X-SSRA-Subject-Ref"),
     ) -> StreamingResponse:
         """Stream AG-UI protocol events over Server-Sent Events with Last-Event-ID resumption."""
+        _verify_turn_subject_consistency(body, x_ssra_subject_ref)
         event = make_conversation_event(
             body.message,
             locale=body.locale,

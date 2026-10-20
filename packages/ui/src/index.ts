@@ -303,3 +303,58 @@ export function resolveSurfaceDesignContext(options: {
 
 export * from "./components.js";
 export * from "./juba-calendar.js";
+
+/**
+ * Strip zero-width spaces (U+200B), soft hyphens, BOMs, and non-ASCII characters from a pasted
+ * JWT or subject_ref token so `fetch()` never throws a non-ISO-8859-1 header TypeError (`SEC2-G7`).
+ */
+export function sanitizeBearerOrSubjectToken(raw: string): string {
+  let out = "";
+  for (const ch of raw) {
+    const cp = ch.codePointAt(0) ?? 0;
+    const keep =
+      (cp >= 0x30 && cp <= 0x39) ||
+      (cp >= 0x41 && cp <= 0x5a) ||
+      (cp >= 0x61 && cp <= 0x7a) ||
+      cp === 0x2d ||
+      cp === 0x5f ||
+      cp === 0x2e;
+    if (keep) out += ch;
+  }
+  return out;
+}
+
+export function looksLikeJwtFormat(token: string): boolean {
+  const clean = sanitizeBearerOrSubjectToken(token);
+  const parts = clean.split(".");
+  return (
+    parts.length === 3 &&
+    (parts[0]?.length ?? 0) > 0 &&
+    (parts[1]?.length ?? 0) > 0 &&
+    (parts[2]?.length ?? 0) > 0
+  );
+}
+
+/**
+ * Proactively check if a JWT `exp` claim is expired or within `skewSeconds` of expiring (`SEC2-G7`).
+ */
+export function isJwtTokenExpired(
+  token: string,
+  skewSeconds = 10,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!looksLikeJwtFormat(token)) return false;
+  try {
+    const payloadPart = sanitizeBearerOrSubjectToken(token).split(".")[1] ?? "";
+    const base64 = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const jsonStr = atob(padded);
+    const parsed = JSON.parse(jsonStr) as { readonly exp?: unknown };
+    if (typeof parsed.exp === "number") {
+      return parsed.exp * 1000 <= nowMs + skewSeconds * 1000;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}

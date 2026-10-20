@@ -8,7 +8,11 @@ from ssra_core import (
     SSRAError,
     get_default_feature_flag_engine,
 )
-from ssra_security import GENESIS_HASH, HashChainedAuditLedger
+from ssra_security import (
+    GENESIS_HASH,
+    PROTECTED_SECURITY_FLAGS,
+    HashChainedAuditLedger,
+)
 
 from ssra_api.admin.domain import KillSwitchState
 from ssra_api.outbox import get_outbox_store
@@ -38,6 +42,18 @@ _VERIFIED_STAFF_DIRECTORY: dict[str, dict[str, str | bool]] = {
         "passkey_verified": True,
         "device_posture_compliant": True,
     },
+    "ssra_admin": {
+        "staff_id": "ssra_admin",
+        "role": "admin",
+        "passkey_verified": True,
+        "device_posture_compliant": True,
+    },
+    "ssra_auditor": {
+        "staff_id": "ssra_auditor",
+        "role": "auditor",
+        "passkey_verified": True,
+        "device_posture_compliant": True,
+    },
 }
 
 
@@ -53,7 +69,8 @@ def update_kill_switch_state(
     disabled_channels: list[str],
     actor: str = "secops_admin",
 ) -> KillSwitchState:
-    """Update the active kill-switch state and append a WORM audit event and outbox CloudEvent."""
+    """Update the active kill-switch state after verifying admin/secops staff RBAC and append a WORM audit event."""
+    verified_actor = _verify_admin_or_secops_actor(actor)
     global _current_state
     _current_state = KillSwitchState(
         degradation_level=degradation_level,
@@ -61,7 +78,7 @@ def update_kill_switch_state(
         disabled_channels=tuple(disabled_channels),
     )
     _admin_audit.append(
-        actor=actor,
+        actor=verified_actor,
         action="admin.kill_switch.update",
         resource="ssra://admin/kill-switches",
         payload={
@@ -117,15 +134,16 @@ def record_jit_admin_elevation(
         )
     req_rec = _VERIFIED_STAFF_DIRECTORY.get(requester_staff_id)
     app_rec = _VERIFIED_STAFF_DIRECTORY.get(approver_staff_id)
-    if (
-        req_rec is None
-        or app_rec is None
-        or not req_rec.get("passkey_verified")
-        or not req_rec.get("device_posture_compliant")
-        or not app_rec.get("passkey_verified")
-        or not app_rec.get("device_posture_compliant")
-        or app_rec.get("role") not in {"supervisor", "secops", "admin"}
-    ):
+    is_valid_actors = (
+        req_rec is not None
+        and app_rec is not None
+        and bool(req_rec.get("passkey_verified"))
+        and bool(req_rec.get("device_posture_compliant"))
+        and bool(app_rec.get("passkey_verified"))
+        and bool(app_rec.get("device_posture_compliant"))
+        and app_rec.get("role") in {"supervisor", "secops", "admin"}
+    )
+    if not is_valid_actors or req_rec is None or app_rec is None:
         raise SSRAError(
             McpErrorCode.NOT_AUTHORIZED,
             "JIT admin elevation requires verified staff identities with active WebAuthn passkey and supervisor/secops approval",
@@ -163,12 +181,13 @@ def record_jit_admin_elevation(
 def _verify_admin_or_secops_actor(actor_staff_id: str) -> str:
     """Validate that `actor_staff_id` is a passkey-verified admin/secops/supervisor staff member."""
     rec = _VERIFIED_STAFF_DIRECTORY.get(actor_staff_id)
-    if (
-        rec is None
-        or not rec.get("passkey_verified")
-        or not rec.get("device_posture_compliant")
-        or rec.get("role") not in {"admin", "secops", "supervisor"}
-    ):
+    is_authorized = (
+        rec is not None
+        and bool(rec.get("passkey_verified"))
+        and bool(rec.get("device_posture_compliant"))
+        and rec.get("role") in {"admin", "secops", "supervisor"}
+    )
+    if not is_authorized or rec is None:
         raise SSRAError(
             McpErrorCode.NOT_AUTHORIZED,
             f"Admin feature-flag access requires verified admin/secops staff identity (received '{actor_staff_id}')",
@@ -192,6 +211,12 @@ def update_admin_feature_flag(
 ) -> FeatureFlagRule:
     """Update a feature-flag cohort rollout percentage and append a WORM audit event + outbox CloudEvent."""
     verified_actor = _verify_admin_or_secops_actor(actor)
+    if flag_name in PROTECTED_SECURITY_FLAGS and (not enabled or rollout_pct < 100):
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            f"Protected security control flag '{flag_name}' cannot be disabled via runtime override",
+            status_code=403,
+        )
     rule = get_default_feature_flag_engine().set_flag_override(
         flag_name,
         enabled=enabled,

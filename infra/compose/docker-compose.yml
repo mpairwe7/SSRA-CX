@@ -72,12 +72,15 @@ services:
   keycloak:
     <<: *hardened-defaults
     image: quay.io/keycloak/keycloak:26.4.11@sha256:f8f53f5990775d2b3056f5d5e19538909887821b6064232d032a27a4d5014140
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /opt/keycloak/data/tmp:rw,noexec,nosuid,size=64m
     command:
       - "start-dev"
       - "--import-realm"
       - "--health-enabled=true"
       - "--metrics-enabled=true"
-      - "--features=passkeys,token-exchange-standard:v2"
+      - "--features=passkeys,token-exchange-standard:v2,dpop"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD must be set}}
@@ -91,9 +94,11 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
       KC_HTTP_ENABLED: "true"
+      KC_HTTP_MANAGEMENT_PORT: "9000"
+      KC_CACHE: ispn
       KC_PROXY_HEADERS: xforwarded
       KC_HOSTNAME_STRICT: "false"
-      KC_FEATURES: passkeys,token-exchange-standard:v2
+      KC_FEATURES: passkeys,token-exchange-standard:v2,dpop
     volumes:
       - ../keycloak/ssra-realm.json:/opt/keycloak/data/import/ssra-realm.json:ro
     ports:
