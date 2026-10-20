@@ -117,13 +117,21 @@ def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> Non
     assert r_timeout.status_code == 200
     assert r_timeout.json()["response_type"] == "END"
 
-    # Juba Arabic (pga) USSD menu & STOP/START webhook opt-out tracking + RFC 9457 422
+    # Juba Arabic (pga) & Dinka (din) USSD menu & STOP/START webhook opt-out tracking + RFC 9457 422
     r_pga = client.post(
         "/v1/ussd/session",
         json={"session_id": "ussd_pga", "ussd_input": "", "locale": "pga"},
     )
     assert r_pga.status_code == 200
     assert "Qaima ta SSRA" in r_pga.json()["screen_text"]
+
+    r_din = client.post(
+        "/v1/ussd/session",
+        json={"session_id": "ussd_din", "ussd_input": "", "locale": "din"},
+    )
+    assert r_din.status_code == 200
+    assert "SSRA Official Menu" in r_din.json()["screen_text"]
+    assert r_din.json()["char_length"] <= 182
 
     r_stop = client.post(
         "/v1/webhooks/inbound",

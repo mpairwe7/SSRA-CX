@@ -55,6 +55,7 @@ def render_ussd_screen(
                 "0. Muwazaf SSRA"
             )
         else:
+            # Tier C locales (e.g. `din`) use the approved English menu fallback until OQ-008 human translator sign-off
             menu = (
                 "CON SSRA Official Menu:\n"
                 "1. TIN Registration\n"

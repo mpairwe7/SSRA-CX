@@ -152,6 +152,15 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
         req_bytes = bounded_body
 
         idem_key = request.headers.get("Idempotency-Key")
+        is_authenticated_req = any(
+            request.headers.get(h)
+            for h in ("authorization", "x-ssra-subject-ref", "x-ssra-staff-id")
+        )
+        base_sec_headers = (
+            {"Cache-Control": "private, no-store", **SECURITY_HEADERS}
+            if is_authenticated_req
+            else SECURITY_HEADERS
+        )
         caller_ctx = (
             f"{request.headers.get('authorization', '')}:"
             f"{request.headers.get('x-ssra-subject-ref', '')}"
@@ -183,13 +192,13 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
                     headers={
                         "traceparent": traceparent,
                         "X-Idempotency-Replayed": "true",
-                        **SECURITY_HEADERS,
+                        **base_sec_headers,
                     },
                 )
 
         response = await call_next(request)
         response.headers["traceparent"] = traceparent
-        for hk, hv in SECURITY_HEADERS.items():
+        for hk, hv in base_sec_headers.items():
             response.headers.setdefault(hk, hv)
 
         content_type = (response.media_type or response.headers.get("content-type", "")).lower()
@@ -214,7 +223,7 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
                 if request.headers.get("If-None-Match") == etag:
                     return Response(
                         status_code=304,
-                        headers={"ETag": etag, "traceparent": traceparent, **SECURITY_HEADERS},
+                        headers={"ETag": etag, "traceparent": traceparent, **base_sec_headers},
                     )
                 response.headers["ETag"] = etag
 
