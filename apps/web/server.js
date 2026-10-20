@@ -736,8 +736,8 @@ function renderPwaShellHtml(locale, nonce) {
       // FE-G1: Zero-PII Shared-Device Storage Hygiene — never persist non-T0 or TIN-bearing turns to localStorage
       function scrubPiiForStorage(text) {
         return String(text || "")
-          .replace(/\bd{9,12}\b/g, "[REDACTED_TIN]")
-          .replace(/+?211d{9}\b/g, "[REDACTED_PHONE]");
+          .replace(/\\+?211\\d{9}\\b/g, "[REDACTED_PHONE]")
+          .replace(/\\b\\d{9,12}\\b/g, "[REDACTED_TIN]");
       }
       function saveState() {
         try {
@@ -803,8 +803,8 @@ function renderPwaShellHtml(locale, nonce) {
       function applyIdentity(idVal) {
         const prev = state.identity;
         state.identity = idVal || "ANONYMOUS";
-        if (prev !== "ANONYMOUS" && state.identity === "ANONYMOUS") {
-          // FE-G1: Purge authenticated conversations from memory & SW cache on sign-out to ANONYMOUS
+        if (prev !== "ANONYMOUS" && prev !== state.identity) {
+          // FE-G1: Purge authenticated conversations from memory & SW cache on any subject change
           state.conversations = state.conversations.filter((c) => !c.isAuthenticated);
           state.activeId = state.conversations[0]?.id || null;
           dispatchSwLogoutPurge();
@@ -827,66 +827,19 @@ function renderPwaShellHtml(locale, nonce) {
         renderApp();
       }
 
-      // FE-G4: Deterministic Offline Statutory Resilience Pack (Part-IV-Sec-18-PAYE, WHT, Official Verifier)
+      // FE-G4: Safe Offline Resilience Pack — abstain from unverified calculations and route to official SSRA/NRA channels
       function computeOfflineResilienceAnswer(text) {
         const q = String(text || "").toLowerCase();
-        const numMatch = text.replace(/,/g, "").match(/(d+(?:.d+)?)/);
-        const amount = numMatch ? Number(numMatch[1]) : 250000;
-        if (q.includes("paye") || q.includes("salary")) {
-          const b2 = Math.max(0, Math.min(amount, 150000) - 50000) * 0.10;
-          const b3 = Math.max(0, Math.min(amount, 300000) - 150000) * 0.15;
-          const b4 = Math.max(0, amount - 300000) * 0.20;
-          const tax = Math.round((b2 + b3 + b4) * 100) / 100;
-          const net = Math.round((amount - tax) * 100) / 100;
-          return {
-            content:
-              "[OFFLINE_ESTIMATE_ONLY · Snapshot 2026.10.1] Monthly PAYE Estimate on " +
-              amount.toLocaleString() +
-              " SSP: Estimated PAYE Tax = " +
-              tax.toLocaleString() +
-              " SSP; Net Pay = " +
-              net.toLocaleString() +
-              " SSP (Filing deadline: 15th of the following month in Africa/Juba).",
-            meta: {
-              tier: "T0",
-              intent: "offline_paye_calculator",
-              outcome_verified: true,
-              ui_component: {
-                name: "CalculatorForm",
-                props: { estimated_tax_ssp: String(tax), net_pay_ssp: String(net) },
-              },
-              citations: [{ section_anchor: "Part-IV-Sec-18-PAYE", snapshot_version: "2026.10.1" }],
-            },
-          };
-        }
-        if (q.includes("wht") || q.includes("withholding")) {
-          const tax = Math.round(amount * 0.10 * 100) / 100;
-          return {
-            content:
-              "[OFFLINE_ESTIMATE_ONLY · Snapshot 2026.10.1] Domestic Withholding Tax (10% standard rate) on " +
-              amount.toLocaleString() +
-              " SSP = " +
-              tax.toLocaleString() +
-              " SSP.",
-            meta: {
-              tier: "T0",
-              intent: "offline_wht_calculator",
-              outcome_verified: true,
-              ui_component: {
-                name: "CalculatorForm",
-                props: { withholding_tax_ssp: String(tax) },
-              },
-              citations: [{ section_anchor: "Part-VI-Sec-31-WHT", snapshot_version: "2026.10.1" }],
-            },
-          };
-        }
+        const isCalcOrRate =
+          q.includes("paye") || q.includes("salary") || q.includes("wht") || q.includes("withholding");
         return {
-          content:
-            "[OFFLINE_RESILIENCE_PACK · Snapshot 2026.10.1] Connection interrupted. Official SSRA / NRA portal: https://etax.nra.gov.ss/ (100% cash-free; pay only via commercial bank PRN). Juba HQ & Nimule Customs hours: Mon–Fri 08:00–17:00 CAT (Africa/Juba).",
+          content: isCalcOrRate
+            ? "[OFFLINE_ABSTENTION · Snapshot 2026.10.1] Connection to the SSRA deterministic tax-facts and calculator engine is currently unavailable. To prevent unverified tax figures, SSRA Assist abstains while offline. Please reconnect or use the official SSRA / NRA portal at https://etax.nra.gov.ss/ (100% cash-free via commercial bank PRN)."
+            : "[OFFLINE_RESILIENCE_PACK · Snapshot 2026.10.1] Connection interrupted. Official SSRA / NRA portal: https://etax.nra.gov.ss/ (100% cash-free; pay only via commercial bank PRN).",
           meta: {
             tier: "T0",
-            intent: "offline_resilience_guidance",
-            outcome_verified: true,
+            intent: isCalcOrRate ? "offline_calculator_abstention" : "offline_resilience_guidance",
+            outcome_verified: false,
             citations: [{ section_anchor: "ssra-official-channels-2026", snapshot_version: "2026.10.1" }],
           },
         };
@@ -1386,6 +1339,7 @@ function renderPwaShellHtml(locale, nonce) {
         acctPopover?.classList.remove("open");
         renderSettingsTabContent("general");
         settingsBackdrop?.classList.add("open");
+        settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]')?.focus();
       });
       document.getElementById("close-settings-btn")?.addEventListener("click", closeAllModals);
       settingsBackdrop?.addEventListener("click", (e) => {
@@ -1444,6 +1398,7 @@ function renderPwaShellHtml(locale, nonce) {
           if (hintEl) hintEl.textContent = "Voice dictation active via Call SSRA modal";
           modalReturnFocusEl = document.getElementById("voice-dictate-btn");
           document.getElementById("call-modal-backdrop")?.classList.add("open");
+          document.getElementById("close-call-btn")?.focus();
           return;
         }
         const rec = new SR();
@@ -1467,6 +1422,7 @@ function renderPwaShellHtml(locale, nonce) {
       document.getElementById("open-call-btn")?.addEventListener("click", (e) => {
         modalReturnFocusEl = e.currentTarget;
         callBackdrop?.classList.add("open");
+        document.getElementById("close-call-btn")?.focus();
       });
       document.getElementById("close-call-btn")?.addEventListener("click", closeAllModals);
       document.querySelectorAll(".call-sample-btn").forEach((btn) => {

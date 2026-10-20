@@ -1299,7 +1299,21 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           }
           if (flRes.status === "fulfilled" && flRes.value.ok) {
             const flData = await flRes.value.json();
-            if (flData && typeof flData.flags === "object" && flData.flags !== null) {
+            if (Array.isArray(flData)) {
+              const liveFlags = Object.fromEntries(
+                flData
+                  .filter(
+                    (flag) =>
+                      flag &&
+                      typeof flag.name === "string" &&
+                      typeof flag.enabled === "boolean",
+                  )
+                  .map((flag) => [flag.name, flag.enabled]),
+              );
+              if (Object.keys(liveFlags).length > 0) {
+                state.flagOverrides = liveFlags;
+              }
+            } else if (flData && typeof flData.flags === "object" && flData.flags !== null) {
               state.flagOverrides = { ...state.flagOverrides, ...flData.flags };
             }
           }
@@ -1474,8 +1488,14 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       }
       function closeCmdk() {
         cmdkBackdrop?.classList.remove("open");
-        if (cmdkReturnFocusEl && typeof cmdkReturnFocusEl.focus === "function") {
+        if (
+          cmdkReturnFocusEl &&
+          cmdkReturnFocusEl.isConnected &&
+          typeof cmdkReturnFocusEl.focus === "function"
+        ) {
           cmdkReturnFocusEl.focus();
+        } else if (mainEl && typeof mainEl.focus === "function") {
+          mainEl.focus();
         }
       }
 
@@ -1514,6 +1534,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         }
         const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
         if (tag === "input" || tag === "textarea" || tag === "select") return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
         if (state.route === "/agent" || state.route === "/admin/tickets") {
           if (e.key === "j") { e.preventDefault(); state.selectedTicketIdx = (state.selectedTicketIdx + 1) % 3; renderCurrentRoute(); }
           else if (e.key === "k") { e.preventDefault(); state.selectedTicketIdx = (state.selectedTicketIdx + 2) % 3; renderCurrentRoute(); }

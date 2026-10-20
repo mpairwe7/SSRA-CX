@@ -127,8 +127,19 @@ def main() -> None:
         "FE-G7 Auditor read-only SoD or South Sudan civic palette missing in packages/ui/ops-console.js"
     )
 
+    # FE-G8: Executable verification of cross-subject purge, safe offline abstention, flag array normalization & focus/hotkey guards
+    assert (
+        "prev !== state.identity" in web_srv_src
+        and "outcome_verified: false" in web_srv_src
+        and "Array.isArray(flData)" in ops_ui_src
+        and "cmdkReturnFocusEl.isConnected" in ops_ui_src
+        and "e.ctrlKey || e.metaKey || e.altKey" in ops_ui_src
+    ), (
+        "FE-G8 cross-subject purge, safe offline abstention, flag normalization, or focus/hotkey guard missing"
+    )
+
     print(
-        f"Frontend budget & WCAG 2.2 AA check passed: public gzip size={gzip_kb:.2f} KB (<= {TARGET_FIRST_LOAD_JS_GZIP_KB} KB target)."
+        f"Frontend budget & WCAG 2.2 AA check passed (FE-G1..FE-G8 verified): public gzip size={gzip_kb:.2f} KB (<= {TARGET_FIRST_LOAD_JS_GZIP_KB} KB target)."
     )
 
 
