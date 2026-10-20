@@ -186,8 +186,9 @@ def route_voice_turn(
     barge_in_detected: bool = False,
     utterance_confidence: float = 0.95,
     consecutive_low_confidence_turns: int = 0,
+    enable_spoken_clarify_gate: bool = False,
 ) -> VoiceSessionDecision:
-    """Route a voice turn across ASR, hybrid DTMF disambiguation, and progressive warm transfer."""
+    """Route a voice turn across ASR, spoken ClarifyGate, hybrid DTMF disambiguation, and progressive warm transfer."""
     _ = barge_in_detected
     asr_engine = ASR_MODEL_BY_LOCALE[locale]
     tts_engine = TTS_MODEL_BY_LOCALE[locale]
@@ -208,6 +209,22 @@ def route_voice_turn(
                 f"Warm transfer from IVR ({locale.value}): caller pressed 0, language WER "
                 f"{measured_wer:.2f} exceeded gate {MAX_VOICE_WER_GATE}, or consecutive low-confidence turns={consecutive_low_confidence_turns}."
             ),
+        )
+
+    should_clarify = (
+        enable_spoken_clarify_gate
+        and dtmf_digit is None
+        and 0.60 <= utterance_confidence < MIN_UTTERANCE_ASR_CONFIDENCE
+        and consecutive_low_confidence_turns <= 1
+    )
+    if should_clarify:
+        return VoiceSessionDecision(
+            session_id=session_id,
+            locale=locale,
+            asr_engine=asr_engine,
+            tts_engine=tts_engine,
+            recording_enabled=recording_consent_granted,
+            action="CLARIFY_INTENT_SPOKEN",
         )
 
     if dtmf_digit is not None or utterance_confidence < MIN_UTTERANCE_ASR_CONFIDENCE:
@@ -323,6 +340,8 @@ class OfficerCallBrief:
     turns_covered: int
     model: str = "ssra-sovereign/sunflower-qwen3.5-9b"
     fallback: bool = False
+    verified_artifacts: list[dict[str, Any]] = field(default_factory=list)
+    recommended_officer_action: str = "Review verified e-Tax context and confirm next step"
 
 
 def generate_officer_call_brief(
@@ -330,6 +349,7 @@ def generate_officer_call_brief(
     call_id: str,
     turns: list[dict[str, Any]],
     transfer_reason: str,
+    verified_artifacts: list[dict[str, Any]] | None = None,
 ) -> OfficerCallBrief:
     """Build the 10-second Officer Call Brief (`CallBriefCard.tsx`) with turn-sequence evidence links."""
     caller_turns = [t for t in turns if t.get("speaker") == "caller"]
@@ -384,6 +404,12 @@ def generate_officer_call_brief(
         ),
         turns_covered=len(turns),
         fallback=len(turns) == 0,
+        verified_artifacts=list(verified_artifacts or []),
+        recommended_officer_action=(
+            f"Priority de-escalation & verify {transfer_reason.lower()}"
+            if sentiment in ("distressed", "frustrated")
+            else f"Verify {transfer_reason.lower()} and guide next e-Tax step"
+        ),
     )
 
 
@@ -652,6 +678,18 @@ class VoiceStreamSession:
             env["sentence_text"] = sentence
             chunks.append(env)
         return chunks
+
+    def resume_after_network_drop(
+        self,
+        text: str,
+        *,
+        last_acked_sentence_index: int,
+        voice: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Resume sentence-chunked TTS after a transient 2G WebSocket/WebRTC drop from `last_acked_sentence_index + 1`."""
+        self.reset_barge_in()
+        all_chunks = self.stream_tts_sentences(text, voice=voice)
+        return [c for c in all_chunks if int(c["sentence_index"]) > last_acked_sentence_index]
 
 
 VOICE_EVENT_TYPES: frozenset[str] = frozenset(
@@ -1108,6 +1146,125 @@ def resolve_edge_appliance_profile(
     )
 
 
+@dataclass(frozen=True)
+class SpokenNumberVerbalization:
+    """Dual-representation envelope holding canonical digit transcript and TTS-friendly verbalized text."""
+
+    canonical_transcript: str
+    phonetic_tts_text: str
+    figures_verified: bool
+    locale: LocaleCode
+
+
+_CURRENCY_SPEECH_MAP: dict[LocaleCode, tuple[str, str]] = {
+    LocaleCode.EN: ("South Sudanese Pounds", "U S Dollars"),
+    LocaleCode.AR: ("جنيه جنوب سوداني", "دولار أمريكي"),
+    LocaleCode.PGA: ("South Sudanese Pounds", "U S Dollars"),
+    LocaleCode.DIN: ("South Sudanese Pounds", "U S Dollars"),
+    LocaleCode.NUS: ("South Sudanese Pounds", "U S Dollars"),
+    LocaleCode.BFA: ("South Sudanese Pounds", "U S Dollars"),
+    LocaleCode.ZNE: ("South Sudanese Pounds", "U S Dollars"),
+    LocaleCode.SHK: ("South Sudanese Pounds", "U S Dollars"),
+}
+
+
+def verbalize_statutory_figures_for_tts(
+    text: str,
+    *,
+    locale: LocaleCode = LocaleCode.EN,
+    expected_numeric_values: list[str] | tuple[str, ...] = (),
+) -> SpokenNumberVerbalization:
+    """Enforce `FLAG_SPOKEN_FIGURE_GUARD` and produce dual canonical-digit + phonetic-currency TTS text."""
+    verified = verify_spoken_figure_fidelity(text, expected_numeric_values)
+    if not verified:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "FLAG_SPOKEN_FIGURE_GUARD blocked TTS synthesis: spoken figure mismatch with verified NumericClaims",
+            status_code=422,
+        )
+    phonetic = normalize_statutory_text_for_speech(text, locale=locale)
+    ssp_word, usd_word = _CURRENCY_SPEECH_MAP.get(locale, _CURRENCY_SPEECH_MAP[LocaleCode.EN])
+    phonetic = re.sub(r"\bSSP\b", ssp_word, phonetic)
+    phonetic = re.sub(r"\bUSD\b", usd_word, phonetic)
+    return SpokenNumberVerbalization(
+        canonical_transcript=text,
+        phonetic_tts_text=phonetic,
+        figures_verified=True,
+        locale=locale,
+    )
+
+
+def sync_affective_state_to_call_lobby(
+    lobby: CallLobbyManager,
+    *,
+    call_id: str,
+    primary_emotion: str,
+    intensity: float,
+    frustration_velocity: float,
+    signals: list[str] | tuple[str, ...] = (),
+) -> LobbyCallEntry:
+    """Push real-time acoustic/text emotion spikes into `CallLobbyManager` (`at_risk` / `watch` + priority raise)."""
+    if primary_emotion == "distressed" or intensity >= 0.80 or frustration_velocity >= 0.45:
+        lobby.apply_event(
+            "call.risk",
+            {"call_id": call_id, "level": "at_risk", "signals": list(signals)},
+        )
+        return lobby.apply_event(
+            "call.priority_raised",
+            {"call_id": call_id, "priority": "urgent", "reason": f"eq_{primary_emotion}"},
+        )
+    if primary_emotion in ("frustrated", "anxious") or intensity >= 0.50:
+        return lobby.apply_event(
+            "call.risk",
+            {"call_id": call_id, "level": "watch", "signals": list(signals)},
+        )
+    return lobby.apply_event(
+        "call.risk",
+        {"call_id": call_id, "level": "none", "signals": []},
+    )
+
+
+@dataclass(frozen=True)
+class CallToWebCarryover:
+    """Symmetric Voice-to-Web carryover descriptor (`VR-G3`) for continuing a voice workflow on `apps/web`."""
+
+    call_id: str
+    conversation_id: str
+    active_goal_id: str
+    resume_step_index: int
+    pending_action: str
+    local_models_only: bool = True
+
+
+def build_call_to_web_carryover(
+    *,
+    call_id: str,
+    conversation_id: str,
+    owner_user_id: str,
+    caller_user_id: str,
+    active_goal_id: str = "goal_guided_tcc",
+    resume_step_index: int = 2,
+    pending_action: str = "upload_supporting_receipt",
+) -> CallToWebCarryover | None:
+    """Build a session-bound Voice-to-Web carryover token when caller and owner identities match."""
+    is_valid = (
+        bool(_SAFE_ID_RE.match(call_id))
+        and bool(_SAFE_ID_RE.match(conversation_id))
+        and bool(_SAFE_ID_RE.match(owner_user_id))
+        and owner_user_id == caller_user_id
+    )
+    if not is_valid:
+        return None
+    return CallToWebCarryover(
+        call_id=call_id,
+        conversation_id=conversation_id,
+        active_goal_id=active_goal_id,
+        resume_step_index=max(1, resume_step_index),
+        pending_action=pending_action[:120],
+        local_models_only=True,
+    )
+
+
 __all__ = [
     "ASR_MODEL_BY_LOCALE",
     "MAX_CARRYOVER_CONTEXT_CHARS",
@@ -1120,12 +1277,14 @@ __all__ = [
     "VOICE_EVENT_TYPES",
     "BriefClaim",
     "CallLobbyManager",
+    "CallToWebCarryover",
     "ChatToCallCarryover",
     "EdgeFieldApplianceProfile",
     "HfVoiceModelDescriptor",
     "HybridVoiceRouteDecision",
     "LobbyCallEntry",
     "OfficerCallBrief",
+    "SpokenNumberVerbalization",
     "TtsCachedAudio",
     "TtsPhraseCache",
     "VADConfig",
@@ -1133,6 +1292,7 @@ __all__ = [
     "VoiceSessionDecision",
     "VoiceStreamSession",
     "VoiceWebSocketConcurrencyGuard",
+    "build_call_to_web_carryover",
     "build_chat_to_call_carryover",
     "build_voice_consent_audit_entry",
     "build_voice_prosody_eq_metadata",
@@ -1150,9 +1310,11 @@ __all__ = [
     "route_voice_turn",
     "select_hybrid_voice_execution_mode",
     "split_tts_sentences",
+    "sync_affective_state_to_call_lobby",
     "synthesize_tts_speech_envelope",
     "validate_audio_pcm_expansion_budget",
     "validate_call_wrap_up",
+    "verbalize_statutory_figures_for_tts",
     "verify_spoken_figure_fidelity",
     "verify_voice_dtmf_step_up",
 ]

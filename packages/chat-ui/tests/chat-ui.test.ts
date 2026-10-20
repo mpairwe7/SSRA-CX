@@ -559,5 +559,33 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(verifyOfflineOfficialChannel("cash-collector-phone").status).toBe("UNVERIFIED_OR_SCAM");
     expect(resolveAdaptiveVoiceNetworkProfile({ effectiveType: "2g" }).opusBitrateKbps).toBe(12);
     expect(resolveAdaptiveVoiceNetworkProfile({ effectiveType: "4g" }).opusBitrateKbps).toBe(24);
+
+    // VR-AR1: Offline T0 Opus Voice-Note Outbox Queue (<= 64 KB, <= 30s, consent-gated)
+    const vnOutbox = new OfflineOutboxQueue(5);
+    expect(
+      vnOutbox.enqueueVoiceNote({
+        id: "vn_t1_rejected",
+        locale: "pga",
+        tier: "T1",
+        mimeType: "audio/webm;codecs=opus",
+        durationSeconds: 15,
+        sizeBytes: 24_000,
+        recordingConsentGranted: true,
+        queuedAtIso: "2026-10-20T10:00:00Z",
+      }).reason,
+    ).toBe("SECURITY_POLICY_T0_ONLY_OFFLINE_QUEUE");
+    expect(
+      vnOutbox.enqueueVoiceNote({
+        id: "vn_t0_ok",
+        locale: "pga",
+        tier: "T0",
+        mimeType: "audio/webm;codecs=opus",
+        durationSeconds: 15,
+        sizeBytes: 24_000,
+        recordingConsentGranted: true,
+        queuedAtIso: "2026-10-20T10:00:00Z",
+      }).queued,
+    ).toBe(true);
+    expect(vnOutbox.drainVoiceNotes()).toHaveLength(1);
   });
 });

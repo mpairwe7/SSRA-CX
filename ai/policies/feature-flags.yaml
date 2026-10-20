@@ -67,3 +67,32 @@ flags:
     allowed_channels: ["web", "voice", "ussd", "sms"]
     allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
 
+  FLAG_HYBRID_SPEECH_S2S:
+    description: "Runbook alias for hybrid speech router (fast-ack cached fillers + governed STT->LLM->TTS cascade)"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["voice", "web", "console"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FLAG_EMOTION_AWARE_PROSODY:
+    description: "Runbook alias for real-time acoustic/text emotion detection, 0.92x calm TTS prosody, and lobby risk alerting"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["voice", "web", "whatsapp", "console"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FLAG_CONTINUOUS_RELATIONSHIP_MEMORY:
+    description: "Runbook alias for 4-tier cognitive relationship memory and bidirectional Voice<->Web carryover"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["voice", "web", "whatsapp", "sms", "console"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+  FLAG_SPOKEN_FIGURE_GUARD:
+    description: "Mandatory pre-TTS whole-token spoken figure fidelity guard and vernacular currency verbalizer"
+    enabled: true
+    rollout_pct: 100
+    allowed_channels: ["voice", "web", "console"]
+    allowed_locales: ["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]
+
+

@@ -50,6 +50,17 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     )
     assert d_low.action == "DTMF_MENU"
 
+    d_clarify = route_voice_turn(
+        session_id="v_03_clarify",
+        locale=LocaleCode.DIN,
+        measured_wer=0.05,
+        recording_consent_granted=False,
+        utterance_confidence=0.65,
+        consecutive_low_confidence_turns=1,
+        enable_spoken_clarify_gate=True,
+    )
+    assert d_clarify.action == "CLARIFY_INTENT_SPOKEN"
+
     d_strike2 = route_voice_turn(
         session_id="v_04",
         locale=LocaleCode.EN,
@@ -311,3 +322,79 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     assert ws_guard.rekey_slot("anon::1", "usr_1", pool="voice") is True
     ws_guard.release("usr_1", pool="voice")
     assert ws_guard.active_count("voice") == 0
+
+    # VR-QW3, VR-QW4, VR-MT2, VR-MT3: Spoken Figure Guard Verbalizer, Live Lobby EQ Sync, CallToWebCarryover & Drop Resumption
+    from ssra_voice import (
+        build_call_to_web_carryover,
+        sync_affective_state_to_call_lobby,
+        verbalize_statutory_figures_for_tts,
+    )
+
+    verb_en = verbalize_statutory_figures_for_tts(
+        "Balance is 450,000 SSP.",
+        locale=LocaleCode.EN,
+        expected_numeric_values=["450,000"],
+    )
+    assert verb_en.figures_verified is True
+    assert "South Sudanese Pounds" in verb_en.phonetic_tts_text
+
+    with pytest.raises(SSRAError):
+        verbalize_statutory_figures_for_tts(
+            "Balance is 450,000 SSP.",
+            locale=LocaleCode.EN,
+            expected_numeric_values=["45,000"],
+        )
+
+    lobby_eq = CallLobbyManager()
+    lobby_eq.apply_event("call.started", {"call_id": "c_eq"})
+    risk_entry = sync_affective_state_to_call_lobby(
+        lobby_eq,
+        call_id="c_eq",
+        primary_emotion="distressed",
+        intensity=0.88,
+        frustration_velocity=0.55,
+        signals=["distress_lexical:seized"],
+    )
+    assert risk_entry.risk_level == "at_risk"
+    assert risk_entry.priority == "urgent"
+    watch_entry = sync_affective_state_to_call_lobby(
+        lobby_eq,
+        call_id="c_eq",
+        primary_emotion="frustrated",
+        intensity=0.60,
+        frustration_velocity=0.20,
+        signals=["frustration_lexical:failed"],
+    )
+    assert watch_entry.risk_level == "watch"
+    calm_entry = sync_affective_state_to_call_lobby(
+        lobby_eq,
+        call_id="c_eq",
+        primary_emotion="calm",
+        intensity=0.10,
+        frustration_velocity=0.0,
+    )
+    assert calm_entry.risk_level == "none"
+
+    c2w = build_call_to_web_carryover(
+        call_id="call_01",
+        conversation_id="conv_01",
+        owner_user_id="usr_01",
+        caller_user_id="usr_01",
+    )
+    assert c2w is not None and c2w.local_models_only is True
+    assert (
+        build_call_to_web_carryover(
+            call_id="call_01",
+            conversation_id="conv_01",
+            owner_user_id="usr_01",
+            caller_user_id="usr_02",
+        )
+        is None
+    )
+
+    resumed_chunks = v_stream.resume_after_network_drop(
+        "First sentence acked. Second resumed. Third resumed.",
+        last_acked_sentence_index=0,
+    )
+    assert len(resumed_chunks) == 2
+    assert resumed_chunks[0]["sentence_index"] == 1
