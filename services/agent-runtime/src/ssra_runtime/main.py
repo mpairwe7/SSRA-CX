@@ -237,13 +237,14 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         return _collect_runtime_stack_status(active_runtime)
 
     def _verify_subject_header(subject_ref: str, x_ssra_subject_ref: str | None) -> str:
-        """Validate `subject_ref` and enforce `X-SSRA-Subject-Ref` header parity when present."""
+        """Validate `subject_ref` and require a matching `X-SSRA-Subject-Ref` header (OWASP API1:2023 / ASI03)."""
         safe_sub = validate_safe_subject_ref(subject_ref, auth_level=AuthLevel.T1_TIN_BOUND)
-        if x_ssra_subject_ref is not None and x_ssra_subject_ref.strip() != safe_sub:
+        caller_sub = (x_ssra_subject_ref or "").strip()
+        if caller_sub != safe_sub:
             raise SSRAError(
                 McpErrorCode.NOT_AUTHORIZED,
-                "X-SSRA-Subject-Ref header mismatch with path subject_ref (ASI03)",
-                status_code=403,
+                "Authenticated matching X-SSRA-Subject-Ref header required (ASI03)",
+                status_code=403 if caller_sub else 401,
             )
         return safe_sub
 
@@ -308,8 +309,21 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         }
 
     @app.post("/v1/turns", response_model=RuntimeTurnResponse)
-    async def execute_turn(body: AguiStreamRequest) -> RuntimeTurnResponse:
-        """Execute a synchronous 11-node LangGraph conversation turn."""
+    def execute_turn(
+        body: AguiStreamRequest,
+        x_ssra_subject_ref: str | None = Header(default=None, alias="X-SSRA-Subject-Ref"),
+    ) -> RuntimeTurnResponse:
+        """Execute a synchronous 11-node LangGraph conversation turn on the worker threadpool."""
+        if (
+            x_ssra_subject_ref is not None
+            and body.subject_ref is not None
+            and x_ssra_subject_ref.strip() != body.subject_ref.strip()
+        ):
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "X-SSRA-Subject-Ref header mismatch with body subject_ref (ASI03)",
+                status_code=403,
+            )
         event = make_conversation_event(
             body.message,
             locale=body.locale,
@@ -327,12 +341,12 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         )
 
     @app.get("/v1/turns/{thread_id}/replay", response_model=list[ReconstructedTurnRecord])
-    async def replay_thread(thread_id: str) -> list[ReconstructedTurnRecord]:
+    def replay_thread(thread_id: str) -> list[ReconstructedTurnRecord]:
         """Reconstruct turn-by-turn forensic replay records for a conversation thread."""
         return active_runtime.reconstruct_conversation(thread_id)
 
     @app.post("/v1/field-officer/assist", response_model=FieldOfficerAssistResponse)
-    async def field_officer_assist(
+    def field_officer_assist(
         body: FieldOfficerAssistRequest,
     ) -> FieldOfficerAssistResponse:
         """Execute passkey-gated Field-Officer Assist tasks with WORM audit logging."""

@@ -735,6 +735,19 @@ async def execute_single_scenario(
         }
 
 
+def _resolve_git_revision() -> str:
+    """Resolve the short Git commit SHA from `.git/HEAD` without spawning a subprocess."""
+    head_file = ROOT / ".git" / "HEAD"
+    if not head_file.exists():
+        return "unknown"
+    raw = head_file.read_text(encoding="utf-8").strip()
+    if raw.startswith("ref: "):
+        ref_path = ROOT / ".git" / raw[5:].strip()
+        if ref_path.exists():
+            return ref_path.read_text(encoding="utf-8").strip()[:7]
+    return raw[:7]
+
+
 async def run_benchmark_async(
     ngrok_url: str,
     concurrency: int = 20,
@@ -846,13 +859,18 @@ async def run_benchmark_async(
     target_label = (
         f"{_parts.scheme}://<redacted-ngrok-tunnel>" if "ngrok" in _parts.netloc else ngrok_url
     )
+    git_rev = _resolve_git_revision()
+    transport_errs = sum(1 for r in results if "transport_error" in r)
     summary: dict[str, Any] = {
         "benchmark_version": "2026.10.21",
+        "git_revision": git_rev,
         "target_ngrok_url": target_label,
         "total_scenarios": len(results),
         "total_turns_executed": total_turns,
         "total_http_requests_over_ngrok": total_http,
         "scenarios_passed": passed_count,
+        "transport_errors_count": transport_errs,
+        "zero_5xx_errors_verified": transport_errs == 0 and passed_count == len(results),
         "overall_accuracy_pct": round(100.0 * passed_count / len(results), 2),
         "intent_identification_accuracy_pct": round(
             100.0 * sum(1 for r in results if r["intent_matched"]) / len(results), 2
