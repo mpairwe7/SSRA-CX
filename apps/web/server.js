@@ -285,6 +285,52 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname.startsWith("/v1/")) {
+    const isRuntimeRoute =
+      pathname.startsWith("/v1/turns") ||
+      pathname.startsWith("/v1/agui/") ||
+      pathname.startsWith("/v1/memory/") ||
+      pathname.startsWith("/v1/runtime/") ||
+      pathname.startsWith("/v1/field-officer/");
+    const upstreamBase = isRuntimeRoute ? INTERNAL_RUNTIME_URL : INTERNAL_API_URL;
+    try {
+      const hasBody = req.method === "POST" || req.method === "PUT" || req.method === "PATCH";
+      const bodyStr = hasBody ? await readRequestBody(req) : undefined;
+      const fwdHeaders = { Accept: req.headers.accept ?? "application/json" };
+      if (hasBody) {
+        fwdHeaders["Content-Type"] = "application/json";
+      }
+      for (const hName of [
+        "x-ssra-subject-ref",
+        "x-ssra-staff-id",
+        "authorization",
+        "last-event-id",
+        "traceparent",
+        "idempotency-key",
+      ]) {
+        if (req.headers[hName]) {
+          fwdHeaders[hName] = String(req.headers[hName]);
+        }
+      }
+      const upstream = await fetch(`${upstreamBase}${pathname}`, {
+        method: req.method ?? "GET",
+        headers: fwdHeaders,
+        body: bodyStr,
+      });
+      const text = await upstream.text();
+      res.writeHead(upstream.status, {
+        "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+        ...secHeaders,
+      });
+      res.end(text);
+    } catch (err) {
+      const code = err instanceof Error && err.message === "PAYLOAD_TOO_LARGE" ? 413 : 502;
+      res.writeHead(code, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ error: "UPSTREAM_V1_PROXY_ERROR" }));
+    }
+    return;
+  }
+
   const seg = pathname.split("/").filter(Boolean)[0] ?? "en";
   const locale = SUPPORTED_LOCALES.has(seg) ? seg : "en";
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...secHeaders });
