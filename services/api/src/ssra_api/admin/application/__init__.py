@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from ssra_core import McpErrorCode, SSRAError
+from ssra_core import (
+    FeatureFlagRule,
+    McpErrorCode,
+    SSRAError,
+    get_default_feature_flag_engine,
+)
 from ssra_security import GENESIS_HASH, HashChainedAuditLedger
 
 from ssra_api.admin.domain import KillSwitchState
@@ -153,3 +158,64 @@ def record_jit_admin_elevation(
         },
     )
     return ev.hash
+
+
+def _verify_admin_or_secops_actor(actor_staff_id: str) -> str:
+    """Validate that `actor_staff_id` is a passkey-verified admin/secops/supervisor staff member."""
+    rec = _VERIFIED_STAFF_DIRECTORY.get(actor_staff_id)
+    if (
+        rec is None
+        or not rec.get("passkey_verified")
+        or not rec.get("device_posture_compliant")
+        or rec.get("role") not in {"admin", "secops", "supervisor"}
+    ):
+        raise SSRAError(
+            McpErrorCode.NOT_AUTHORIZED,
+            f"Admin feature-flag access requires verified admin/secops staff identity (received '{actor_staff_id}')",
+            status_code=403,
+        )
+    return str(rec["staff_id"])
+
+
+def list_admin_feature_flags(*, actor: str = "secops_admin") -> list[FeatureFlagRule]:
+    """Return all registered SSRA Assist feature-flag rules after verifying staff authorization."""
+    _verify_admin_or_secops_actor(actor)
+    return get_default_feature_flag_engine().list_rules()
+
+
+def update_admin_feature_flag(
+    *,
+    flag_name: str,
+    enabled: bool,
+    rollout_pct: int = 100,
+    actor: str = "secops_admin",
+) -> FeatureFlagRule:
+    """Update a feature-flag cohort rollout percentage and append a WORM audit event + outbox CloudEvent."""
+    verified_actor = _verify_admin_or_secops_actor(actor)
+    rule = get_default_feature_flag_engine().set_flag_override(
+        flag_name,
+        enabled=enabled,
+        rollout_pct=rollout_pct,
+    )
+    _admin_audit.append(
+        actor=verified_actor,
+        action="admin.feature_flag.update",
+        resource=f"ssra://admin/feature-flags/{flag_name}",
+        payload={
+            "flag_name": flag_name,
+            "enabled": rule.enabled,
+            "rollout_pct": rule.rollout_pct,
+        },
+    )
+    get_outbox_store().stage_domain_event(
+        context_name="admin",
+        event_type="ssra.admin.feature_flag.updated.v1",
+        subject=flag_name,
+        data={
+            "flag_name": flag_name,
+            "enabled": rule.enabled,
+            "rollout_pct": rule.rollout_pct,
+            "actor": verified_actor,
+        },
+    )
+    return rule

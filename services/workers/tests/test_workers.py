@@ -15,6 +15,7 @@ from ssra_workers import (
 
 
 def test_legal_structure_chunking_preserves_part_and_section_anchors() -> None:
+    """Verify legal document chunking preserves PART and SECTION anchors and SHA-256 checksums."""
     sample_act = """
     PART IV: PERSONAL INCOME TAX (PAYE)
     Section 18: Monthly Withholding and Remittance
@@ -30,6 +31,7 @@ def test_legal_structure_chunking_preserves_part_and_section_anchors() -> None:
 
 
 def test_knowledge_release_gate_and_sla_escalation() -> None:
+    """Verify knowledge release gate rollback, SLA breach escalation, and goal continuation."""
     failed_job = KnowledgeReleaseJob(
         snapshot_version="2026.11.0",
         approved_by="SSRA Legal",
@@ -80,9 +82,137 @@ def test_knowledge_release_gate_and_sla_escalation() -> None:
     assert set(summary.skipped_no_consent_subjects) == {"sub_stopped", "sub_no_consent"}
 
     from ssra_voice.__main__ import main as voice_main
-    from ssra_workers import get_worker_health_status
+    from ssra_workers import (
+        GoalContinuationCandidate,
+        get_worker_health_status,
+        run_post_interaction_goal_continuation,
+    )
     from ssra_workers.__main__ import main as workers_main
 
     assert get_worker_health_status()["status"] == "ok"
     assert workers_main() == 0
     assert voice_main() == 0
+
+    from ssra_core import ChannelName, IntentName, LocaleCode
+
+    cont_summary = run_post_interaction_goal_continuation(
+        [
+            GoalContinuationCandidate(
+                goal_id="goal_tcc_01",
+                subject_ref="sub_opted_in",
+                goal_type=IntentName.GUIDED_TCC,
+                current_step_index=2,
+                total_steps=2,
+                pending_dependency="ETAX_TCC_APPROVAL",
+                dependency_resolved=True,
+                opt_in_consent_active=True,
+                channel=ChannelName.WHATSAPP,
+                locale=LocaleCode.PGA,
+                within_whatsapp_24h_window=False,
+                template_id="TMPL_SSRA_TCC_READY_2026",
+            ),
+            GoalContinuationCandidate(
+                goal_id="goal_tcc_02",
+                subject_ref="sub_no_consent",
+                goal_type=IntentName.GUIDED_TCC,
+                current_step_index=2,
+                total_steps=2,
+                pending_dependency="ETAX_TCC_APPROVAL",
+                dependency_resolved=True,
+                opt_in_consent_active=False,
+            ),
+            GoalContinuationCandidate(
+                goal_id="goal_tcc_03",
+                subject_ref="sub_unresolved",
+                goal_type=IntentName.GUIDED_TCC,
+                current_step_index=2,
+                total_steps=2,
+                pending_dependency="ETAX_TCC_APPROVAL",
+                dependency_resolved=False,
+                opt_in_consent_active=True,
+            ),
+            GoalContinuationCandidate(
+                goal_id="goal_tcc_04",
+                subject_ref="sub_bad_tmpl",
+                goal_type=IntentName.GUIDED_TCC,
+                current_step_index=2,
+                total_steps=2,
+                pending_dependency="ETAX_TCC_APPROVAL",
+                dependency_resolved=True,
+                opt_in_consent_active=True,
+                channel=ChannelName.WHATSAPP,
+                locale=LocaleCode.AR,
+                within_whatsapp_24h_window=False,
+                template_id="UNAPPROVED_TEMPLATE",
+            ),
+            GoalContinuationCandidate(
+                goal_id="goal_tcc_05",
+                subject_ref="sub_ar_ok",
+                goal_type=IntentName.GUIDED_TCC,
+                current_step_index=2,
+                total_steps=2,
+                pending_dependency="ETAX_TCC_APPROVAL",
+                dependency_resolved=True,
+                opt_in_consent_active=True,
+                channel=ChannelName.SMS,
+                locale=LocaleCode.AR,
+                template_id="TMPL_SSRA_TCC_READY_2026",
+            ),
+            GoalContinuationCandidate(
+                goal_id="goal_tcc_06",
+                subject_ref="sub_en_ok",
+                goal_type=IntentName.GUIDED_TCC,
+                current_step_index=2,
+                total_steps=2,
+                pending_dependency="ETAX_TCC_APPROVAL",
+                dependency_resolved=True,
+                opt_in_consent_active=True,
+                channel=ChannelName.SMS,
+                locale=LocaleCode.EN,
+                template_id="TMPL_SSRA_TCC_READY_2026",
+            ),
+            GoalContinuationCandidate(
+                goal_id="goal_tcc_07",
+                subject_ref="sub_sms_bad_tmpl",
+                goal_type=IntentName.GUIDED_TCC,
+                current_step_index=2,
+                total_steps=2,
+                pending_dependency="ETAX_TCC_APPROVAL",
+                dependency_resolved=True,
+                opt_in_consent_active=True,
+                channel=ChannelName.SMS,
+                locale=LocaleCode.EN,
+                template_id="UNAPPROVED_SMS_TEMPLATE",
+            ),
+        ]
+    )
+    assert cont_summary.resumed_count == 3
+    assert cont_summary.skipped_no_consent == 1
+    assert cont_summary.skipped_unresolved_dependency == 1
+    assert cont_summary.skipped_unapproved_template_or_flag == 2
+    assert "https://etax.nra.gov.ss/" in cont_summary.dispatched_messages[0]["message"]
+
+    from ssra_core import get_default_feature_flag_engine
+
+    engine = get_default_feature_flag_engine()
+    engine.set_flag_override(
+        "FF_TEMPORAL_POST_INTERACTION_CONTINUATION", enabled=False, rollout_pct=0
+    )
+    try:
+        disabled_cont = run_post_interaction_goal_continuation(
+            [
+                GoalContinuationCandidate(
+                    goal_id="goal_tcc_08",
+                    subject_ref="sub_opted_in",
+                    goal_type=IntentName.GUIDED_TCC,
+                    current_step_index=2,
+                    total_steps=2,
+                    pending_dependency="ETAX_TCC_APPROVAL",
+                    dependency_resolved=True,
+                    opt_in_consent_active=True,
+                )
+            ]
+        )
+        assert disabled_cont.skipped_unapproved_template_or_flag == 1
+    finally:
+        engine.reset_flag_override("FF_TEMPORAL_POST_INTERACTION_CONTINUATION")

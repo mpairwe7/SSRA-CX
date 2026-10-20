@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 from pydantic import BaseModel, ConfigDict, Field
 
 from ssra_api.admin.application import (
     default_kill_switch_state,
     get_admin_audit_head_hash,
+    list_admin_feature_flags,
     record_jit_admin_elevation,
+    update_admin_feature_flag,
     update_kill_switch_state,
     verify_admin_audit_chain,
 )
@@ -71,6 +73,25 @@ class PublicStatusResponse(BaseModel):
     channels: dict[str, str]
     upstreams: dict[str, str]
     official_portal: str = "https://etax.nra.gov.ss/"
+
+
+class FeatureFlagRuleResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: str
+    enabled: bool
+    rollout_pct: int
+    allowed_channels: list[str]
+    allowed_locales: list[str]
+
+
+class UpdateFeatureFlagRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    flag_name: str = Field(min_length=3)
+    enabled: bool = True
+    rollout_pct: int = Field(ge=0, le=100, default=100)
 
 
 @router.get("/kill-switches", response_model=KillSwitchResponse)
@@ -148,4 +169,44 @@ async def request_jit_elevation(body: JitElevationRequest) -> JitElevationRespon
         granted=True,
         duration_minutes=body.duration_minutes,
         status="GRANTED_TIMEBOXED_JIT_ADMIN",
+    )
+
+
+@router.get("/feature-flags", response_model=list[FeatureFlagRuleResponse])
+async def get_feature_flags(
+    x_ssra_staff_id: str = Header(default="secops_admin", alias="X-SSRA-Staff-Id"),
+) -> list[FeatureFlagRuleResponse]:
+    """List all registered SSRA Assist cohort/percentage feature flags (requires verified admin/secops staff)."""
+    return [
+        FeatureFlagRuleResponse(
+            name=r.name,
+            description=r.description,
+            enabled=r.enabled,
+            rollout_pct=r.rollout_pct,
+            allowed_channels=list(r.allowed_channels),
+            allowed_locales=list(r.allowed_locales),
+        )
+        for r in list_admin_feature_flags(actor=x_ssra_staff_id)
+    ]
+
+
+@router.post("/feature-flags", response_model=FeatureFlagRuleResponse)
+async def set_feature_flag(
+    body: UpdateFeatureFlagRequest,
+    x_ssra_staff_id: str = Header(default="secops_admin", alias="X-SSRA-Staff-Id"),
+) -> FeatureFlagRuleResponse:
+    """Update a cohort/percentage feature flag and append a WORM audit event attributed to the verified staff actor."""
+    rule = update_admin_feature_flag(
+        flag_name=body.flag_name,
+        enabled=body.enabled,
+        rollout_pct=body.rollout_pct,
+        actor=x_ssra_staff_id,
+    )
+    return FeatureFlagRuleResponse(
+        name=rule.name,
+        description=rule.description,
+        enabled=rule.enabled,
+        rollout_pct=rule.rollout_pct,
+        allowed_channels=list(rule.allowed_channels),
+        allowed_locales=list(rule.allowed_locales),
     )

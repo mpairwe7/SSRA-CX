@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ssra_core import AuthLevel, IntentName
+from ssra_core import AuthLevel, IntentName, SSRAError
 
+from ssra_runtime.nodes.verifier import verify_plan_outcomes
 from ssra_runtime.schemas import PendingConfirmation, ToolArtifact
 from ssra_runtime.state import ConversationGraphState
 from ssra_runtime.tools import GovernedMcpGatewayClient
@@ -15,7 +16,7 @@ def execute_self_service_subgraph(
     state: ConversationGraphState,
     gateway: GovernedMcpGatewayClient,
 ) -> dict[str, Any]:
-    """Execute authenticated T1 read tools or issue T2/T3 confirmation interrupts."""
+    """Execute authenticated T1 read tools (including multi-step compound plans) or issue T2/T3 confirmation interrupts."""
     intent = state.get("intent")
     intent_name = intent.intent if intent else IntentName.GET_BALANCE
     slots = state.get("slots", {})
@@ -23,6 +24,7 @@ def execute_self_service_subgraph(
     subject_ref = state.get("subject_ref")
     thread_id = state.get("thread_id", "thr_default")
     budget = state.get("budget")
+    plan = state.get("plan")
     artifacts: list[ToolArtifact] = list(state.get("artifacts", []))
 
     # Microsoft agent-framework#8132: If resuming a pending confirmation with confirmation_token_in, preserve it for confirm_node
@@ -30,41 +32,48 @@ def execute_self_service_subgraph(
     if existing_pending is not None and state.get("confirmation_token_in"):
         return {"pending_confirmation": existing_pending, "artifacts": artifacts, "budget": budget}
 
-    if intent_name == IntentName.GET_BALANCE:
-        art = gateway.invoke_tool(
-            server_name="ledger",
-            tool_name="get_balance",
-            arguments={},
-            auth_level=auth_level,
-            subject_ref=subject_ref,
-            budget=budget,
-        )
-        artifacts.append(art)
-        return {"artifacts": artifacts, "budget": budget}
-
-    if intent_name == IntentName.GET_FILING_STATUS:
-        art = gateway.invoke_tool(
-            server_name="ledger",
-            tool_name="get_filing_status",
-            arguments={},
-            auth_level=auth_level,
-            subject_ref=subject_ref,
-            budget=budget,
-        )
-        artifacts.append(art)
-        return {"artifacts": artifacts, "budget": budget}
-
-    if intent_name == IntentName.GET_TCC_STATUS:
-        art = gateway.invoke_tool(
-            server_name="tcc",
-            tool_name="get_tcc_status",
-            arguments={},
-            auth_level=auth_level,
-            subject_ref=subject_ref,
-            budget=budget,
-        )
-        artifacts.append(art)
-        return {"artifacts": artifacts, "budget": budget}
+    # Multi-step or single-step autonomous execution for T1 read steps
+    if intent_name in (
+        IntentName.GET_BALANCE,
+        IntentName.GET_FILING_STATUS,
+        IntentName.GET_TCC_STATUS,
+    ):
+        planned_steps = list(plan.steps) if plan is not None else []
+        t1_read_steps = [
+            s
+            for s in planned_steps
+            if s in ("ledger.get_balance", "ledger.get_filing_status", "tcc.get_tcc_status")
+        ]
+        if not t1_read_steps:
+            default_map = {
+                IntentName.GET_BALANCE: "ledger.get_balance",
+                IntentName.GET_FILING_STATUS: "ledger.get_filing_status",
+                IntentName.GET_TCC_STATUS: "tcc.get_tcc_status",
+            }
+            t1_read_steps = [default_map[intent_name]]
+        failed_steps: list[str] = []
+        for idx, step in enumerate(t1_read_steps):
+            srv, tl = step.split(".", 1)
+            try:
+                art = gateway.invoke_tool(
+                    server_name=srv,
+                    tool_name=tl,
+                    arguments={},
+                    auth_level=auth_level,
+                    subject_ref=subject_ref,
+                    budget=budget,
+                )
+                artifacts.append(art)
+            except SSRAError:
+                if idx == 0:
+                    raise
+                failed_steps.append(step)
+        verification = verify_plan_outcomes(plan, artifacts, failed_steps=failed_steps)
+        return {
+            "artifacts": artifacts,
+            "budget": budget,
+            "outcome_verification": verification.model_dump(mode="json"),
+        }
 
     if intent_name == IntentName.REPORT_SCAM:
         args = {

@@ -22,4 +22,4 @@
 No change to `ai/prompts/`, `ai/policies/`, `ai/routing/`, or `knowledge/` may be promoted to production without:
 1. Codeowners sign-off from SSRA Legal (for knowledge/`TaxFact` changes) and SSRA SecOps (for policy/routing changes);
 2. Passing `task lint`, `task test`, and the full 600-item `task eval` + `ASI01`–`ASI10` red-team suite;
-3. Verified 1-step rollback target (`previous_published_version`).
+3. Verified 1-step rollback target (`previous_published_version`) or feature-flag cohort rollback via `POST /v1/admin/feature-flags` (`enabled: false`, `rollout_pct: 0`).

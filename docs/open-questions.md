@@ -21,6 +21,7 @@
 | **OQ-010** | **Operations:** contact-centre size and hours, escalation matrix, SLAs, console roles | Phase 1 | SSRA Contact Centre & Operations | 🔴 Open | Configure parameterised office hours (`Africa/Juba`), queues, RBAC roles, and SLA timers in `services/api` and Temporal with conservative defaults; route out-of-hours escalations to callback intake. |
 | **OQ-011** | **Official-channel registry and branding** for anti-scam verification | Phase 1 | SSRA Communications & SecOps | 🔴 Open | Seed `official-channels` MCP server with verified domain `etax.nra.gov.ss` and March 2026 cash-free bank-only directive; mark phone/short-code/bank account entries as pending SSRA sign-off. |
 | **OQ-012** | **Procurement:** open-source policy, licensing, export-control and sanctions screening of vendors | Phase 0 (Sign-off) | SSRA Procurement & Legal | 🔴 Open | Restrict Phase 0 stack strictly to permissive/open OSI-approved self-hostable software (Apache-2.0, MIT, BSD, PostgreSQL); generate CycloneDX SBOMs for license audit. |
+| **OQ-013** | **Production Analytics Warehouse & Workforce Telemetry Aggregation:** ClickHouse / Langfuse warehouse schema & staff AHT baseline for live `AgenticCxScorecard` aggregation | Phase 4 | SSRA Operations & ICT | 🔴 Open | Return synthetic baseline metrics explicitly badged with `is_synthetic_baseline: true` and `source_note: "SYNTHETIC_PHASE4_BASELINE_OQ013"` on `GET /v1/analytics/cx-scorecard` until live warehouse aggregation is signed off. |
 
 ---
 

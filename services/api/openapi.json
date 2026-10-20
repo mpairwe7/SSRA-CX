@@ -1,6 +1,66 @@
 {
   "components": {
     "schemas": {
+      "AgenticCxScorecardResponse": {
+        "additionalProperties": false,
+        "description": "Synthetic baseline response model for the October 2026 SSRA Agentic CX Scorecard (`OQ-013`).",
+        "properties": {
+          "clean_handoff_rate": {
+            "title": "Clean Handoff Rate",
+            "type": "number"
+          },
+          "cross_session_goal_completion_rate": {
+            "title": "Cross Session Goal Completion Rate",
+            "type": "number"
+          },
+          "customer_effort_repetition_rate": {
+            "title": "Customer Effort Repetition Rate",
+            "type": "number"
+          },
+          "eq_deescalation_save_rate": {
+            "title": "Eq Deescalation Save Rate",
+            "type": "number"
+          },
+          "is_synthetic_baseline": {
+            "default": true,
+            "title": "Is Synthetic Baseline",
+            "type": "boolean"
+          },
+          "officer_high_eq_hours_saved_30d": {
+            "title": "Officer High Eq Hours Saved 30D",
+            "type": "number"
+          },
+          "quality_adjusted_autonomous_resolution_rate": {
+            "title": "Quality Adjusted Autonomous Resolution Rate",
+            "type": "number"
+          },
+          "source_note": {
+            "default": "SYNTHETIC_PHASE4_BASELINE_OQ013",
+            "title": "Source Note",
+            "type": "string"
+          },
+          "vernacular_parity_gap_pct": {
+            "title": "Vernacular Parity Gap Pct",
+            "type": "number"
+          },
+          "zero_unverified_numeric_claims": {
+            "title": "Zero Unverified Numeric Claims",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "quality_adjusted_autonomous_resolution_rate",
+          "cross_session_goal_completion_rate",
+          "customer_effort_repetition_rate",
+          "eq_deescalation_save_rate",
+          "clean_handoff_rate",
+          "officer_high_eq_hours_saved_30d",
+          "vernacular_parity_gap_pct",
+          "zero_unverified_numeric_claims"
+        ],
+        "title": "AgenticCxScorecardResponse",
+        "type": "object"
+      },
       "AnalyzeDocumentRequest": {
         "additionalProperties": false,
         "properties": {
@@ -211,6 +271,7 @@
       },
       "ConversationResponse": {
         "additionalProperties": false,
+        "description": "Response payload representing a conversation thread and its current assignment state.",
         "properties": {
           "assigned_staff_id": {
             "anyOf": [
@@ -243,6 +304,16 @@
             "title": "Office Code",
             "type": "string"
           },
+          "officer_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OfficerResolutionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "qa_score": {
             "anyOf": [
               {
@@ -272,6 +343,7 @@
       },
       "CopilotDraftRequest": {
         "additionalProperties": false,
+        "description": "Request payload for generating an AI copilot reply draft.",
         "properties": {
           "taxpayer_question": {
             "title": "Taxpayer Question",
@@ -286,6 +358,7 @@
       },
       "CopilotDraftResponse": {
         "additionalProperties": false,
+        "description": "Response payload containing a cited reply draft and next-best action for staff.",
         "properties": {
           "citations": {
             "items": {
@@ -352,6 +425,7 @@
       },
       "CreateConversationRequest": {
         "additionalProperties": false,
+        "description": "Request payload for creating a new taxpayer conversation thread.",
         "properties": {
           "channel": {
             "default": "web",
@@ -470,6 +544,7 @@
       },
       "DriftMonitorResponse": {
         "additionalProperties": false,
+        "description": "Response model for 24-hour online drift monitor evaluation.",
         "properties": {
           "abstention_rate_24h": {
             "title": "Abstention Rate 24H",
@@ -502,8 +577,54 @@
         "title": "DriftMonitorResponse",
         "type": "object"
       },
+      "FeatureFlagRuleResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_channels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Channels",
+            "type": "array"
+          },
+          "allowed_locales": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Locales",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rollout_pct": {
+            "title": "Rollout Pct",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "enabled",
+          "rollout_pct",
+          "allowed_channels",
+          "allowed_locales"
+        ],
+        "title": "FeatureFlagRuleResponse",
+        "type": "object"
+      },
       "FunnelSummaryResponse": {
         "additionalProperties": false,
+        "description": "Response model for quality-adjusted containment and safety summary.",
         "properties": {
           "quality_adjusted_containment_rate": {
             "title": "Quality Adjusted Containment Rate",
@@ -537,6 +658,41 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HandbackResolutionRequest": {
+        "additionalProperties": false,
+        "description": "Optional structured resolution payload when an officer hands a conversation back to AI.",
+        "properties": {
+          "approved_next_intent": {
+            "default": "guided_filing_and_payment",
+            "title": "Approved Next Intent",
+            "type": "string"
+          },
+          "officer_id": {
+            "minLength": 2,
+            "title": "Officer Id",
+            "type": "string"
+          },
+          "resolution_summary": {
+            "maxLength": 240,
+            "minLength": 3,
+            "title": "Resolution Summary",
+            "type": "string"
+          },
+          "return_to_ai_step": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Return To Ai Step",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "officer_id",
+          "resolution_summary"
+        ],
+        "title": "HandbackResolutionRequest",
         "type": "object"
       },
       "JitElevationRequest": {
@@ -714,6 +870,36 @@
         "title": "MakerCheckerApprovalResponse",
         "type": "object"
       },
+      "OfficerResolutionResponse": {
+        "additionalProperties": false,
+        "description": "Serialized officer resolution artifact attached on warm hand-back to AI.",
+        "properties": {
+          "approved_next_intent": {
+            "title": "Approved Next Intent",
+            "type": "string"
+          },
+          "officer_id": {
+            "title": "Officer Id",
+            "type": "string"
+          },
+          "resolution_summary": {
+            "title": "Resolution Summary",
+            "type": "string"
+          },
+          "return_to_ai_step": {
+            "title": "Return To Ai Step",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "officer_id",
+          "resolution_summary",
+          "approved_next_intent",
+          "return_to_ai_step"
+        ],
+        "title": "OfficerResolutionResponse",
+        "type": "object"
+      },
       "PreferencesResponse": {
         "additionalProperties": false,
         "properties": {
@@ -807,6 +993,7 @@
       },
       "QaScoreRequest": {
         "additionalProperties": false,
+        "description": "Request payload for scoring a conversation against the 4-dimension QA rubric.",
         "properties": {
           "accuracy": {
             "maximum": 1.0,
@@ -844,6 +1031,7 @@
       },
       "RegionalLanguageInsightResponse": {
         "additionalProperties": false,
+        "description": "Response model for regional and language-level CX insights.",
         "properties": {
           "average_csat": {
             "title": "Average Csat",
@@ -936,6 +1124,7 @@
       },
       "SubmitFeedbackRequest": {
         "additionalProperties": false,
+        "description": "Request payload for submitting taxpayer CSAT feedback.",
         "properties": {
           "conversation_id": {
             "title": "Conversation Id",
@@ -974,6 +1163,7 @@
       },
       "SubmitFeedbackResponse": {
         "additionalProperties": false,
+        "description": "Response payload confirming recorded taxpayer feedback.",
         "properties": {
           "conversation_id": {
             "title": "Conversation Id",
@@ -1008,6 +1198,7 @@
       },
       "TakeoverRequest": {
         "additionalProperties": false,
+        "description": "Request payload for an SSRA officer taking over a conversation.",
         "properties": {
           "staff_id": {
             "title": "Staff Id",
@@ -1047,6 +1238,33 @@
           "purpose"
         ],
         "title": "UpdateConsentRequest",
+        "type": "object"
+      },
+      "UpdateFeatureFlagRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "flag_name": {
+            "minLength": 3,
+            "title": "Flag Name",
+            "type": "string"
+          },
+          "rollout_pct": {
+            "default": 100,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Rollout Pct",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "flag_name"
+        ],
+        "title": "UpdateFeatureFlagRequest",
         "type": "object"
       },
       "UpdateKillSwitchRequest": {
@@ -1277,6 +1495,106 @@
         ]
       }
     },
+    "/v1/admin/feature-flags": {
+      "get": {
+        "description": "List all registered SSRA Assist cohort/percentage feature flags (requires verified admin/secops staff).",
+        "operationId": "get_feature_flags_v1_admin_feature_flags_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-SSRA-Staff-Id",
+            "required": false,
+            "schema": {
+              "default": "secops_admin",
+              "title": "X-Ssra-Staff-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FeatureFlagRuleResponse"
+                  },
+                  "title": "Response Get Feature Flags V1 Admin Feature Flags Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Feature Flags",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "description": "Update a cohort/percentage feature flag and append a WORM audit event attributed to the verified staff actor.",
+        "operationId": "set_feature_flag_v1_admin_feature_flags_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-SSRA-Staff-Id",
+            "required": false,
+            "schema": {
+              "default": "secops_admin",
+              "title": "X-Ssra-Staff-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFeatureFlagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlagRuleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Feature Flag",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/v1/admin/jit-elevation": {
       "post": {
         "description": "Grant time-boxed JIT admin elevation after verifying trusted staff directory & maker-checker controls.",
@@ -1403,8 +1721,31 @@
         ]
       }
     },
+    "/v1/analytics/cx-scorecard": {
+      "get": {
+        "description": "Return the synthetic baseline October 2026 SSRA Agentic CX & Human-AI Workforce Scorecard (`OQ-013`).",
+        "operationId": "get_cx_scorecard_v1_analytics_cx_scorecard_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgenticCxScorecardResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Cx Scorecard",
+        "tags": [
+          "analytics_api"
+        ]
+      }
+    },
     "/v1/analytics/drift-monitors": {
       "get": {
+        "description": "Evaluate 24-hour online drift monitors for intent KL divergence and abstention spikes.",
         "operationId": "get_drift_monitors_v1_analytics_drift_monitors_get",
         "parameters": [
           {
@@ -1468,6 +1809,7 @@
     },
     "/v1/analytics/feedback": {
       "post": {
+        "description": "Submit a taxpayer CSAT rating and reason for a conversation.",
         "operationId": "submit_feedback_v1_analytics_feedback_post",
         "requestBody": {
           "content": {
@@ -1509,6 +1851,7 @@
     },
     "/v1/analytics/insights": {
       "get": {
+        "description": "Return regional and language containment insights across SSRA offices.",
         "operationId": "get_insights_v1_analytics_insights_get",
         "responses": {
           "200": {
@@ -1534,6 +1877,7 @@
     },
     "/v1/analytics/summary": {
       "get": {
+        "description": "Return the quality-adjusted containment and safety funnel summary.",
         "operationId": "get_summary_v1_analytics_summary_get",
         "responses": {
           "200": {
@@ -1830,6 +2174,7 @@
     },
     "/v1/conversations": {
       "post": {
+        "description": "Create a new taxpayer conversation thread scoped to an SSRA office.",
         "operationId": "create_conversation_v1_conversations_post",
         "parameters": [
           {
@@ -1889,6 +2234,7 @@
     },
     "/v1/conversations/inbox": {
       "get": {
+        "description": "List conversations in the staff inbox scoped by PostgreSQL RLS `office_code`.",
         "operationId": "list_inbox_v1_conversations_inbox_get",
         "parameters": [
           {
@@ -1978,6 +2324,7 @@
     },
     "/v1/conversations/{conversation_id}/copilot-draft": {
       "post": {
+        "description": "Generate a cited reply draft and next-best action for an SSRA officer.",
         "operationId": "generate_copilot_draft_v1_conversations__conversation_id__copilot_draft_post",
         "parameters": [
           {
@@ -2030,6 +2377,7 @@
     },
     "/v1/conversations/{conversation_id}/handback": {
       "post": {
+        "description": "Hand a conversation back to the AI assistant, optionally attaching a verified officer resolution.",
         "operationId": "handback_conversation_v1_conversations__conversation_id__handback_post",
         "parameters": [
           {
@@ -2042,6 +2390,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/HandbackResolutionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -2072,6 +2437,7 @@
     },
     "/v1/conversations/{conversation_id}/qa-score": {
       "post": {
+        "description": "Record a supervisor QA rubric score for a conversation.",
         "operationId": "score_conversation_qa_v1_conversations__conversation_id__qa_score_post",
         "parameters": [
           {
@@ -2124,6 +2490,7 @@
     },
     "/v1/conversations/{conversation_id}/takeover": {
       "post": {
+        "description": "Assign a conversation to an SSRA staff officer for human takeover.",
         "operationId": "takeover_conversation_v1_conversations__conversation_id__takeover_post",
         "parameters": [
           {

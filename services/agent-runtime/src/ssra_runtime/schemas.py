@@ -6,13 +6,17 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from ssra_core import (
+    AffectiveSnapshot,
     Answer,
     AuthLevel,
     ChannelName,
     Citation,
+    EnglishRouterEnvelope,
+    HandoffEnvelope,
     HandoffTicket,
     Intent,
     LocaleCode,
+    Plan,
     RiskTier,
 )
 
@@ -66,5 +70,10 @@ class RuntimeTurnResponse(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
     pending_confirmation: PendingConfirmation | None = None
     handoff_ticket: HandoffTicket | None = None
+    handoff_envelope: HandoffEnvelope | None = None
+    affective_state: AffectiveSnapshot | None = None
+    english_router_envelope: EnglishRouterEnvelope | None = None
+    plan: Plan | None = None
+    outcome_verified: bool = True
     safety_flags: list[str] = Field(default_factory=list)
     audit_event_hash: str

@@ -44,6 +44,7 @@ class McpSpanAttributes:
     traceparent: str
 
     def to_otel_dict(self) -> dict[str, str]:
+        """Serialize MCP span attributes to an OpenTelemetry attribute dictionary."""
         return {
             "mcp.method.name": self.mcp_method_name,
             "mcp.protocol.version": self.mcp_protocol_version,
@@ -107,6 +108,7 @@ class GenAISpanAttributes:
     gen_ai_response_ttft_ms: float = 0.0
 
     def to_otel_dict(self) -> dict[str, Any]:
+        """Serialize GenAI span attributes to an OpenTelemetry attribute dictionary."""
         return {
             "gen_ai.system": self.gen_ai_system,
             "gen_ai.request.model": self.gen_ai_request_model,
@@ -137,6 +139,7 @@ def build_genai_span_attributes(
     ttft_ms: float = 0.0,
     sms_segments: int = 0,
 ) -> GenAISpanAttributes:
+    """Build OpenTelemetry GenAI span attributes with sovereign GPU prefix-cache cost attribution."""
     intent_val = intent.value if isinstance(intent, IntentName) else str(intent)
     bounded_cached = max(0, min(input_tokens, cached_input_tokens))
     uncached_input = max(0, input_tokens - bounded_cached)
@@ -221,4 +224,75 @@ def evaluate_finops_turn_budget(
         action="PRESERVE_SAFETY_VERIFIERS",
         effective_max_tokens=min(requested_max_tokens, 512),
         safety_verifiers_preserved=True,
+    )
+
+
+@dataclass(frozen=True)
+class AgenticCxSpanAttributes:
+    """October 2026 SSRA Agentic CX, EQ & Workforce Collaboration OpenTelemetry Attributes."""
+
+    goal_id: str
+    goal_step_count: int
+    goal_outcome: Literal[
+        "autonomous_resolved",
+        "async_continued",
+        "eq_escalated",
+        "t4_mandatory_handoff",
+        "abstained",
+    ]
+    eq_emotion: str
+    eq_intensity: float
+    eq_frustration_velocity: float
+    eq_tone_adapted: bool
+    language_state: str
+    locale: str
+    handoff_clean: bool
+
+    def to_otel_dict(self) -> dict[str, Any]:
+        """Serialize Agentic CX and EQ span attributes to an OpenTelemetry attribute dictionary."""
+        return {
+            "ssra.cx.goal.id": self.goal_id,
+            "ssra.cx.goal.step_count": self.goal_step_count,
+            "ssra.cx.goal.outcome": self.goal_outcome,
+            "ssra.cx.eq.emotion": self.eq_emotion,
+            "ssra.cx.eq.intensity": self.eq_intensity,
+            "ssra.cx.eq.frustration_velocity": self.eq_frustration_velocity,
+            "ssra.cx.eq.tone_adapted": self.eq_tone_adapted,
+            "ssra.cx.language.state": self.language_state,
+            "ssra.cx.language.locale": self.locale,
+            "ssra.cx.handoff.clean": self.handoff_clean,
+        }
+
+
+def build_agentic_cx_span_attributes(
+    *,
+    goal_id: str,
+    goal_step_count: int = 1,
+    goal_outcome: Literal[
+        "autonomous_resolved",
+        "async_continued",
+        "eq_escalated",
+        "t4_mandatory_handoff",
+        "abstained",
+    ] = "autonomous_resolved",
+    eq_emotion: str = "calm",
+    eq_intensity: float = 0.1,
+    eq_frustration_velocity: float = 0.0,
+    eq_tone_adapted: bool = False,
+    language_state: str = "LOCKED",
+    locale: LocaleCode = LocaleCode.EN,
+    handoff_clean: bool = True,
+) -> AgenticCxSpanAttributes:
+    """Construct validated OpenTelemetry Agentic CX and EQ span attributes."""
+    return AgenticCxSpanAttributes(
+        goal_id=goal_id,
+        goal_step_count=max(1, goal_step_count),
+        goal_outcome=goal_outcome,
+        eq_emotion=eq_emotion,
+        eq_intensity=round(max(0.0, min(1.0, eq_intensity)), 2),
+        eq_frustration_velocity=round(max(-1.0, min(1.0, eq_frustration_velocity)), 2),
+        eq_tone_adapted=eq_tone_adapted,
+        language_state=language_state,
+        locale=locale.value,
+        handoff_clean=handoff_clean,
     )

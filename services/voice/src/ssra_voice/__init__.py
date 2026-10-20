@@ -125,10 +125,22 @@ def synthesize_tts_speech_envelope(
     locale: LocaleCode,
     voice: str | None = None,
     hf_home: str = "/home/developer/huggingface_cache",
+    recommended_tone: Literal[
+        "standard_clear",
+        "reassuring_step_by_step",
+        "concise_urgent",
+        "empathetic_deescalation",
+    ] = "standard_clear",
 ) -> dict[str, Any]:
-    """Build deterministic offline HuggingFace MMS-TTS / Orpheus synthesis envelope with locale-validated speaker tag."""
+    """Build deterministic offline HuggingFace MMS-TTS / Orpheus synthesis envelope with locale-validated speaker tag and EQ prosody modulation."""
     desc = resolve_hf_voice_model_cache(locale, hf_home=hf_home)
     resolved_voice = resolve_tts_voice(locale.value, voice)
+    speaking_rate = (
+        0.92 if recommended_tone in ("reassuring_step_by_step", "empathetic_deescalation") else 1.0
+    )
+    sentence_pause_ms = (
+        350 if recommended_tone in ("reassuring_step_by_step", "empathetic_deescalation") else 200
+    )
     return {
         "tts_model": desc.tts_repo_id,
         "voice": resolved_voice,
@@ -137,6 +149,9 @@ def synthesize_tts_speech_envelope(
         "local_files_only": desc.local_files_only,
         "sample_rate_hz": 16000,
         "text_length": len(text.strip()),
+        "recommended_tone": recommended_tone,
+        "speaking_rate": speaking_rate,
+        "sentence_pause_ms": sentence_pause_ms,
     }
 
 

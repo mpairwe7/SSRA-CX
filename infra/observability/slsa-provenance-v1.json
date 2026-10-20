@@ -31,13 +31,13 @@
     },
     {
       "digest": {
-        "sha256": "ccc45aed6780f80304617195d662dbd26301f8d6118abad907cacf1d1caf67f1"
+        "sha256": "93f5c593cd53512837ff60416de316c59a302b803a8b68699e60f4187e0a9d33"
       },
       "name": "services/api/openapi.json"
     },
     {
       "digest": {
-        "sha256": "7760efe3102ce8368e36236009d8ef3f70c74fbc045aecc5cd9d4e09cdd09af9"
+        "sha256": "006563484f6bf6b9e8a5208ee619c9b5f8a5fa0dcd7ec945c4760485d031752b"
       },
       "name": "packages/contracts/schemas"
     }

@@ -9,7 +9,9 @@ _PROHIBITED_PROMISE_RE = re.compile(
     r"\b(your\s+penalty\s+will\s+be\s+waived|"
     r"we\s+have\s+waived\s+your\s+(tax|penalty)|"
     r"this\s+is\s+a\s+binding\s+legal\s+ruling|"
-    r"pay\s+cash\s+to\s+an?\s+(officer|collector))\b",
+    r"pay\s+cash\s+to\s+an?\s+(officer|collector)|"
+    r"ssra\s+admits\s+legal\s+liability|"
+    r"i\s+guarantee\s+your\s+refund\s+is\s+approved)\b",
     flags=re.IGNORECASE,
 )
 
@@ -26,6 +28,7 @@ class NeutralityResult:
 
 
 def validate_neutrality_and_promises(text: str) -> NeutralityResult:
+    """Validate that assistant output contains no prohibited T4 promises, liability admissions, or political commentary."""
     if _PROHIBITED_PROMISE_RE.search(text):
         return NeutralityResult(
             passed=False,

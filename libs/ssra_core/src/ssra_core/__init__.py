@@ -11,6 +11,7 @@ from ssra_core.clock import (
 )
 from ssra_core.contracts import (
     SCHEMA_BUNDLE_SHA256,
+    AffectiveSnapshot,
     Answer,
     AnswerSegment,
     AuthLevel,
@@ -20,8 +21,10 @@ from ssra_core.contracts import (
     ContentPart,
     ConversationEvent,
     ConversationEventData,
+    EnglishRouterEnvelope,
     GenerativeUIComponent,
     GenerativeUIComponentName,
+    HandoffEnvelope,
     HandoffTicket,
     Intent,
     IntentName,
@@ -34,6 +37,15 @@ from ssra_core.contracts import (
     ToolCall,
 )
 from ssra_core.errors import McpErrorCode, ProblemDetails, SSRAError
+from ssra_core.flags import (
+    KNOWN_FEATURE_FLAGS,
+    FeatureFlagEngine,
+    FeatureFlagEvaluation,
+    FeatureFlagRule,
+    compute_deterministic_flag_bucket,
+    evaluate_flag,
+    get_default_feature_flag_engine,
+)
 from ssra_core.ids import new_id, new_uuid7
 from ssra_core.resilience import (
     ChannelBulkhead,
@@ -46,9 +58,11 @@ from ssra_core.resilience import (
 from ssra_core.settings import CoreSettings, configure_logging
 from ssra_core.synonyms import expand_ssra_nra_synonyms, normalise_authority_mentions
 from ssra_core.telemetry import (
+    AgenticCxSpanAttributes,
     FinOpsBudgetDecision,
     GenAISpanAttributes,
     McpSpanAttributes,
+    build_agentic_cx_span_attributes,
     build_genai_span_attributes,
     build_mcp_span_attributes,
     ensure_w3c_traceparent,
@@ -57,7 +71,10 @@ from ssra_core.telemetry import (
 
 __all__ = [
     "JUBA_TZ",
+    "KNOWN_FEATURE_FLAGS",
     "SCHEMA_BUNDLE_SHA256",
+    "AffectiveSnapshot",
+    "AgenticCxSpanAttributes",
     "Answer",
     "AnswerSegment",
     "AuthLevel",
@@ -71,10 +88,15 @@ __all__ = [
     "ConversationEvent",
     "ConversationEventData",
     "CoreSettings",
+    "EnglishRouterEnvelope",
+    "FeatureFlagEngine",
+    "FeatureFlagEvaluation",
+    "FeatureFlagRule",
     "FinOpsBudgetDecision",
     "GenAISpanAttributes",
     "GenerativeUIComponent",
     "GenerativeUIComponentName",
+    "HandoffEnvelope",
     "HandoffTicket",
     "Intent",
     "IntentName",
@@ -90,16 +112,20 @@ __all__ = [
     "TaxFactContract",
     "ToolCall",
     "UpstreamCircuitBreaker",
+    "build_agentic_cx_span_attributes",
     "build_genai_span_attributes",
     "build_mcp_span_attributes",
+    "compute_deterministic_flag_bucket",
     "compute_monthly_filing_deadline",
     "configure_logging",
     "ensure_w3c_traceparent",
     "evaluate_channel_latency_slo",
     "evaluate_finops_turn_budget",
+    "evaluate_flag",
     "execute_with_idempotent_retry",
     "expand_ssra_nra_synonyms",
     "fiscal_year_for_date",
+    "get_default_feature_flag_engine",
     "is_within_juba_office_hours",
     "juba_now",
     "juba_today",
