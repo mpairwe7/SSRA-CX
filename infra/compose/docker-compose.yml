@@ -211,6 +211,56 @@ services:
       timeout: 5s
       retries: 5
 
+  frontend:
+    <<: *hardened-defaults
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        INTERNAL_API_URL: http://api:8000
+        INTERNAL_RUNTIME_URL: http://agent-runtime:8001
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_URL: http://api:8000
+      INTERNAL_RUNTIME_URL: http://agent-runtime:8001
+    ports:
+      - "127.0.0.1:3033:3000"
+    networks:
+      - edge_net
+      - sovereign_internal_net
+    depends_on:
+      api:
+        condition: service_healthy
+      agent-runtime:
+        condition: service_healthy
+
+  console:
+    <<: *hardened-defaults
+    build:
+      context: ../..
+      dockerfile: apps/console/Dockerfile
+      args:
+        INTERNAL_API_URL: http://api:8000
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_URL: http://api:8000
+    ports:
+      - "127.0.0.1:3034:3001"
+    networks:
+      - edge_net
+      - sovereign_internal_net
+    depends_on:
+      api:
+        condition: service_healthy
+
 networks:
   edge_net:
     driver: bridge

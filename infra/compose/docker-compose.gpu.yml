@@ -138,6 +138,54 @@ services:
               device_ids: ["${SSRA_GPU_DEVICE_ID:-5}"]
               capabilities: [gpu]
 
+  ssra-frontend:
+    <<: *hardened-gpu-defaults
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        INTERNAL_API_URL: http://ssra-api:8000
+        INTERNAL_RUNTIME_URL: http://ssra-agent-runtime:8001
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_URL: http://ssra-api:8000
+      INTERNAL_RUNTIME_URL: http://ssra-agent-runtime:8001
+    ports:
+      - "127.0.0.1:${SSRA_WEB_PORT:-3033}:3000"
+    networks:
+      - ssra_sovereign_net
+    depends_on:
+      ssra-api:
+        condition: service_healthy
+      ssra-agent-runtime:
+        condition: service_healthy
+
+  ssra-console:
+    <<: *hardened-gpu-defaults
+    build:
+      context: ../..
+      dockerfile: apps/console/Dockerfile
+      args:
+        INTERNAL_API_URL: http://ssra-api:8000
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_URL: http://ssra-api:8000
+    ports:
+      - "127.0.0.1:${SSRA_CONSOLE_PORT:-3034}:3001"
+    networks:
+      - ssra_sovereign_net
+    depends_on:
+      ssra-api:
+        condition: service_healthy
+
 networks:
   ssra_sovereign_net:
     driver: bridge
