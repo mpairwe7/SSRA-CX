@@ -106,12 +106,16 @@ async def get_kill_switches() -> KillSwitchResponse:
 
 
 @router.post("/kill-switches", response_model=KillSwitchResponse)
-async def set_kill_switches(body: UpdateKillSwitchRequest) -> KillSwitchResponse:
+async def set_kill_switches(
+    body: UpdateKillSwitchRequest,
+    x_ssra_staff_id: str = Header(default="secops_admin", alias="X-SSRA-Staff-Id"),
+) -> KillSwitchResponse:
     """Update the active SecOps kill-switches and log the change to the WORM audit ledger."""
     state = update_kill_switch_state(
         degradation_level=body.degradation_level,
         disabled_tools=body.disabled_tools,
         disabled_channels=body.disabled_channels,
+        actor=x_ssra_staff_id,
     )
     return KillSwitchResponse(
         degradation_level=state.degradation_level,

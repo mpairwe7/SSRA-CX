@@ -33,7 +33,25 @@ const INTERNAL_RUNTIME_URL = (
 
 const SUPPORTED_LOCALES = new Set(["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]);
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
+const VALID_SUBJECT_REF_RE = /^sub_[A-Za-z0-9_-]{3,64}$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "DELETE", "OPTIONS"]);
+
+function sanitizeHeaderToken(raw) {
+  let out = "";
+  for (const ch of String(raw ?? "")) {
+    const cp = ch.codePointAt(0) ?? 0;
+    const keep =
+      (cp >= 0x30 && cp <= 0x39) ||
+      (cp >= 0x41 && cp <= 0x5a) ||
+      (cp >= 0x61 && cp <= 0x7a) ||
+      cp === 0x2d ||
+      cp === 0x5f ||
+      cp === 0x2e ||
+      cp === 0x3a;
+    if (keep) out += ch;
+  }
+  return out;
+}
 
 function createTraceparent(existing) {
   if (typeof existing === "string" && /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/.test(existing)) {
@@ -1490,7 +1508,11 @@ const server = http.createServer(async (req, res) => {
   let pathname = "/";
   try {
     const rawTarget = req.url ?? "/";
-    if (!rawTarget.startsWith("/")) {
+    if (
+      !rawTarget.startsWith("/") ||
+      rawTarget.includes("..") ||
+      rawTarget.toLowerCase().includes("%2e")
+    ) {
       throw new Error("INVALID_TARGET");
     }
     pathname = new URL(rawTarget, "http://127.0.0.1").pathname;
@@ -1674,6 +1696,17 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname.startsWith("/v1/")) {
+    // SEC2-G6: Block staff/admin mutations on the public taxpayer Web BFF proxy
+    if (
+      !isGetOrHead &&
+      (pathname.startsWith("/v1/admin/") ||
+        pathname.endsWith("/takeover") ||
+        pathname.endsWith("/handback"))
+    ) {
+      res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ error: "STAFF_CONSOLE_REQUIRED_FOR_ADMIN_MUTATIONS" }));
+      return;
+    }
     const isRuntimeRoute =
       pathname.startsWith("/v1/turns") ||
       pathname.startsWith("/v1/agui/") ||
@@ -1688,15 +1721,18 @@ const server = http.createServer(async (req, res) => {
       if (hasBody) {
         fwdHeaders["Content-Type"] = "application/json";
       }
-      for (const hName of [
-        "x-ssra-subject-ref",
-        "x-ssra-staff-id",
-        "authorization",
-        "last-event-id",
-        "idempotency-key",
-      ]) {
+      if (req.headers["x-ssra-subject-ref"]) {
+        const cleanSub = sanitizeHeaderToken(req.headers["x-ssra-subject-ref"]);
+        if (!VALID_SUBJECT_REF_RE.test(cleanSub)) {
+          res.writeHead(400, { "Content-Type": "application/json", ...secHeaders });
+          res.end(JSON.stringify({ error: "INVALID_SUBJECT_REF_HEADER" }));
+          return;
+        }
+        fwdHeaders["x-ssra-subject-ref"] = cleanSub;
+      }
+      for (const hName of ["last-event-id", "idempotency-key"]) {
         if (req.headers[hName]) {
-          fwdHeaders[hName] = String(req.headers[hName]);
+          fwdHeaders[hName] = sanitizeHeaderToken(req.headers[hName]);
         }
       }
       const upstream = await fetch(`${upstreamBase}${pathname}`, {

@@ -492,6 +492,51 @@ def test_conversation_replay_forensic_reconstruction_endpoint() -> None:
     assert rec["tool_calls"][0]["tool"] == "calculate_paye_estimate"
     assert len(rec["audit_event_hash"]) == 64
 
+    # SEC2-G3: Reject malformed thread_id on replay, and enforce X-SSRA-Subject-Ref on /v1/agui/stream & /v1/turns/batch
+    assert client.get("/v1/turns/bad$thread/replay").status_code == 400
+    assert (
+        client.post(
+            "/v1/agui/stream",
+            headers={"X-SSRA-Subject-Ref": "sub_taxpayer_deng_02"},
+            json={
+                "message": "Check my tax balance",
+                "auth_level": "T1_TIN_BOUND",
+                "subject_ref": "sub_taxpayer_amina_01",
+            },
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            "/v1/turns/batch",
+            headers={"X-SSRA-Subject-Ref": "sub_taxpayer_deng_02"},
+            json={
+                "items": [
+                    {
+                        "message": "Check my tax balance",
+                        "auth_level": "T1_TIN_BOUND",
+                        "subject_ref": "sub_taxpayer_amina_01",
+                    }
+                ]
+            },
+        ).status_code
+        == 403
+    )
+
+    # SEC2-G4: Streaming DLP scrubber on outgoing AG-UI SSE deltas
+    from ssra_runtime.streaming import scrub_agui_stream_dlp
+
+    assert scrub_agui_stream_dlp("") == ""
+    dlp_sample = (
+        "Token Bearer abcdefgh12345678 and DSN postgresql://user:pw@db:5432/ssra "
+        "and phone +211912345678 and TIN 1002001234"
+    )
+    dlp_cleaned = scrub_agui_stream_dlp(dlp_sample)
+    assert "[REDACTED_SECRET_TOKEN]" in dlp_cleaned
+    assert "[REDACTED_INTERNAL_DSN]" in dlp_cleaned
+    assert "[REDACTED_PHONE]" in dlp_cleaned
+    assert "[REDACTED_TIN]" in dlp_cleaned
+
 
 def test_pgvector_hybrid_rrf_and_embedding_reranker_bakeoff() -> None:
     """Verify PostgreSQL 18 pgvector hybrid RRF SQL and multilingual recall@k bake-off."""

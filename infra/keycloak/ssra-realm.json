@@ -20,6 +20,10 @@
   "ssoSessionIdleTimeout": 900,
   "ssoSessionMaxLifespan": 28800,
   "offlineSessionIdleTimeout": 0,
+  "eventsEnabled": true,
+  "eventsListeners": ["jboss-logging"],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
   "attributes": {
     "acr.loa.map": "{\"urn:ssra:acr:otp-t1\":1,\"urn:ssra:acr:t3-step-up\":3,\"urn:ssra:acr:passkey\":3}",
     "parRequestUriLifespan": "60"
@@ -39,7 +43,10 @@
       { "name": "legal_approver", "description": "SSRA Legal & Policy Snapshot Approver" },
       { "name": "secops", "description": "SSRA Security Operations & Audit Officer" },
       { "name": "admin", "description": "SSRA Platform Administrator (JIT Elevated)" },
-      { "name": "auditor", "description": "SSRA Read-Only Forensic & ISO/IEC 42001 Auditor" }
+      { "name": "auditor", "description": "SSRA Read-Only Forensic & ISO/IEC 42001 Auditor" },
+      { "name": "ssra_staff", "description": "SSRA Console Tax Agent Role" },
+      { "name": "ssra_admin", "description": "SSRA Console Administrator Role" },
+      { "name": "ssra_auditor", "description": "SSRA Console Read-Only Auditor Role" }
     ]
   },
   "clientScopes": [
@@ -49,16 +56,21 @@
     { "name": "mcp:official-channels:read", "protocol": "openid-connect" },
     { "name": "mcp:official-channels:write", "protocol": "openid-connect" },
     { "name": "mcp:taxpayer:read", "protocol": "openid-connect" },
+    { "name": "mcp:taxpayer:write", "protocol": "openid-connect" },
     { "name": "mcp:ledger:read", "protocol": "openid-connect" },
+    { "name": "mcp:ledger:write", "protocol": "openid-connect" },
+    { "name": "mcp:ledger:step_up", "protocol": "openid-connect" },
     { "name": "mcp:payments-info:read", "protocol": "openid-connect" },
     { "name": "mcp:payments-info:step_up", "protocol": "openid-connect" },
     { "name": "mcp:tcc:read", "protocol": "openid-connect" },
     { "name": "mcp:tcc:step_up", "protocol": "openid-connect" },
     { "name": "mcp:customs:read", "protocol": "openid-connect" },
+    { "name": "mcp:customs:write", "protocol": "openid-connect" },
     { "name": "mcp:cases:read", "protocol": "openid-connect" },
     { "name": "mcp:cases:write", "protocol": "openid-connect" },
     { "name": "mcp:appointments:read", "protocol": "openid-connect" },
     { "name": "mcp:appointments:write", "protocol": "openid-connect" },
+    { "name": "mcp:notifications:read", "protocol": "openid-connect" },
     { "name": "mcp:notifications:write", "protocol": "openid-connect" }
   ],
   "identityProviders": [
@@ -79,9 +91,12 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
+      "frontchannelLogout": true,
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "token.exchange.standard.enabled": "true",
+        "oauth2.dpop.bound.access.tokens": "true",
+        "backchannel.logout.session.required": "true",
         "use.refresh.tokens": "true",
         "client.offline.session.idle.timeout": "0"
       }
@@ -94,11 +109,30 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
+      "frontchannelLogout": true,
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "default.acr.values": "urn:ssra:acr:passkey",
         "minimum.acr.value": "urn:ssra:acr:passkey",
-        "token.exchange.standard.enabled": "true"
+        "token.exchange.standard.enabled": "true",
+        "oauth2.dpop.bound.access.tokens": "true",
+        "require.pushed.authorization.requests": "true",
+        "backchannel.logout.session.required": "true"
+      }
+    },
+    {
+      "clientId": "ssra-api",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "token.exchange.standard.enabled": "true",
+        "oauth2.dpop.bound.access.tokens": "true",
+        "backchannel.logout.session.required": "true"
       }
     },
     {
@@ -111,7 +145,9 @@
       "fullScopeAllowed": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "token.exchange.standard.enabled": "true"
+        "token.exchange.standard.enabled": "true",
+        "oauth2.dpop.bound.access.tokens": "true",
+        "backchannel.logout.session.required": "true"
       }
     },
     {

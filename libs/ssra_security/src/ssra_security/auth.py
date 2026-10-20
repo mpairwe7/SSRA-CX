@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
+import os
 import threading
 from datetime import datetime, timedelta
 from typing import Any
@@ -121,17 +123,92 @@ MAX_CONFIRMATION_RECORDS = 2048
 MAX_STEP_UP_AGE_SECONDS = 300
 _SHARED_JTI_LOCK = threading.Lock()
 _SHARED_CONSUMED_JTIS: dict[str, datetime] = {}
+_SHARED_CONFIRM_LOCK = threading.Lock()
+_SHARED_CONSUMED_CONFIRMATIONS: dict[str, datetime] = {}
+
+
+def _b64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _b64url_decode(val: str) -> bytes:
+    pad = "=" * (-len(val) % 4)
+    return base64.urlsafe_b64decode(val + pad)
 
 
 class ConfirmationTokenManager:
-    """Issues and validates single-use, short-TTL confirmation tokens bound to argument hashes."""
+    """Issues and validates single-use, short-TTL HMAC-SHA256 confirmation tokens bound to argument hashes."""
 
-    def __init__(self, ttl_seconds: int = 300) -> None:
-        """Initialise the confirmation token manager with a thread lock and TTL."""
+    def __init__(self, ttl_seconds: int = 300, signing_secret: str | None = None) -> None:
+        """Initialise the confirmation token manager with a thread lock, TTL, and HMAC signing secret."""
         self._ttl_seconds = ttl_seconds
+        raw_secret = (
+            signing_secret
+            or os.environ.get("SSRA_CONFIRM_HMAC_SECRET")
+            or "ssra-dev-confirm-hmac-key"
+        )
+        self._secret = raw_secret.encode("utf-8")
         self._lock = threading.Lock()
         self._records: dict[str, ConfirmationRecord] = {}
         self._idempotency_results: dict[str, dict[str, Any]] = {}
+
+    def _sign_token(
+        self,
+        *,
+        token_id: str,
+        conversation_id: str,
+        tool_name: str,
+        action_digest: str,
+        idempotency_key: str,
+        issued_at: datetime,
+        expires_at: datetime,
+    ) -> str:
+        payload = {
+            "tid": token_id,
+            "cid": conversation_id,
+            "tool": tool_name,
+            "dig": action_digest,
+            "idem": idempotency_key,
+            "iat": issued_at.isoformat(),
+            "exp": expires_at.isoformat(),
+        }
+        payload_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        tag = hmac.new(self._secret, payload_bytes, hashlib.sha256).digest()
+        return f"{token_id}.{_b64url_encode(payload_bytes)}.{_b64url_encode(tag)}"
+
+    def _verify_stateless_signed_token(self, token: str) -> ConfirmationRecord | None:
+        """Verify an HMAC-SHA256 signed confirmation token across worker replicas in constant time."""
+        parts = token.split(".")
+        if len(parts) != 3 or not parts[0].startswith("cfm"):
+            return None
+        try:
+            payload_bytes = _b64url_decode(parts[1])
+            expected_tag = _b64url_decode(parts[2])
+        except ValueError:
+            return None
+        actual_tag = hmac.new(self._secret, payload_bytes, hashlib.sha256).digest()
+        if not hmac.compare_digest(actual_tag, expected_tag):
+            return None
+        try:
+            data = json.loads(payload_bytes.decode("utf-8"))
+            if not isinstance(data, dict) or data.get("tid") != parts[0]:
+                return None
+            issued_at = datetime.fromisoformat(str(data["iat"]))
+            expires_at = datetime.fromisoformat(str(data["exp"]))
+            with _SHARED_CONFIRM_LOCK:
+                used_at = _SHARED_CONSUMED_CONFIRMATIONS.get(token)
+            return ConfirmationRecord(
+                token=token,
+                conversation_id=str(data["cid"]),
+                tool_name=str(data["tool"]),
+                action_digest=str(data["dig"]),
+                idempotency_key=str(data["idem"]),
+                issued_at=issued_at,
+                expires_at=expires_at,
+                used_at=used_at,
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
+            return None
 
     def issue_token(
         self,
@@ -143,12 +220,22 @@ class ConfirmationTokenManager:
         idempotency_key: str | None = None,
         now: datetime | None = None,
     ) -> ConfirmationRecord:
-        """Issue a single-use, argument-digest-bound confirmation token, purging expired records first."""
+        """Issue a single-use, HMAC-SHA256 argument-digest-bound confirmation token, purging expired records first."""
         issued = now or utc_now()
-        token = new_id("cfm")
+        expires = issued + timedelta(seconds=self._ttl_seconds)
+        token_id = new_id("cfm")
         idem_key = idempotency_key or new_id("idem")
         digest = compute_action_digest(
             tool_name=tool_name, arguments=arguments, subject_ref=subject_ref
+        )
+        token = self._sign_token(
+            token_id=token_id,
+            conversation_id=conversation_id,
+            tool_name=tool_name,
+            action_digest=digest,
+            idempotency_key=idem_key,
+            issued_at=issued,
+            expires_at=expires,
         )
         rec = ConfirmationRecord(
             token=token,
@@ -157,7 +244,7 @@ class ConfirmationTokenManager:
             action_digest=digest,
             idempotency_key=idem_key,
             issued_at=issued,
-            expires_at=issued + timedelta(seconds=self._ttl_seconds),
+            expires_at=expires,
         )
         with self._lock:
             self._records = {k: v for k, v in self._records.items() if issued <= v.expires_at}
@@ -167,9 +254,19 @@ class ConfirmationTokenManager:
         return rec
 
     def get_record(self, token: str) -> ConfirmationRecord | None:
-        """Look up a confirmation record by token string."""
+        """Look up a confirmation record by token string (or verify statelessly across replicas)."""
         with self._lock:
-            return self._records.get(token)
+            rec = self._records.get(token)
+            if rec is not None:
+                with _SHARED_CONFIRM_LOCK:
+                    shared_used = _SHARED_CONSUMED_CONFIRMATIONS.get(token)
+                if shared_used is not None and rec.used_at is None:
+                    rec.used_at = shared_used
+                return rec
+            stateless_rec = self._verify_stateless_signed_token(token)
+            if stateless_rec is not None:
+                self._records[token] = stateless_rec
+            return stateless_rec
 
     def consume_token(
         self,
@@ -182,7 +279,7 @@ class ConfirmationTokenManager:
         conversation_id: str | None = None,
         now: datetime | None = None,
     ) -> ConfirmationRecord:
-        """Consume a single-use confirmation token atomically after verifying TTL, thread, and argument digest."""
+        """Consume a single-use confirmation token atomically after verifying HMAC, TTL, thread, and argument digest."""
         current = now or utc_now()
         expected_digest = compute_action_digest(
             tool_name=tool_name, arguments=arguments, subject_ref=subject_ref
@@ -190,12 +287,19 @@ class ConfirmationTokenManager:
         with self._lock:
             rec = self._records.get(token)
             if rec is None:
+                rec = self._verify_stateless_signed_token(token)
+                if rec is not None:
+                    self._records[token] = rec
+            if rec is None:
                 raise SSRAError(
                     McpErrorCode.NOT_AUTHORIZED,
                     "Invalid or unknown confirmation_token",
                     status_code=403,
                 )
-            if rec.used_at is not None:
+            with _SHARED_CONFIRM_LOCK:
+                shared_used = _SHARED_CONSUMED_CONFIRMATIONS.get(token)
+            if rec.used_at is not None or shared_used is not None:
+                rec.used_at = rec.used_at or shared_used
                 raise SSRAError(
                     McpErrorCode.NOT_AUTHORIZED,
                     "confirmation_token has already been used (single-use policy)",
@@ -205,6 +309,12 @@ class ConfirmationTokenManager:
                 raise SSRAError(
                     McpErrorCode.NOT_AUTHORIZED,
                     "confirmation_token has expired",
+                    status_code=403,
+                )
+            if rec.tool_name != tool_name:
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "confirmation_token tool_name mismatch",
                     status_code=403,
                 )
             if conversation_id is not None and rec.conversation_id != conversation_id:
@@ -226,6 +336,12 @@ class ConfirmationTokenManager:
                     status_code=400,
                 )
             rec.used_at = current
+            with _SHARED_CONFIRM_LOCK:
+                if len(_SHARED_CONSUMED_CONFIRMATIONS) >= MAX_CONFIRMATION_RECORDS:
+                    _SHARED_CONSUMED_CONFIRMATIONS.pop(
+                        next(iter(_SHARED_CONSUMED_CONFIRMATIONS)), None
+                    )
+                _SHARED_CONSUMED_CONFIRMATIONS[token] = current
             return rec
 
 

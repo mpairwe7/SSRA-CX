@@ -1661,6 +1661,18 @@
       "post": {
         "description": "Update the active SecOps kill-switches and log the change to the WORM audit ledger.",
         "operationId": "set_kill_switches_v1_admin_kill_switches_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-SSRA-Staff-Id",
+            "required": false,
+            "schema": {
+              "default": "secops_admin",
+              "title": "X-Ssra-Staff-Id",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {

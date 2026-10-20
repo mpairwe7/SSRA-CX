@@ -3,12 +3,30 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
 from ssra_core import new_id
 
 from ssra_runtime.schemas import RuntimeTurnResponse
+
+_BEARER_OR_JWT_RE = re.compile(
+    r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b|\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"
+)
+_INTERNAL_DSN_RE = re.compile(r"(?i)\b(?:postgres(?:ql)?|redis|valkey)://[^\s\"']+")
+_UNMASKED_PHONE_RE = re.compile(r"(?<!\d)\+?211[\s-]?\d{9}\b")
+_UNMASKED_TIN_RE = re.compile(r"\b\d{9,12}\b")
+
+
+def scrub_agui_stream_dlp(text: str) -> str:
+    """Scrub leaked secrets, JWTs, internal DSNs, and unmasked TINs/phones from outgoing AG-UI SSE chunks."""
+    if not text:
+        return text
+    cleaned = _BEARER_OR_JWT_RE.sub("[REDACTED_SECRET_TOKEN]", text)
+    cleaned = _INTERNAL_DSN_RE.sub("[REDACTED_INTERNAL_DSN]", cleaned)
+    cleaned = _UNMASKED_PHONE_RE.sub("[REDACTED_PHONE]", cleaned)
+    return _UNMASKED_TIN_RE.sub("[REDACTED_TIN]", cleaned)
 
 
 def format_sse_event(event_type: str, data: dict[str, Any], event_id: str | None = None) -> str:
@@ -69,7 +87,7 @@ async def stream_agui_events(
             "TEXT_MESSAGE_CONTENT",
             {
                 "messageId": msg_id,
-                "delta": seg.text,
+                "delta": scrub_agui_stream_dlp(seg.text),
                 "citationIds": seg.citation_ids,
             },
         )

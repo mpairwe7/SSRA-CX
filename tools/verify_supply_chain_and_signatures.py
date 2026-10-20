@@ -177,6 +177,13 @@ def main() -> None:
     assert "kc.sh build" in kc_df_txt and "--optimized" in kc_df_txt, (
         "infra/keycloak/Dockerfile must pre-build Quarkus image with kc.sh build and start --optimized"
     )
+    assert (
+        "@sha256:" in kc_df_txt
+        and "/opt/keycloak/data/tmp" in kc_df_txt
+        and "KC_HTTP_MANAGEMENT_PORT=9000" in kc_df_txt
+    ), (
+        "infra/keycloak/Dockerfile must pin @sha256:, pre-create /opt/keycloak/data/tmp, and set KC_HTTP_MANAGEMENT_PORT=9000"
+    )
     assert "keycloak" in prod_compose.get("services", {}), (
         "docker-compose.prod.yml must define hardened keycloak production overlay"
     )

@@ -468,6 +468,21 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     )
     assert r_flags_unauth.status_code == 403
 
+    # SEC2-G5: Read-only Auditor (ssra_auditor) is blocked from mutating kill switches or feature flags
+    r_ks_auditor = client.post(
+        "/v1/admin/kill-switches",
+        headers={"X-SSRA-Staff-Id": "ssra_auditor"},
+        json={"degradation_level": 2, "disabled_tools": [], "disabled_channels": []},
+    )
+    assert r_ks_auditor.status_code == 403
+
+    r_prot_flag = client.post(
+        "/v1/admin/feature-flags",
+        headers={"X-SSRA-Staff-Id": "secops_admin"},
+        json={"flag_name": "FF_NUMERIC_PROVENANCE", "enabled": False, "rollout_pct": 0},
+    )
+    assert r_prot_flag.status_code == 403
+
     r_flags = client.get(
         "/v1/admin/feature-flags",
         headers={"X-SSRA-Staff-Id": "secops_admin"},

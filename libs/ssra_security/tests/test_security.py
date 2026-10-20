@@ -331,6 +331,159 @@ def test_keycloak_26_realm_export_and_docker_invariants() -> None:
         validate_keycloak_realm_export(
             {**realm_data, "clients": [bad_client, *realm_data["clients"][1:]]}
         )
+    no_dpop_client = {
+        **realm_data["clients"][0],
+        "attributes": {
+            **realm_data["clients"][0]["attributes"],
+            "oauth2.dpop.bound.access.tokens": "false",
+        },
+    }
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export(
+            {**realm_data, "clients": [no_dpop_client, *realm_data["clients"][1:]]}
+        )
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export({**realm_data, "eventsEnabled": False})
+
+    # Verify CVE-2026-93999 disabled-client guard, RFC 9449 DPoP proof verifier & OIDC Back-Channel Logout
+    import base64
+    import hashlib
+    from datetime import timedelta
+
+    from ssra_core import utc_now
+    from ssra_security import (
+        BackchannelLogoutClaims,
+        DpopProofClaims,
+        KeycloakOidcClaims,
+        KeycloakOidcSecurityService,
+    )
+
+    now = utc_now()
+    kc_disabled = KeycloakOidcSecurityService(enabled_client_ids=frozenset({"ssra-web-bff"}))
+    with pytest.raises(SSRAError):
+        kc_disabled.validate_keycloak_oidc_claims(
+            KeycloakOidcClaims(
+                jti="jti_cve_93999",
+                sub="sub_taxpayer_amina_01",
+                aud="mcp-ledger",
+                azp="ssra-web-bff",
+                acr="urn:ssra:acr:otp-t1",
+                exp=now + timedelta(seconds=120),
+            ),
+            expected_audience="mcp-ledger",
+            expected_azp="ssra-web-bff",
+        )
+
+    kc = KeycloakOidcSecurityService()
+    sample_at = "at_sample_12345"
+    ath = (
+        base64.urlsafe_b64encode(hashlib.sha256(sample_at.encode("ascii")).digest())
+        .rstrip(b"=")
+        .decode("ascii")
+    )
+    dpop_ok = kc.verify_dpop_proof(
+        DpopProofClaims(
+            jti="jti_dpop_01",
+            htm="POST",
+            htu="https://assist.ssra.gov.ss/v1/turns?foo=bar",
+            iat=now,
+            ath=ath,
+            cnf_jkt="jkt_thumbprint_01",
+        ),
+        expected_htm="POST",
+        expected_htu="https://assist.ssra.gov.ss/v1/turns",
+        expected_cnf_jkt="jkt_thumbprint_01",
+        bound_access_token=sample_at,
+        now=now,
+    )
+    assert dpop_ok.jti == "jti_dpop_01"
+
+    # DPoP htm/htu mismatch, stale iat, cnf_jkt mismatch, and ath mismatch are rejected
+    with pytest.raises(SSRAError):
+        kc.verify_dpop_proof(
+            DpopProofClaims(
+                jti="jti_dpop_02",
+                htm="GET",
+                htu="https://assist.ssra.gov.ss/v1/turns",
+                iat=now,
+                cnf_jkt="jkt_thumbprint_01",
+            ),
+            expected_htm="POST",
+            expected_htu="https://assist.ssra.gov.ss/v1/turns",
+            expected_cnf_jkt="jkt_thumbprint_01",
+            now=now,
+        )
+    with pytest.raises(SSRAError):
+        kc.verify_dpop_proof(
+            DpopProofClaims(
+                jti="jti_dpop_03",
+                htm="POST",
+                htu="https://assist.ssra.gov.ss/v1/turns",
+                iat=now - timedelta(seconds=300),
+                cnf_jkt="jkt_thumbprint_01",
+            ),
+            expected_htm="POST",
+            expected_htu="https://assist.ssra.gov.ss/v1/turns",
+            expected_cnf_jkt="jkt_thumbprint_01",
+            now=now,
+        )
+    with pytest.raises(SSRAError):
+        kc.verify_dpop_proof(
+            DpopProofClaims(
+                jti="jti_dpop_04",
+                htm="POST",
+                htu="https://assist.ssra.gov.ss/v1/turns",
+                iat=now,
+                cnf_jkt="jkt_wrong",
+            ),
+            expected_htm="POST",
+            expected_htu="https://assist.ssra.gov.ss/v1/turns",
+            expected_cnf_jkt="jkt_thumbprint_01",
+            now=now,
+        )
+    with pytest.raises(SSRAError):
+        kc.verify_dpop_proof(
+            DpopProofClaims(
+                jti="jti_dpop_05",
+                htm="POST",
+                htu="https://assist.ssra.gov.ss/v1/turns",
+                iat=now,
+                ath="wrong_ath",
+                cnf_jkt="jkt_thumbprint_01",
+            ),
+            expected_htm="POST",
+            expected_htu="https://assist.ssra.gov.ss/v1/turns",
+            expected_cnf_jkt="jkt_thumbprint_01",
+            bound_access_token=sample_at,
+            now=now,
+        )
+
+    # OIDC Back-Channel Logout 1.0 validation
+    bcl_ok = kc.validate_backchannel_logout_token(
+        BackchannelLogoutClaims(
+            jti="jti_bcl_01",
+            aud="ssra-web-bff",
+            sid="sid_session_01",
+            events={"http://schemas.openid.net/event/backchannel-logout": {}},
+            iat=now,
+        ),
+        expected_audience="ssra-web-bff",
+        now=now,
+    )
+    assert bcl_ok.sid == "sid_session_01"
+    with pytest.raises(SSRAError):
+        kc.validate_backchannel_logout_token(
+            BackchannelLogoutClaims(
+                jti="jti_bcl_02",
+                aud="ssra-web-bff",
+                sid="sid_session_01",
+                events={"http://schemas.openid.net/event/backchannel-logout": {}},
+                iat=now,
+                nonce="forbidden_nonce",
+            ),
+            expected_audience="ssra-web-bff",
+            now=now,
+        )
 
 
 def test_blind_index_normalizes_arabic_indic_digits() -> None:
@@ -359,3 +512,117 @@ def test_blind_index_normalizes_arabic_indic_digits() -> None:
         kc.verify_webauthn_sign_count("cred_staff_01", 2, user_verified=True)
     with pytest.raises(SSRAError):
         kc.verify_webauthn_sign_count("cred_staff_01", 3, user_verified=False)
+
+
+def test_sovereign_readiness_and_stateless_hmac_confirmation_tokens() -> None:
+    """Verify SEC2-G1 sovereign/production readiness gates and SEC2-G2 multi-replica HMAC confirmation tokens."""
+    from ssra_security import (
+        ConfirmationTokenManager,
+        assert_sovereign_and_production_readiness,
+        evaluate_sovereign_and_production_readiness,
+        is_allowed_sovereign_host,
+    )
+
+    assert is_allowed_sovereign_host("localhost") is True
+    assert is_allowed_sovereign_host("127.0.0.1") is True
+    assert is_allowed_sovereign_host("10.24.0.5") is True
+    assert is_allowed_sovereign_host("fd00::1") is True
+    assert is_allowed_sovereign_host("ssra-vllm-sunflower") is True
+    assert is_allowed_sovereign_host("api.openai.com") is False
+    assert is_allowed_sovereign_host("") is False
+
+    # 1. Sovereign Mode checks
+    sov_ok = evaluate_sovereign_and_production_readiness(
+        {
+            "SSRA_SOVEREIGN_MODE": "true",
+            "HF_HUB_OFFLINE": "1",
+            "SSRA_VLLM_SUNFLOWER_URL": "http://ssra-vllm-sunflower:8001/v1",
+            "SSRA_QDRANT_URL": "http://127.0.0.1:6333",
+        }
+    )
+    assert sov_ok == []
+
+    sov_bad = evaluate_sovereign_and_production_readiness(
+        {
+            "SSRA_SOVEREIGN_MODE": "true",
+            "HF_HUB_OFFLINE": "0",
+            "OPENAI_API_KEY": "sk-secret-do-not-log",
+            "SSRA_VLLM_SUNFLOWER_URL": "https://api.openai.com/v1",
+        }
+    )
+    assert len(sov_bad) == 3
+    assert all("sk-secret-do-not-log" not in err for err in sov_bad)
+
+    # 2. Production Mode checks
+    prod_bad = evaluate_sovereign_and_production_readiness(
+        {
+            "SSRA_ENV": "production",
+            "SSRA_CONFIRM_HMAC_SECRET": "ssra-dev-hmac-key",
+            "SSRA_FLAG_HMAC_SECRET": "a" * 24,
+            "SSRA_TOKEN_EXCHANGE_SECRET": "b" * 24,
+            "LLM_TRUST_REMOTE_CODE": "true",
+            "STORE_RAW_PROMPTS": "true",
+            "SSRA_AUDIT_DIR": "/dev/shm",  # noqa: S108
+            "SSRA_DATA_DIR": "/nonexistent_ssra_audit_dir_test",
+        },
+        persisted_flag_overrides={"numeric_provenance": False},
+    )
+    assert len(prod_bad) >= 4
+    with pytest.raises(SSRAError):
+        assert_sovereign_and_production_readiness(
+            {"SSRA_SOVEREIGN_MODE": "true", "OPENAI_API_KEY": "1"}
+        )
+
+    # 3. Multi-replica HMAC-SHA256 ConfirmationTokenManager verification & single-use replay tombstone
+    mgr_replica_a = ConfirmationTokenManager(ttl_seconds=300, signing_secret="c" * 24)
+    mgr_replica_b = ConfirmationTokenManager(ttl_seconds=300, signing_secret="c" * 24)
+    issued = mgr_replica_a.issue_token(
+        conversation_id="thr_sec2_01",
+        tool_name="create_support_ticket",
+        arguments={"topic": "TCC_DELAY"},
+        subject_ref="sub_taxpayer_amina_01",
+        idempotency_key="idem_sec2_01",
+    )
+    assert issued.token.count(".") == 2
+    # Replica B verifies and consumes the token minted by Replica A without prior in-memory state
+    looked_up = mgr_replica_b.get_record(issued.token)
+    assert looked_up is not None and looked_up.conversation_id == "thr_sec2_01"
+    consumed = mgr_replica_b.consume_token(
+        token=issued.token,
+        tool_name="create_support_ticket",
+        arguments={"topic": "TCC_DELAY"},
+        subject_ref="sub_taxpayer_amina_01",
+        idempotency_key="idem_sec2_01",
+        conversation_id="thr_sec2_01",
+    )
+    assert consumed.used_at is not None
+    # Replay on Replica A is rejected via shared tombstone
+    with pytest.raises(SSRAError):
+        mgr_replica_a.consume_token(
+            token=issued.token,
+            tool_name="create_support_ticket",
+            arguments={"topic": "TCC_DELAY"},
+            subject_ref="sub_taxpayer_amina_01",
+            idempotency_key="idem_sec2_01",
+            conversation_id="thr_sec2_01",
+        )
+    # Tampered token signature & mismatched tool_name are rejected
+    assert mgr_replica_b.get_record(issued.token.rsplit(".", 1)[0] + ".AAAA") is None
+    assert mgr_replica_b.get_record("cfm_1.!!!.!!!") is None
+    assert mgr_replica_b.get_record("not-a-valid-token") is None
+    issued2 = mgr_replica_a.issue_token(
+        conversation_id="thr_sec2_02",
+        tool_name="create_support_ticket",
+        arguments={"topic": "TCC_DELAY"},
+        subject_ref="sub_taxpayer_amina_01",
+        idempotency_key="idem_sec2_02",
+    )
+    with pytest.raises(SSRAError):
+        mgr_replica_b.consume_token(
+            token=issued2.token,
+            tool_name="wrong_tool_name",
+            arguments={"topic": "TCC_DELAY"},
+            subject_ref="sub_taxpayer_amina_01",
+            idempotency_key="idem_sec2_02",
+            conversation_id="thr_sec2_02",
+        )

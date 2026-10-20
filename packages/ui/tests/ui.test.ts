@@ -8,10 +8,13 @@ import {
   formatNextShiftJuba,
   getHtmlLayoutProps,
   getSouthSudanFiscalYear,
+  isJwtTokenExpired,
+  looksLikeJwtFormat,
   resolveMenuKeyNavigation,
   resolveResponsiveViewportContext,
   resolveSurfaceDesignContext,
   SSRA_DESIGN_TOKENS,
+  sanitizeBearerOrSubjectToken,
   shouldEnableLowDataMode,
   verifyThemeColorCoherency,
 } from "../src/index.js";
@@ -109,5 +112,16 @@ describe("@ssra/ui design tokens and RTL layout", () => {
     expect(desktop1280.viewportHeightCss).toBe("100dvh");
     expect(desktop1280.effectiveTouchTargetPx).toBe(44);
     expect(desktop1280.navigationPattern).toBe("collapsible_side_rail");
+
+    // SEC2-G7: Zero-width/BOM token sanitizer & proactive clock-skew JWT expiry check
+    expect(sanitizeBearerOrSubjectToken("  \u200bsub_taxpayer_amina_01\uFEFF… ")).toBe(
+      "sub_taxpayer_amina_01",
+    );
+    const expPayload = btoa(JSON.stringify({ exp: 1_700_000_000 })).replace(/=+$/, "");
+    const sampleJwt = `eyJhbGciOiJFUzI1NiJ9.${expPayload}.sig_part`;
+    expect(looksLikeJwtFormat(sampleJwt)).toBe(true);
+    expect(looksLikeJwtFormat("not-a-jwt")).toBe(false);
+    expect(isJwtTokenExpired(sampleJwt, 10, 1_700_000_000 * 1000 - 5_000)).toBe(true);
+    expect(isJwtTokenExpired(sampleJwt, 10, 1_700_000_000 * 1000 - 30_000)).toBe(false);
   });
 });

@@ -26,6 +26,7 @@ REQUIRED_KEYCLOAK_CLIENTS: frozenset[str] = frozenset(
     {
         "ssra-web-bff",
         "ssra-staff-console",
+        "ssra-api",
         "ssra-agentgateway",
         "mcp-knowledge",
         "mcp-tax-facts",
@@ -80,17 +81,67 @@ def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
         c = client_map[cid]
         attrs = c.get("attributes", {})
         if (
-            c.get("publicClient") is not False
+            c.get("enabled") is not True
+            or c.get("publicClient") is not False
             or c.get("directAccessGrantsEnabled") is not False
             or attrs.get("pkce.code.challenge.method") != "S256"
             or attrs.get("token.exchange.standard.enabled") != "true"
         ):
             raise SSRAError(
                 McpErrorCode.VALIDATION_FAILED,
-                f"Keycloak client '{cid}' must be confidential, forbid direct grants, enforce PKCE S256, and enable standard token exchange V2",
+                f"Keycloak client '{cid}' must be enabled, confidential, forbid direct grants, enforce PKCE S256, and enable standard token exchange V2",
                 status_code=400,
             )
+    for dpop_cid in ("ssra-web-bff", "ssra-staff-console", "ssra-agentgateway"):
+        dpop_attrs = client_map[dpop_cid].get("attributes", {})
+        dpop_ok = (
+            dpop_attrs.get("oauth2.dpop.bound.access.tokens") == "true"
+            and dpop_attrs.get("backchannel.logout.session.required") == "true"
+        )
+        if not dpop_ok:
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Keycloak client '{dpop_cid}' must enforce RFC 9449 DPoP-bound access tokens and OIDC backchannel logout session binding",
+                status_code=400,
+            )
+    events_ok = (
+        realm_data.get("eventsEnabled") is True and realm_data.get("adminEventsEnabled") is True
+    )
+    if not events_ok:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "Keycloak realm must enable security events and admin audit events (ASVS 5.0 V16)",
+            status_code=400,
+        )
     return True
+
+
+class DpopProofClaims(BaseModel):
+    """RFC 9449 §4.2 Demonstrating Proof-of-Possession (DPoP) JWT proof claims."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    jti: str = Field(min_length=4)
+    htm: str = Field(min_length=3)
+    htu: str = Field(min_length=8)
+    iat: datetime
+    ath: str | None = None
+    cnf_jkt: str = Field(min_length=8)
+
+
+class BackchannelLogoutClaims(BaseModel):
+    """OIDC Back-Channel Logout 1.0 (§2.4) `logout+jwt` token claims."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    jti: str = Field(min_length=4)
+    iss: str = "https://sso.ssra.gov.ss/realms/ssra"
+    aud: str = Field(min_length=1)
+    sub: str | None = None
+    sid: str | None = None
+    events: dict[str, dict[str, Any]]
+    iat: datetime
+    nonce: str | None = None
 
 
 class KeycloakOidcClaims(BaseModel):
@@ -125,10 +176,12 @@ class KeycloakOidcSecurityService:
         *,
         expected_issuer: str = "https://sso.ssra.gov.ss/realms/ssra",
         allowed_idp_aliases: frozenset[str] = ALLOWED_IDP_ALIASES,
+        enabled_client_ids: frozenset[str] = REQUIRED_KEYCLOAK_CLIENTS,
     ) -> None:
-        """Initialise the Keycloak OIDC security service with JTI replay and shared WebAuthn signCount trackers."""
+        """Initialise the Keycloak OIDC security service with JTI replay, enabled clients, and WebAuthn signCount trackers."""
         self.expected_issuer = expected_issuer
         self.allowed_idp_aliases = allowed_idp_aliases
+        self.enabled_client_ids = enabled_client_ids
         self._consumed_jtis: dict[str, datetime] = {}
         self._webauthn_sign_counts = _SHARED_WEBAUTHN_SIGN_COUNTS
 
@@ -247,6 +300,12 @@ class KeycloakOidcSecurityService:
                 "Keycloak audience or azp mismatch blocked (CVE-2026-37979)",
                 status_code=403,
             )
+        if claims.aud not in self.enabled_client_ids or claims.azp not in self.enabled_client_ids:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "Token exchange or authentication targeting a disabled/unregistered client blocked (CVE-2026-93999)",
+                status_code=403,
+            )
         if claims.idp not in self.allowed_idp_aliases:
             raise SSRAError(
                 McpErrorCode.NOT_AUTHORIZED,
@@ -273,3 +332,84 @@ class KeycloakOidcSecurityService:
                     status_code=403,
                 )
         return claims
+
+    def verify_dpop_proof(
+        self,
+        proof: DpopProofClaims,
+        *,
+        expected_htm: str,
+        expected_htu: str,
+        expected_cnf_jkt: str,
+        bound_access_token: str | None = None,
+        max_clock_skew_seconds: int = 120,
+        now: datetime | None = None,
+    ) -> DpopProofClaims:
+        """Verify an RFC 9449 §4.2 DPoP proof (`htm`, `htu`, `iat` freshness, single-use `jti`, `ath`, and `cnf_jkt`)."""
+        current = now or utc_now()
+        clean_htu = expected_htu.split("?", 1)[0].split("#", 1)[0]
+        proof_htu = proof.htu.split("?", 1)[0].split("#", 1)[0]
+        if proof.htm.upper() != expected_htm.upper() or proof_htu != clean_htu:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "RFC 9449 DPoP proof htm or htu mismatch",
+                status_code=401,
+            )
+        age_seconds = abs((current - proof.iat).total_seconds())
+        if age_seconds > max_clock_skew_seconds:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                f"RFC 9449 DPoP proof iat outside {max_clock_skew_seconds}s freshness window",
+                status_code=401,
+            )
+        if not hmac.compare_digest(proof.cnf_jkt, expected_cnf_jkt):
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "RFC 9449 DPoP proof JWK thumbprint (cnf_jkt) mismatch",
+                status_code=403,
+            )
+        if bound_access_token is not None:
+            expected_ath = (
+                base64.urlsafe_b64encode(
+                    hashlib.sha256(bound_access_token.encode("ascii")).digest()
+                )
+                .rstrip(b"=")
+                .decode("ascii")
+            )
+            if not proof.ath or not hmac.compare_digest(proof.ath, expected_ath):
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "RFC 9449 DPoP proof access-token hash (ath) mismatch",
+                    status_code=401,
+                )
+        self.consume_single_use_jti(
+            proof.jti,
+            exp=current + timedelta(seconds=max_clock_skew_seconds),
+            now=current,
+        )
+        return proof
+
+    def validate_backchannel_logout_token(
+        self,
+        logout_claims: BackchannelLogoutClaims,
+        *,
+        expected_audience: str,
+        now: datetime | None = None,
+    ) -> BackchannelLogoutClaims:
+        """Validate an OIDC Back-Channel Logout 1.0 (§2.4) token and consume its `jti`."""
+        current = now or utc_now()
+        valid_bcl = (
+            logout_claims.iss == self.expected_issuer
+            and logout_claims.aud == expected_audience
+            and logout_claims.aud in self.enabled_client_ids
+            and logout_claims.nonce is None
+            and "http://schemas.openid.net/event/backchannel-logout" in logout_claims.events
+            and bool(logout_claims.sid or logout_claims.sub)
+        )
+        if not valid_bcl:
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                "Invalid OIDC Back-Channel Logout token claims (OIDC Back-Channel Logout 1.0 §2.4)",
+                status_code=400,
+            )
+        self.consume_single_use_jti(logout_claims.jti, now=current)
+        return logout_claims
