@@ -178,28 +178,103 @@
         }
       }
     },
+    "EnglishRouterEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_locale",
+        "detected_vernacular",
+        "language_state",
+        "canonical_en_query",
+        "extracted_slots",
+        "preserved_statutory_tokens"
+      ],
+      "properties": {
+        "source_locale": { "$ref": "#/$defs/LocaleCode" },
+        "detected_vernacular": { "type": "string" },
+        "language_state": {
+          "type": "string",
+          "enum": ["LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN"]
+        },
+        "canonical_en_query": { "type": "string", "minLength": 1 },
+        "extracted_slots": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "number", "boolean"] }
+        },
+        "preserved_statutory_tokens": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "HandoffTicket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conversation_id", "reason", "queue", "summary", "citations", "priority"],
+      "properties": {
+        "conversation_id": { "type": "string", "minLength": 1 },
+        "reason": {
+          "type": "string",
+          "enum": ["USER_REQUEST", "T4_POLICY", "GUARD_FALLBACK", "LOW_CONFIDENCE", "EQ_ESCALATION"]
+        },
+        "queue": {
+          "type": "string",
+          "enum": ["DOMESTIC_TAX", "CUSTOMS", "ETAX_TECH", "SCAM_REPORT"]
+        },
+        "summary": { "type": "string" },
+        "citations": { "type": "array", "items": { "type": "string" } },
+        "priority": {
+          "type": "string",
+          "enum": ["LOW", "NORMAL", "HIGH", "CRITICAL"]
+        }
+      }
+    },
     "HandoffEnvelope": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "envelope_version",
+        "ticket",
         "source_channel",
         "target_channel",
         "locale",
         "language_state",
+        "auth_level",
         "affective_state",
+        "verified_tool_artifacts",
+        "suggested_opener",
         "return_to_ai_eligible"
       ],
       "properties": {
         "envelope_version": { "type": "string", "enum": ["2.0"] },
-        "source_channel": { "type": "string" },
-        "target_channel": { "type": "string" },
+        "ticket": { "$ref": "#/$defs/HandoffTicket" },
+        "source_channel": {
+          "type": "string",
+          "enum": ["web", "whatsapp", "sms", "ussd", "voice", "console"]
+        },
+        "target_channel": {
+          "type": "string",
+          "enum": ["web", "whatsapp", "sms", "ussd", "voice", "console"]
+        },
         "locale": { "$ref": "#/$defs/LocaleCode" },
         "language_state": {
           "type": "string",
           "enum": ["LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN"]
         },
+        "subject_ref_masked": { "type": ["string", "null"] },
+        "auth_level": {
+          "type": "string",
+          "enum": ["ANONYMOUS", "OTP_PHONE", "T1_TIN_BOUND", "T3_STEP_UP", "STAFF_PASSKEY"]
+        },
         "affective_state": { "$ref": "#/$defs/AffectiveSnapshot" },
+        "active_goal": { "type": ["object", "null"] },
+        "verified_tool_artifacts": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "officer_call_brief": { "type": ["object", "null"] },
+        "chat_to_call_carryover": { "type": ["object", "null"] },
+        "suggested_opener": { "type": "string" },
         "return_to_ai_eligible": { "type": "boolean" }
       }
     }

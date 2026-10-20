@@ -24,7 +24,7 @@ from ssra_core import ChannelName, IntentName, LocaleCode, new_id, utc_now
 from ssra_security import redact_pii
 
 _CURRENCY_OR_LONG_DIGIT_RE = re.compile(
-    r"\b(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:SSP|USD|%)|\d{4,12})\b",
+    r"(?:(?:SSP|USD)\s*)?[\d\u0660-\u0669]+(?:[.,][\d\u0660-\u0669]+)*(?:\s*(?:SSP|USD|%))?",
     flags=re.IGNORECASE,
 )
 
@@ -110,6 +110,7 @@ class SubjectPreferenceMemoryStore:
     """Typed long-term preference store (Tier 3) + 4-Tier Cognitive Memory Manager with Right-to-Erasure."""
 
     def __init__(self) -> None:
+        """Initialize the in-memory 4-tier cognitive memory and preference store."""
         self._prefs: dict[str, ConsentedUserPreferences] = {}
         self._continuity_consent: dict[str, bool] = {}
         self._episodes: dict[str, list[EpisodicMemoryRecord]] = {}
@@ -125,6 +126,7 @@ class SubjectPreferenceMemoryStore:
         high_contrast_a11y: bool = False,
         voice_first_a11y: bool = False,
     ) -> ConsentedUserPreferences:
+        """Upsert typed Tier 3 accessibility and channel preferences for `subject_ref`."""
         pref = ConsentedUserPreferences(
             subject_ref=subject_ref,
             preferred_locale=preferred_locale,
@@ -138,6 +140,7 @@ class SubjectPreferenceMemoryStore:
         return pref
 
     def get_preferences(self, subject_ref: str) -> ConsentedUserPreferences | None:
+        """Retrieve stored Tier 3 preferences for `subject_ref`, or `None` if absent."""
         return self._prefs.get(subject_ref)
 
     def set_memory_continuity_consent(self, subject_ref: str, *, consented: bool) -> None:
@@ -148,6 +151,7 @@ class SubjectPreferenceMemoryStore:
             self._goals.pop(subject_ref, None)
 
     def has_memory_continuity_consent(self, subject_ref: str) -> bool:
+        """Return True if `subject_ref` has active opt-in consent for Tier 2/4 memory continuity."""
         return self._continuity_consent.get(subject_ref, False)
 
     def record_episode(
@@ -185,6 +189,7 @@ class SubjectPreferenceMemoryStore:
         return rec
 
     def list_episodes(self, subject_ref: str) -> list[EpisodicMemoryRecord]:
+        """List non-expired Tier 2 episodic records for `subject_ref`."""
         now = utc_now()
         items = self._episodes.get(subject_ref, [])
         valid = [ep for ep in items if ep.expires_at > now]
@@ -238,6 +243,7 @@ class SubjectPreferenceMemoryStore:
         return rec
 
     def list_active_goals(self, subject_ref: str) -> list[ActiveGoalRecord]:
+        """List non-expired, in-progress or async-waiting Tier 4 goals for `subject_ref`."""
         now = utc_now()
         subj_goals = self._goals.get(subject_ref, {})
         valid = {

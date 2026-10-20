@@ -22,7 +22,26 @@ from ssra_core import (
 from ssra_runtime.state import ConversationGraphState
 
 
+def _build_localized_suggested_opener(locale: LocaleCode) -> str:
+    """Return a taxpayer-friendly, localized officer opener without exposing internal queue/reason codes."""
+    if locale == LocaleCode.AR:
+        return (
+            "مرحباً، أنا موظف في هيئة الإيرادات (SSRA) ولدي ملخص المحادثة الكامل من المساعد "
+            "الذكي حتى لا تضطر لإعادة شرح طلبك."
+        )
+    if locale == LocaleCode.PGA:
+        return (
+            "Salam, ana muwazaf min SSRA wa indi kullu tafasil mawdu taki min SSRA Assist "
+            "ashan ma ta'id كلامك من الأول."
+        )
+    return (
+        "Hello, I am an SSRA officer and I already have the context from SSRA Assist so "
+        "you do not need to repeat yourself."
+    )
+
+
 def execute_handoff_subgraph(state: ConversationGraphState) -> dict[str, Any]:
+    """Build a structured HandoffTicket and HandoffEnvelope v2 for human officer escalation."""
     if state.get("answer") is not None:
         return {}
 
@@ -106,10 +125,7 @@ def execute_handoff_subgraph(state: ConversationGraphState) -> dict[str, Any]:
         verified_tool_artifacts=[
             {"id": a.id, "server": a.server, "tool": a.tool} for a in artifacts
         ],
-        suggested_opener=(
-            f"Hello, I am an SSRA officer reviewing your {ticket.queue} inquiry ({ticket.reason}) — "
-            "I already have the context from SSRA Assist so you do not need to repeat yourself."
-        ),
+        suggested_opener=_build_localized_suggested_opener(locale),
         return_to_ai_eligible=(tier != RiskTier.T4),
     )
 

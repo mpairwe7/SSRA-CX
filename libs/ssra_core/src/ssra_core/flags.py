@@ -1,23 +1,32 @@
 """Deterministic Cohort & Percentage Feature-Flag Engine (`flags.py` — SSRA Assist October 2026).
 
 Supports:
-1. Percentage rollouts (`0..100`) using deterministic HMAC-SHA256 bucketing on `(flag_name, subject_key)`.
+1. Percentage rollouts (`0..100`) using deterministic HMAC-SHA256 bucketing on `(flag_name, subject_ref)`.
 2. Cohort filtering by SSRA `channel` (`web`, `whatsapp`, `sms`, `ussd`, `voice`, `console`) and
    SSRA BCP-47 `locale` (`en`, `pga`, `ar`, `din`, `nus`, `bfa`, `zne`, `shk`).
-3. Live SecOps / Admin overrides without service restarts (`set_flag_override`).
+3. Shared runtime override state across API and runtime workers with `reset_flag_override` to restore YAML defaults.
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
-from dataclasses import dataclass, field
+import json
+import os
+import tempfile
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 _DEFAULT_FLAGS_FILE = Path(__file__).resolve().parents[4] / "ai" / "policies" / "feature-flags.yaml"
+_DEFAULT_SHARED_OVERRIDE_PATH = Path(
+    os.environ.get(
+        "SSRA_FEATURE_FLAGS_OVERRIDE_FILE",
+        str(Path(tempfile.gettempdir()) / "ssra_feature_flag_overrides.json"),
+    )
+)
 
 KNOWN_FEATURE_FLAGS: tuple[str, ...] = (
     "FF_AUTONOMOUS_GOAL_PLANNER",
@@ -42,6 +51,8 @@ SSRA_SUPPORTED_LOCALES: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class FeatureFlagRule:
+    """Immutable configuration rule for a single cohort/percentage feature flag."""
+
     name: str
     description: str
     enabled: bool = True
@@ -54,6 +65,8 @@ class FeatureFlagRule:
 
 @dataclass(frozen=True)
 class FeatureFlagEvaluation:
+    """Result of evaluating a feature flag for a specific `(subject_ref, channel, locale)` tuple."""
+
     flag_name: str
     active: bool
     bucket: int
@@ -82,49 +95,84 @@ class FeatureFlagEngine:
         *,
         config_path: Path | None = None,
         salt: str | None = None,
+        shared_override_path: Path | None = None,
     ) -> None:
+        """Initialize the feature-flag engine from the validated YAML registry and shared override store."""
         path = config_path or _DEFAULT_FLAGS_FILE
-        raw: dict[str, Any] = {}
-        if path.is_file():
-            loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                raw = loaded
+        if not path.is_file():
+            raise FileNotFoundError(f"Feature flag configuration file not found: {path}")
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict) or not isinstance(loaded.get("flags"), dict):
+            raise ValueError(
+                f"Malformed feature flag configuration in {path}: root and 'flags' must be mappings"
+            )
+        raw: dict[str, Any] = loaded
+        self.config_path: Path = path
+        self.shared_override_path: Path = shared_override_path or _DEFAULT_SHARED_OVERRIDE_PATH
         self.version: str = str(raw.get("version", "2026.10.2"))
         self.salt: str = salt or str(raw.get("default_salt", "ssra-sovereign-flag-salt-2026-10"))
-        self._rules: dict[str, FeatureFlagRule] = {}
+        self._base_rules: dict[str, FeatureFlagRule] = {}
+        self._overrides: dict[str, FeatureFlagRule] = {}
 
-        flags_cfg = raw.get("flags", {})
-        if isinstance(flags_cfg, dict):
-            for f_name, f_data in flags_cfg.items():
-                if not isinstance(f_data, dict):
-                    continue
-                pct = max(0, min(100, int(f_data.get("rollout_pct", 100))))
-                chans = tuple(str(c).lower() for c in f_data.get("allowed_channels", ()))
-                locs = tuple(str(loc).lower() for loc in f_data.get("allowed_locales", ()))
-                self._rules[str(f_name)] = FeatureFlagRule(
-                    name=str(f_name),
-                    description=str(f_data.get("description", "")),
-                    enabled=bool(f_data.get("enabled", True)),
-                    rollout_pct=pct,
-                    allowed_channels=chans
-                    or ("web", "whatsapp", "sms", "ussd", "voice", "console"),
-                    allowed_locales=locs or SSRA_SUPPORTED_LOCALES,
-                )
+        flags_cfg: dict[str, Any] = raw["flags"]
+        for f_name, f_data in flags_cfg.items():
+            if not isinstance(f_data, dict):
+                raise ValueError(f"Flag entry '{f_name}' in {path} must be a mapping")
+            pct = max(0, min(100, int(f_data.get("rollout_pct", 100))))
+            chans = tuple(str(c).lower() for c in f_data.get("allowed_channels", ()))
+            locs = tuple(str(loc).lower() for loc in f_data.get("allowed_locales", ()))
+            rule = FeatureFlagRule(
+                name=str(f_name),
+                description=str(f_data.get("description", "")),
+                enabled=bool(f_data.get("enabled", True)),
+                rollout_pct=pct,
+                allowed_channels=chans or ("web", "whatsapp", "sms", "ussd", "voice", "console"),
+                allowed_locales=locs or SSRA_SUPPORTED_LOCALES,
+            )
+            self._base_rules[str(f_name)] = rule
 
-        for known in KNOWN_FEATURE_FLAGS:
-            if known not in self._rules:
-                self._rules[known] = FeatureFlagRule(
-                    name=known,
-                    description=f"Default rule for {known}",
-                    enabled=True,
-                    rollout_pct=100,
+    def _sync_shared_overrides_from_disk(self) -> None:
+        """Load shared runtime overrides written by Admin control-plane processes if present."""
+        if not self.shared_override_path.is_file():
+            return
+        data = json.loads(self.shared_override_path.read_text(encoding="utf-8"))
+        synced: dict[str, FeatureFlagRule] = {}
+        for k, v in data.items():
+            if isinstance(v, dict):
+                synced[str(k)] = FeatureFlagRule(
+                    name=str(v.get("name", k)),
+                    description=str(v.get("description", "")),
+                    enabled=bool(v.get("enabled", True)),
+                    rollout_pct=max(0, min(100, int(v.get("rollout_pct", 100)))),
+                    allowed_channels=tuple(str(c) for c in v.get("allowed_channels", ("web",))),
+                    allowed_locales=tuple(
+                        str(loc) for loc in v.get("allowed_locales", SSRA_SUPPORTED_LOCALES)
+                    ),
                 )
+        self._overrides = synced
+
+    def _persist_shared_overrides_to_disk(self) -> None:
+        """Persist active runtime overrides so all local runtime workers observe changes immediately."""
+        self.shared_override_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {k: asdict(v) for k, v in self._overrides.items()}
+        self.shared_override_path.write_text(
+            json.dumps(payload, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    def _effective_rules(self) -> dict[str, FeatureFlagRule]:
+        """Return base YAML rules merged with any active runtime overrides."""
+        self._sync_shared_overrides_from_disk()
+        return {**self._base_rules, **self._overrides}
 
     def list_rules(self) -> list[FeatureFlagRule]:
-        return [self._rules[k] for k in sorted(self._rules)]
+        """Return all registered feature-flag rules sorted by flag name."""
+        merged = self._effective_rules()
+        return [merged[k] for k in sorted(merged)]
 
     def get_rule(self, flag_name: str) -> FeatureFlagRule | None:
-        return self._rules.get(flag_name)
+        """Look up a single feature-flag rule by name."""
+        return self._effective_rules().get(flag_name)
 
     def set_flag_override(
         self,
@@ -135,9 +183,10 @@ class FeatureFlagEngine:
         allowed_channels: list[str] | tuple[str, ...] | None = None,
         allowed_locales: list[str] | tuple[str, ...] | None = None,
     ) -> FeatureFlagRule:
-        """Update or register a feature-flag state at runtime (used by SSRA Admin control plane)."""
+        """Update or register a feature-flag state at runtime and persist across local workers."""
+        self._sync_shared_overrides_from_disk()
         bounded_pct = max(0, min(100, int(rollout_pct)))
-        existing = self._rules.get(flag_name)
+        existing = self._overrides.get(flag_name) or self._base_rules.get(flag_name)
         desc = existing.description if existing else f"Runtime override for {flag_name}"
         chans = (
             tuple(str(c).lower() for c in allowed_channels)
@@ -161,8 +210,18 @@ class FeatureFlagEngine:
             allowed_channels=chans,
             allowed_locales=locs,
         )
-        self._rules[flag_name] = rule
+        self._overrides[flag_name] = rule
+        self._persist_shared_overrides_to_disk()
         return rule
+
+    def reset_flag_override(self, flag_name: str | None = None) -> None:
+        """Clear a runtime override (or all overrides when `flag_name` is None) to restore YAML defaults."""
+        self._sync_shared_overrides_from_disk()
+        if flag_name is None:
+            self._overrides.clear()
+        else:
+            self._overrides.pop(flag_name, None)
+        self._persist_shared_overrides_to_disk()
 
     def evaluate(
         self,
@@ -173,7 +232,7 @@ class FeatureFlagEngine:
         locale: str = "en",
     ) -> FeatureFlagEvaluation:
         """Deterministically evaluate whether `flag_name` is active for `(subject_ref, channel, locale)`."""
-        rule = self._rules.get(flag_name)
+        rule = self._effective_rules().get(flag_name)
         bucket = compute_deterministic_flag_bucket(flag_name, subject_ref, salt=self.salt)
         if rule is None:
             return FeatureFlagEvaluation(
@@ -231,6 +290,7 @@ _DEFAULT_ENGINE = FeatureFlagEngine()
 
 
 def get_default_feature_flag_engine() -> FeatureFlagEngine:
+    """Return the process-wide default `FeatureFlagEngine` instance."""
     return _DEFAULT_ENGINE
 
 

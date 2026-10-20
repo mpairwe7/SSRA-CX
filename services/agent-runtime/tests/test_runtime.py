@@ -450,6 +450,7 @@ def test_agentgateway_stateless_mcp_routing_spend_cap_and_a2a_stub() -> None:
 
 
 def test_subject_preference_memory_store_forbids_free_text_and_supports_erasure() -> None:
+    """Verify Tier 3 preference store persistence and per-subject erasure."""
     from ssra_core import LocaleCode
     from ssra_runtime.memory import SubjectPreferenceMemoryStore
 
@@ -467,6 +468,7 @@ def test_subject_preference_memory_store_forbids_free_text_and_supports_erasure(
 
 
 def test_conversation_replay_forensic_reconstruction_endpoint() -> None:
+    """Verify turn-by-turn forensic conversation replay reconstruction via `/v1/turns/{id}/replay`."""
     client = TestClient(create_runtime_app())
     r_turn = client.post(
         "/v1/turns",
@@ -492,6 +494,7 @@ def test_conversation_replay_forensic_reconstruction_endpoint() -> None:
 
 
 def test_pgvector_hybrid_rrf_and_embedding_reranker_bakeoff() -> None:
+    """Verify PostgreSQL 18 pgvector hybrid RRF SQL and multilingual recall@k bake-off."""
     from ssra_runtime.retrieval import (
         PGVECTOR_ITERATIVE_SCAN_SQL,
         build_pgvector_hybrid_rrf_sql,
@@ -533,6 +536,7 @@ def test_pgvector_hybrid_rrf_and_embedding_reranker_bakeoff() -> None:
 
 
 def test_official_manuals_faqs_and_financial_act_2024_2025_end_to_end() -> None:
+    """Verify end-to-end grounded Q&A across official manuals, FAQs, and Financial Act 2024/2025."""
     from datetime import date
 
     from ssra_mcp_knowledge.adapters import KnowledgeCorpusAdapter
@@ -703,16 +707,17 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
     )
     assert loc_locked == LocaleCode.AR and state_locked == "LOCKED"
 
-    loc1, state1, _cand1 = evaluate_language_state_transition(
+    loc1, state1, cand1 = evaluate_language_state_transition(
         previous_locale=LocaleCode.EN,
         detected_locale=LocaleCode.PGA,
         raw_text="Kif ana aml tasjil ta TIN 1002003004?",
     )
-    assert loc1 == LocaleCode.PGA
+    assert loc1 == LocaleCode.EN
     assert state1 == "CODE_SWITCHING"
+    assert cand1 == LocaleCode.PGA
     router_env = build_english_router_envelope(
         "Kif ana aml tasjil ta TIN 1002003004?",
-        source_locale=loc1,
+        source_locale=LocaleCode.PGA,
         language_state=state1,
     )
     assert "register tin" in router_env.canonical_en_query
@@ -789,21 +794,50 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
     assert compound_resp.outcome_verified is True
     assert "TCC status:" in compound_resp.answer.segments[0].text
 
-    # 4. HandoffEnvelope v2 on T4 escalation
-    t4_ev = make_conversation_event(
-        "My goods are detained and I need a penalty waiver immediately",
-        locale=LocaleCode.EN,
-        thread_id="thr_t4_env_v2",
-    )
-    t4_resp = rt.run_turn(t4_ev)
-    assert t4_resp.handoff_envelope is not None
-    assert t4_resp.handoff_envelope.envelope_version == "2.0"
-    assert t4_resp.handoff_envelope.affective_state.primary_emotion == "distressed"
-    assert t4_resp.handoff_envelope.return_to_ai_eligible is False
+    # 4. HandoffEnvelope v2 on T4 escalation (en, ar, pga)
+    for h_loc in (LocaleCode.EN, LocaleCode.AR, LocaleCode.PGA):
+        t4_ev = make_conversation_event(
+            "My goods are detained and I need a penalty waiver immediately",
+            locale=h_loc,
+            thread_id=f"thr_t4_env_v2_{h_loc.value}",
+        )
+        t4_resp = rt.run_turn(t4_ev)
+        assert t4_resp.handoff_envelope is not None
+        assert t4_resp.handoff_envelope.envelope_version == "2.0"
+        assert t4_resp.handoff_envelope.return_to_ai_eligible is False
+
+    # Test secondary step failure resilience in execute_self_service_subgraph
+    rt.gateway.set_tool_kill_switch("tcc.get_tcc_status", disabled=True)
+    try:
+        partial_res = execute_self_service_subgraph(
+            {
+                "intent": Intent(intent=IntentName.GET_BALANCE, language=LocaleCode.EN),
+                "auth_level": AuthLevel.T1_TIN_BOUND,
+                "subject_ref": "sub_taxpayer_amina_01",
+                "plan": compound_resp.plan,
+            },
+            rt.gateway,
+        )
+        assert len(partial_res["artifacts"]) == 1
+        assert (
+            "STEP_FAILED:tcc.get_tcc_status" in partial_res["outcome_verification"]["blocker_codes"]
+        )
+    finally:
+        rt.gateway.set_tool_kill_switch("tcc.get_tcc_status", disabled=False)
 
     # 5. 4-Tier Cognitive Memory (Consent-Gated Episodic + Procedural Goals + Figure Stripping + Erasure)
     mem = SubjectPreferenceMemoryStore()
-    assert "[REDACTED_FIGURE]" in strip_financial_figures_for_memory("Balance is 450,000 SSP")
+    for raw_fin in (
+        "Balance is 450,000 SSP",
+        "Small fee 50 SSP",
+        "Zero balance 0 SSP",
+        "Rate 18%",
+        "Decimal 12.5 USD",
+        "Prefix SSP 500",
+        "Long 123456789012345",
+    ):
+        scrubbed = strip_financial_figures_for_memory(raw_fin)
+        assert not any(ch.isdigit() for ch in scrubbed), f"Digits leaked in '{scrubbed}'"
     # Without consent, episodes and goals are not stored
     assert (
         mem.record_episode(

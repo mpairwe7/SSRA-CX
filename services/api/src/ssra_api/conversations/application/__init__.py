@@ -23,6 +23,7 @@ def create_conversation_use_case(
     auth_level: str = "ANONYMOUS",
     office_code: str = "JUBA_HQ",
 ) -> ConversationEntity:
+    """Create a new `ConversationEntity` and stage a creation domain event."""
     entity = ConversationEntity(
         id=new_id("conv"),
         channel=channel,
@@ -42,6 +43,7 @@ def create_conversation_use_case(
 
 
 def staff_takeover_use_case(entity: ConversationEntity, *, staff_id: str) -> ConversationEntity:
+    """Transition a conversation to `STAFF_TAKEOVER` assigned to `staff_id`."""
     updated = replace(entity, status="STAFF_TAKEOVER", assigned_staff_id=staff_id)
     get_outbox_store().stage_domain_event(
         context_name="conversations",
@@ -57,6 +59,7 @@ def staff_handback_to_ai_use_case(
     *,
     officer_resolution: OfficerResolutionArtifact | None = None,
 ) -> ConversationEntity:
+    """Return a conversation to AI control with an optional PII-redacted `OfficerResolutionArtifact`."""
     safe_resolution = officer_resolution
     if officer_resolution is not None:
         safe_resolution = OfficerResolutionArtifact(
@@ -91,6 +94,7 @@ def staff_handback_to_ai_use_case(
 def generate_copilot_draft_use_case(
     *, conversation_id: str, taxpayer_question: str
 ) -> StaffCopilotDraft:
+    """Generate a PII-redacted, cited staff copilot draft reply."""
     redacted_q = redact_pii(taxpayer_question).redacted_text
     return StaffCopilotDraft(
         conversation_id=conversation_id,
@@ -113,5 +117,6 @@ def score_conversation_qa_use_case(
     neutrality: float,
     language_quality: float,
 ) -> ConversationEntity:
+    """Compute the mean QA rubric score across accuracy, citations, neutrality, and language quality."""
     overall = round((accuracy + citations_complete + neutrality + language_quality) / 4.0, 4)
     return replace(entity, qa_score=overall)

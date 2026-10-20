@@ -28,6 +28,7 @@ class ConversationGraphState(TypedDict, total=False):
     channel: ChannelName
     locale: LocaleCode
     language_state: str
+    language_candidate: LocaleCode | None
     capabilities: ChannelCapabilities
     auth_level: AuthLevel
     subject_ref: str | None

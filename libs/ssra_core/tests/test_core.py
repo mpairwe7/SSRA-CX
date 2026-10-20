@@ -128,6 +128,12 @@ def test_circuit_breaker_idempotent_retries_and_channel_bulkhead() -> None:
 
 
 def test_feature_flag_engine_cohort_bucketing_and_agentic_cx_telemetry() -> None:
+    """Verify deterministic feature-flag bucketing, validation, shared overrides, and Agentic CX OTel attributes."""
+    import os
+    import tempfile
+    from pathlib import Path
+
+    import pytest
     from ssra_core import (
         FeatureFlagEngine,
         LocaleCode,
@@ -135,54 +141,72 @@ def test_feature_flag_engine_cohort_bucketing_and_agentic_cx_telemetry() -> None
         compute_deterministic_flag_bucket,
     )
 
+    tmp_dir = Path(tempfile.gettempdir()) / f"ssra_flag_test_{os.getpid()}"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
     b1 = compute_deterministic_flag_bucket("FF_AUTONOMOUS_GOAL_PLANNER", "sub_taxpayer_amina_01")
     b2 = compute_deterministic_flag_bucket("FF_AUTONOMOUS_GOAL_PLANNER", "sub_taxpayer_amina_01")
     assert b1 == b2
     assert 0 <= b1 < 100
 
-    eng = FeatureFlagEngine()
+    with pytest.raises(FileNotFoundError):
+        FeatureFlagEngine(config_path=tmp_dir / "missing.yaml")
+
+    bad_yaml = tmp_dir / "bad.yaml"
+    bad_yaml.write_text("flags: [1, 2, 3]\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        FeatureFlagEngine(config_path=bad_yaml)
+
+    bad_entry_yaml = tmp_dir / "bad_entry.yaml"
+    bad_entry_yaml.write_text("flags:\n  FF_BAD: 'not_a_dict'\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        FeatureFlagEngine(config_path=bad_entry_yaml)
+
+    eng = FeatureFlagEngine(shared_override_path=tmp_dir / "overrides.json")
     assert len(eng.list_rules()) >= 6
-    full_eval = eng.evaluate(
-        "FF_AUTONOMOUS_GOAL_PLANNER",
-        subject_ref="sub_taxpayer_amina_01",
-        channel="web",
-        locale="pga",
-    )
-    assert full_eval.active is True
-    assert full_eval.reason == "FULL_ROLLOUT"
+    try:
+        full_eval = eng.evaluate(
+            "FF_AUTONOMOUS_GOAL_PLANNER",
+            subject_ref="sub_taxpayer_amina_01",
+            channel="web",
+            locale="pga",
+        )
+        assert full_eval.active is True
+        assert full_eval.reason == "FULL_ROLLOUT"
 
-    eng.set_flag_override("FF_AUTONOMOUS_GOAL_PLANNER", enabled=False, rollout_pct=0)
-    disabled_eval = eng.evaluate("FF_AUTONOMOUS_GOAL_PLANNER", subject_ref="sub_taxpayer_amina_01")
-    assert disabled_eval.active is False
-    assert disabled_eval.reason == "FLAG_DISABLED"
+        eng.set_flag_override("FF_AUTONOMOUS_GOAL_PLANNER", enabled=False, rollout_pct=0)
+        disabled_eval = eng.evaluate(
+            "FF_AUTONOMOUS_GOAL_PLANNER", subject_ref="sub_taxpayer_amina_01"
+        )
+        assert disabled_eval.active is False
+        assert disabled_eval.reason == "FLAG_DISABLED"
 
-    # Test unknown flag, channel exclusion, locale exclusion, and partial cohort percentage
-    assert eng.get_rule("FF_AUTONOMOUS_GOAL_PLANNER") is not None
-    assert eng.evaluate("FF_NONEXISTENT_FLAG").reason == "FLAG_NOT_REGISTERED"
-    eng.set_flag_override(
-        "FF_CUSTOM_CANARY",
-        enabled=True,
-        rollout_pct=50,
-        allowed_channels=["web"],
-        allowed_locales=["en"],
-    )
-    assert (
-        eng.evaluate("FF_CUSTOM_CANARY", channel="ussd", locale="en").reason
-        == "CHANNEL_EXCLUDED:ussd"
-    )
-    assert (
-        eng.evaluate("FF_CUSTOM_CANARY", channel="web", locale="ar").reason == "LOCALE_EXCLUDED:ar"
-    )
-    canary_res = eng.evaluate(
-        "FF_CUSTOM_CANARY",
-        subject_ref="sub_taxpayer_amina_01",
-        channel="web",
-        locale="en",
-    )
-    assert canary_res.reason in ("COHORT_INCLUDED", "COHORT_BUCKET_OUTSIDE_PCT")
-
-    # Restore 100% default
-    eng.set_flag_override("FF_AUTONOMOUS_GOAL_PLANNER", enabled=True, rollout_pct=100)
+        # Test unknown flag, channel exclusion, locale exclusion, and partial cohort percentage
+        assert eng.get_rule("FF_AUTONOMOUS_GOAL_PLANNER") is not None
+        assert eng.evaluate("FF_NONEXISTENT_FLAG").reason == "FLAG_NOT_REGISTERED"
+        eng.set_flag_override(
+            "FF_CUSTOM_CANARY",
+            enabled=True,
+            rollout_pct=50,
+            allowed_channels=["web"],
+            allowed_locales=["en"],
+        )
+        assert (
+            eng.evaluate("FF_CUSTOM_CANARY", channel="ussd", locale="en").reason
+            == "CHANNEL_EXCLUDED:ussd"
+        )
+        assert (
+            eng.evaluate("FF_CUSTOM_CANARY", channel="web", locale="ar").reason
+            == "LOCALE_EXCLUDED:ar"
+        )
+        canary_res = eng.evaluate(
+            "FF_CUSTOM_CANARY",
+            subject_ref="sub_taxpayer_amina_01",
+            channel="web",
+            locale="en",
+        )
+        assert canary_res.reason in ("COHORT_INCLUDED", "COHORT_BUCKET_OUTSIDE_PCT")
+    finally:
+        eng.reset_flag_override()
 
     cx_span = build_agentic_cx_span_attributes(
         goal_id="goal_get_balance",

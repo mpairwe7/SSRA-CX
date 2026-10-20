@@ -1,4 +1,4 @@
-"""Application layer for analytics_api bounded context (Phase 4 Insights, Feedback & Drift Monitors)."""
+"""Application layer for analytics_api bounded context (Phase 4 Insights, Feedback, Drift Monitors & Synthetic CX Scorecard)."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ _feedback_store: list[UserFeedbackItem] = []
 
 
 def get_funnel_summary_use_case() -> FunnelSummary:
+    """Return the quality-adjusted containment and zero-leakage funnel summary."""
     return FunnelSummary(
         quality_adjusted_containment_rate=0.96,
         zero_fabricated_figures=True,
@@ -24,6 +25,7 @@ def get_funnel_summary_use_case() -> FunnelSummary:
 
 
 def get_regional_language_insights_use_case() -> list[RegionalLanguageInsight]:
+    """Return synthetic regional and language insights across SSRA offices."""
     return [
         RegionalLanguageInsight(
             locale="en",
@@ -55,6 +57,7 @@ def get_regional_language_insights_use_case() -> list[RegionalLanguageInsight]:
 def record_user_feedback_use_case(
     *, conversation_id: str, csat: int, reason: str, locale: str
 ) -> UserFeedbackItem:
+    """Record a taxpayer CSAT feedback submission."""
     item = UserFeedbackItem(
         feedback_id=new_id("fbk"),
         conversation_id=conversation_id,
@@ -72,6 +75,7 @@ def evaluate_online_drift_monitors_use_case(
     abstention_rate_24h: float = 0.08,
     guardrail_trigger_rate_24h: float = 0.01,
 ) -> OnlineDriftMonitorSnapshot:
+    """Evaluate 24-hour online drift monitors against SSRA alerting thresholds."""
     alert = (
         intent_mix_kl_divergence > 0.15
         or abstention_rate_24h > 0.25
@@ -87,7 +91,7 @@ def evaluate_online_drift_monitors_use_case(
 
 
 def get_agentic_cx_scorecard_use_case() -> AgenticCxScorecard:
-    """Compute the October 2026 SSRA Agentic CX & Human-AI Workforce Scorecard."""
+    """Return the synthetic baseline October 2026 SSRA Agentic CX Scorecard (`OQ-013`)."""
     return AgenticCxScorecard(
         quality_adjusted_autonomous_resolution_rate=0.82,
         cross_session_goal_completion_rate=0.71,
@@ -97,4 +101,6 @@ def get_agentic_cx_scorecard_use_case() -> AgenticCxScorecard:
         officer_high_eq_hours_saved_30d=412.5,
         vernacular_parity_gap_pct=0.0,
         zero_unverified_numeric_claims=True,
+        is_synthetic_baseline=True,
+        source_note="SYNTHETIC_PHASE4_BASELINE_OQ013",
     )

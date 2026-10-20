@@ -116,12 +116,12 @@ def evaluate_language_state_transition(
         for w in ("tin", "tcc", "paye", "tax", "balance", "return", "etax", "ssra", "nra")
     )
     if has_en_tax_word and detected_locale != LocaleCode.EN and previous_locale == LocaleCode.EN:
-        return detected_locale, "CODE_SWITCHING", detected_locale
+        return previous_locale, "CODE_SWITCHING", detected_locale
 
     if previous_candidate == detected_locale:
         return detected_locale, "LOCKED", None
 
-    return detected_locale, "CANDIDATE_SHIFT", detected_locale
+    return previous_locale, "CANDIDATE_SHIFT", detected_locale
 
 
 def build_english_router_envelope(

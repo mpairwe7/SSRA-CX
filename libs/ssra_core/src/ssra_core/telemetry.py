@@ -44,6 +44,7 @@ class McpSpanAttributes:
     traceparent: str
 
     def to_otel_dict(self) -> dict[str, str]:
+        """Serialize MCP span attributes to an OpenTelemetry attribute dictionary."""
         return {
             "mcp.method.name": self.mcp_method_name,
             "mcp.protocol.version": self.mcp_protocol_version,
@@ -107,6 +108,7 @@ class GenAISpanAttributes:
     gen_ai_response_ttft_ms: float = 0.0
 
     def to_otel_dict(self) -> dict[str, Any]:
+        """Serialize GenAI span attributes to an OpenTelemetry attribute dictionary."""
         return {
             "gen_ai.system": self.gen_ai_system,
             "gen_ai.request.model": self.gen_ai_request_model,
@@ -137,6 +139,7 @@ def build_genai_span_attributes(
     ttft_ms: float = 0.0,
     sms_segments: int = 0,
 ) -> GenAISpanAttributes:
+    """Build OpenTelemetry GenAI span attributes with sovereign GPU prefix-cache cost attribution."""
     intent_val = intent.value if isinstance(intent, IntentName) else str(intent)
     bounded_cached = max(0, min(input_tokens, cached_input_tokens))
     uncached_input = max(0, input_tokens - bounded_cached)
@@ -246,6 +249,7 @@ class AgenticCxSpanAttributes:
     handoff_clean: bool
 
     def to_otel_dict(self) -> dict[str, Any]:
+        """Serialize Agentic CX and EQ span attributes to an OpenTelemetry attribute dictionary."""
         return {
             "ssra.cx.goal.id": self.goal_id,
             "ssra.cx.goal.step_count": self.goal_step_count,
@@ -279,6 +283,7 @@ def build_agentic_cx_span_attributes(
     locale: LocaleCode = LocaleCode.EN,
     handoff_clean: bool = True,
 ) -> AgenticCxSpanAttributes:
+    """Construct validated OpenTelemetry Agentic CX and EQ span attributes."""
     return AgenticCxSpanAttributes(
         goal_id=goal_id,
         goal_step_count=max(1, goal_step_count),

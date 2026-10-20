@@ -3,7 +3,7 @@
 Verifies after specialist subgraph & MCP tool execution that:
 1. Every executed `ToolArtifact` carries deterministic provenance (`record_id`, `as_of`, or `snapshot_version`).
 2. Multi-step plan post-conditions hold and any domain blockers (e.g., overdue balance blocking TCC issuance,
-   or overdue filing status) are explicitly surfaced for grounded composition.
+   overdue filing status, or secondary step failures) are explicitly surfaced for grounded composition.
 """
 
 from __future__ import annotations
@@ -17,6 +17,8 @@ from ssra_runtime.schemas import ToolArtifact
 
 
 class OutcomeVerificationResult(BaseModel):
+    """Structured result of Stage 9 post-tool outcome verification."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     verified: bool
@@ -28,6 +30,7 @@ class OutcomeVerificationResult(BaseModel):
 
 
 def _parse_decimal_safe(val: object) -> Decimal:
+    """Parse a string/number into a `Decimal` safely, returning `Decimal('0')` on malformed values."""
     try:
         return Decimal(str(val).replace(",", "").strip())
     except (InvalidOperation, ValueError):
@@ -37,21 +40,23 @@ def _parse_decimal_safe(val: object) -> Decimal:
 def verify_plan_outcomes(
     plan: Plan | None,
     artifacts: list[ToolArtifact],
+    *,
+    failed_steps: list[str] | None = None,
 ) -> OutcomeVerificationResult:
     """Verify tool artifact provenance and cross-step statutory post-conditions."""
     planned_count = len(plan.steps) if plan is not None else 1
+    blockers: list[str] = [f"STEP_FAILED:{s}" for s in (failed_steps or [])]
     if not artifacts:
         return OutcomeVerificationResult(
-            verified=True,
+            verified=(len(blockers) == 0),
             planned_step_count=planned_count,
             completed_artifact_count=0,
             provenance_complete=True,
-            blocker_codes=[],
+            blocker_codes=blockers,
             remediation_notes=[],
         )
 
     provenance_ok = True
-    blockers: list[str] = []
     notes: list[str] = []
 
     has_tcc_step = any(a.tool == "get_tcc_status" for a in artifacts) or (
@@ -89,7 +94,7 @@ def verify_plan_outcomes(
                 )
 
     return OutcomeVerificationResult(
-        verified=provenance_ok,
+        verified=provenance_ok and not failed_steps,
         planned_step_count=planned_count,
         completed_artifact_count=len(artifacts),
         provenance_complete=provenance_ok,

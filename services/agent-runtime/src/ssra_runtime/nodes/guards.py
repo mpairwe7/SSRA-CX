@@ -31,6 +31,7 @@ _WORD_SPLIT_RE = re.compile(r"[^\s,.;:!?()\"']+")
 
 
 def _has_marker_hit(lower_text: str, words: set[str], markers: tuple[str, ...]) -> bool:
+    """Return True if any single-word or multi-word language marker matches the input text."""
     for m in markers:
         if " " in m:
             if m in lower_text:
@@ -41,6 +42,7 @@ def _has_marker_hit(lower_text: str, words: set[str], markers: tuple[str, ...]) 
 
 
 def detect_language(text: str, default_locale: LocaleCode = LocaleCode.EN) -> LocaleCode:
+    """Detect the primary South Sudan BCP-47 language (`en`, `pga`, `ar`, `din`, `nus`, `bfa`, `zne`, `shk`)."""
     # 1. Detect Arabic script (U+0600..U+06FF)
     if any("\u0600" <= ch <= "\u06ff" for ch in text):
         return LocaleCode.AR
@@ -80,6 +82,7 @@ def detect_language(text: str, default_locale: LocaleCode = LocaleCode.EN) -> Lo
 
 
 def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
+    """Execute Stage 3 input guards: language detection, EQ scoring, PII redaction, and prompt-injection blocking."""
     raw = state.get("raw_user_text", "")
     default_loc = state.get("locale", LocaleCode.EN)
     detected_loc = detect_language(raw, default_loc)
@@ -87,15 +90,17 @@ def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
     channel_str = str(state.get("channel", "web"))
 
     lang_state = "LOCKED"
+    next_candidate: LocaleCode | None = state.get("language_candidate")
     if evaluate_flag(
         "FF_ENGLISH_ROUTER_CANONICAL",
         subject_ref=subject_id,
         channel=channel_str,
         locale=detected_loc.value,
     ):
-        detected_loc, lang_state, _ = evaluate_language_state_transition(
+        _eff_loc, lang_state, next_candidate = evaluate_language_state_transition(
             previous_locale=default_loc,
             detected_locale=detected_loc,
+            previous_candidate=state.get("language_candidate"),
             raw_text=raw,
         )
 
@@ -131,6 +136,7 @@ def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
         return {
             "locale": detected_loc,
             "language_state": lang_state,
+            "language_candidate": next_candidate,
             "affective_state": affective,
             "tier": RiskTier.T0,
             "redacted_user_text": redaction.redacted_text,
@@ -159,6 +165,7 @@ def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
     return {
         "locale": detected_loc,
         "language_state": lang_state,
+        "language_candidate": next_candidate,
         "affective_state": affective,
         "redacted_user_text": redaction.redacted_text,
         "safety_flags": sorted(set(flags)),
@@ -166,6 +173,7 @@ def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
 
 
 def output_guard_node(state: ConversationGraphState) -> dict[str, Any]:
+    """Execute Stage 11 output guardrails: grounding, numeric provenance, PII leak prevention, and political neutrality."""
     answer = state.get("answer")
     if answer is None:
         return {}

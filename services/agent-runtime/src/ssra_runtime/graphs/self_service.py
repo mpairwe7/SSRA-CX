@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ssra_core import AuthLevel, IntentName
+from ssra_core import AuthLevel, IntentName, SSRAError
 
 from ssra_runtime.nodes.verifier import verify_plan_outcomes
 from ssra_runtime.schemas import PendingConfirmation, ToolArtifact
@@ -51,18 +51,24 @@ def execute_self_service_subgraph(
                 IntentName.GET_TCC_STATUS: "tcc.get_tcc_status",
             }
             t1_read_steps = [default_map[intent_name]]
-        for step in t1_read_steps:
+        failed_steps: list[str] = []
+        for idx, step in enumerate(t1_read_steps):
             srv, tl = step.split(".", 1)
-            art = gateway.invoke_tool(
-                server_name=srv,
-                tool_name=tl,
-                arguments={},
-                auth_level=auth_level,
-                subject_ref=subject_ref,
-                budget=budget,
-            )
-            artifacts.append(art)
-        verification = verify_plan_outcomes(plan, artifacts)
+            try:
+                art = gateway.invoke_tool(
+                    server_name=srv,
+                    tool_name=tl,
+                    arguments={},
+                    auth_level=auth_level,
+                    subject_ref=subject_ref,
+                    budget=budget,
+                )
+                artifacts.append(art)
+            except SSRAError:
+                if idx == 0:
+                    raise
+                failed_steps.append(step)
+        verification = verify_plan_outcomes(plan, artifacts, failed_steps=failed_steps)
         return {
             "artifacts": artifacts,
             "budget": budget,

@@ -21,6 +21,7 @@ _RISK_TIERS_FILE = Path(__file__).resolve().parents[5] / "ai" / "policies" / "ri
 
 
 def _load_intent_tiers() -> dict[str, RiskTier]:
+    """Load the deterministic intent-to-RiskTier mapping from `ai/policies/risk-tiers.yaml`."""
     raw = yaml.safe_load(_RISK_TIERS_FILE.read_text(encoding="utf-8"))
     mapping = raw.get("intent_tiers", {})
     return {str(k): RiskTier(str(v)) for k, v in mapping.items()}
@@ -236,6 +237,7 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
 
 
 def understand_node(state: ConversationGraphState) -> dict[str, Any]:
+    """Execute Stage 4 & 5: English-Router normalization, intent classification, tier lookup, and bounded goal planning."""
     # Microsoft agent-framework#8132: Preserve restored intent/tier on AG-UI confirmation resume turns
     existing_intent = state.get("intent")
     if (

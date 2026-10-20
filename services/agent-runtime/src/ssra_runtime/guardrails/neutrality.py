@@ -28,6 +28,7 @@ class NeutralityResult:
 
 
 def validate_neutrality_and_promises(text: str) -> NeutralityResult:
+    """Validate that assistant output contains no prohibited T4 promises, liability admissions, or political commentary."""
     if _PROHIBITED_PROMISE_RE.search(text):
         return NeutralityResult(
             passed=False,

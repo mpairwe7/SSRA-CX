@@ -18,6 +18,9 @@ from typing import Literal
 from ssra_core import ChannelName, IntentName, LocaleCode, evaluate_flag
 from ssra_security import redact_pii
 
+# Official SSRA e-Tax portal URL (per knowledge/sources.yaml; see OQ-011 for final WhatsApp/SMS sender sign-off)
+OFFICIAL_ETAX_PORTAL_URL: str = "https://etax.nra.gov.ss/"
+
 APPROVED_CONTINUATION_TEMPLATES: frozenset[str] = frozenset(
     {
         "TMPL_SSRA_GOAL_CONTINUATION_2026",
@@ -29,6 +32,8 @@ APPROVED_CONTINUATION_TEMPLATES: frozenset[str] = frozenset(
 
 @dataclass(frozen=True)
 class GoalContinuationCandidate:
+    """Candidate long-horizon goal evaluated for post-interaction continuation."""
+
     goal_id: str
     subject_ref: str
     goal_type: IntentName
@@ -51,6 +56,8 @@ class GoalContinuationCandidate:
 
 @dataclass(frozen=True)
 class GoalContinuationDispatchSummary:
+    """Summary of evaluated and dispatched post-interaction goal continuations."""
+
     evaluated_count: int
     resumed_count: int
     skipped_no_consent: int
@@ -68,18 +75,18 @@ def build_continuation_message(
         return (
             f"تحديث رسمي من هيئة الإيرادات (SSRA): {safe_note} "
             f"يمكنك متابعة الخطوة {candidate.current_step_index} من {candidate.total_steps} عبر البوابة الرسمية "
-            "https://etax.nra.gov.ss/ فقط. لا تدفع نقداً لأي شخص."
+            f"{OFFICIAL_ETAX_PORTAL_URL} فقط. لا تدفع نقداً لأي شخص."
         )
     if candidate.locale == LocaleCode.PGA:
         return (
             f"Khabar rasmi min SSRA: {safe_note} "
             f"Tagdar takamil khatwa {candidate.current_step_index} min {candidate.total_steps} fi "
-            "https://etax.nra.gov.ss/ bas. Ma tadfa gurush cash li ayi zol."
+            f"{OFFICIAL_ETAX_PORTAL_URL} bas. Ma tadfa gurush cash li ayi zol."
         )
     return (
         f"Official SSRA Assist Update ({candidate.goal_type.value}): {safe_note} "
         f"You can now resume step {candidate.current_step_index} of {candidate.total_steps} on "
-        "https://etax.nra.gov.ss/. Never pay cash to an individual collector."
+        f"{OFFICIAL_ETAX_PORTAL_URL}. Never pay cash to an individual collector."
     )
 
 

@@ -15,6 +15,7 @@ from ssra_workers import (
 
 
 def test_legal_structure_chunking_preserves_part_and_section_anchors() -> None:
+    """Verify legal document chunking preserves PART and SECTION anchors and SHA-256 checksums."""
     sample_act = """
     PART IV: PERSONAL INCOME TAX (PAYE)
     Section 18: Monthly Withholding and Remittance
@@ -30,6 +31,7 @@ def test_legal_structure_chunking_preserves_part_and_section_anchors() -> None:
 
 
 def test_knowledge_release_gate_and_sla_escalation() -> None:
+    """Verify knowledge release gate rollback, SLA breach escalation, and goal continuation."""
     failed_job = KnowledgeReleaseJob(
         snapshot_version="2026.11.0",
         approved_by="SSRA Legal",
@@ -192,24 +194,25 @@ def test_knowledge_release_gate_and_sla_escalation() -> None:
 
     from ssra_core import get_default_feature_flag_engine
 
-    get_default_feature_flag_engine().set_flag_override(
+    engine = get_default_feature_flag_engine()
+    engine.set_flag_override(
         "FF_TEMPORAL_POST_INTERACTION_CONTINUATION", enabled=False, rollout_pct=0
     )
-    disabled_cont = run_post_interaction_goal_continuation(
-        [
-            GoalContinuationCandidate(
-                goal_id="goal_tcc_08",
-                subject_ref="sub_opted_in",
-                goal_type=IntentName.GUIDED_TCC,
-                current_step_index=2,
-                total_steps=2,
-                pending_dependency="ETAX_TCC_APPROVAL",
-                dependency_resolved=True,
-                opt_in_consent_active=True,
-            )
-        ]
-    )
-    assert disabled_cont.skipped_unapproved_template_or_flag == 1
-    get_default_feature_flag_engine().set_flag_override(
-        "FF_TEMPORAL_POST_INTERACTION_CONTINUATION", enabled=True, rollout_pct=100
-    )
+    try:
+        disabled_cont = run_post_interaction_goal_continuation(
+            [
+                GoalContinuationCandidate(
+                    goal_id="goal_tcc_08",
+                    subject_ref="sub_opted_in",
+                    goal_type=IntentName.GUIDED_TCC,
+                    current_step_index=2,
+                    total_steps=2,
+                    pending_dependency="ETAX_TCC_APPROVAL",
+                    dependency_resolved=True,
+                    opt_in_consent_active=True,
+                )
+            ]
+        )
+        assert disabled_cont.skipped_unapproved_template_or_flag == 1
+    finally:
+        engine.reset_flag_override("FF_TEMPORAL_POST_INTERACTION_CONTINUATION")

@@ -462,12 +462,22 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     assert "auditor" in aud_rls.to_set_local_sql()[1]
 
     # 7. Admin Feature-Flags API, Bidirectional Officer Hand-Back, and 2026 Agentic CX Scorecard
-    r_flags = client.get("/v1/admin/feature-flags")
+    r_flags_unauth = client.get(
+        "/v1/admin/feature-flags",
+        headers={"X-SSRA-Staff-Id": "unverified_caller"},
+    )
+    assert r_flags_unauth.status_code == 403
+
+    r_flags = client.get(
+        "/v1/admin/feature-flags",
+        headers={"X-SSRA-Staff-Id": "secops_admin"},
+    )
     assert r_flags.status_code == 200
     assert len(r_flags.json()) >= 6
 
     r_flag_upd = client.post(
         "/v1/admin/feature-flags",
+        headers={"X-SSRA-Staff-Id": "secops_admin"},
         json={
             "flag_name": "FF_AUTONOMOUS_GOAL_PLANNER",
             "enabled": True,
@@ -477,20 +487,78 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     assert r_flag_upd.status_code == 200
     assert r_flag_upd.json()["rollout_pct"] == 100
 
+    from ssra_core import get_default_feature_flag_engine
+
+    get_default_feature_flag_engine().reset_flag_override("FF_AUTONOMOUS_GOAL_PLANNER")
+
     r_scorecard = client.get("/v1/analytics/cx-scorecard")
     assert r_scorecard.status_code == 200
     assert r_scorecard.json()["zero_unverified_numeric_claims"] is True
+    assert r_scorecard.json()["is_synthetic_baseline"] is True
+    assert r_scorecard.json()["source_note"] == "SYNTHETIC_PHASE4_BASELINE_OQ013"
     assert r_scorecard.json()["quality_adjusted_autonomous_resolution_rate"] >= 0.78
 
     conv_id = r_post1.json()["id"]
+    # Body-bearing handback before takeover is rejected with 403
+    r_hb_before_takeover = client.post(
+        f"/v1/conversations/{conv_id}/handback",
+        json={
+            "officer_id": "stf_01",
+            "resolution_summary": "Premature handback attempt",
+            "approved_next_intent": "guided_filing_and_payment",
+            "return_to_ai_step": 2,
+        },
+    )
+    assert r_hb_before_takeover.status_code == 403
+
+    # Takeover by stf_01 first
+    r_to = client.post(
+        f"/v1/conversations/{conv_id}/takeover",
+        json={"staff_id": "stf_01"},
+    )
+    assert r_to.status_code == 200
+    assert r_to.json()["status"] == "STAFF_TAKEOVER"
+
+    # Mismatched officer_id on handback is rejected with 403
+    r_hb_wrong_officer = client.post(
+        f"/v1/conversations/{conv_id}/handback",
+        json={
+            "officer_id": "stf_other",
+            "resolution_summary": "Wrong officer attempt",
+            "approved_next_intent": "guided_filing_and_payment",
+            "return_to_ai_step": 2,
+        },
+    )
+    assert r_hb_wrong_officer.status_code == 403
+
+    # Invalid approved_next_intent on handback is rejected with 422
+    r_hb_bad_intent = client.post(
+        f"/v1/conversations/{conv_id}/handback",
+        json={
+            "officer_id": "stf_01",
+            "resolution_summary": "Bad intent attempt",
+            "approved_next_intent": "not_a_valid_intent",
+            "return_to_ai_step": 2,
+        },
+    )
+    assert r_hb_bad_intent.status_code == 422
+
     r_hb = client.post(
         f"/v1/conversations/{conv_id}/handback",
         json={
             "officer_id": "stf_01",
-            "resolution_summary": "Verified e-Tax assessment slip; ready for guided payment step.",
+            "resolution_summary": "Verified e-Tax assessment slip for +211912345678; ready for guided payment step.",
             "approved_next_intent": "guided_filing_and_payment",
             "return_to_ai_step": 2,
         },
     )
     assert r_hb.status_code == 200
-    assert r_hb.json()["status"] == "HANDED_BACK_TO_AI"
+    hb_json = r_hb.json()
+    assert hb_json["status"] == "HANDED_BACK_TO_AI"
+    assert hb_json["officer_resolution"] is not None
+    assert hb_json["officer_resolution"]["return_to_ai_step"] == 2
+    assert "+211912345678" not in hb_json["officer_resolution"]["resolution_summary"]
+    assert any(
+        ev.type == "ssra.conversation.handback.v1" and ev.data.get("has_officer_resolution") is True
+        for ev in get_outbox_store().staged_events
+    )
