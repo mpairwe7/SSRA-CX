@@ -211,7 +211,7 @@ def update_admin_feature_flag(
 ) -> FeatureFlagRule:
     """Update a feature-flag cohort rollout percentage and append a WORM audit event + outbox CloudEvent."""
     verified_actor = _verify_admin_or_secops_actor(actor)
-    if flag_name in PROTECTED_SECURITY_FLAGS and not enabled:
+    if flag_name in PROTECTED_SECURITY_FLAGS and (not enabled or rollout_pct < 100):
         raise SSRAError(
             McpErrorCode.NOT_AUTHORIZED,
             f"Protected security control flag '{flag_name}' cannot be disabled via runtime override",

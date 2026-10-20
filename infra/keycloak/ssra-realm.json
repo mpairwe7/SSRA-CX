@@ -91,12 +91,13 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
-      "frontchannelLogout": true,
+      "frontchannelLogout": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "token.exchange.standard.enabled": "true",
         "oauth2.dpop.bound.access.tokens": "true",
         "backchannel.logout.session.required": "true",
+        "backchannel.logout.url": "https://assist.ssra.gov.ss/api/auth/backchannel-logout",
         "use.refresh.tokens": "true",
         "client.offline.session.idle.timeout": "0"
       }
@@ -109,7 +110,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
-      "frontchannelLogout": true,
+      "frontchannelLogout": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "default.acr.values": "urn:ssra:acr:passkey",
@@ -117,7 +118,8 @@
         "token.exchange.standard.enabled": "true",
         "oauth2.dpop.bound.access.tokens": "true",
         "require.pushed.authorization.requests": "true",
-        "backchannel.logout.session.required": "true"
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.url": "https://console.ssra.gov.ss/api/auth/backchannel-logout"
       }
     },
     {

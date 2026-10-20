@@ -82,15 +82,30 @@ async def stream_agui_events(
         {"messageId": msg_id, "role": "assistant"},
     )
 
-    for seg in turn.answer.segments:
+    per_seg_scrubbed = [scrub_agui_stream_dlp(seg.text) for seg in turn.answer.segments]
+    joined_scrubbed = scrub_agui_stream_dlp("".join(seg.text for seg in turn.answer.segments))
+    if len(turn.answer.segments) > 1 and joined_scrubbed != "".join(per_seg_scrubbed):
+        merged_citations = list(
+            dict.fromkeys(cid for seg in turn.answer.segments for cid in seg.citation_ids)
+        )
         _push(
             "TEXT_MESSAGE_CONTENT",
             {
                 "messageId": msg_id,
-                "delta": scrub_agui_stream_dlp(seg.text),
-                "citationIds": seg.citation_ids,
+                "delta": joined_scrubbed,
+                "citationIds": merged_citations,
             },
         )
+    else:
+        for seg, clean_delta in zip(turn.answer.segments, per_seg_scrubbed, strict=True):
+            _push(
+                "TEXT_MESSAGE_CONTENT",
+                {
+                    "messageId": msg_id,
+                    "delta": clean_delta,
+                    "citationIds": seg.citation_ids,
+                },
+            )
 
     _push(
         "TEXT_MESSAGE_END",

@@ -129,6 +129,11 @@ services:
     build:
       context: ../..
       dockerfile: infra/keycloak/Dockerfile
+    entrypoint:
+      - "/bin/bash"
+      - "-c"
+      - "export KC_DB_PASSWORD=\"$(cat /run/secrets/postgres_password)\" KC_BOOTSTRAP_ADMIN_PASSWORD=\"$(cat /run/secrets/keycloak_admin_password)\" && exec /opt/keycloak/bin/kc.sh \"$$@\""
+      - "--"
     command:
       - "start"
       - "--optimized"
@@ -145,8 +150,9 @@ services:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/ssra_cx
       KC_DB_USERNAME: ssra
-      KC_DB_PASSWORD_FILE: /run/secrets/postgres_password
-      KC_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/keycloak_admin_password
+      KC_DB_PASSWORD: ""
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ""
+      KEYCLOAK_ADMIN_PASSWORD: ""
       KC_HOSTNAME: ${KC_HOSTNAME:-https://sso.ssra.gov.ss}
       KC_HOSTNAME_STRICT: "true"
       KC_PROXY_HEADERS: xforwarded

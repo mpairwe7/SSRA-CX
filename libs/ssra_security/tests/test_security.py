@@ -462,10 +462,12 @@ def test_keycloak_26_realm_export_and_docker_invariants() -> None:
     bcl_ok = kc.validate_backchannel_logout_token(
         BackchannelLogoutClaims(
             jti="jti_bcl_01",
+            iss="https://sso.ssra.gov.ss/realms/ssra",
             aud="ssra-web-bff",
             sid="sid_session_01",
             events={"http://schemas.openid.net/event/backchannel-logout": {}},
             iat=now,
+            exp=now + timedelta(seconds=300),
         ),
         expected_audience="ssra-web-bff",
         now=now,
@@ -475,10 +477,12 @@ def test_keycloak_26_realm_export_and_docker_invariants() -> None:
         kc.validate_backchannel_logout_token(
             BackchannelLogoutClaims(
                 jti="jti_bcl_02",
+                iss="https://sso.ssra.gov.ss/realms/ssra",
                 aud="ssra-web-bff",
                 sid="sid_session_01",
                 events={"http://schemas.openid.net/event/backchannel-logout": {}},
                 iat=now,
+                exp=now + timedelta(seconds=300),
                 nonce="forbidden_nonce",
             ),
             expected_audience="ssra-web-bff",
@@ -526,12 +530,15 @@ def test_sovereign_readiness_and_stateless_hmac_confirmation_tokens() -> None:
     assert is_allowed_sovereign_host("localhost") is True
     assert is_allowed_sovereign_host("127.0.0.1") is True
     assert is_allowed_sovereign_host("10.24.0.5") is True
+    assert is_allowed_sovereign_host("::ffff:10.24.0.5") is True
+    assert is_allowed_sovereign_host("::ffff:169.254.169.254") is False
     assert is_allowed_sovereign_host("fd00::1") is True
     assert is_allowed_sovereign_host("ssra-vllm-sunflower") is True
     assert is_allowed_sovereign_host("api.openai.com") is False
     assert is_allowed_sovereign_host("") is False
 
-    # 1. Sovereign Mode checks
+    # 1. Sovereign Mode checks (including unset HF_HUB_OFFLINE failing closed)
+    assert len(evaluate_sovereign_and_production_readiness({"SSRA_SOVEREIGN_MODE": "true"})) == 1
     sov_ok = evaluate_sovereign_and_production_readiness(
         {
             "SSRA_SOVEREIGN_MODE": "true",

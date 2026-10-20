@@ -34,6 +34,7 @@ const INTERNAL_RUNTIME_URL = (
 const SUPPORTED_LOCALES = new Set(["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]);
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
 const VALID_SUBJECT_REF_RE = /^sub_[A-Za-z0-9_-]{3,64}$/;
+const VALID_OPAQUE_HEADER_RE = /^[\x21-\x7e]{1,128}$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "DELETE", "OPTIONS"]);
 
 function sanitizeHeaderToken(raw) {
@@ -1508,14 +1509,21 @@ const server = http.createServer(async (req, res) => {
   let pathname = "/";
   try {
     const rawTarget = req.url ?? "/";
+    const lowerTarget = rawTarget.toLowerCase();
     if (
       !rawTarget.startsWith("/") ||
       rawTarget.includes("..") ||
-      rawTarget.toLowerCase().includes("%2e")
+      lowerTarget.includes("%2e") ||
+      lowerTarget.includes("%2f") ||
+      lowerTarget.includes("%5c")
     ) {
       throw new Error("INVALID_TARGET");
     }
-    pathname = new URL(rawTarget, "http://127.0.0.1").pathname;
+    const decodedPath = decodeURIComponent(new URL(rawTarget, "http://127.0.0.1").pathname);
+    pathname = path.posix.normalize(decodedPath);
+    if (!pathname.startsWith("/") || pathname.includes("..")) {
+      throw new Error("INVALID_TARGET");
+    }
   } catch {
     res.writeHead(400, { "Content-Type": "application/json", ...secHeaders });
     res.end(JSON.stringify({ error: "INVALID_REQUEST_TARGET" }));
@@ -1732,7 +1740,13 @@ const server = http.createServer(async (req, res) => {
       }
       for (const hName of ["last-event-id", "idempotency-key"]) {
         if (req.headers[hName]) {
-          fwdHeaders[hName] = sanitizeHeaderToken(req.headers[hName]);
+          const rawVal = String(req.headers[hName]).trim();
+          if (!VALID_OPAQUE_HEADER_RE.test(rawVal)) {
+            res.writeHead(400, { "Content-Type": "application/json", ...secHeaders });
+            res.end(JSON.stringify({ error: "INVALID_HEADER_VALUE" }));
+            return;
+          }
+          fwdHeaders[hName] = rawVal;
         }
       }
       const upstream = await fetch(`${upstreamBase}${pathname}`, {

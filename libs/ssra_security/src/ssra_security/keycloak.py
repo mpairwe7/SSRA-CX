@@ -93,10 +93,17 @@ def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
                 status_code=400,
             )
     for dpop_cid in ("ssra-web-bff", "ssra-staff-console", "ssra-agentgateway"):
-        dpop_attrs = client_map[dpop_cid].get("attributes", {})
+        dpop_client = client_map[dpop_cid]
+        dpop_attrs = dpop_client.get("attributes", {})
+        is_interactive_bff = dpop_cid in ("ssra-web-bff", "ssra-staff-console")
+        bcl_url_ok = not is_interactive_bff or (
+            dpop_client.get("frontchannelLogout") is False
+            and bool(str(dpop_attrs.get("backchannel.logout.url") or "").strip())
+        )
         dpop_ok = (
             dpop_attrs.get("oauth2.dpop.bound.access.tokens") == "true"
             and dpop_attrs.get("backchannel.logout.session.required") == "true"
+            and bcl_url_ok
         )
         if not dpop_ok:
             raise SSRAError(
@@ -130,17 +137,18 @@ class DpopProofClaims(BaseModel):
 
 
 class BackchannelLogoutClaims(BaseModel):
-    """OIDC Back-Channel Logout 1.0 (§2.4) `logout+jwt` token claims."""
+    """OIDC Back-Channel Logout 1.0 (§2.4 & §2.6) `logout+jwt` token claims."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     jti: str = Field(min_length=4)
-    iss: str = "https://sso.ssra.gov.ss/realms/ssra"
+    iss: str = Field(min_length=1)
     aud: str = Field(min_length=1)
     sub: str | None = None
     sid: str | None = None
     events: dict[str, dict[str, Any]]
     iat: datetime
+    exp: datetime
     nonce: str | None = None
 
 
@@ -383,7 +391,7 @@ class KeycloakOidcSecurityService:
                 )
         self.consume_single_use_jti(
             proof.jti,
-            exp=current + timedelta(seconds=max_clock_skew_seconds),
+            exp=max(current, proof.iat) + timedelta(seconds=max_clock_skew_seconds),
             now=current,
         )
         return proof
@@ -393,15 +401,19 @@ class KeycloakOidcSecurityService:
         logout_claims: BackchannelLogoutClaims,
         *,
         expected_audience: str,
+        max_clock_skew_seconds: int = 120,
         now: datetime | None = None,
     ) -> BackchannelLogoutClaims:
-        """Validate an OIDC Back-Channel Logout 1.0 (§2.4) token and consume its `jti`."""
+        """Validate an OIDC Back-Channel Logout 1.0 (§2.4 & §2.6) token and consume its `jti` until `exp`."""
         current = now or utc_now()
+        iat_fresh = abs((current - logout_claims.iat).total_seconds()) <= max_clock_skew_seconds
         valid_bcl = (
             logout_claims.iss == self.expected_issuer
             and logout_claims.aud == expected_audience
             and logout_claims.aud in self.enabled_client_ids
             and logout_claims.nonce is None
+            and current <= logout_claims.exp
+            and iat_fresh
             and "http://schemas.openid.net/event/backchannel-logout" in logout_claims.events
             and bool(logout_claims.sid or logout_claims.sub)
         )
@@ -411,5 +423,5 @@ class KeycloakOidcSecurityService:
                 "Invalid OIDC Back-Channel Logout token claims (OIDC Back-Channel Logout 1.0 §2.4)",
                 status_code=400,
             )
-        self.consume_single_use_jti(logout_claims.jti, now=current)
+        self.consume_single_use_jti(logout_claims.jti, exp=logout_claims.exp, now=current)
         return logout_claims

@@ -20,8 +20,12 @@ from ssra_core import (
     McpErrorCode,
     SSRAError,
     ensure_w3c_traceparent,
+    get_default_feature_flag_engine,
 )
-from ssra_security import evaluate_sovereign_and_production_readiness
+from ssra_security import (
+    assert_sovereign_and_production_readiness,
+    evaluate_sovereign_and_production_readiness,
+)
 from ssra_testing import make_conversation_event
 
 from ssra_runtime.field_officer import (
@@ -156,6 +160,11 @@ async def _read_bounded_runtime_body(request: Request, max_bytes: int) -> bytes 
 
 def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAPI:
     """Create the FastAPI application for services/agent-runtime with security middleware and SSE streaming."""
+    assert_sovereign_and_production_readiness(
+        persisted_flag_overrides={
+            r.name: r.enabled for r in get_default_feature_flag_engine().list_rules()
+        }
+    )
     app = FastAPI(
         title="SSRA Assist Agent Runtime",
         version="0.1.0",

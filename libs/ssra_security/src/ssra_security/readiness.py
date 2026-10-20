@@ -87,11 +87,13 @@ def is_allowed_sovereign_host(hostname: str | None) -> bool:
         ip = ipaddress.ip_address(host)
     except ValueError:
         return "." not in host and bool(_COMPOSE_SERVICE_HOST_RE.match(host))
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
     if ip.is_loopback:
         return True
     if isinstance(ip, ipaddress.IPv4Address):
         return any(ip in net for net in _RFC1918_NETWORKS)
-    return ip.is_private and not ip.is_link_local
+    return ip in ipaddress.IPv6Network("fc00::/7")
 
 
 def _is_world_writable(path: str) -> bool:
@@ -121,7 +123,7 @@ def evaluate_sovereign_and_production_readiness(
                 errors.append(
                     f"SOVEREIGN_MODE: commercial API key environment variable {key_var} must not be set."
                 )
-        if active_env.get("HF_HUB_OFFLINE", "1").strip() != "1":
+        if not _truthy(active_env.get("HF_HUB_OFFLINE")):
             errors.append(
                 "SOVEREIGN_MODE: HF_HUB_OFFLINE must be '1' to enforce air-gapped weight loading."
             )

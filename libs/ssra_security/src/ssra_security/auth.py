@@ -137,16 +137,26 @@ def _b64url_decode(val: str) -> bytes:
 
 
 class ConfirmationTokenManager:
-    """Issues and validates single-use, short-TTL HMAC-SHA256 confirmation tokens bound to argument hashes."""
+    """Issues and validates single-use, short-TTL HMAC-SHA256 confirmation tokens bound to argument hashes.
+
+    Note: `_SHARED_CONSUMED_CONFIRMATIONS` enforces single-use replay rejection across manager instances
+    within a single OS process; multi-process deployments must back `tid` consumption with an atomic
+    Valkey `SET NX EX` or PostgreSQL `INSERT ... ON CONFLICT DO NOTHING` store.
+    """
 
     def __init__(self, ttl_seconds: int = 300, signing_secret: str | None = None) -> None:
         """Initialise the confirmation token manager with a thread lock, TTL, and HMAC signing secret."""
         self._ttl_seconds = ttl_seconds
-        raw_secret = (
-            signing_secret
-            or os.environ.get("SSRA_CONFIRM_HMAC_SECRET")
-            or "ssra-dev-confirm-hmac-key"
-        )
+        raw_secret = signing_secret or os.environ.get("SSRA_CONFIRM_HMAC_SECRET")
+        if not raw_secret:
+            runtime_env = (
+                (os.environ.get("SSRA_ENV") or os.environ.get("APP_ENV") or "development")
+                .strip()
+                .lower()
+            )
+            if runtime_env not in ("local", "dev", "development", "test"):
+                raise RuntimeError("SSRA_CONFIRM_HMAC_SECRET must be set in production")
+            raw_secret = "ssra-dev-confirm-hmac-key"  # noqa: S105
         self._secret = raw_secret.encode("utf-8")
         self._lock = threading.Lock()
         self._records: dict[str, ConfirmationRecord] = {}
@@ -196,7 +206,7 @@ class ConfirmationTokenManager:
             issued_at = datetime.fromisoformat(str(data["iat"]))
             expires_at = datetime.fromisoformat(str(data["exp"]))
             with _SHARED_CONFIRM_LOCK:
-                used_at = _SHARED_CONSUMED_CONFIRMATIONS.get(token)
+                is_consumed = token in _SHARED_CONSUMED_CONFIRMATIONS
             return ConfirmationRecord(
                 token=token,
                 conversation_id=str(data["cid"]),
@@ -205,7 +215,7 @@ class ConfirmationTokenManager:
                 idempotency_key=str(data["idem"]),
                 issued_at=issued_at,
                 expires_at=expires_at,
-                used_at=used_at,
+                used_at=issued_at if is_consumed else None,
             )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
             return None
@@ -259,9 +269,9 @@ class ConfirmationTokenManager:
             rec = self._records.get(token)
             if rec is not None:
                 with _SHARED_CONFIRM_LOCK:
-                    shared_used = _SHARED_CONSUMED_CONFIRMATIONS.get(token)
-                if shared_used is not None and rec.used_at is None:
-                    rec.used_at = shared_used
+                    is_consumed = token in _SHARED_CONSUMED_CONFIRMATIONS
+                if is_consumed and rec.used_at is None:
+                    rec.used_at = rec.issued_at
                 return rec
             stateless_rec = self._verify_stateless_signed_token(token)
             if stateless_rec is not None:
@@ -297,9 +307,9 @@ class ConfirmationTokenManager:
                     status_code=403,
                 )
             with _SHARED_CONFIRM_LOCK:
-                shared_used = _SHARED_CONSUMED_CONFIRMATIONS.get(token)
-            if rec.used_at is not None or shared_used is not None:
-                rec.used_at = rec.used_at or shared_used
+                is_consumed = token in _SHARED_CONSUMED_CONFIRMATIONS
+            if rec.used_at is not None or is_consumed:
+                rec.used_at = rec.used_at or current
                 raise SSRAError(
                     McpErrorCode.NOT_AUTHORIZED,
                     "confirmation_token has already been used (single-use policy)",
@@ -337,11 +347,11 @@ class ConfirmationTokenManager:
                 )
             rec.used_at = current
             with _SHARED_CONFIRM_LOCK:
-                if len(_SHARED_CONSUMED_CONFIRMATIONS) >= MAX_CONFIRMATION_RECORDS:
-                    _SHARED_CONSUMED_CONFIRMATIONS.pop(
-                        next(iter(_SHARED_CONSUMED_CONFIRMATIONS)), None
-                    )
-                _SHARED_CONSUMED_CONFIRMATIONS[token] = current
+                for k in [
+                    k for k, exp_at in _SHARED_CONSUMED_CONFIRMATIONS.items() if exp_at < current
+                ]:
+                    del _SHARED_CONSUMED_CONFIRMATIONS[k]
+                _SHARED_CONSUMED_CONFIRMATIONS[token] = rec.expires_at
             return rec
 
 
