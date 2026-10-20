@@ -6,6 +6,7 @@ model and knowledge versions, tool calls and outputs.'
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime
 from typing import Any
 
@@ -41,12 +42,14 @@ class ReconstructedTurnRecord(BaseModel):
 
 
 MAX_REPLAY_THREADS = 2048
+MAX_TURNS_PER_THREAD = 128
 
 
 class ConversationReplayStore:
     """Stores immutable turn reconstruction records and verifies replay determinism."""
 
     def __init__(self) -> None:
+        self._lock = threading.RLock()
         self._by_thread: dict[str, list[ReconstructedTurnRecord]] = {}
 
     def record_turn(
@@ -72,35 +75,39 @@ class ConversationReplayStore:
         safety_flags: list[str],
         audit_event_hash: str,
     ) -> ReconstructedTurnRecord:
-        if thread_id not in self._by_thread and len(self._by_thread) >= MAX_REPLAY_THREADS:
-            oldest_tid = next(iter(self._by_thread))
-            self._by_thread.pop(oldest_tid, None)
-        history = self._by_thread.setdefault(thread_id, [])
-        rec = ReconstructedTurnRecord(
-            turn_index=len(history) + 1,
-            thread_id=thread_id,
-            recorded_at=utc_now(),
-            channel=channel,
-            locale=locale,
-            auth_level=auth_level,
-            subject_ref=subject_ref,
-            redacted_input=redact_pii(redacted_input).redacted_text,
-            intent_name=intent_name,
-            risk_tier=risk_tier,
-            policy_decision=policy_decision,
-            prompt_version=prompt_version,
-            model_route=model_route,
-            knowledge_snapshot_version=knowledge_snapshot_version,
-            tool_calls=tool_calls,
-            citations=citations,
-            numbers=numbers,
-            output_text=redact_pii(output_text).redacted_text,
-            abstained=abstained,
-            safety_flags=safety_flags,
-            audit_event_hash=audit_event_hash,
-        )
-        history.append(rec)
-        return rec
+        with self._lock:
+            if thread_id not in self._by_thread and len(self._by_thread) >= MAX_REPLAY_THREADS:
+                oldest_tid = next(iter(self._by_thread))
+                self._by_thread.pop(oldest_tid, None)
+            history = self._by_thread.setdefault(thread_id, [])
+            rec = ReconstructedTurnRecord(
+                turn_index=len(history) + 1,
+                thread_id=thread_id,
+                recorded_at=utc_now(),
+                channel=channel,
+                locale=locale,
+                auth_level=auth_level,
+                subject_ref=subject_ref,
+                redacted_input=redact_pii(redacted_input).redacted_text,
+                intent_name=intent_name,
+                risk_tier=risk_tier,
+                policy_decision=policy_decision,
+                prompt_version=prompt_version,
+                model_route=model_route,
+                knowledge_snapshot_version=knowledge_snapshot_version,
+                tool_calls=tool_calls,
+                citations=citations,
+                numbers=numbers,
+                output_text=redact_pii(output_text).redacted_text,
+                abstained=abstained,
+                safety_flags=safety_flags,
+                audit_event_hash=audit_event_hash,
+            )
+            history.append(rec)
+            if len(history) > MAX_TURNS_PER_THREAD:
+                del history[:-MAX_TURNS_PER_THREAD]
+            return rec
 
     def reconstruct_thread(self, thread_id: str) -> list[ReconstructedTurnRecord]:
-        return list(self._by_thread.get(thread_id, []))
+        with self._lock:
+            return list(self._by_thread.get(thread_id, []))

@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 from fastapi import FastAPI, Header, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from ssra_core import (
     ChannelName,
     ConversationEvent,
@@ -41,6 +41,8 @@ _GSM7_BASIC_CHARS: frozenset[str] = frozenset(
 )
 _GSM7_EXTENDED_CHARS: frozenset[str] = frozenset("^{}\\[~]|€\f")
 MAX_SEEN_MESSAGE_IDS = 4096
+MAX_TRACKED_SENDERS = 4096
+_UNSAFE_THREAD_CHAR_RE = re.compile(r"[^A-Za-z0-9_:-]+")
 
 
 def compute_sms_segments(text: str) -> dict[str, int | str]:
@@ -105,18 +107,18 @@ async def _read_bounded_channel_body(request: Request, max_bytes: int) -> bytes 
 class InboundChannelWebhook(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    message_id: str
+    message_id: str = Field(min_length=1, max_length=128)
     channel: ChannelName
-    sender_ref: str
-    text: str
+    sender_ref: str = Field(min_length=1, max_length=128)
+    text: str = Field(max_length=4096)
     locale: LocaleCode = LocaleCode.EN
 
 
 class UssdSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    session_id: str
-    ussd_input: str = ""
+    session_id: str = Field(min_length=1, max_length=128)
+    ussd_input: str = Field(default="", max_length=256)
     elapsed_seconds: int = 0
     locale: str = "en"
 
@@ -132,7 +134,7 @@ def create_channel_gateway_app(
     app = FastAPI(title="SSRA Assist Channel Gateway", version="0.1.0")
     seen_message_ids: dict[str, None] = {}
     sender_counts: dict[str, int] = {}
-    opted_out_senders: set[str] = set()
+    opted_out_senders: dict[str, None] = {}
 
     @app.middleware("http")
     async def channel_security_middleware(
@@ -241,6 +243,8 @@ def create_channel_gateway_app(
                 f"Per-sender rate limit ({max_requests_per_sender}) exceeded for '{body.sender_ref}'",
                 status_code=429,
             )
+        if len(sender_counts) >= MAX_TRACKED_SENDERS and body.sender_ref not in sender_counts:
+            sender_counts.pop(next(iter(sender_counts)), None)
         sender_counts[body.sender_ref] = current_count + 1
         if len(seen_message_ids) >= MAX_SEEN_MESSAGE_IDS:
             oldest_mid = next(iter(seen_message_ids))
@@ -252,21 +256,24 @@ def create_channel_gateway_app(
             if body.channel == ChannelName.USSD
             else (160 if body.channel == ChannelName.SMS else 4096)
         )
+        safe_sender = _UNSAFE_THREAD_CHAR_RE.sub("_", body.sender_ref.strip())[:64] or "anon"
         event: ConversationEvent = make_conversation_event(
             body.text,
             locale=body.locale,
             channel=body.channel,
-            thread_id=f"thr_{body.channel.value}_{body.sender_ref}",
+            thread_id=f"thr_{body.channel.value}_{safe_sender}",
             max_len=max_len,
             rich_ui=body.channel == ChannelName.WEB,
         )
         upper_txt = body.text.strip().upper()
         consent_action: str | None = None
         if upper_txt in ("STOP", "UNSUBSCRIBE"):
-            opted_out_senders.add(body.sender_ref)
+            if len(opted_out_senders) >= MAX_TRACKED_SENDERS:
+                opted_out_senders.pop(next(iter(opted_out_senders)), None)
+            opted_out_senders[body.sender_ref] = None
             consent_action = "OPTED_OUT"
         elif upper_txt == "START":
-            opted_out_senders.discard(body.sender_ref)
+            opted_out_senders.pop(body.sender_ref, None)
             consent_action = "OPTED_IN"
 
         return {

@@ -173,6 +173,20 @@ def test_knowledge_release_gate_and_sla_escalation() -> None:
                 template_id="TMPL_SSRA_TCC_READY_2026",
             ),
             GoalContinuationCandidate(
+                goal_id="goal_tcc_06_din",
+                subject_ref="sub_din_ok",
+                goal_type=IntentName.GUIDED_TCC,
+                current_step_index=2,
+                total_steps=2,
+                pending_dependency="ETAX_TCC_APPROVAL",
+                dependency_resolved=True,
+                opt_in_consent_active=True,
+                channel=ChannelName.WHATSAPP,
+                locale=LocaleCode.DIN,
+                within_whatsapp_24h_window=False,
+                template_id="TMPL_SSRA_GOAL_CONTINUATION_2026",
+            ),
+            GoalContinuationCandidate(
                 goal_id="goal_tcc_07",
                 subject_ref="sub_sms_bad_tmpl",
                 goal_type=IntentName.GUIDED_TCC,
@@ -187,11 +201,12 @@ def test_knowledge_release_gate_and_sla_escalation() -> None:
             ),
         ]
     )
-    assert cont_summary.resumed_count == 3
+    assert cont_summary.resumed_count == 4
     assert cont_summary.skipped_no_consent == 1
     assert cont_summary.skipped_unresolved_dependency == 1
     assert cont_summary.skipped_unapproved_template_or_flag == 2
     assert "https://etax.nra.gov.ss/" in cont_summary.dispatched_messages[0]["message"]
+    assert "Wël de SSRA:" in cont_summary.dispatched_messages[3]["message"]
 
     from ssra_core import get_default_feature_flag_engine
 

@@ -21,6 +21,9 @@ APPROVED_OUTBOUND_TEMPLATES: frozenset[str] = frozenset(
         "ssra_appointment_confirmation_v1",
         "ssra_callback_scheduled_v1",
         "ssra_case_status_update_v1",
+        "TMPL_SSRA_GOAL_CONTINUATION_2026",
+        "TMPL_SSRA_TCC_READY_2026",
+        "TMPL_SSRA_DOCUMENT_REVIEWED_2026",
     }
 )
 

@@ -44,7 +44,7 @@ We adopt Option 2:
 
 ## 5. Consequences
 
-- **Positive:** Higher quality-adjusted autonomous resolution on compound flows, zero context repetition on officer handoffs, real-time empathetic de-escalation, and full backward compatibility with all existing contracts and guardrails. Verified under live Docker GPU + Local HF Cache + Qdrant + Valkey + PostgreSQL 18 (`infra/compose/docker-compose.gpu.yml`) and Ngrok HTTPS load via `tools/run_1000_complex_ngrok_benchmark.py` (`1,000/1,000` scenarios passed across `en`, `ar`/`pga`, `din` and `TTT`/`STT`/`TTS`, `40` Qdrant episodic points capped at `MAX_EPISODES_PER_SUBJECT=20` per subject at peak & `0` residual points after Right-to-Erasure, with `QA2-G1`..`QA2-G7` BOLA/IDOR, threadpool, `RLock`/FIFO eviction, and Qdrant backoff hardening).
+- **Positive:** Higher quality-adjusted autonomous resolution on compound flows, zero context repetition on officer handoffs, real-time empathetic de-escalation, and full backward compatibility with all existing contracts and guardrails. Verified under live Docker GPU + Local HF Cache + Qdrant + Valkey + PostgreSQL 18 (`infra/compose/docker-compose.gpu.yml`) and Ngrok HTTPS load via `tools/run_1000_complex_ngrok_benchmark.py` (`1,000/1,000` scenarios passed across `en`, `ar`/`pga`, `din` and `TTT`/`STT`/`TTS`, `40` Qdrant episodic points capped at `MAX_EPISODES_PER_SUBJECT=20` per subject at peak & `0` residual points after Right-to-Erasure, with `QA2-G1`..`QA2-G7` and `BE-G1`..`BE-G6` backend setup/flow hardening).
 - **Negative / Trade-offs:** Additional state fields in `ConversationGraphState` and `RuntimeTurnResponse`, governed by strict Pydantic/Zod schemas and feature flags.
 
 ## 6. Reversal Cost & Migration Path

@@ -191,6 +191,11 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
         response.headers["traceparent"] = traceparent
         for hk, hv in SECURITY_HEADERS.items():
             response.headers.setdefault(hk, hv)
+        if any(
+            request.headers.get(h)
+            for h in ("authorization", "x-ssra-subject-ref", "x-ssra-staff-id")
+        ):
+            response.headers.setdefault("Cache-Control", "private, no-store")
 
         content_type = (response.media_type or response.headers.get("content-type", "")).lower()
         if content_type.startswith("text/event-stream"):

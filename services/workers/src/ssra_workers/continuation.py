@@ -83,6 +83,12 @@ def build_continuation_message(
             f"Tagdar takamil khatwa {candidate.current_step_index} min {candidate.total_steps} fi "
             f"{OFFICIAL_ETAX_PORTAL_URL} bas. Ma tadfa gurush cash li ayi zol."
         )
+    if candidate.locale == LocaleCode.DIN:
+        return (
+            f"Wël de SSRA: {safe_note} "
+            f"Yïn lëu ba luɔi duɔ̈t në {OFFICIAL_ETAX_PORTAL_URL} ({candidate.current_step_index}/{candidate.total_steps}). "
+            "Duk wëu cuɔl në cin tënë raan."
+        )
     return (
         f"Official SSRA Assist Update ({candidate.goal_type.value}): {safe_note} "
         f"You can now resume step {candidate.current_step_index} of {candidate.total_steps} on "
