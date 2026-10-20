@@ -107,6 +107,51 @@ export function isVocalAcousticProfile(samples: Float32Array): boolean {
   return zeroCrossingRate(samples) <= 0.45;
 }
 
+const INCOMPLETE_TAIL_TOKENS = new Set([
+  "and",
+  "or",
+  "if",
+  "my",
+  "tin",
+  "number",
+  "wa",
+  "ku",
+  "tënë",
+  "و",
+  "أو",
+  "في",
+]);
+
+/**
+ * Semantic Endpointing Evaluator (October 2026 Hybrid Speech Architecture):
+ * - Extends silence window to `1100 ms` when the caller pauses mid-TIN (1..8 trailing digits) or on a trailing conjunction/clause starter (`"and"`, `"wa"`, `"ku"`, `"و"`).
+ * - Tightens silence window to `420 ms` when the utterance ends with an explicit question mark or complete query marker.
+ */
+export function evaluateSemanticEndpointing(
+  partialTranscript: string,
+  baseSilenceMs = 600,
+): {
+  readonly effectiveSilenceMs: number;
+  readonly reason: "incomplete_digit_or_clause" | "complete_question" | "default_acoustic";
+} {
+  const trimmed = partialTranscript.trim();
+  if (!trimmed) {
+    return { effectiveSilenceMs: baseSilenceMs, reason: "default_acoustic" };
+  }
+  if (/[?؟]$/.test(trimmed)) {
+    return { effectiveSilenceMs: 420, reason: "complete_question" };
+  }
+  const words = trimmed.toLowerCase().split(/\s+/);
+  const lastWord = (words[words.length - 1] ?? "").replace(/[.,;:]/g, "");
+  if (
+    /^[0-9\u0660-\u0669\u06F0-\u06F9]{1,8}$/.test(lastWord) ||
+    INCOMPLETE_TAIL_TOKENS.has(lastWord)
+  ) {
+    return { effectiveSilenceMs: 1100, reason: "incomplete_digit_or_clause" };
+  }
+  return { effectiveSilenceMs: baseSilenceMs, reason: "default_acoustic" };
+}
+
 /**
  * Adaptive room-floor End-of-Turn Detector (`endOfTurn.ts`).
  * Freezes `speechFloor` once speech begins so a steady voice never becomes its own floor.

@@ -2,8 +2,18 @@
 // Security Invariant: Caches ONLY immutable T0 public assets and FAQ shell.
 // NEVER caches /api/*, /v1/*, Authorization/session requests, no-store requests, or T1-T3 data.
 
-const CACHE_NAME = "ssra-assist-public-shell-v2026.10.1";
-const PUBLIC_SHELL_URLS = ["/en", "/pga", "/ar", "/manifest.webmanifest"];
+const CACHE_NAME = "ssra-assist-public-shell-v2026.10.2";
+const PUBLIC_SHELL_URLS = [
+  "/en",
+  "/pga",
+  "/ar",
+  "/din",
+  "/nus",
+  "/bfa",
+  "/zne",
+  "/shk",
+  "/manifest.webmanifest",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PUBLIC_SHELL_URLS)));

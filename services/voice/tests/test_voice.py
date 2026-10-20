@@ -7,6 +7,7 @@ from ssra_voice import ASR_MODEL_BY_LOCALE, is_voice_language_approved, route_vo
 
 
 def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
+    """Verify ASR/TTS model selection, WER gate, DTMF step-up, hybrid speech router, and spoken figure fidelity."""
     assert "whisper" in ASR_MODEL_BY_LOCALE[LocaleCode.EN]
     assert "omnilingual" in ASR_MODEL_BY_LOCALE[LocaleCode.PGA]
     assert "omnilingual" in ASR_MODEL_BY_LOCALE[LocaleCode.DIN]
@@ -100,3 +101,124 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     assert followup["sentence_count"] == 3
     assert followup["spoken_text"].startswith("Estimate only.")
     assert len(followup["sms_continuation_text"]) <= 160
+
+    # Hybrid Speech Router, Localized Tool-Wait Fillers, Statutory Speech Normalizer & Figure Fidelity
+    from ssra_voice import (
+        get_localized_tool_wait_filler,
+        normalize_statutory_text_for_speech,
+        select_hybrid_voice_execution_mode,
+        verify_spoken_figure_fidelity,
+    )
+
+    fast_ack = select_hybrid_voice_execution_mode(
+        locale=LocaleCode.DIN,
+        requires_tool_call=False,
+        contains_statutory_figures=False,
+        is_pure_greeting_or_backchannel=True,
+    )
+    assert fast_ack.mode == "S2S_FAST_ACK_CACHED"
+    assert fast_ack.target_ttfa_ms <= 250
+
+    governed_route = select_hybrid_voice_execution_mode(
+        locale=LocaleCode.DIN,
+        requires_tool_call=True,
+        contains_statutory_figures=True,
+    )
+    assert governed_route.mode == "CASCADED_GOVERNED_STT_LLM_TTS"
+    assert governed_route.emit_tool_wait_filler is True
+    assert governed_route.filler_text == get_localized_tool_wait_filler(LocaleCode.DIN)
+
+    norm_speech = normalize_statutory_text_for_speech(
+        "For TIN ••••1234 under Part-IV-Sec-18, balance is 450,000 SSP on https://etax.nra.gov.ss/."
+    )
+    assert "T I N ending in 1 2 3 4" in norm_speech
+    assert "Part IV, Section 18" in norm_speech
+    assert "e-tax dot n r a dot gov dot s s" in norm_speech
+    assert verify_spoken_figure_fidelity(norm_speech, ["450,000"]) is True
+    assert verify_spoken_figure_fidelity("450,000 SSP", ["45,000"]) is False
+    assert verify_spoken_figure_fidelity(norm_speech, ["999,999"]) is False
+
+    # Full-duplex sub-sentence barge-in recovery & Edge Field-Office Appliance Profile
+    from ssra_voice import VoiceStreamSession, resolve_edge_appliance_profile
+
+    v_stream = VoiceStreamSession(session_id="vs_01", locale=LocaleCode.EN)
+    assert v_stream.record_partial_transcript("how much") is None
+    assert v_stream.record_partial_transcript("how much paye tax do") == "how much paye tax"
+    v_stream.trigger_barge_in(sentence_index=1)
+    chunks = v_stream.stream_tts_sentences(
+        "First sentence spoken. Second interrupted. Third unspoken."
+    )
+    assert len(chunks) == 1
+    assert v_stream.unspoken_sentences == ["Second interrupted.", "Third unspoken."]
+    v_stream.reset_barge_in()
+    assert v_stream.barge_in_cancelled is False
+    assert v_stream.interrupted_at_sentence_index is None
+
+    edge_offline = resolve_edge_appliance_profile(
+        office_code="NIMULE_CUSTOMS", backhaul_online=False
+    )
+    assert edge_offline.llm_model == "ssra-sovereign/qwen2.5-3b-cpu-gguf"
+    assert edge_offline.opus_bitrate_kbps == 12
+    assert edge_offline.store_and_forward_outbox_enabled is True
+    edge_online = resolve_edge_appliance_profile(office_code="JUBA_HQ", backhaul_online=True)
+    assert edge_online.backhaul_online is True
+    assert edge_online.opus_bitrate_kbps == 24
+
+    from ssra_voice import CallLobbyManager, generate_officer_call_brief
+
+    brief = generate_officer_call_brief(
+        call_id="call_01",
+        turns=[
+            {"speaker": "caller", "text": "My account is blocked and urgent", "seq": 1},
+            {"speaker": "assistant", "text": "Checking your e-Tax status.", "seq": 2},
+        ],
+        transfer_reason="Account freeze verification",
+    )
+    assert brief.sentiment == "distressed"
+    assert brief.turns_covered == 2
+
+    brief_frust = generate_officer_call_brief(
+        call_id="call_02",
+        turns=[{"speaker": "caller", "text": "It failed with an error", "seq": 1}],
+        transfer_reason="Error check",
+    )
+    assert brief_frust.sentiment == "frustrated"
+
+    brief_conf = generate_officer_call_brief(
+        call_id="call_03",
+        turns=[{"speaker": "caller", "text": "I am confused how to file", "seq": 1}],
+        transfer_reason="Filing help",
+    )
+    assert brief_conf.sentiment == "confused"
+
+    lobby = CallLobbyManager()
+    lobby.apply_event("call.started", {"call_id": "c1"})
+    lobby.apply_event("call.transfer_requested", {"call_id": "c1", "reason": "user"})
+    lobby.apply_event("call.priority_raised", {"call_id": "c1", "priority": "urgent"})
+    lobby.apply_event("call.claimed", {"call_id": "c1", "officer_id": "stf_1"})
+    lobby.apply_event("call.officer_disconnected", {"call_id": "c1"})
+    lobby.apply_event("call.transfer_timed_out", {"call_id": "c1"})
+    lobby.apply_event("call.risk", {"call_id": "c1", "level": "at_risk", "signals": ["high"]})
+    lobby.apply_event("call.bridged", {"call_id": "c1"})
+    lobby.apply_event("call.on_hold", {"call_id": "c1", "on": True})
+    ended = lobby.apply_event("call.ended", {"call_id": "c1"})
+    assert ended.status == "ended"
+
+    from ssra_voice import resolve_mt_and_tts_turn_plan, validate_call_wrap_up
+
+    mt_plan = resolve_mt_and_tts_turn_plan(
+        source_locale="din",
+        original_transcript="Ajul de Ariöp",
+        inbound_translated_en="PAYE salary tax",
+        english_reply_text="PAYE is due by the 15th.",
+        outbound_translated_text="Ajul de Ariöp",
+    )
+    assert mt_plan["reply_language"] == "din"
+    wrap = validate_call_wrap_up(
+        note="Resolved PAYE question",
+        outcome="resolved",
+        caller_satisfaction=5,
+        caller_satisfaction_status="answered",
+        ai_rating=5,
+    )
+    assert wrap["outcome"] == "resolved"

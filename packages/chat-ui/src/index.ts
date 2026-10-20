@@ -160,6 +160,7 @@ export * from "./components.js";
 export * from "./document-analysis.js";
 export * from "./mcp-apps-sandbox.js";
 export * from "./offline-outbox.js";
+export * from "./offline-resilience.js";
 export * from "./reveal-queue.js";
 export * from "./storybook-catalog.js";
 export * from "./voice-notes.js";

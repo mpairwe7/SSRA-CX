@@ -7,12 +7,15 @@ import {
   buildFloatingChatHeader,
   buildHumanSubtleMicrocopy,
   buildNarrationBarView,
+  calculateOfflinePayeEstimate,
+  calculateOfflineWithholdingEstimate,
   cleanMarkdownForSpeech,
   computeCallOrbFrame,
   createRevealQueue,
   EndOfTurnDetector,
   escapeHtmlStrict,
   evaluateCaptionScrollPin,
+  evaluateSemanticEndpointing,
   formatDocType,
   GENERATIVE_UI_STORYBOOK_FIXTURES,
   groupConversationsByRecency,
@@ -21,14 +24,17 @@ import {
   joinDictated,
   levelDbfs,
   nextRevealIndex,
+  OFFLINE_SSRA_OFFICE_DIRECTORY,
   OfflineOutboxQueue,
   parseAguiSseStream,
   renderGenerativeUICard,
+  resolveAdaptiveVoiceNetworkProfile,
   resolveGenerativeUIComponent,
   stripStepPrefix,
   validateMcpAppIframe,
   validateVoiceNoteSubmission,
   verifyAllStorybookFixturesRenderAccessibly,
+  verifyOfflineOfficialChannel,
 } from "../src/index.js";
 
 describe("@ssra/chat-ui Generative UI Registry", () => {
@@ -525,5 +531,33 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     });
     expect(narFailed.mode).toBe("failed");
     expect(narFailed.showRetry).toBe(true);
+
+    // Semantic Endpointing & Offline Statutory Resilience Pack (October 2026 Voice & 2G Flows)
+    expect(evaluateSemanticEndpointing("My TIN is 1002").effectiveSilenceMs).toBe(1100);
+    expect(evaluateSemanticEndpointing("رقمي ١٠٠٢").effectiveSilenceMs).toBe(1100);
+    expect(evaluateSemanticEndpointing("Check my balance ku").effectiveSilenceMs).toBe(1100);
+    expect(evaluateSemanticEndpointing("What is the PAYE rate?").effectiveSilenceMs).toBe(420);
+
+    const offlinePaye = calculateOfflinePayeEstimate(250_000);
+    // Matches seed-2026.10.1.yaml: 0..50k @ 0% (0) + 50k..150k @ 10% (10,000) + 150k..250k @ 15% (15,000) = 25,000 SSP
+    expect(offlinePaye.estimatedTaxSsp).toBe(25_000);
+    expect(offlinePaye.netMonthlySsp).toBe(225_000);
+    expect(offlinePaye.isOfflinePack).toBe(true);
+    const offlineWht = calculateOfflineWithholdingEstimate(500_000, "rent");
+    // Matches seed-2026.10.1.yaml: wht.rent.rate_percent = 10% -> 50,000 SSP
+    expect(offlineWht.ratePercent).toBe(10);
+    expect(offlineWht.withholdingTaxSsp).toBe(50_000);
+    expect(offlineWht.netPayableSsp).toBe(450_000);
+    expect(OFFLINE_SSRA_OFFICE_DIRECTORY).toHaveLength(4);
+    expect(verifyOfflineOfficialChannel("https://etax.nra.gov.ss/").status).toBe(
+      "OFFICIAL_VERIFIED",
+    );
+    expect(verifyOfflineOfficialChannel("https://etax.nra.gov.ss/login").status).toBe(
+      "OFFICIAL_VERIFIED",
+    );
+    expect(verifyOfflineOfficialChannel("etax.nra.gov.ss").status).toBe("OFFICIAL_VERIFIED");
+    expect(verifyOfflineOfficialChannel("cash-collector-phone").status).toBe("UNVERIFIED_OR_SCAM");
+    expect(resolveAdaptiveVoiceNetworkProfile({ effectiveType: "2g" }).opusBitrateKbps).toBe(12);
+    expect(resolveAdaptiveVoiceNetworkProfile({ effectiveType: "4g" }).opusBitrateKbps).toBe(24);
   });
 });
