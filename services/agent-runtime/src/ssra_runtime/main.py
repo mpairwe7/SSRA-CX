@@ -82,6 +82,12 @@ class MemoryConsentRequest(BaseModel):
     voice_first_a11y: bool = False
 
 
+class BatchAguiTurnRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[AguiStreamRequest] = Field(min_length=1, max_length=100)
+
+
 def probe_valkey_redis(redis_url: str) -> str:
     """Probe Valkey/Redis TCP RESP `PING` health without external redis client dependencies."""
     if not redis_url:
@@ -339,6 +345,30 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
             confirmation_token=body.confirmation_token,
             idempotency_key=body.idempotency_key,
         )
+
+    @app.post("/v1/turns/batch", response_model=list[RuntimeTurnResponse])
+    def execute_turn_batch(body: BatchAguiTurnRequest) -> list[RuntimeTurnResponse]:
+        """Execute a batch of up to 100 synchronous 11-node conversation turns for high-volume stress/load evaluation."""
+        out: list[RuntimeTurnResponse] = []
+        for item in body.items:
+            ev = make_conversation_event(
+                item.message,
+                locale=item.locale,
+                channel=item.channel,
+                thread_id=item.thread_id,
+                rich_ui=not item.low_data_mode,
+                metadata=item.metadata,
+            )
+            out.append(
+                active_runtime.run_turn(
+                    ev,
+                    auth_level=item.auth_level,
+                    subject_ref=item.subject_ref,
+                    confirmation_token=item.confirmation_token,
+                    idempotency_key=item.idempotency_key,
+                )
+            )
+        return out
 
     @app.get("/v1/turns/{thread_id}/replay", response_model=list[ReconstructedTurnRecord])
     def replay_thread(thread_id: str) -> list[ReconstructedTurnRecord]:

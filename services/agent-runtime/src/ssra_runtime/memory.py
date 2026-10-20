@@ -139,6 +139,7 @@ class SubjectPreferenceMemoryStore:
         self._continuity_consent: dict[str, bool] = {}
         self._episodes: dict[str, list[EpisodicMemoryRecord]] = {}
         self._goals: dict[str, dict[str, ActiveGoalRecord]] = {}
+        self._qdrant_synced_count: dict[str, int] = {}
         self._qdrant_collection_ready: bool = False
         self._qdrant_backoff_until: float = 0.0
 
@@ -313,6 +314,7 @@ class SubjectPreferenceMemoryStore:
             if not consented:
                 self._episodes.pop(subject_ref, None)
                 self._goals.pop(subject_ref, None)
+                self._qdrant_synced_count.pop(subject_ref, None)
                 self._delete_subject_from_qdrant(subject_ref)
 
     def has_memory_continuity_consent(self, subject_ref: str) -> bool:
@@ -352,11 +354,14 @@ class SubjectPreferenceMemoryStore:
             bucket = self._episodes.setdefault(subject_ref, [])
             bucket.append(rec)
             self._evict_overflow_subjects()
-            trimmed = [ep.episode_id for ep in bucket[:-MAX_EPISODES_PER_SUBJECT]]
             if len(bucket) > MAX_EPISODES_PER_SUBJECT:
                 del bucket[:-MAX_EPISODES_PER_SUBJECT]
-        self._delete_episodes_from_qdrant(trimmed)
-        self._sync_episode_to_qdrant(rec)
+            synced_so_far = self._qdrant_synced_count.get(subject_ref, 0)
+            should_sync_qdrant = synced_so_far < MAX_EPISODES_PER_SUBJECT
+            if should_sync_qdrant:
+                self._qdrant_synced_count[subject_ref] = synced_so_far + 1
+        if should_sync_qdrant:
+            self._sync_episode_to_qdrant(rec)
         return rec
 
     def list_episodes(self, subject_ref: str) -> list[EpisodicMemoryRecord]:
@@ -450,5 +455,6 @@ class SubjectPreferenceMemoryStore:
             had_ep = self._episodes.pop(subject_ref, None) is not None
             had_goals = self._goals.pop(subject_ref, None) is not None
             self._continuity_consent.pop(subject_ref, None)
+            self._qdrant_synced_count.pop(subject_ref, None)
         qdrant_ok = self._delete_subject_from_qdrant(subject_ref)
         return (had_prefs or had_ep or had_goals or bool(self._qdrant_base_url())) and qdrant_ok

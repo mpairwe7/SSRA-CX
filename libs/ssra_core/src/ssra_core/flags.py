@@ -126,6 +126,7 @@ class FeatureFlagEngine:
         self.salt: str = salt or str(raw.get("default_salt", "ssra-sovereign-flag-salt-2026-10"))
         self._base_rules: dict[str, FeatureFlagRule] = {}
         self._overrides: dict[str, FeatureFlagRule] = {}
+        self._override_mtime_ns: int | None = None
 
         flags_cfg: dict[str, Any] = raw["flags"]
         for f_name, f_data in flags_cfg.items():
@@ -146,8 +147,14 @@ class FeatureFlagEngine:
 
     def _sync_shared_overrides_from_disk(self) -> None:
         """Load HMAC-verified shared runtime overrides written by Admin control-plane processes if present."""
-        if not self.shared_override_path.is_file():
+        try:
+            mtime_ns = self.shared_override_path.stat().st_mtime_ns
+        except OSError:
+            self._override_mtime_ns = None
             return
+        if self._override_mtime_ns == mtime_ns:
+            return
+        self._override_mtime_ns = mtime_ns
         envelope = json.loads(self.shared_override_path.read_text(encoding="utf-8"))
         data = envelope.get("overrides", {})
         sig = str(envelope.get("hmac_sha256", ""))
@@ -186,6 +193,7 @@ class FeatureFlagEngine:
         tmp_path.write_text(json.dumps(envelope, sort_keys=True), encoding="utf-8")
         tmp_path.chmod(0o600)
         os.replace(tmp_path, self.shared_override_path)
+        self._override_mtime_ns = self.shared_override_path.stat().st_mtime_ns
 
     def _effective_rules(self) -> dict[str, FeatureFlagRule]:
         """Return base YAML rules merged with any active runtime overrides."""

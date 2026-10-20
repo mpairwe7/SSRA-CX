@@ -1224,6 +1224,22 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
     assert c_turn2.status_code == 200
     assert any(a["tool"] == "create_case" for a in c_turn2.json()["artifacts"])
 
+    batch_res = client.post(
+        "/v1/turns/batch",
+        json={
+            "items": [
+                {"message": "How much is PAYE on 250,000 SSP?", "locale": "en", "channel": "web"},
+                {
+                    "message": "Waraga de Cuɔk de Wëu (TCC) fi SSRA",
+                    "locale": "din",
+                    "channel": "web",
+                },
+            ]
+        },
+    )
+    assert batch_res.status_code == 200
+    assert len(batch_res.json()) == 2
+
     del_res = client.delete("/v1/memory/sub_taxpayer_amina_01", headers=mem_hdr)
     assert del_res.status_code == 200
     assert del_res.json()["erased"] is True
