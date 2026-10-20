@@ -12,7 +12,6 @@ import threading
 from typing import Any
 
 from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
 from ssra_core import (
     Answer,
@@ -127,7 +126,7 @@ class SSRAConversationRuntime:
         self._thread_subject_binding: dict[str, str] = {}
         self._pending_by_thread: dict[str, tuple[PendingConfirmation, Intent | None, RiskTier]] = {}
         self._workflow_stack_by_thread: dict[str, list[dict[str, Any]]] = {}
-        self._compiled = self._build_graph()
+        self._checkpoint_state_by_thread: dict[str, dict[str, Any]] = {}
 
     def _evict_overflow_threads(self) -> None:
         """Enforce `MAX_TRACKED_RUNTIME_THREADS` FIFO eviction across per-thread dictionaries (`ASI08`)."""
@@ -135,6 +134,7 @@ class SSRAConversationRuntime:
             self._thread_subject_binding,
             self._pending_by_thread,
             self._workflow_stack_by_thread,
+            self._checkpoint_state_by_thread,
         ):
             while len(s) > MAX_TRACKED_RUNTIME_THREADS:
                 s.pop(next(iter(s)), None)
@@ -185,102 +185,51 @@ class SSRAConversationRuntime:
         safe_id = validate_safe_thread_id(thread_id)
         return self.replay_store.reconstruct_thread(safe_id)
 
-    def _build_graph(self) -> Any:
-        """Compile the 11-node deterministic LangGraph state machine."""
-        builder: StateGraph[ConversationGraphState] = StateGraph(ConversationGraphState)
-
-        def _knowledge_qa_node(state: ConversationGraphState) -> dict[str, Any]:
-            """Invoke the knowledge_qa specialist subgraph."""
-            return execute_knowledge_qa_subgraph(state, self.gateway)
-
-        def _self_service_node(state: ConversationGraphState) -> dict[str, Any]:
-            """Invoke the self_service specialist subgraph."""
-            return execute_self_service_subgraph(state, self.gateway)
-
-        def _confirm_node(state: ConversationGraphState) -> dict[str, Any]:
-            """Invoke the T2/T3 confirmation or write-execution node."""
-            return confirm_or_execute_write_node(state, self.gateway)
-
-        def _egress_node(state: ConversationGraphState) -> dict[str, Any]:
-            """Invoke the egress audit and running-summary node."""
-            return egress_node(state, self.audit_ledger)
-
-        builder.add_node("ingress", ingress_node)
-        builder.add_node("deterministic_router", deterministic_router_node)
-        builder.add_node("input_guard", input_guard_node)
-        builder.add_node("understand", understand_node)
-        builder.add_node("policy_gate", policy_gate_node)
-        builder.add_node("knowledge_qa", _knowledge_qa_node)
-        builder.add_node("self_service", _self_service_node)
-        builder.add_node("handoff", execute_handoff_subgraph)
-        builder.add_node("confirm", _confirm_node)
-        builder.add_node("compose", compose_node)
-        builder.add_node("output_guard", output_guard_node)
-        builder.add_node("egress", _egress_node)
-
-        builder.add_edge(START, "ingress")
-        builder.add_edge("ingress", "deterministic_router")
-
-        def _after_router(state: ConversationGraphState) -> str:
-            """Route deterministic turns directly to egress or continue to input_guard."""
-            if state.get("deterministic_handled"):
-                return "egress"
-            return "input_guard"
-
-        builder.add_conditional_edges(
-            "deterministic_router",
-            _after_router,
-            {"egress": "egress", "input_guard": "input_guard"},
-        )
-
-        def _after_input_guard(state: ConversationGraphState) -> str:
-            """Route blocked adversarial inputs to egress or continue to understand."""
-            if state.get("policy_decision") == "DENY":
-                return "egress"
-            return "understand"
-
-        builder.add_conditional_edges(
-            "input_guard",
-            _after_input_guard,
-            {"egress": "egress", "understand": "understand"},
-        )
-
-        builder.add_edge("understand", "policy_gate")
-
-        def _route_subgraph(state: ConversationGraphState) -> str:
-            """Select the specialist subgraph determined by policy_gate."""
-            return state.get("selected_subgraph", "knowledge_qa")
-
-        builder.add_conditional_edges(
-            "policy_gate",
-            _route_subgraph,
-            {
-                "knowledge_qa": "knowledge_qa",
-                "self_service": "self_service",
-                "handoff": "handoff",
+    def _execute_graph_fast(
+        self,
+        initial_state: ConversationGraphState,
+        safe_thread_id: str,
+    ) -> ConversationGraphState:
+        """Execute the 11-node deterministic state machine on the calling thread without per-turn ThreadPoolExecutor churn."""
+        with self._state_lock:
+            prev_chk = self._checkpoint_state_by_thread.get(safe_thread_id, {})
+        state: dict[str, Any] = {
+            **{
+                k: prev_chk[k]
+                for k in ("affective_state", "language_candidate", "language_state")
+                if k in prev_chk
             },
-        )
-
-        builder.add_edge("knowledge_qa", "compose")
-        builder.add_edge("self_service", "confirm")
-        builder.add_edge("confirm", "compose")
-        builder.add_edge("handoff", "compose")
-        builder.add_edge("compose", "output_guard")
-
-        def _after_output_guard(state: ConversationGraphState) -> str:
-            """Loop back to compose once on validator feedback or proceed to egress."""
-            if state.get("validator_feedback") and state.get("answer") is None:
-                return "compose"
-            return "egress"
-
-        builder.add_conditional_edges(
-            "output_guard",
-            _after_output_guard,
-            {"compose": "compose", "egress": "egress"},
-        )
-        builder.add_edge("egress", END)
-
-        return builder.compile(checkpointer=self.checkpointer)
+            **initial_state,
+        }
+        state.update(ingress_node(state))  # pyright: ignore[reportArgumentType]
+        state.update(deterministic_router_node(state))  # pyright: ignore[reportArgumentType]
+        if not state.get("deterministic_handled"):
+            state.update(input_guard_node(state))  # pyright: ignore[reportArgumentType]
+            if state.get("policy_decision") != "DENY":
+                state.update(understand_node(state))  # pyright: ignore[reportArgumentType]
+                state.update(policy_gate_node(state))  # pyright: ignore[reportArgumentType]
+                subgraph = state.get("selected_subgraph", "knowledge_qa")
+                if subgraph == "knowledge_qa":
+                    state.update(execute_knowledge_qa_subgraph(state, self.gateway))  # pyright: ignore[reportArgumentType]
+                elif subgraph == "self_service":
+                    state.update(execute_self_service_subgraph(state, self.gateway))  # pyright: ignore[reportArgumentType]
+                    state.update(confirm_or_execute_write_node(state, self.gateway))  # pyright: ignore[reportArgumentType]
+                else:
+                    state.update(execute_handoff_subgraph(state))  # pyright: ignore[reportArgumentType]
+                state.update(compose_node(state))  # pyright: ignore[reportArgumentType]
+                state.update(output_guard_node(state))  # pyright: ignore[reportArgumentType]
+                if state.get("validator_feedback") and state.get("answer") is None:
+                    state.update(compose_node(state))  # pyright: ignore[reportArgumentType]
+                    state.update(output_guard_node(state))  # pyright: ignore[reportArgumentType]
+        state.update(egress_node(state, self.audit_ledger))  # pyright: ignore[reportArgumentType]
+        with self._state_lock:
+            self._checkpoint_state_by_thread[safe_thread_id] = {
+                k: state[k]
+                for k in ("affective_state", "language_candidate", "language_state")
+                if k in state
+            }
+            self._evict_overflow_threads()
+        return state  # pyright: ignore[reportReturnType]
 
     def run_turn(
         self,
@@ -471,12 +420,9 @@ class SSRAConversationRuntime:
 
         self.channel_bulkhead.acquire(event.data.channel)
         try:
-            final_state: ConversationGraphState = self._compiled.invoke(
+            final_state: ConversationGraphState = self._execute_graph_fast(
                 initial_state,
-                config={
-                    "configurable": {"thread_id": safe_thread_id},
-                    "recursion_limit": 25,
-                },
+                safe_thread_id,
             )
         finally:
             self.channel_bulkhead.release(event.data.channel)

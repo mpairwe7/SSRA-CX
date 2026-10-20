@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,7 @@ class PromptRegistry:
         self.version: str = str(raw.get("version", "2026.10.1"))
 
     @classmethod
+    @functools.lru_cache(maxsize=1)
     def load_default(cls) -> PromptRegistry:
         data = yaml.safe_load(_PROMPTS_FILE.read_text(encoding="utf-8"))
         return cls(data)
@@ -79,9 +81,11 @@ class PromptRegistry:
         )
 
 
+@functools.lru_cache(maxsize=1)
 def load_termbase() -> dict[str, Any]:
     return dict(yaml.safe_load(_TERMBASE_FILE.read_text(encoding="utf-8")))
 
 
+@functools.lru_cache(maxsize=1)
 def load_routing_config() -> dict[str, Any]:
     return dict(yaml.safe_load(_ROUTING_FILE.read_text(encoding="utf-8")))

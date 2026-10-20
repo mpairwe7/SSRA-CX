@@ -1,0 +1,161 @@
+{
+  "benchmark_version": "2026.10.21-20k",
+  "git_revision": "884b622",
+  "target_ngrok_url": "https://<redacted-ngrok-tunnel>",
+  "total_scenarios": 20000,
+  "total_turns_executed": 20120,
+  "total_ngrok_http_requests": 500,
+  "scenarios_passed": 20000,
+  "transport_errors_count": 0,
+  "zero_5xx_errors_verified": true,
+  "overall_accuracy_pct": 100.0,
+  "intent_identification_accuracy_pct": 100.0,
+  "objective_and_issue_resolution_rate_pct": 100.0,
+  "emotional_intelligence_accuracy_pct": 100.0,
+  "spoken_and_written_numeric_fidelity_pct": 100.0,
+  "long_horizon_memory_subjects_hydrated": "2/2",
+  "right_to_erasure_subjects_verified": "2/2",
+  "qdrant_episodic_points_indexed_at_peak": 40,
+  "performance_metrics": {
+    "concurrency": 16,
+    "batch_size": 100,
+    "wall_clock_seconds": 75.78,
+    "throughput_scenarios_per_sec": 263.92,
+    "conversational_rate_turns_per_sec": 265.51,
+    "conversational_rate_turns_per_min": 15930.4,
+    "amortized_turn_latency_p50_ms": 56.35,
+    "amortized_turn_latency_p90_ms": 68.02,
+    "amortized_turn_latency_p95_ms": 71.82,
+    "amortized_turn_latency_p99_ms": 93.22,
+    "single_turn_ngrok_rtt_p50_ms": 651.84,
+    "single_turn_ngrok_rtt_p95_ms": 1327.98
+  },
+  "stack_status": {
+    "service": "ssra-agent-runtime",
+    "hf_offline_mode": true,
+    "hf_cached_entries_count": 28,
+    "sunflower_models": [
+      "models--Sunbird--Sunflower-Qwen3.5-9B",
+      "models--Sunbird--Sunflower-Qwen3.8-27B",
+      "models--Sunbird--SunflowerASR-51-african-languages"
+    ],
+    "gpu_devices": [
+      "nvidia6"
+    ],
+    "qdrant_status": "healthy",
+    "qdrant_episodic_points": 0,
+    "valkey_status": "healthy"
+  },
+  "by_language_group": {
+    "en": {
+      "total": 6800,
+      "passed": 6800,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 67.45
+    },
+    "ar": {
+      "total": 6600,
+      "passed": 6600,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 60.01
+    },
+    "din": {
+      "total": 6600,
+      "passed": 6600,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 41.21
+    }
+  },
+  "by_modality": {
+    "TTT": {
+      "total": 8000,
+      "passed": 8000,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 67.28
+    },
+    "STT": {
+      "total": 6000,
+      "passed": 6000,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 49.59
+    },
+    "TTS": {
+      "total": 6000,
+      "passed": 6000,
+      "accuracy_pct": 100.0,
+      "mean_latency_ms": 48.49
+    }
+  },
+  "by_category": {
+    "AUTHENTICATED_T1_SELF_SERVICE": {
+      "total": 2000,
+      "passed": 2000,
+      "accuracy_pct": 100.0
+    },
+    "FUZZY_GROUPED_TIN_AND_FILING": {
+      "total": 500,
+      "passed": 500,
+      "accuracy_pct": 100.0
+    },
+    "FUZZY_SECURITY_HOMOGLYPH_INJECTION": {
+      "total": 500,
+      "passed": 500,
+      "accuracy_pct": 100.0
+    },
+    "FUZZY_SECURITY_MULTILINGUAL_INJECTION": {
+      "total": 500,
+      "passed": 500,
+      "accuracy_pct": 100.0
+    },
+    "FUZZY_SECURITY_SUBJECT_SMUGGLE": {
+      "total": 500,
+      "passed": 500,
+      "accuracy_pct": 100.0
+    },
+    "LONG_HORIZON_COMPOUND_PLANNER": {
+      "total": 2000,
+      "passed": 2000,
+      "accuracy_pct": 100.0
+    },
+    "LONG_HORIZON_WORKFLOW_DELEGATION": {
+      "total": 2000,
+      "passed": 2000,
+      "accuracy_pct": 100.0
+    },
+    "MULTILINGUAL_TCC_JOURNEY": {
+      "total": 2000,
+      "passed": 2000,
+      "accuracy_pct": 100.0
+    },
+    "MULTIMODAL_EQ_DEESCALATION": {
+      "total": 1000,
+      "passed": 1000,
+      "accuracy_pct": 100.0
+    },
+    "MULTIMODAL_EQ_ESCALATION": {
+      "total": 1000,
+      "passed": 1000,
+      "accuracy_pct": 100.0
+    },
+    "OFFICIAL_CHANNEL_VERIFICATION": {
+      "total": 2000,
+      "passed": 2000,
+      "accuracy_pct": 100.0
+    },
+    "STATUTORY_NUMERIC_PAYE": {
+      "total": 2000,
+      "passed": 2000,
+      "accuracy_pct": 100.0
+    },
+    "STATUTORY_NUMERIC_WHT": {
+      "total": 2000,
+      "passed": 2000,
+      "accuracy_pct": 100.0
+    },
+    "T4_AND_OOS_GOVERNANCE_GATE": {
+      "total": 2000,
+      "passed": 2000,
+      "accuracy_pct": 100.0
+    }
+  }
+}
