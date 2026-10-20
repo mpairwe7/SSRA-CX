@@ -13,7 +13,7 @@
 | Command | Action |
 |---|---|
 | `task up` | Start local hardened Docker Compose stack (`infra/compose/docker-compose.yml`) and run end-to-end AG-UI smoke test (`tools/smoke_test_stack.py`) |
-| `docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait` | Start local sovereign GPU + local HF cache (`Sunflower-Qwen3.5-9B`, `Sunflower-Qwen3.8-27B`, `SunflowerASR`) + Qdrant + Valkey + PostgreSQL 18 stack (`127.0.0.1:18000` API, `127.0.0.1:18001` Runtime) and run `uv run python tools/run_20000_complex_ngrok_benchmark.py` |
+| `docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait` | Start local sovereign GPU + local HF cache (`Sunflower-Qwen3.5-9B`, `Sunflower-Qwen3.8-27B`, `SunflowerASR`) + Qdrant + Valkey + PostgreSQL 18 + `ssra-frontend` (`:3033`) + `ssra-console` (`:3034`) stack (`127.0.0.1:18000` API, `127.0.0.1:18001` Runtime) and run `uv run python tools/run_20000_complex_ngrok_benchmark.py` |
 | `task down` | Stop local Docker Compose stack cleanly (`--remove-orphans`) |
 | `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.prod.yml --profile prod up -d --wait` | Deploy production NCA Sovereign stack (including pre-built `keycloak` `--optimized` on port `8080`/`9000`, offline `vllm-sovereign` GPU container, and `postgres-wal-archiver`) |
 | `task gen` | Regenerate Pydantic v2 models, TypeScript types, Zod 4 schemas, OpenAPI 3.1 client, and CycloneDX 1.6 SBOM + ML-BOM |
