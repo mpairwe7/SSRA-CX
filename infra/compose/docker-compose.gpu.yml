@@ -6,10 +6,16 @@ name: ssra-cx-gpu
 x-hardened-gpu-defaults: &hardened-gpu-defaults
   security_opt:
     - no-new-privileges:true
+    - seccomp:../policies/seccomp-sovereign-default.json
   cap_drop:
     - ALL
   pids_limit: 256
   restart: on-failure:5
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   ssra-postgres:

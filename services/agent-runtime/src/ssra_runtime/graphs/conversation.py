@@ -8,6 +8,7 @@ Executes the 11-node deterministic shell in strict order:
 from __future__ import annotations
 
 import re
+import threading
 from typing import Any
 
 from langgraph.checkpoint.memory import InMemorySaver
@@ -121,11 +122,22 @@ class SSRAConversationRuntime:
         self.semantic_cache = AnonymousT0SemanticCache()
         self.channel_bulkhead = ChannelBulkhead()
         self.checkpointer = InMemorySaver()
+        self._state_lock = threading.RLock()
         self._disabled_channels: set[ChannelName] = set()
         self._thread_subject_binding: dict[str, str] = {}
         self._pending_by_thread: dict[str, tuple[PendingConfirmation, Intent | None, RiskTier]] = {}
         self._workflow_stack_by_thread: dict[str, list[dict[str, Any]]] = {}
         self._compiled = self._build_graph()
+
+    def _evict_overflow_threads(self) -> None:
+        """Enforce `MAX_TRACKED_RUNTIME_THREADS` FIFO eviction across per-thread dictionaries (`ASI08`)."""
+        for s in (
+            self._thread_subject_binding,
+            self._pending_by_thread,
+            self._workflow_stack_by_thread,
+        ):
+            while len(s) > MAX_TRACKED_RUNTIME_THREADS:
+                s.pop(next(iter(s)), None)
 
     def apply_officer_handback_resolution(
         self,
@@ -285,15 +297,21 @@ class SSRAConversationRuntime:
             subject_ref = validate_safe_subject_ref(subject_ref, auth_level=auth_level)
 
         # ASI03 / ASI06: Prevent cross-subject thread hijacking on bound threads
-        bound_subject = self._thread_subject_binding.get(safe_thread_id)
-        if bound_subject is not None and subject_ref is not None and subject_ref != bound_subject:
-            raise SSRAError(
-                McpErrorCode.NOT_AUTHORIZED,
-                f"Cross-subject thread hijacking blocked on thread '{safe_thread_id}' (ASI03)",
-                status_code=403,
-            )
-        if subject_ref is not None:
-            self._thread_subject_binding[safe_thread_id] = subject_ref
+        with self._state_lock:
+            bound_subject = self._thread_subject_binding.get(safe_thread_id)
+            if (
+                bound_subject is not None
+                and subject_ref is not None
+                and subject_ref != bound_subject
+            ):
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    f"Cross-subject thread hijacking blocked on thread '{safe_thread_id}' (ASI03)",
+                    status_code=403,
+                )
+            if subject_ref is not None:
+                self._thread_subject_binding[safe_thread_id] = subject_ref
+                self._evict_overflow_threads()
 
         text_parts = [p.value for p in event.data.parts if p.kind == "text"]
         user_text = " ".join(text_parts).strip()
@@ -418,10 +436,12 @@ class SSRAConversationRuntime:
         restored_pending: PendingConfirmation | None = None
         restored_intent: Intent | None = None
         restored_tier: RiskTier | None = None
-        if confirmation_token and safe_thread_id in self._pending_by_thread:
-            restored_pending, restored_intent, restored_tier = self._pending_by_thread[
-                safe_thread_id
-            ]
+        with self._state_lock:
+            if confirmation_token and safe_thread_id in self._pending_by_thread:
+                restored_pending, restored_intent, restored_tier = self._pending_by_thread[
+                    safe_thread_id
+                ]
+            wf_stack_copy = list(self._workflow_stack_by_thread.get(safe_thread_id, []))
 
         initial_state: ConversationGraphState = {
             "thread_id": safe_thread_id,
@@ -432,7 +452,7 @@ class SSRAConversationRuntime:
             "subject_ref": subject_ref,
             "raw_user_text": user_text,
             "slots": seed_slots,
-            "workflow_stack": list(self._workflow_stack_by_thread.get(safe_thread_id, [])),
+            "workflow_stack": wf_stack_copy,
             "confirmation_token_in": confirmation_token,
             "idempotency_key_in": idempotency_key,
             "answer": None,
@@ -462,14 +482,16 @@ class SSRAConversationRuntime:
             self.channel_bulkhead.release(event.data.channel)
 
         out_pending = final_state.get("pending_confirmation")
-        if out_pending is not None:
-            self._pending_by_thread[safe_thread_id] = (
-                out_pending,
-                final_state.get("intent"),
-                final_state.get("tier", RiskTier.T2),
-            )
-        else:
-            self._pending_by_thread.pop(safe_thread_id, None)
+        with self._state_lock:
+            if out_pending is not None:
+                self._pending_by_thread[safe_thread_id] = (
+                    out_pending,
+                    final_state.get("intent"),
+                    final_state.get("tier", RiskTier.T2),
+                )
+                self._evict_overflow_threads()
+            else:
+                self._pending_by_thread.pop(safe_thread_id, None)
 
         verif_dict = final_state.get("outcome_verification") or {}
         outcome_verified = bool(verif_dict.get("verified", True))

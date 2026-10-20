@@ -1084,7 +1084,11 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
     ):
         q_mem._qdrant_collection_ready = False  # pyright: ignore[reportPrivateUsage]
         assert q_mem.qdrant_episodic_points_count() is None
+        assert q_mem.delete_subject_preferences("sub_qdrant_test") is False
+        # Hit fast-fail _qdrant_backoff_until branch before resetting backoff
+        assert q_mem._ensure_qdrant_collection("http://127.0.0.1:26333") is False  # pyright: ignore[reportPrivateUsage]
         q_mem._qdrant_collection_ready = True  # pyright: ignore[reportPrivateUsage]
+        q_mem._qdrant_backoff_until = 0.0  # pyright: ignore[reportPrivateUsage]
         q_mem.set_memory_continuity_consent("sub_qdrant_test", consented=True)
         q_mem.record_episode(
             subject_ref="sub_qdrant_test",
@@ -1094,9 +1098,26 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
             outcome_status="RESOLVED",
             raw_summary="Offline fallback",
         )
+        q_mem._qdrant_backoff_until = 0.0  # pyright: ignore[reportPrivateUsage]
         q_mem._delete_episodes_from_qdrant(["ep_trim_01"])  # pyright: ignore[reportPrivateUsage]
+        q_mem._qdrant_backoff_until = 0.0  # pyright: ignore[reportPrivateUsage]
         assert q_mem.qdrant_episodic_points_count() is None
+        q_mem._qdrant_backoff_until = 0.0  # pyright: ignore[reportPrivateUsage]
         q_mem.delete_subject_preferences("sub_qdrant_test")
+
+    # Exercise FIFO capacity eviction in SubjectPreferenceMemoryStore & SSRAConversationRuntime
+    import ssra_runtime.graphs.conversation as conv_mod
+    import ssra_runtime.memory as mem_mod
+
+    with patch.object(mem_mod, "MAX_TRACKED_SUBJECTS", 2):
+        q_mem.upsert_preferences(subject_ref="s1")
+        q_mem.upsert_preferences(subject_ref="s2")
+        q_mem.upsert_preferences(subject_ref="s3")
+        assert len(q_mem._prefs) <= 2  # pyright: ignore[reportPrivateUsage]
+    with patch.object(conv_mod, "MAX_TRACKED_RUNTIME_THREADS", 2):
+        rt._thread_subject_binding.update({"t1": "s1", "t2": "s2", "t3": "s3"})  # pyright: ignore[reportPrivateUsage]
+        rt._evict_overflow_threads()  # pyright: ignore[reportPrivateUsage]
+        assert len(rt._thread_subject_binding) <= 2  # pyright: ignore[reportPrivateUsage]
 
     client = TestClient(create_runtime_app(rt))
     stack_res = client.get("/v1/runtime/stack-status")
@@ -1108,12 +1129,26 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
         patch("httpx.post", return_value=mock_resp_200),
     ):
         assert client.get("/v1/runtime/stack-status").json()["qdrant_status"] == "healthy"
+    mem_hdr = {"X-SSRA-Subject-Ref": "sub_taxpayer_amina_01"}
     with (
         patch.dict(os.environ, {"SSRA_QDRANT_URL": "http://127.0.0.1:26333"}),
         patch("httpx.get", side_effect=httpx.ConnectError("offline")),
         patch("httpx.post", side_effect=httpx.ConnectError("offline")),
     ):
-        assert client.delete("/v1/memory/sub_taxpayer_amina_01").status_code == 503
+        assert client.delete("/v1/memory/sub_taxpayer_amina_01", headers=mem_hdr).status_code == 503
+    assert client.get("/v1/memory/sub_taxpayer_amina_01").status_code == 401
+    assert (
+        client.post(
+            "/v1/turns",
+            headers={"X-SSRA-Subject-Ref": "sub_other_attacker"},
+            json={
+                "message": "Check my balance",
+                "auth_level": "T1_TIN_BOUND",
+                "subject_ref": "sub_taxpayer_amina_01",
+            },
+        ).status_code
+        == 403
+    )
     assert (
         client.post(
             "/v1/turns",
@@ -1127,7 +1162,7 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
 
     consent_res = client.post(
         "/v1/memory/sub_taxpayer_amina_01/consent",
-        headers={"X-SSRA-Subject-Ref": "sub_taxpayer_amina_01"},
+        headers=mem_hdr,
         json={
             "consented": True,
             "preferred_locale": "en",
@@ -1156,7 +1191,10 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
         },
     )
     assert g_res.status_code == 200
-    assert len(client.get("/v1/memory/sub_taxpayer_amina_01").json()["active_goals"]) >= 1
+    assert (
+        len(client.get("/v1/memory/sub_taxpayer_amina_01", headers=mem_hdr).json()["active_goals"])
+        >= 1
+    )
 
     # Compound T1 reads + staged T2 create_case -> confirm on next turn
     c_turn1 = client.post(
@@ -1186,7 +1224,10 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
     assert c_turn2.status_code == 200
     assert any(a["tool"] == "create_case" for a in c_turn2.json()["artifacts"])
 
-    del_res = client.delete("/v1/memory/sub_taxpayer_amina_01")
+    del_res = client.delete("/v1/memory/sub_taxpayer_amina_01", headers=mem_hdr)
     assert del_res.status_code == 200
     assert del_res.json()["erased"] is True
-    assert client.get("/v1/memory/sub_taxpayer_amina_01").json()["recent_episodes"] == []
+    assert (
+        client.get("/v1/memory/sub_taxpayer_amina_01", headers=mem_hdr).json()["recent_episodes"]
+        == []
+    )

@@ -252,7 +252,10 @@ def understand_node(state: ConversationGraphState) -> dict[str, Any]:
             "report_scam": IntentName.REPORT_SCAM,
         }
         resumed_intent_name = tool_to_intent.get(existing_pending.tool, existing_intent.intent)
-        resumed_intent = existing_intent.model_copy(update={"intent": resumed_intent_name})
+        merged_resumed_slots = {**existing_intent.slots, **existing_pending.arguments}
+        resumed_intent = existing_intent.model_copy(
+            update={"intent": resumed_intent_name, "slots": merged_resumed_slots}
+        )
         tier = _INTENT_TIERS.get(resumed_intent.intent.value, state.get("tier", RiskTier.T2))
         return {
             "intent": resumed_intent,

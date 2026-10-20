@@ -18,6 +18,8 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import threading
+import time
 import uuid
 from datetime import datetime, timedelta
 from typing import Literal
@@ -131,32 +133,43 @@ class SubjectPreferenceMemoryStore:
     """Typed long-term preference store (Tier 3) + 4-Tier Cognitive Memory Manager with Right-to-Erasure."""
 
     def __init__(self) -> None:
-        """Initialize the in-memory 4-tier cognitive memory and preference store."""
+        """Initialize the thread-safe, bounded 4-tier cognitive memory and preference store."""
+        self._lock = threading.RLock()
         self._prefs: dict[str, ConsentedUserPreferences] = {}
         self._continuity_consent: dict[str, bool] = {}
         self._episodes: dict[str, list[EpisodicMemoryRecord]] = {}
         self._goals: dict[str, dict[str, ActiveGoalRecord]] = {}
         self._qdrant_collection_ready: bool = False
+        self._qdrant_backoff_until: float = 0.0
+
+    def _evict_overflow_subjects(self) -> None:
+        """Enforce `MAX_TRACKED_SUBJECTS` FIFO eviction across all in-memory dictionaries (`ASI08`)."""
+        for s in (self._prefs, self._continuity_consent, self._episodes, self._goals):
+            while len(s) > MAX_TRACKED_SUBJECTS:
+                s.pop(next(iter(s)), None)
 
     def _qdrant_base_url(self) -> str:
         """Return the configured Qdrant HTTP URL or empty string if in-memory only."""
         return os.environ.get("SSRA_QDRANT_URL", "").strip().rstrip("/")
 
-    def _ensure_qdrant_collection(self, base_url: str) -> bool:
-        """Ensure the `ssra_episodic_memory_v1` collection exists in Qdrant."""
+    def _ensure_qdrant_collection(self, base_url: str, *, bypass_backoff: bool = False) -> bool:
+        """Ensure the `ssra_episodic_memory_v1` collection exists in Qdrant with fast-fail backoff."""
+        if not bypass_backoff and time.monotonic() < self._qdrant_backoff_until:
+            return False
         if self._qdrant_collection_ready:
             return True
         try:
-            r = httpx.get(f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}", timeout=3.0)
+            r = httpx.get(f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}", timeout=1.5)
             if r.status_code != 200:
                 r = httpx.put(
                     f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}",
                     json={"vectors": {"size": 16, "distance": "Cosine"}},
-                    timeout=3.0,
+                    timeout=1.5,
                 )
             self._qdrant_collection_ready = r.status_code in (200, 201)
             return self._qdrant_collection_ready
         except httpx.HTTPError:
+            self._qdrant_backoff_until = time.monotonic() + 5.0
             return False
 
     def _sync_episode_to_qdrant(self, rec: EpisodicMemoryRecord) -> None:
@@ -186,10 +199,10 @@ class SubjectPreferenceMemoryStore:
                         }
                     ]
                 },
-                timeout=3.0,
+                timeout=1.5,
             )
         except httpx.HTTPError:
-            return
+            self._qdrant_backoff_until = time.monotonic() + 5.0
 
     def _delete_episodes_from_qdrant(self, episode_ids: list[str]) -> None:
         """Delete trimmed or expired episodic point UUIDs from Qdrant when configured."""
@@ -201,17 +214,18 @@ class SubjectPreferenceMemoryStore:
             httpx.post(
                 f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}/points/delete?wait=true",
                 json={"points": point_uuids},
-                timeout=3.0,
+                timeout=1.5,
             )
         except httpx.HTTPError:
-            return
+            self._qdrant_backoff_until = time.monotonic() + 5.0
 
     def _delete_subject_from_qdrant(self, subject_ref: str) -> bool:
         """Delete all Qdrant episodic points belonging to `subject_ref` for Right-to-Erasure."""
         base_url = self._qdrant_base_url()
         if not base_url:
             return True
-        if not self._ensure_qdrant_collection(base_url):
+        self._qdrant_backoff_until = 0.0
+        if not self._ensure_qdrant_collection(base_url, bypass_backoff=True):
             return False
         try:
             r = httpx.post(
@@ -223,7 +237,7 @@ class SubjectPreferenceMemoryStore:
                         ]
                     }
                 },
-                timeout=3.0,
+                timeout=2.0,
             )
             return r.status_code == 200
         except httpx.HTTPError:
@@ -240,19 +254,22 @@ class SubjectPreferenceMemoryStore:
         if not base_url:
             return 0
         if force_probe:
-            self._qdrant_collection_ready = False
-        if not self._ensure_qdrant_collection(base_url):
+            self._qdrant_collection_ready, self._qdrant_backoff_until = False, 0.0
+        if not self._ensure_qdrant_collection(base_url, bypass_backoff=force_probe):
             return None
-        body: dict[str, object] = {"exact": True}
-        if subject_ref is not None:
-            body["filter"] = {
-                "must": [{"key": "subject_ref", "match": {"value": subject_ref}}],
+        body: dict[str, object] = (
+            {
+                "exact": True,
+                "filter": {"must": [{"key": "subject_ref", "match": {"value": subject_ref}}]},
             }
+            if subject_ref is not None
+            else {"exact": True}
+        )
         try:
             r = httpx.post(
                 f"{base_url}/collections/{QDRANT_EPISODIC_COLLECTION}/points/count",
                 json=body,
-                timeout=3.0,
+                timeout=2.0,
             )
             return int(r.json().get("result", {}).get("count", 0)) if r.status_code == 200 else None
         except (httpx.HTTPError, ValueError, TypeError):
@@ -278,24 +295,30 @@ class SubjectPreferenceMemoryStore:
             voice_first_a11y=voice_first_a11y,
             updated_at=utc_now(),
         )
-        self._prefs[subject_ref] = pref
+        with self._lock:
+            self._prefs[subject_ref] = pref
+            self._evict_overflow_subjects()
         return pref
 
     def get_preferences(self, subject_ref: str) -> ConsentedUserPreferences | None:
         """Retrieve stored Tier 3 preferences for `subject_ref`, or `None` if absent."""
-        return self._prefs.get(subject_ref)
+        with self._lock:
+            return self._prefs.get(subject_ref)
 
     def set_memory_continuity_consent(self, subject_ref: str, *, consented: bool) -> None:
         """Enable or revoke consent for Tier 2 (Episodic) and Tier 4 (Procedural Goal) continuity."""
-        self._continuity_consent[subject_ref] = bool(consented)
-        if not consented:
-            self._episodes.pop(subject_ref, None)
-            self._goals.pop(subject_ref, None)
-            self._delete_subject_from_qdrant(subject_ref)
+        with self._lock:
+            self._continuity_consent[subject_ref] = bool(consented)
+            self._evict_overflow_subjects()
+            if not consented:
+                self._episodes.pop(subject_ref, None)
+                self._goals.pop(subject_ref, None)
+                self._delete_subject_from_qdrant(subject_ref)
 
     def has_memory_continuity_consent(self, subject_ref: str) -> bool:
         """Return True if `subject_ref` has active opt-in consent for Tier 2/4 memory continuity."""
-        return self._continuity_consent.get(subject_ref, False)
+        with self._lock:
+            return self._continuity_consent.get(subject_ref, False)
 
     def record_episode(
         self,
@@ -309,40 +332,42 @@ class SubjectPreferenceMemoryStore:
         unresolved_blocker_code: str | None = None,
     ) -> EpisodicMemoryRecord | None:
         """Record a PII-redacted and figure-stripped Tier 2 episode if consent is granted."""
-        if not self.has_memory_continuity_consent(subject_ref):
-            return None
-        now = utc_now()
-        safe_summary = strip_financial_figures_for_memory(raw_summary)[:280]
-        rec = EpisodicMemoryRecord(
-            episode_id=new_id("ep"),
-            subject_ref=subject_ref,
-            channel=channel,
-            locale=locale,
-            intent=intent,
-            outcome_status=outcome_status,
-            redacted_summary=safe_summary,
-            unresolved_blocker_code=unresolved_blocker_code,
-            created_at=now,
-            expires_at=now + timedelta(days=EPISODIC_TTL_DAYS),
-        )
-        bucket = self._episodes.setdefault(subject_ref, [])
-        bucket.append(rec)
-        if len(bucket) > MAX_EPISODES_PER_SUBJECT:
+        with self._lock:
+            if not self.has_memory_continuity_consent(subject_ref):
+                return None
+            now = utc_now()
+            safe_summary = strip_financial_figures_for_memory(raw_summary)[:280]
+            rec = EpisodicMemoryRecord(
+                episode_id=new_id("ep"),
+                subject_ref=subject_ref,
+                channel=channel,
+                locale=locale,
+                intent=intent,
+                outcome_status=outcome_status,
+                redacted_summary=safe_summary,
+                unresolved_blocker_code=unresolved_blocker_code,
+                created_at=now,
+                expires_at=now + timedelta(days=EPISODIC_TTL_DAYS),
+            )
+            bucket = self._episodes.setdefault(subject_ref, [])
+            bucket.append(rec)
+            self._evict_overflow_subjects()
             trimmed = [ep.episode_id for ep in bucket[:-MAX_EPISODES_PER_SUBJECT]]
-            del bucket[:-MAX_EPISODES_PER_SUBJECT]
-            self._delete_episodes_from_qdrant(trimmed)
+            if len(bucket) > MAX_EPISODES_PER_SUBJECT:
+                del bucket[:-MAX_EPISODES_PER_SUBJECT]
+        self._delete_episodes_from_qdrant(trimmed)
         self._sync_episode_to_qdrant(rec)
         return rec
 
     def list_episodes(self, subject_ref: str) -> list[EpisodicMemoryRecord]:
         """List non-expired Tier 2 episodic records for `subject_ref`."""
-        now = utc_now()
-        items = self._episodes.get(subject_ref, [])
-        expired = [ep.episode_id for ep in items if ep.expires_at <= now]
-        if expired:
-            self._delete_episodes_from_qdrant(expired)
-        valid = [ep for ep in items if ep.expires_at > now]
-        self._episodes[subject_ref] = valid
+        with self._lock:
+            now = utc_now()
+            items = self._episodes.get(subject_ref, [])
+            expired = [ep.episode_id for ep in items if ep.expires_at <= now]
+            valid = [ep for ep in items if ep.expires_at > now]
+            self._episodes[subject_ref] = valid
+        self._delete_episodes_from_qdrant(expired)
         return list(valid)
 
     def upsert_active_goal(
@@ -384,41 +409,46 @@ class SubjectPreferenceMemoryStore:
             updated_at=now,
             expires_at=now + timedelta(days=PROCEDURAL_GOAL_TTL_DAYS),
         )
-        subj_goals = self._goals.setdefault(subject_ref, {})
-        if status in ("COMPLETED", "CANCELLED"):
-            subj_goals.pop(gid, None)
-        else:
-            subj_goals[gid] = rec
+        with self._lock:
+            subj_goals = self._goals.setdefault(subject_ref, {})
+            self._evict_overflow_subjects()
+            if status in ("COMPLETED", "CANCELLED"):
+                subj_goals.pop(gid, None)
+            else:
+                subj_goals[gid] = rec
         return rec
 
     def list_active_goals(self, subject_ref: str) -> list[ActiveGoalRecord]:
         """List non-expired, in-progress or async-waiting Tier 4 goals for `subject_ref`."""
-        now = utc_now()
-        subj_goals = self._goals.get(subject_ref, {})
-        valid = {
-            gid: g
-            for gid, g in subj_goals.items()
-            if g.expires_at > now and g.status in ("IN_PROGRESS", "WAITING_ASYNC")
-        }
-        self._goals[subject_ref] = valid
-        return list(valid.values())
+        with self._lock:
+            now = utc_now()
+            subj_goals = self._goals.get(subject_ref, {})
+            valid = {
+                gid: g
+                for gid, g in subj_goals.items()
+                if g.expires_at > now and g.status in ("IN_PROGRESS", "WAITING_ASYNC")
+            }
+            self._goals[subject_ref] = valid
+            return list(valid.values())
 
     def hydrate_subject_context(self, subject_ref: str) -> HydratedCognitiveContext:
         """Hydrate Tiers 2, 3, and 4 for an authenticated `subject_ref`."""
-        consented = self.has_memory_continuity_consent(subject_ref)
-        return HydratedCognitiveContext(
-            subject_ref=subject_ref,
-            memory_continuity_consented=consented,
-            preferences=self.get_preferences(subject_ref),
-            recent_episodes=self.list_episodes(subject_ref) if consented else [],
-            active_goals=self.list_active_goals(subject_ref) if consented else [],
-        )
+        with self._lock:
+            consented = self.has_memory_continuity_consent(subject_ref)
+            return HydratedCognitiveContext(
+                subject_ref=subject_ref,
+                memory_continuity_consented=consented,
+                preferences=self.get_preferences(subject_ref),
+                recent_episodes=self.list_episodes(subject_ref) if consented else [],
+                active_goals=self.list_active_goals(subject_ref) if consented else [],
+            )
 
     def delete_subject_preferences(self, subject_ref: str) -> bool:
         """Per-subject deletion of all long-term preferences and cognitive memory tiers (Section 6.5)."""
-        had_prefs = self._prefs.pop(subject_ref, None) is not None
-        had_ep = self._episodes.pop(subject_ref, None) is not None
-        had_goals = self._goals.pop(subject_ref, None) is not None
-        self._continuity_consent.pop(subject_ref, None)
+        with self._lock:
+            had_prefs = self._prefs.pop(subject_ref, None) is not None
+            had_ep = self._episodes.pop(subject_ref, None) is not None
+            had_goals = self._goals.pop(subject_ref, None) is not None
+            self._continuity_consent.pop(subject_ref, None)
         qdrant_ok = self._delete_subject_from_qdrant(subject_ref)
         return (had_prefs or had_ep or had_goals or bool(self._qdrant_base_url())) and qdrant_ok

@@ -10,7 +10,7 @@
 - **Issue Resolution & Autonomous Goal Completion Rate:** **`100.0%`**
 - **Emotional Intelligence (`EQ`) Accuracy:** **`100.0%`**
 - **Statutory Numeric Provenance & Spoken Figure Fidelity:** **`100.0%`**
-- **4-Tier Cognitive Memory Hydration & Qdrant Sync:** `2/2` (`230` Qdrant vector points indexed at peak)
+- **4-Tier Cognitive Memory Hydration & Qdrant Sync:** `2/2` (`40` Qdrant vector points indexed at peak)
 - **Right-to-Erasure Verification (In-Memory + Qdrant):** `2/2` (`0` residual points)
 
 ## 1. Performance, Throughput & Conversational Rate Metrics (Live Ngrok HTTPS)
@@ -18,31 +18,31 @@
 | Metric | Value |
 |---|---|
 | Concurrency (Persistent TLS Keep-Alive Workers) | `16` |
-| Total Wall-Clock Duration | `32.45 s` |
-| Scenario Throughput | `30.81 scenarios/sec` |
-| Conversational Rate (Turns / sec) | `32.66 turns/sec` (`1959.8 turns/min`) |
-| HTTP Request Rate Over Ngrok | `32.63 req/sec` |
-| Latency `p50` (Median) | `430.46 ms` |
-| Latency `p90` | `576.58 ms` |
-| Latency `p95` | `883.47 ms` |
-| Latency `p99` | `1084.13 ms` |
-| Latency Mean | `465.11 ms` |
+| Total Wall-Clock Duration | `38.33 s` |
+| Scenario Throughput | `26.09 scenarios/sec` |
+| Conversational Rate (Turns / sec) | `27.65 turns/sec` (`1659.3 turns/min`) |
+| HTTP Request Rate Over Ngrok | `27.63 req/sec` |
+| Latency `p50` (Median) | `519.74 ms` |
+| Latency `p90` | `797.39 ms` |
+| Latency `p95` | `1040.95 ms` |
+| Latency `p99` | `1352.1 ms` |
+| Latency Mean | `561.03 ms` |
 
 ## 2. Accuracy & Latency by Language Family (`en`, `ar`/`pga`, `din`)
 
 | Language Family | Scenarios | Passed | Accuracy | Mean Latency (`ms`) |
 |---|---|---|---|---|
-| `en` | `340` | `340` | **`100.0%`** | `469.71 ms` |
-| `ar` | `330` | `330` | **`100.0%`** | `443.58 ms` |
-| `din` | `330` | `330` | **`100.0%`** | `481.89 ms` |
+| `en` | `340` | `340` | **`100.0%`** | `565.26 ms` |
+| `ar` | `330` | `330` | **`100.0%`** | `549.32 ms` |
+| `din` | `330` | `330` | **`100.0%`** | `568.38 ms` |
 
 ## 3. Accuracy & Latency by Modality (`TTT`, `STT`, `TTS`)
 
 | Modality | Scenarios | Passed | Accuracy | Mean Latency (`ms`) |
 |---|---|---|---|---|
-| `TTT` | `400` | `400` | **`100.0%`** | `546.39 ms` |
-| `STT` | `300` | `300` | **`100.0%`** | `414.61 ms` |
-| `TTS` | `300` | `300` | **`100.0%`** | `407.24 ms` |
+| `TTT` | `400` | `400` | **`100.0%`** | `624.42 ms` |
+| `STT` | `300` | `300` | **`100.0%`** | `492.44 ms` |
+| `TTS` | `300` | `300` | **`100.0%`** | `545.1 ms` |
 
 ## 4. Accuracy by Functional, Long-Horizon, EQ & Security Category
 
