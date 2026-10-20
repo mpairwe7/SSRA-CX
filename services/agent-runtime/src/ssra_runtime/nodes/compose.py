@@ -474,6 +474,9 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
                 }
                 for s in steps
             ]
+        wf_stack = state.get("workflow_stack") or []
+        if wf_stack:
+            ui_props["resumable_workflow"] = wf_stack[-1]
         return {
             "citations": [cit],
             "answer": Answer(

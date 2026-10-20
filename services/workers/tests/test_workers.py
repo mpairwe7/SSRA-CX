@@ -84,6 +84,7 @@ def test_knowledge_release_gate_and_sla_escalation() -> None:
     from ssra_voice.__main__ import main as voice_main
     from ssra_workers import (
         GoalContinuationCandidate,
+        build_continuation_candidates_from_outbox_events,
         get_worker_health_status,
         run_post_interaction_goal_continuation,
     )
@@ -216,3 +217,14 @@ def test_knowledge_release_gate_and_sla_escalation() -> None:
         assert disabled_cont.skipped_unapproved_template_or_flag == 1
     finally:
         engine.reset_flag_override("FF_TEMPORAL_POST_INTERACTION_CONTINUATION")
+
+    outbox_cands = build_continuation_candidates_from_outbox_events(
+        outbox_events=[
+            {"type": "ssra.cases.maker_checker_approved.v1", "subject": "sub_opted_in"},
+            {"type": "ssra.conversation.handback.v1", "subject": "sub_opted_in"},
+            {"type": "ssra.unrelated.event.v1", "subject": "sub_opted_in"},
+        ],
+        opted_in_subjects={"sub_opted_in"},
+    )
+    assert len(outbox_cands) == 2
+    assert run_post_interaction_goal_continuation(outbox_cands).resumed_count == 2

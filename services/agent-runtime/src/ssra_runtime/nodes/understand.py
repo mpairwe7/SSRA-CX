@@ -279,6 +279,7 @@ def understand_node(state: ConversationGraphState) -> dict[str, Any]:
         else text
     )
     intent_obj = validate_inter_model_handoff(classify_intent_deterministic(routing_text, locale))
+    merged_slots: dict[str, Any] = {**state.get("slots", {}), **intent_obj.slots}
     router_env = router_env.model_copy(update={"extracted_slots": dict(intent_obj.slots)})
 
     # Risk tier NEVER comes from the model; it comes deterministically from risk-tiers.yaml
@@ -300,7 +301,7 @@ def understand_node(state: ConversationGraphState) -> dict[str, Any]:
     return {
         "english_router_envelope": router_env,
         "intent": intent_obj,
-        "slots": dict(intent_obj.slots),
+        "slots": merged_slots,
         "tier": tier,
         "plan": plan,
     }

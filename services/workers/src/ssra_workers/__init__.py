@@ -13,6 +13,7 @@ from ssra_workers.continuation import (
     APPROVED_CONTINUATION_TEMPLATES,
     GoalContinuationCandidate,
     GoalContinuationDispatchSummary,
+    build_continuation_candidates_from_outbox_events,
     build_continuation_message,
     run_post_interaction_goal_continuation,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "KnowledgeReleaseJob",
     "LegalChunk",
     "ReminderCandidate",
+    "build_continuation_candidates_from_outbox_events",
     "build_continuation_message",
     "chunk_legal_document_by_structure",
     "evaluate_case_sla",

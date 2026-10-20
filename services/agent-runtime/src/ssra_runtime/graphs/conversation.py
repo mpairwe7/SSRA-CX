@@ -25,6 +25,7 @@ from ssra_core import (
     GenerativeUIComponentName,
     HandoffTicket,
     Intent,
+    IntentName,
     LocaleCode,
     McpErrorCode,
     RiskTier,
@@ -38,6 +39,7 @@ from ssra_runtime.graphs.knowledge_qa import execute_knowledge_qa_subgraph
 from ssra_runtime.graphs.self_service import execute_self_service_subgraph
 from ssra_runtime.memory import SubjectPreferenceMemoryStore
 from ssra_runtime.nodes import (
+    ActiveWorkflowCursor,
     compose_node,
     confirm_or_execute_write_node,
     deterministic_router_node,
@@ -48,6 +50,7 @@ from ssra_runtime.nodes import (
     policy_gate_node,
     understand_node,
 )
+from ssra_runtime.nodes.planner import MAX_WORKFLOW_STACK_DEPTH
 from ssra_runtime.replay import ConversationReplayStore, ReconstructedTurnRecord
 from ssra_runtime.schemas import PendingConfirmation, RuntimeTurnResponse
 from ssra_runtime.state import ConversationGraphState
@@ -102,7 +105,32 @@ class SSRAConversationRuntime:
         self._disabled_channels: set[ChannelName] = set()
         self._thread_subject_binding: dict[str, str] = {}
         self._pending_by_thread: dict[str, tuple[PendingConfirmation, Intent | None, RiskTier]] = {}
+        self._workflow_stack_by_thread: dict[str, list[dict[str, Any]]] = {}
         self._compiled = self._build_graph()
+
+    def apply_officer_handback_resolution(
+        self,
+        *,
+        thread_id: str,
+        approved_next_intent: IntentName,
+        return_to_ai_step: int = 1,
+        resolution_summary: str = "",
+    ) -> ActiveWorkflowCursor:
+        """Seed a conversation thread's `workflow_stack` with an officer's verified hand-back cursor."""
+        safe_id = validate_safe_thread_id(thread_id)
+        cursor = ActiveWorkflowCursor(
+            workflow_id=f"wf_{safe_id}",
+            journey_intent=approved_next_intent,
+            current_step=max(1, return_to_ai_step),
+            total_steps=3,
+            status="ACTIVE",
+            officer_note=redact_pii(resolution_summary).redacted_text[:200],
+        )
+        stack = self._workflow_stack_by_thread.setdefault(safe_id, [])
+        stack.append(cursor.model_dump(mode="json"))
+        if len(stack) > MAX_WORKFLOW_STACK_DEPTH:
+            del stack[:-MAX_WORKFLOW_STACK_DEPTH]
+        return cursor
 
     def set_kill_switches(
         self,
@@ -249,12 +277,27 @@ class SSRAConversationRuntime:
         text_parts = [p.value for p in event.data.parts if p.kind == "text"]
         user_text = " ".join(text_parts).strip()
 
-        # Hydrate consented accessibility/low-data preferences if stored for subject_ref (Section 6.5)
+        # Hydrate consented accessibility/low-data preferences & 4-tier active goals if stored for subject_ref (Section 6.5)
         capabilities = event.data.capabilities
+        seed_slots: dict[str, Any] = {}
+        for meta_k in (
+            "voice_barge_in_count",
+            "voice_rms_energy_delta",
+            "voice_speech_rate_ratio",
+            "consecutive_low_confidence_turns",
+            "repeated_clarification_count",
+        ):
+            if meta_k in event.data.metadata:
+                seed_slots[meta_k] = event.data.metadata[meta_k]
+        if event.data.metadata.get("eq_preemptive_escalate") == "true":
+            seed_slots["eq_preemptive_escalate"] = True
+
         if subject_ref is not None:
-            saved_pref = self.preference_store.get_preferences(subject_ref)
-            if saved_pref is not None and saved_pref.low_data_mode:
+            hydrated = self.preference_store.hydrate_subject_context(subject_ref)
+            if hydrated.preferences is not None and hydrated.preferences.low_data_mode:
                 capabilities = capabilities.model_copy(update={"rich_ui": False})
+            if hydrated.active_goals:
+                seed_slots["resumable_goal_id"] = hydrated.active_goals[0].goal_id
 
         # Enforce active channel kill-switch or Level 5 static FAQ safe mode before graph execution
         if (
@@ -367,6 +410,8 @@ class SSRAConversationRuntime:
             "auth_level": auth_level,
             "subject_ref": subject_ref,
             "raw_user_text": user_text,
+            "slots": seed_slots,
+            "workflow_stack": list(self._workflow_stack_by_thread.get(safe_thread_id, [])),
             "confirmation_token_in": confirmation_token,
             "idempotency_key_in": idempotency_key,
             "answer": None,
@@ -429,6 +474,23 @@ class SSRAConversationRuntime:
             safety_flags=final_state.get("safety_flags", []),
             audit_event_hash=final_state.get("audit_event_hash", ""),
         )
+        if resp.intent is not None and resp.intent.intent in (
+            IntentName.GUIDED_TIN_REGISTRATION,
+            IntentName.GUIDED_FILING_AND_PAYMENT,
+            IntentName.GUIDED_TCC,
+        ):
+            cursor = ActiveWorkflowCursor(
+                workflow_id=f"wf_{safe_thread_id}",
+                journey_intent=resp.intent.intent,
+                current_step=1,
+                total_steps=3 if resp.intent.intent == IntentName.GUIDED_TIN_REGISTRATION else 2,
+                status="PAUSED_FOR_DELEGATION",
+            )
+            stack = self._workflow_stack_by_thread.setdefault(safe_thread_id, [])
+            stack.append(cursor.model_dump(mode="json"))
+            if len(stack) > MAX_WORKFLOW_STACK_DEPTH:
+                del stack[:-MAX_WORKFLOW_STACK_DEPTH]
+
         if subject_ref is not None and resp.intent is not None:
             blockers = verif_dict.get("blocker_codes") or []
             self.preference_store.record_episode(

@@ -3,8 +3,8 @@
 Enforces:
 1. Hysteretic Language-State Machine (`LOCKED`, `CODE_SWITCHING`, `CANDIDATE_SHIFT`, `FALLBACK_EN`)
    requiring 2 consecutive turns to shift primary session locale unless the taxpayer explicitly requests a switch.
-2. Multilingual vernacular detection across all 8 South Sudan BCP-47 languages
-   (`en`, `pga`, `ar`, `din`, `nus`, `bfa`, `zne`, `shk`).
+2. Multilingual vernacular & termbase detection across all 8 South Sudan BCP-47 languages
+   (`en`, `pga`, `ar`, `din`, `nus`, `bfa`, `zne`, `shk`), dynamically loading `ai/termbase/glossary.yaml`.
 3. Canonical English-Router normalization (`EnglishRouterEnvelope`) preserving all statutory tokens
    (TINs, SSP/USD amounts, section anchors, form codes) untouched.
 """
@@ -12,11 +12,15 @@ Enforces:
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Literal
 
+import yaml
 from ssra_core import EnglishRouterEnvelope, LocaleCode
 
 LanguageStateLiteral = Literal["LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN"]
+
+_GLOSSARY_FILE = Path(__file__).resolve().parents[5] / "ai" / "termbase" / "glossary.yaml"
 
 # Statutory tokens that must NEVER be altered by translation or normalization
 _STATUTORY_TOKEN_RE = re.compile(
@@ -30,41 +34,80 @@ _VERNACULAR_TO_CANONICAL_EN: tuple[tuple[tuple[str, ...], str, str], ...] = (
     # Juba Arabic (`pga`)
     (("dariba ta mahiya", "gurush ta mahiya"), "pga", "calculate paye salary tax"),
     (("shahada ta imtisal", "imtisal"), "pga", "tax compliance certificate tcc"),
-    (("tasjil", "ragam daribi"), "pga", "register tin taxpayer identification number"),
+    (
+        ("tasjil", "ragam daribi", "namba ta dariba"),
+        "pga",
+        "register tin taxpayer identification number",
+    ),
     (("gamarik", "bidaa"), "pga", "customs duties tariff declaration"),
     (("hisab", "gurush kam", "medyun"), "pga", "check my tax balance"),
     # Arabic (`ar`)
     (("ضريبة الدخل", "ضريبة المرتبات"), "ar", "calculate paye salary tax"),
     (("شهادة الامتثال",), "ar", "tax compliance certificate tcc"),
-    (("الرقم الضريبي", "تسجيل"), "ar", "register tin taxpayer identification number"),
+    (
+        ("الرقم الضريبي", "الرقم التعريفي الضريبي", "تسجيل"),
+        "ar",
+        "register tin taxpayer identification number",
+    ),
     (("الجمارك", "التعريفة"), "ar", "customs duties tariff declaration"),
     # Dinka (`din`)
+    (("namba de ajul wëu",), "din", "register tin taxpayer identification number"),
+    (("waraga de cuɔk de wëu",), "din", "tax compliance certificate tcc"),
+    (("ajul de ariöp de luɔi",), "din", "calculate paye salary tax"),
+    (("ajul de rïöök de ɣɔɔc",), "din", "business profit tax bpt"),
+    (("ajul määc në cök",), "din", "withholding tax wht"),
     (("ajul", "wëu", "bɛ̈ŋic"), "din", "south sudan tax procedures and official e-tax bank payment"),
     # Nuer (`nus`)
+    (("namba juäärä yiööth",), "nus", "register tin taxpayer identification number"),
+    (("waraga cuɔk yiööth",), "nus", "tax compliance certificate tcc"),
+    (("yiööth luɔi",), "nus", "calculate paye salary tax"),
     (
         ("yiööth", "juäärä", "cuɔl"),
         "nus",
         "south sudan tax procedures and official e-tax bank payment",
     ),
     # Bari (`bfa`)
+    (("namba lo kaser",), "bfa", "register tin taxpayer identification number"),
+    (("waraga lo kaser",), "bfa", "tax compliance certificate tcc"),
     (
         ("kaser", "lɔŋɔt", "banki lo"),
         "bfa",
         "south sudan tax procedures and official e-tax bank payment",
     ),
     # Zande (`zne`)
+    (("namba marã",), "zne", "register tin taxpayer identification number"),
+    (("waraga marã",), "zne", "tax compliance certificate tcc"),
     (
         ("marã", "tumosi", "rogo ssra"),
         "zne",
         "south sudan tax procedures and official e-tax bank payment",
     ),
     # Shilluk (`shk`)
+    (("namba ocul jami",), "shk", "register tin taxpayer identification number"),
+    (("waraga ocul jami",), "shk", "tax compliance certificate tcc"),
     (
         ("cøøri", "ocul jami", "bëëne"),
         "shk",
         "south sudan tax procedures and official e-tax bank payment",
     ),
 )
+
+
+def _load_termbase_glossary_expansions() -> tuple[tuple[str, str, str], ...]:
+    """Load multilingual term mappings from `ai/termbase/glossary.yaml` into `(marker_lower, locale_code, canonical_en)`."""
+    raw = yaml.safe_load(_GLOSSARY_FILE.read_text(encoding="utf-8")) or {}
+    entries: list[tuple[str, str, str]] = []
+    for item in raw.get("terms", []):
+        en_canonical = str(item.get("en", "")).strip().lower()
+        for loc_key in ("ar", "pga", "din", "nus", "bfa", "zne", "shk"):
+            loc_phrase = str(item.get(loc_key, "")).strip()
+            clean_phrase = re.sub(r"\s*\([^)]*\)\s*$", "", loc_phrase).strip().lower()
+            if len(clean_phrase) >= 4:
+                entries.append((clean_phrase, loc_key, en_canonical))
+    return tuple(entries)
+
+
+_GLOSSARY_EXPANSIONS: tuple[tuple[str, str, str], ...] = _load_termbase_glossary_expansions()
 
 _EXPLICIT_SWITCH_RE = re.compile(
     r"\b(?:speak|switch\s+to|respond\s+in|in)\s+(english|arabic|juba\s+arabic|dinka|nuer|bari|zande|shilluk)\b",
@@ -144,6 +187,12 @@ def build_english_router_envelope(
             detected_vernacular = vern_code
             if en_concept not in expansions:
                 expansions.append(en_concept)
+
+    for marker_lower, vern_code, en_canonical in _GLOSSARY_EXPANSIONS:
+        if marker_lower in lower:
+            detected_vernacular = vern_code
+            if en_canonical not in expansions:
+                expansions.append(en_canonical)
 
     if expansions:
         token_suffix = f" [{' '.join(preserved)}]" if preserved else ""

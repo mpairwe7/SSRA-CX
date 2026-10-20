@@ -36,9 +36,9 @@ We adopt Option 2:
    - Normalizes South Sudanese vernacular queries (`pga`, `ar`, `din`, `nus`, `bfa`, `zne`, `shk`) into `EnglishRouterEnvelope` while preserving statutory tokens (TINs, section anchors, SSP/USD figures).
 3. **Bounded Goal Planner & Outcome Verifier (`planner.py`, `verifier.py`, `self_service.py`, `compose.py`):**
    - Executes multi-step `Plan` DAGs within `TurnBudget` and verifies provenance and domain blockers (`OVERDUE_BALANCE_REQUIRES_SETTLEMENT`, `FILING_STATUS_NOT_CURRENT`) before composition.
-4. **4-Tier Cognitive Memory, `HandoffEnvelope` v2 & Temporal Continuation (`memory.py`, `handoff.py`, `continuation.py`, `conversations` API):**
-   - Adds consent-gated `EpisodicMemoryRecord` (Tier 2) and `ActiveGoalRecord` (Tier 4) with mandatory `strip_financial_figures_for_memory` and instant single-call Right-to-Erasure.
-   - Emits `HandoffEnvelope` v2 on officer escalations, supports `OfficerResolutionArtifact` on `POST /v1/conversations/{id}/handback`, and dispatches consent-checked post-interaction goal continuations (`run_post_interaction_goal_continuation`).
+4. **4-Tier Cognitive Memory, `HandoffEnvelope` v2 & Temporal Continuation (`memory.py`, `handoff.py`, `continuation.py`, `conversations` API, `database.py`):**
+   - Adds consent-gated `EpisodicMemoryRecord` (Tier 2) and `ActiveGoalRecord` (Tier 4) with mandatory `strip_financial_figures_for_memory`, `EpisodicMemoryORM`/`ActiveGoalORM` DDL, and instant single-call Right-to-Erasure.
+   - Emits `HandoffEnvelope` v2 on officer escalations, supports `OfficerResolutionArtifact` on `POST /v1/conversations/{id}/handback` + `apply_officer_handback_resolution`, supports mid-journey `workflow_stack` delegation and Cross-Tier Read -> Stage-Write planning, and dispatches consent-checked post-interaction goal continuations (`run_post_interaction_goal_continuation`, `build_continuation_candidates_from_outbox_events`).
 
 ## 5. Consequences
 

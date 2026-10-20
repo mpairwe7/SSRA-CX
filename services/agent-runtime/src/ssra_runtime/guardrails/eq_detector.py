@@ -270,6 +270,8 @@ def build_empathetic_preamble(
             return "نتفهم أهمية واستعجال طلبك، وسنتحقق من سجلات هيئة الإيرادات (SSRA) الرسمية خطوة بخطوة. "
         if locale_code == "pga":
             return "Anina fahim mawdu taki مهم شديد — خلينا نراجع خطوات SSRA الرسمية سوا. "
+        if locale_code == "din":
+            return "Ɣok aa deet lɔn ril käkɛ̈ tënë yïn — buk ajul ku lööŋ ke SSRA caar ನ್ಯಾಯic. "
         return (
             "I understand how urgent this matter is for you—let us review the verified SSRA "
             "steps clearly together. "
@@ -279,5 +281,7 @@ def build_empathetic_preamble(
             return "لا تقلق، سنوضح الإجراء الرسمي خطوة بخطوة: "
         if locale_code == "pga":
             return "Maangal، حنشرح ليك الخطوات الرسمية واحدة واحدة: "
+        if locale_code == "din":
+            return "Duɔ̈në riɔ̈ɔ̈c, buk dhöl de SSRA nyuɔɔth yïn në كök: "
         return "Here is the clear step-by-step official guidance: "
     return ""
