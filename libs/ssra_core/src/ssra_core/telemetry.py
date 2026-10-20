@@ -247,13 +247,13 @@ class AgenticCxSpanAttributes:
     language_state: str
     locale: str
     handoff_clean: bool
-    voice_ttfa_ms: float = 0.0
+    voice_ttfa_ms: float | None = None
     hybrid_voice_mode: Literal["none", "s2s_fast_ack", "cascaded_governed"] = "none"
     offline_pack_used: bool = False
 
     def to_otel_dict(self) -> dict[str, Any]:
         """Serialize Agentic CX and EQ span attributes to an OpenTelemetry attribute dictionary."""
-        return {
+        attrs: dict[str, Any] = {
             "ssra.cx.goal.id": self.goal_id,
             "ssra.cx.goal.step_count": self.goal_step_count,
             "ssra.cx.goal.outcome": self.goal_outcome,
@@ -264,10 +264,12 @@ class AgenticCxSpanAttributes:
             "ssra.cx.language.state": self.language_state,
             "ssra.cx.language.locale": self.locale,
             "ssra.cx.handoff.clean": self.handoff_clean,
-            "ssra.cx.voice.ttfa_ms": self.voice_ttfa_ms,
             "ssra.cx.voice.hybrid_mode": self.hybrid_voice_mode,
             "ssra.cx.offline.pack_used": self.offline_pack_used,
         }
+        if self.voice_ttfa_ms is not None and math.isfinite(self.voice_ttfa_ms):
+            attrs["ssra.cx.voice.ttfa_ms"] = self.voice_ttfa_ms
+        return attrs
 
 
 def build_agentic_cx_span_attributes(
@@ -288,11 +290,29 @@ def build_agentic_cx_span_attributes(
     language_state: str = "LOCKED",
     locale: LocaleCode = LocaleCode.EN,
     handoff_clean: bool = True,
-    voice_ttfa_ms: float = 0.0,
-    hybrid_voice_mode: Literal["none", "s2s_fast_ack", "cascaded_governed"] = "none",
+    voice_ttfa_ms: float | None = None,
+    hybrid_voice_mode: Literal[
+        "none",
+        "s2s_fast_ack",
+        "cascaded_governed",
+        "S2S_FAST_ACK_CACHED",
+        "CASCADED_GOVERNED_STT_LLM_TTS",
+    ] = "none",
     offline_pack_used: bool = False,
 ) -> AgenticCxSpanAttributes:
     """Construct validated OpenTelemetry Agentic CX and EQ span attributes."""
+    resolved_ttfa = (
+        round(max(0.0, voice_ttfa_ms), 2)
+        if voice_ttfa_ms is not None and math.isfinite(voice_ttfa_ms)
+        else None
+    )
+    mapped_mode: Literal["none", "s2s_fast_ack", "cascaded_governed"] = (
+        "s2s_fast_ack"
+        if hybrid_voice_mode in ("s2s_fast_ack", "S2S_FAST_ACK_CACHED")
+        else "cascaded_governed"
+        if hybrid_voice_mode in ("cascaded_governed", "CASCADED_GOVERNED_STT_LLM_TTS")
+        else "none"
+    )
     return AgenticCxSpanAttributes(
         goal_id=goal_id,
         goal_step_count=max(1, goal_step_count),
@@ -304,7 +324,7 @@ def build_agentic_cx_span_attributes(
         language_state=language_state,
         locale=locale.value,
         handoff_clean=handoff_clean,
-        voice_ttfa_ms=round(max(0.0, voice_ttfa_ms), 2) if math.isfinite(voice_ttfa_ms) else 0.0,
-        hybrid_voice_mode=hybrid_voice_mode,
+        voice_ttfa_ms=resolved_ttfa,
+        hybrid_voice_mode=mapped_mode,
         offline_pack_used=offline_pack_used,
     )

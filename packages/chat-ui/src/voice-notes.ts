@@ -143,7 +143,10 @@ export function evaluateSemanticEndpointing(
   }
   const words = trimmed.toLowerCase().split(/\s+/);
   const lastWord = (words[words.length - 1] ?? "").replace(/[.,;:]/g, "");
-  if (/^\d{1,8}$/.test(lastWord) || INCOMPLETE_TAIL_TOKENS.has(lastWord)) {
+  if (
+    /^[0-9\u0660-\u0669\u06F0-\u06F9]{1,8}$/.test(lastWord) ||
+    INCOMPLETE_TAIL_TOKENS.has(lastWord)
+  ) {
     return { effectiveSilenceMs: 1100, reason: "incomplete_digit_or_clause" };
   }
   return { effectiveSilenceMs: baseSilenceMs, reason: "default_acoustic" };

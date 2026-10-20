@@ -596,6 +596,7 @@ class VoiceStreamSession:
     def __init__(
         self, *, session_id: str, locale: LocaleCode, vad: VADConfig | None = None
     ) -> None:
+        """Initialize a streaming voice session with VAD thresholds and full-duplex barge-in state."""
         self.session_id = session_id
         self.locale = locale
         self.vad = vad or VADConfig.from_sensitivity("medium")
@@ -606,10 +607,19 @@ class VoiceStreamSession:
 
     def trigger_barge_in(self, *, sentence_index: int | None = None) -> None:
         """Cancel active TTS playback immediately (<80ms) on caller barge-in and record interrupt index."""
-        self.barge_in_cancelled = sentence_index is None
-        self.interrupted_at_sentence_index = sentence_index
+        if sentence_index is None:
+            self.barge_in_cancelled = True
+        else:
+            self.interrupted_at_sentence_index = max(0, sentence_index)
+
+    def reset_barge_in(self) -> None:
+        """Reset per-turn barge-in interruption state before streaming the next reply."""
+        self.barge_in_cancelled = False
+        self.interrupted_at_sentence_index = None
+        self.unspoken_sentences = []
 
     def record_partial_transcript(self, partial_text: str) -> str | None:
+        """Record a 4-word stable partial transcript prefix for speculative retrieval prefetch."""
         words = [w for w in partial_text.strip().split() if w]
         if len(words) >= 3:
             stable_prefix = " ".join(words[:4])
@@ -618,8 +628,10 @@ class VoiceStreamSession:
         return None
 
     def stream_tts_sentences(self, text: str, *, voice: str | None = None) -> list[dict[str, Any]]:
+        """Synthesize reply sentences in order, halting on barge-in and recording unspoken sentences."""
         sentences = split_tts_sentences(text)
         chunks: list[dict[str, Any]] = []
+        self.unspoken_sentences = []
         for idx, sentence in enumerate(sentences):
             if self.barge_in_cancelled or (
                 self.interrupted_at_sentence_index is not None
@@ -933,15 +945,18 @@ def build_voice_spoken_turn_and_sms_followup(
     }
 
 
+_EN_APPROVED_TOOL_WAIT_FILLER = "One moment while I check the official SSRA records."
+
+# Only single-script, SSRA-approved fillers are active; Tier B/C locales pending OQ-008 voice clip sign-off fall back safely to _EN_APPROVED_TOOL_WAIT_FILLER
 _TOOL_WAIT_FILLERS: dict[LocaleCode, str] = {
-    LocaleCode.EN: "One moment while I check the official SSRA records.",
+    LocaleCode.EN: _EN_APPROVED_TOOL_WAIT_FILLER,
     LocaleCode.AR: "لحظة واحدة، أتحقق الآن من سجلات هيئة الإيرادات الرسمية.",
-    LocaleCode.PGA: "Sabur shwaya, ana bishuf سجلات SSRA al-rasmiya.",
-    LocaleCode.DIN: "Tiit nyin tök, ɣɛn caar athör ke SSRA.",
-    LocaleCode.NUS: "Tiit tëët, ɣän caar waraga SSRA.",
-    LocaleCode.BFA: "Titit na'dit, nan mede waraga lo SSRA.",
-    LocaleCode.ZNE: "Mo sungu toni, miertingo waraga SSRA.",
-    LocaleCode.SHK: "Kürityen, aneno waraga SSRA.",
+    LocaleCode.PGA: _EN_APPROVED_TOOL_WAIT_FILLER,
+    LocaleCode.DIN: _EN_APPROVED_TOOL_WAIT_FILLER,
+    LocaleCode.NUS: _EN_APPROVED_TOOL_WAIT_FILLER,
+    LocaleCode.BFA: _EN_APPROVED_TOOL_WAIT_FILLER,
+    LocaleCode.ZNE: _EN_APPROVED_TOOL_WAIT_FILLER,
+    LocaleCode.SHK: _EN_APPROVED_TOOL_WAIT_FILLER,
 }
 
 
@@ -1015,15 +1030,18 @@ def normalize_statutory_text_for_speech(text: str, locale: LocaleCode = LocaleCo
     return out
 
 
+_NUMERIC_TOKEN_RE = re.compile(r"(?<![\d.])\d+(?:\.\d+)?(?![\d.])")
+
+
 def verify_spoken_figure_fidelity(
     spoken_text: str,
     expected_numeric_values: list[str] | tuple[str, ...],
 ) -> bool:
-    """Verify that every required `NumericClaim` value appears intact in the TTS-prepared text."""
-    normalized_spoken = spoken_text.replace(",", "")
+    """Verify that every required `NumericClaim` value appears as an exact whole numeric token in the TTS-prepared text."""
+    spoken_tokens = set(_NUMERIC_TOKEN_RE.findall(re.sub(r"(?<=\d),(?=\d{3})", "", spoken_text)))
     for val in expected_numeric_values:
         clean_val = str(val).replace(",", "").strip()
-        if clean_val and clean_val not in normalized_spoken:
+        if clean_val and clean_val not in spoken_tokens:
             return False
     return True
 

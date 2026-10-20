@@ -7,6 +7,7 @@ from ssra_voice import ASR_MODEL_BY_LOCALE, is_voice_language_approved, route_vo
 
 
 def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
+    """Verify ASR/TTS model selection, WER gate, DTMF step-up, hybrid speech router, and spoken figure fidelity."""
     assert "whisper" in ASR_MODEL_BY_LOCALE[LocaleCode.EN]
     assert "omnilingual" in ASR_MODEL_BY_LOCALE[LocaleCode.PGA]
     assert "omnilingual" in ASR_MODEL_BY_LOCALE[LocaleCode.DIN]
@@ -134,6 +135,7 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     assert "Part IV, Section 18" in norm_speech
     assert "e-tax dot n r a dot gov dot s s" in norm_speech
     assert verify_spoken_figure_fidelity(norm_speech, ["450,000"]) is True
+    assert verify_spoken_figure_fidelity("450,000 SSP", ["45,000"]) is False
     assert verify_spoken_figure_fidelity(norm_speech, ["999,999"]) is False
 
     # Full-duplex sub-sentence barge-in recovery & Edge Field-Office Appliance Profile
@@ -148,6 +150,9 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     )
     assert len(chunks) == 1
     assert v_stream.unspoken_sentences == ["Second interrupted.", "Third unspoken."]
+    v_stream.reset_barge_in()
+    assert v_stream.barge_in_cancelled is False
+    assert v_stream.interrupted_at_sentence_index is None
 
     edge_offline = resolve_edge_appliance_profile(
         office_code="NIMULE_CUSTOMS", backhaul_online=False

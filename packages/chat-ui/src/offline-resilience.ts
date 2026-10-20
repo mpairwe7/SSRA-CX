@@ -3,7 +3,7 @@
  *
  * Provides zero-network, deterministic client-side capabilities for intermittent/offline South Sudan networks:
  * 1. Offline PAYE & Withholding Tax estimators (`calculateOfflinePayeEstimate`, `calculateOfflineWithholdingEstimate`)
- *    matching `knowledge/tax-facts/seed-2026.10.1.yaml` and badged `OFFLINE_ESTIMATE_ONLY`.
+ *    matching `knowledge/tax-facts/seed-2026.10.1.yaml` and `libs/ssra_rules/src/ssra_rules/engine.py` (`OFFLINE_ESTIMATE_ONLY`).
  * 2. Offline Anti-Impersonation Official Channel Verifier (`verifyOfflineOfficialChannel`) & SSRA Office Directory.
  * 3. Adaptive Opus Bitrate & Timeout Governor (`resolveAdaptiveVoiceNetworkProfile`: `12 kbps` on `2g`/`slow-2g`).
  */
@@ -45,6 +45,24 @@ export const OFFLINE_SSRA_OFFICE_DIRECTORY: readonly OfflineSsraOfficeEntry[] = 
   },
 ] as const;
 
+/**
+ * Canonical PAYE brackets from `knowledge/tax-facts/seed-2026.10.1.yaml`:
+ * - Band 1: 0 .. 50,000 SSP @ 0% (`paye.bracket.1.*`)
+ * - Band 2: 50,000 .. 150,000 SSP @ 10% (`paye.bracket.2.*`)
+ * - Band 3: 150,000 .. 300,000 SSP @ 15% (`paye.bracket.3.*`)
+ * - Band 4: > 300,000 SSP @ 20% (`paye.bracket.4.rate_percent`)
+ */
+export const OFFLINE_PAYE_BRACKETS_2026_10_1 = {
+  b1MaxSsp: 50_000,
+  b1RatePct: 0,
+  b2MaxSsp: 150_000,
+  b2RatePct: 10,
+  b3MaxSsp: 300_000,
+  b3RatePct: 15,
+  b4RatePct: 20,
+  filingDeadlineDay: 15,
+} as const;
+
 export interface OfflinePayeEstimateResult {
   readonly grossMonthlySsp: number;
   readonly estimatedTaxSsp: number;
@@ -58,20 +76,25 @@ export interface OfflinePayeEstimateResult {
 }
 
 /**
- * Compute a deterministic offline monthly PAYE estimate matching `libs/ssra_rules` (`seed-2026.10.1.yaml`).
+ * Compute a deterministic offline monthly PAYE estimate matching `libs/ssra_rules/src/ssra_rules/engine.py` (`seed-2026.10.1.yaml`).
  */
 export function calculateOfflinePayeEstimate(grossMonthlySsp: number): OfflinePayeEstimateResult {
   if (!Number.isFinite(grossMonthlySsp) || grossMonthlySsp < 0) {
     throw new RangeError("grossMonthlySsp must be a finite non-negative number");
   }
   const gross = Math.round(grossMonthlySsp * 100) / 100;
+  const { b1MaxSsp, b2MaxSsp, b3MaxSsp, b2RatePct, b3RatePct, b4RatePct } =
+    OFFLINE_PAYE_BRACKETS_2026_10_1;
   let tax = 0;
-  if (gross > 300_000) {
-    tax = (gross - 300_000) * 0.2 + 100_000 * 0.15 + 100_000 * 0.1;
-  } else if (gross > 200_000) {
-    tax = (gross - 200_000) * 0.15 + 100_000 * 0.1;
-  } else if (gross > 100_000) {
-    tax = (gross - 100_000) * 0.1;
+  if (gross > b3MaxSsp) {
+    tax =
+      (gross - b3MaxSsp) * (b4RatePct / 100) +
+      (b3MaxSsp - b2MaxSsp) * (b3RatePct / 100) +
+      (b2MaxSsp - b1MaxSsp) * (b2RatePct / 100);
+  } else if (gross > b2MaxSsp) {
+    tax = (gross - b2MaxSsp) * (b3RatePct / 100) + (b2MaxSsp - b1MaxSsp) * (b2RatePct / 100);
+  } else if (gross > b1MaxSsp) {
+    tax = (gross - b1MaxSsp) * (b2RatePct / 100);
   }
   const roundedTax = Math.round(tax * 100) / 100;
   const net = Math.round((gross - roundedTax) * 100) / 100;
@@ -89,17 +112,26 @@ export function calculateOfflinePayeEstimate(grossMonthlySsp: number): OfflinePa
   };
 }
 
+/**
+ * Canonical Withholding Tax categories & rates from `knowledge/tax-facts/seed-2026.10.1.yaml` (`libs/ssra_rules`).
+ */
 export type OfflineWithholdingCategory =
+  | "goods_and_services"
   | "rent"
-  | "government_contracts"
   | "technical_fees"
-  | "dividends_interest_royalties";
+  | "government_contractors_resident"
+  | "government_contractors_non_resident"
+  | "mobile_money_commissions"
+  | "end_of_service_benefits";
 
-const OFFLINE_WHT_RATES: Record<OfflineWithholdingCategory, number> = {
-  rent: 20,
-  government_contracts: 20,
+export const OFFLINE_WHT_RATES_2026_10_1: Record<OfflineWithholdingCategory, number> = {
+  goods_and_services: 20,
+  rent: 10,
   technical_fees: 15,
-  dividends_interest_royalties: 10,
+  government_contractors_resident: 15,
+  government_contractors_non_resident: 20,
+  mobile_money_commissions: 10,
+  end_of_service_benefits: 10,
 };
 
 export interface OfflineWithholdingEstimateResult {
@@ -119,12 +151,12 @@ export interface OfflineWithholdingEstimateResult {
  */
 export function calculateOfflineWithholdingEstimate(
   grossAmountSsp: number,
-  category: OfflineWithholdingCategory = "rent",
+  category: OfflineWithholdingCategory = "goods_and_services",
 ): OfflineWithholdingEstimateResult {
   if (!Number.isFinite(grossAmountSsp) || grossAmountSsp < 0) {
     throw new RangeError("grossAmountSsp must be a finite non-negative number");
   }
-  const ratePercent = OFFLINE_WHT_RATES[category] ?? 20;
+  const ratePercent = OFFLINE_WHT_RATES_2026_10_1[category] ?? 20;
   const gross = Math.round(grossAmountSsp * 100) / 100;
   const wht = Math.round(gross * (ratePercent / 100) * 100) / 100;
   const net = Math.round((gross - wht) * 100) / 100;
@@ -141,13 +173,23 @@ export function calculateOfflineWithholdingEstimate(
   };
 }
 
+/**
+ * Verify whether a candidate URL or channel identifier is the official SSRA e-Tax portal (`etax.nra.gov.ss`).
+ */
 export function verifyOfflineOfficialChannel(candidate: string): {
   readonly status: "OFFICIAL_VERIFIED" | "UNVERIFIED_OR_SCAM";
   readonly officialPortal: typeof OFFICIAL_ETAX_PORTAL_URL;
   readonly guidance: string;
 } {
   const norm = candidate.trim().toLowerCase();
-  if (norm === "https://etax.nra.gov.ss/" || norm === "etax.nra.gov.ss") {
+  let host: string | null = null;
+  try {
+    const u = new URL(/^[a-z]+:\/\//.test(norm) ? norm : `https://${norm}`);
+    host = u.protocol === "https:" && !u.username && !u.password && !u.port ? u.hostname : null;
+  } catch {
+    host = null;
+  }
+  if (host === "etax.nra.gov.ss") {
     return {
       status: "OFFICIAL_VERIFIED",
       officialPortal: OFFICIAL_ETAX_PORTAL_URL,
