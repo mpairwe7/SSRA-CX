@@ -560,6 +560,10 @@ def resolve_tts_voice(locale: str, requested_voice: str | None = None) -> str | 
 
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+_ABBREV_PROTECT_RE = re.compile(
+    r"\b(Sec|Reg|Art|No|Vol|Ch|Pt|Dr|Mr|Mrs|Ms)\.\s+",
+    flags=re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -574,6 +578,7 @@ class VADConfig:
 
     @classmethod
     def from_sensitivity(cls, sensitivity: str = "medium", sample_rate: int = 16_000) -> VADConfig:
+        """Construct a `VADConfig` preset from a named sensitivity level (`low`, `medium`, `high`)."""
         presets = {
             "low": cls(energy_threshold=0.025, silence_duration_ms=800, sample_rate=sample_rate),
             "medium": cls(energy_threshold=0.015, silence_duration_ms=600, sample_rate=sample_rate),
@@ -583,11 +588,14 @@ class VADConfig:
 
 
 def split_tts_sentences(text: str) -> list[str]:
-    """Split reply text into sentence chunks for sub-second time-to-first-audio."""
+    """Split reply text into sentence chunks while preserving statutory abbreviations (`Sec. 18`, `Reg. 1.21`)."""
     cleaned = text.strip()
     if not cleaned:
         return []
-    return [s.strip() for s in _SENTENCE_SPLIT_RE.split(cleaned) if s.strip()]
+    protected = _ABBREV_PROTECT_RE.sub(r"\1<DOT> ", cleaned)
+    return [
+        s.replace("<DOT>", ".").strip() for s in _SENTENCE_SPLIT_RE.split(protected) if s.strip()
+    ]
 
 
 class VoiceStreamSession:
@@ -1036,12 +1044,23 @@ _NUMERIC_TOKEN_RE = re.compile(r"(?<![\d.])\d+(?:\.\d+)?(?![\d.])")
 def verify_spoken_figure_fidelity(
     spoken_text: str,
     expected_numeric_values: list[str] | tuple[str, ...],
+    *,
+    strict_no_extra_numbers: bool = False,
+    allowed_context_numbers: list[str] | tuple[str, ...] = (),
 ) -> bool:
     """Verify that every required `NumericClaim` value appears as an exact whole numeric token in the TTS-prepared text."""
     spoken_tokens = set(_NUMERIC_TOKEN_RE.findall(re.sub(r"(?<=\d),(?=\d{3})", "", spoken_text)))
-    for val in expected_numeric_values:
-        clean_val = str(val).replace(",", "").strip()
-        if clean_val and clean_val not in spoken_tokens:
+    expected_clean = {
+        str(val).replace(",", "").strip() for val in expected_numeric_values if str(val).strip()
+    }
+    for clean_val in expected_clean:
+        if clean_val not in spoken_tokens:
+            return False
+    if strict_no_extra_numbers:
+        allowed_all = expected_clean | {
+            str(c).replace(",", "").strip() for c in allowed_context_numbers if str(c).strip()
+        }
+        if not spoken_tokens.issubset(allowed_all):
             return False
     return True
 

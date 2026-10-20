@@ -135,10 +135,17 @@ class FeatureFlagEngine:
             self._base_rules[str(f_name)] = rule
 
     def _sync_shared_overrides_from_disk(self) -> None:
-        """Load shared runtime overrides written by Admin control-plane processes if present."""
+        """Load HMAC-verified shared runtime overrides written by Admin control-plane processes if present."""
         if not self.shared_override_path.is_file():
             return
-        data = json.loads(self.shared_override_path.read_text(encoding="utf-8"))
+        envelope = json.loads(self.shared_override_path.read_text(encoding="utf-8"))
+        data = envelope.get("overrides", {})
+        sig = str(envelope.get("hmac_sha256", ""))
+        canonical = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        expected = hmac.new(self.salt.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            self._overrides.clear()
+            return
         synced: dict[str, FeatureFlagRule] = {}
         for k, v in data.items():
             if isinstance(v, dict):
@@ -155,13 +162,20 @@ class FeatureFlagEngine:
         self._overrides = synced
 
     def _persist_shared_overrides_to_disk(self) -> None:
-        """Persist active runtime overrides so all local runtime workers observe changes immediately."""
+        """Atomically persist HMAC-signed runtime overrides (`0o600` + `os.replace`) across local workers."""
         self.shared_override_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {k: asdict(v) for k, v in self._overrides.items()}
-        self.shared_override_path.write_text(
-            json.dumps(payload, sort_keys=True),
-            encoding="utf-8",
+        overrides_dict = {k: asdict(v) for k, v in self._overrides.items()}
+        canonical = json.dumps(overrides_dict, sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
         )
+        sig = hmac.new(self.salt.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
+        envelope = {"overrides": overrides_dict, "hmac_sha256": sig}
+        tmp_path = self.shared_override_path.with_name(
+            f".{self.shared_override_path.name}.{os.getpid()}.tmp"
+        )
+        tmp_path.write_text(json.dumps(envelope, sort_keys=True), encoding="utf-8")
+        tmp_path.chmod(0o600)
+        os.replace(tmp_path, self.shared_override_path)
 
     def _effective_rules(self) -> dict[str, FeatureFlagRule]:
         """Return base YAML rules merged with any active runtime overrides."""

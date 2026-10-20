@@ -71,6 +71,30 @@ def main() -> None:
             jsonschema.Draft202012Validator.check_schema(tool.output_schema)
             total_tools += 1
 
+    # 3. Verify offline-resilience.ts PAYE & WHT constants match TaxFactsRegistry (seed-2026.10.1.yaml)
+    from ssra_rules import TaxFactsRegistry
+
+    reg = TaxFactsRegistry.from_yaml_file()
+    offline_ts = (ROOT / "packages" / "chat-ui" / "src" / "offline-resilience.ts").read_text(
+        encoding="utf-8"
+    )
+    assert f"b1MaxSsp: {int(reg.get_fact('paye.bracket.1.max_monthly_ssp').value):_}" in offline_ts
+    assert f"b2MaxSsp: {int(reg.get_fact('paye.bracket.2.max_monthly_ssp').value):_}" in offline_ts
+    assert f"b3MaxSsp: {int(reg.get_fact('paye.bracket.3.max_monthly_ssp').value):_}" in offline_ts
+    for wht_cat in (
+        "goods_and_services",
+        "rent",
+        "technical_fees",
+        "government_contractors_resident",
+        "government_contractors_non_resident",
+        "mobile_money_commissions",
+        "end_of_service_benefits",
+    ):
+        expected_rate = int(reg.get_fact(f"wht.{wht_cat}.rate_percent").value)
+        assert f"{wht_cat}: {expected_rate}" in offline_ts, (
+            f"Offline WHT rate drift for {wht_cat} in offline-resilience.ts"
+        )
+
     print(
         f"Schema validation passed: {len(schema_files)} contract schemas and {total_tools} MCP tools across 11 servers."
     )

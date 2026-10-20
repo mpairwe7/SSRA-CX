@@ -136,7 +136,31 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     assert "e-tax dot n r a dot gov dot s s" in norm_speech
     assert verify_spoken_figure_fidelity(norm_speech, ["450,000"]) is True
     assert verify_spoken_figure_fidelity("450,000 SSP", ["45,000"]) is False
+    assert (
+        verify_spoken_figure_fidelity(
+            "Balance is 450,000 SSP and 99,000 SSP",
+            ["450,000"],
+            strict_no_extra_numbers=True,
+        )
+        is False
+    )
+    assert (
+        verify_spoken_figure_fidelity(
+            "Under Section 18, balance is 450,000 SSP",
+            ["450,000"],
+            strict_no_extra_numbers=True,
+            allowed_context_numbers=["18"],
+        )
+        is True
+    )
     assert verify_spoken_figure_fidelity(norm_speech, ["999,999"]) is False
+
+    from ssra_voice import split_tts_sentences
+
+    abbrev_sents = split_tts_sentences(
+        "Per Reg. 1.21 and Sec. 18, PAYE is 25,000 SSP. Pay via bank."
+    )
+    assert len(abbrev_sents) == 2
 
     # Full-duplex sub-sentence barge-in recovery & Edge Field-Office Appliance Profile
     from ssra_voice import VoiceStreamSession, resolve_edge_appliance_profile
@@ -222,3 +246,68 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         ai_rating=5,
     )
     assert wrap["outcome"] == "resolved"
+
+    from ssra_voice import (
+        TtsCachedAudio,
+        TtsPhraseCache,
+        build_chat_to_call_carryover,
+        build_voice_consent_audit_entry,
+        looks_like_valid_audio_bytes,
+    )
+
+    valid_wav = b"RIFF" + b"\x00\x00\x00\x00" + b"WAVE" + b"\x00" * 32
+    assert looks_like_valid_audio_bytes(valid_wav) is True
+    assert looks_like_valid_audio_bytes(b"short") is False
+
+    def _mock_synth(_txt: str, *, language: str, voice: str) -> TtsCachedAudio:
+        """Return a synthetic valid WAV audio clip for TTS phrase cache verification."""
+        return TtsCachedAudio(
+            audio=valid_wav, backend="mms", voice=voice, language=language, latency_ms=12.0
+        )
+
+    cache = TtsPhraseCache(max_entries=2)
+    r1 = cache.get_or_synthesize(
+        "Hello",
+        language="en",
+        voice="ssra_eng_0001",
+        synthesizer=_mock_synth,
+    )
+    assert r1.backend == "mms"
+    r2 = cache.get_or_synthesize(
+        "Hello",
+        language="en",
+        voice="ssra_eng_0001",
+        synthesizer=_mock_synth,
+    )
+    assert r2.backend == "mms+cache"
+    assert r2.latency_ms == 0.0
+
+    aud_entry = build_voice_consent_audit_entry(
+        event_type="recording_start",
+        session_id="vs_01",
+        audio_bytes=valid_wav,
+    )
+    assert aud_entry["raw_audio_stored"] is False
+    assert aud_entry["audio_sha256"] is not None
+
+    carry = build_chat_to_call_carryover(
+        conversation_id="conv_01",
+        owner_user_id="usr_01",
+        owner_session_id="ses_01",
+        caller_user_id="usr_01",
+    )
+    assert carry is not None and carry.local_models_only is True
+
+    from ssra_voice import VoiceWebSocketConcurrencyGuard, validate_audio_pcm_expansion_budget
+
+    assert (
+        validate_audio_pcm_expansion_budget(compressed_bytes=10_000, duration_seconds=5.0)
+        == 320_000
+    )
+    ws_guard = VoiceWebSocketConcurrencyGuard(per_user_cap=2, global_cap=4)
+    ok_acq, _ = ws_guard.try_acquire("anon::1", pool="voice")
+    assert ok_acq is True
+    assert ws_guard.active_count("voice") == 1
+    assert ws_guard.rekey_slot("anon::1", "usr_1", pool="voice") is True
+    ws_guard.release("usr_1", pool="voice")
+    assert ws_guard.active_count("voice") == 0

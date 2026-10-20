@@ -205,6 +205,17 @@ def test_feature_flag_engine_cohort_bucketing_and_agentic_cx_telemetry() -> None
             locale="en",
         )
         assert canary_res.reason in ("COHORT_INCLUDED", "COHORT_BUCKET_OUTSIDE_PCT")
+
+        # QA-G2: Tampered or corrupted shared override file is rejected by HMAC-SHA256 verification
+        override_file = tmp_dir / "overrides.json"
+        override_file.write_text(
+            '{"overrides": {"FF_AUTONOMOUS_GOAL_PLANNER": {"enabled": false, "rollout_pct": 0}}, "hmac_sha256": "deadbeef"}',
+            encoding="utf-8",
+        )
+        assert (
+            eng.evaluate("FF_AUTONOMOUS_GOAL_PLANNER", subject_ref="sub_taxpayer_amina_01").active
+            is True
+        )
     finally:
         eng.reset_flag_override()
 

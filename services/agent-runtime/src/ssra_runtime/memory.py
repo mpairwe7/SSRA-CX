@@ -24,19 +24,25 @@ from ssra_core import ChannelName, IntentName, LocaleCode, new_id, utc_now
 from ssra_security import redact_pii
 
 _CURRENCY_OR_LONG_DIGIT_RE = re.compile(
-    r"(?:(?:SSP|USD)\s*)?[\d\u0660-\u0669]+(?:[.,][\d\u0660-\u0669]+)*(?:\s*(?:SSP|USD|%))?",
+    r"(?:(?:SSP|USD)\s*)?[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,][\d\u0660-\u0669\u06F0-\u06F9]+)*(?:\s*(?:SSP|USD|%))?",
+    flags=re.IGNORECASE,
+)
+_MEMORY_DELIMITER_SCRUB_RE = re.compile(
+    r"<\|[^|>]*\|>|<\s*/?\s*untrusted_[^>]*>",
     flags=re.IGNORECASE,
 )
 
 MAX_EPISODES_PER_SUBJECT: int = 20
+MAX_TRACKED_SUBJECTS: int = 4096
 EPISODIC_TTL_DAYS: int = 90
 PROCEDURAL_GOAL_TTL_DAYS: int = 14
 
 
 def strip_financial_figures_for_memory(text: str) -> str:
-    """Scrub PII via Presidio/regex and replace all currency figures/digits so balances never enter memory."""
+    """Scrub PII, special tokens/delimiters (`ASI06`), and all ASCII/Arabic-Indic currency figures so balances never enter memory."""
     redacted = redact_pii(text).redacted_text
-    return _CURRENCY_OR_LONG_DIGIT_RE.sub("[REDACTED_FIGURE]", redacted).strip()
+    delimit_scrubbed = _MEMORY_DELIMITER_SCRUB_RE.sub("[REDACTED_DELIMITER]", redacted)
+    return _CURRENCY_OR_LONG_DIGIT_RE.sub("[REDACTED_FIGURE]", delimit_scrubbed).strip()
 
 
 class ConsentedUserPreferences(BaseModel):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -81,6 +82,26 @@ def detect_language(text: str, default_locale: LocaleCode = LocaleCode.EN) -> Lo
     return default_locale
 
 
+def _safe_meta_int(val: Any, default: int = 0, *, max_val: int = 100) -> int:
+    """Safely parse a non-negative bounded integer from untrusted event metadata."""
+    try:
+        parsed = int(str(val).strip())
+        return max(0, min(max_val, parsed))
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_meta_float(val: Any, default: float = 0.0, *, max_val: float = 10.0) -> float:
+    """Safely parse a finite non-negative bounded float from untrusted event metadata."""
+    try:
+        parsed = float(str(val).strip())
+        if not math.isfinite(parsed):
+            return default
+        return max(0.0, min(max_val, parsed))
+    except (ValueError, TypeError):
+        return default
+
+
 def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
     """Execute Stage 3 input guards: language detection, EQ scoring, PII redaction, and prompt-injection blocking."""
     raw = state.get("raw_user_text", "")
@@ -115,13 +136,17 @@ def input_guard_node(state: ConversationGraphState) -> dict[str, Any]:
         affective = compute_affective_state(
             raw,
             previous=state.get("affective_state"),
-            consecutive_low_confidence_turns=int(
+            consecutive_low_confidence_turns=_safe_meta_int(
                 slots_meta.get("consecutive_low_confidence_turns", 0)
             ),
-            repeated_clarification_count=int(slots_meta.get("repeated_clarification_count", 0)),
-            barge_in_count=int(slots_meta.get("voice_barge_in_count", 0)),
-            rms_energy_delta=float(slots_meta.get("voice_rms_energy_delta", 0.0)),
-            speech_rate_ratio=float(slots_meta.get("voice_speech_rate_ratio", 1.0)),
+            repeated_clarification_count=_safe_meta_int(
+                slots_meta.get("repeated_clarification_count", 0)
+            ),
+            barge_in_count=_safe_meta_int(slots_meta.get("voice_barge_in_count", 0)),
+            rms_energy_delta=_safe_meta_float(slots_meta.get("voice_rms_energy_delta", 0.0)),
+            speech_rate_ratio=_safe_meta_float(
+                slots_meta.get("voice_speech_rate_ratio", 1.0), default=1.0
+            ),
         )
 
     redaction = redact_pii(raw)
