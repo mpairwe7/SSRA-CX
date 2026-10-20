@@ -18,6 +18,20 @@ export interface QueuedOutboxMessage {
   readonly queuedAtIso: string;
 }
 
+export const MAX_OFFLINE_VOICE_NOTE_BYTES = 64 * 1024;
+export const MAX_OFFLINE_VOICE_NOTE_SECONDS = 30;
+
+export interface QueuedOfflineVoiceNote {
+  readonly id: string;
+  readonly locale: LocaleCode;
+  readonly tier: RiskTier;
+  readonly mimeType: "audio/webm;codecs=opus" | "audio/ogg;codecs=opus";
+  readonly durationSeconds: number;
+  readonly sizeBytes: number;
+  readonly recordingConsentGranted: boolean;
+  readonly queuedAtIso: string;
+}
+
 const UNMASKED_TIN_OR_PHONE_PATTERN = /\d{9,12}|\+?211\d{9}/;
 const UNMASKED_NATIONAL_ID_OR_EMAIL_PATTERN =
   /\b[RP]\d{7,8}\b|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/i;
@@ -38,6 +52,7 @@ function containsUnmaskedTin(message: string): boolean {
 
 export class OfflineOutboxQueue {
   private readonly items: QueuedOutboxMessage[] = [];
+  private readonly voiceNotes: QueuedOfflineVoiceNote[] = [];
   private readonly maxItems: number;
 
   public constructor(maxItems = 25) {
@@ -77,8 +92,47 @@ export class OfflineOutboxQueue {
     return this.items.splice(0, this.items.length);
   }
 
+  /**
+   * Queue a compressed <= 64 KB (`<= 30s` @ 12 kbps Opus) T0 public voice note for store-and-forward transcription when offline.
+   */
+  public enqueueVoiceNote(note: QueuedOfflineVoiceNote): {
+    readonly queued: boolean;
+    readonly reason?: string;
+  } {
+    if (note.tier !== "T0") {
+      return { queued: false, reason: "SECURITY_POLICY_T0_ONLY_OFFLINE_QUEUE" };
+    }
+    if (!note.recordingConsentGranted) {
+      return { queued: false, reason: "VOICE_RECORDING_CONSENT_REQUIRED" };
+    }
+    if (
+      !Number.isFinite(note.durationSeconds) ||
+      note.durationSeconds <= 0 ||
+      note.durationSeconds > MAX_OFFLINE_VOICE_NOTE_SECONDS
+    ) {
+      return { queued: false, reason: "EXCEEDS_30S_OFFLINE_VOICE_NOTE_CAP" };
+    }
+    if (
+      !Number.isFinite(note.sizeBytes) ||
+      note.sizeBytes <= 0 ||
+      note.sizeBytes > MAX_OFFLINE_VOICE_NOTE_BYTES
+    ) {
+      return { queued: false, reason: "EXCEEDS_64KB_OFFLINE_VOICE_NOTE_CAP" };
+    }
+    if (this.voiceNotes.length >= this.maxItems) {
+      return { queued: false, reason: "OFFLINE_OUTBOX_CAPACITY_EXCEEDED" };
+    }
+    this.voiceNotes.push(note);
+    return { queued: true };
+  }
+
+  public drainVoiceNotes(): QueuedOfflineVoiceNote[] {
+    return this.voiceNotes.splice(0, this.voiceNotes.length);
+  }
+
   public clearOnLogout(): void {
     this.items.length = 0;
+    this.voiceNotes.length = 0;
   }
 
   public get size(): number {
