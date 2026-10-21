@@ -131,13 +131,23 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
       verifyOidcBackchannelLogoutJwt({
         logoutToken: validBclJwt,
         expectedAudience: "ssra-web-bff",
+        verifySignature: (_inp, sig, alg) => alg === "ES256" && sig === "sig_es256",
         nowMs: 1_700_000_010 * 1000,
       }),
     ).toEqual({ valid: true, sid: "sid_web_01" });
     expect(
       verifyOidcBackchannelLogoutJwt({
+        logoutToken: validBclJwt,
+        expectedAudience: "ssra-web-bff",
+        verifySignature: () => false,
+        nowMs: 1_700_000_010 * 1000,
+      }).valid,
+    ).toBe(false);
+    expect(
+      verifyOidcBackchannelLogoutJwt({
         logoutToken: `${btoa(JSON.stringify({ alg: "none" })).replace(/=+$/, "")}.${bclPld}.sig`,
         expectedAudience: "ssra-web-bff",
+        verifySignature: () => true,
         nowMs: 1_700_000_010 * 1000,
       }).valid,
     ).toBe(false);

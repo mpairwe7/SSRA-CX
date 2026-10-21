@@ -472,6 +472,14 @@ class KeycloakOidcSecurityService:
     ) -> ParRequestRecord:
         """Mint an RFC 9126 PAR `request_uri` bound to `(realm, client_id, code_challenge_s256)` (`#50135`)."""
         current = now or utc_now()
+        for k in [k for k, r in self._par_requests.items() if current > r.expires_at]:
+            self._par_requests.pop(k, None)
+        if len(self._par_requests) >= MAX_CONSUMED_JTIS:
+            raise SSRAError(
+                McpErrorCode.RATE_LIMITED,
+                f"PAR request_uri cache capacity ({MAX_CONSUMED_JTIS}) saturated with unexpired requests",
+                status_code=429,
+            )
         req_uri = f"urn:ietf:params:oauth:request_uri:{new_id('par')}"
         rec = ParRequestRecord(
             request_uri=req_uri,

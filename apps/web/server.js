@@ -1755,10 +1755,27 @@ const server = http.createServer(async (req, res) => {
       }
       const hdr = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf-8"));
       const pld = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
+      const verifyKey = process.env.KEYCLOAK_LOGOUT_VERIFY_KEY ?? "";
+      const expectedSig = verifyKey
+        ? crypto.createHmac("sha256", verifyKey).update(`${parts[0]}.${parts[1]}`).digest()
+        : Buffer.alloc(0);
+      const actualSig = Buffer.from(parts[2], "base64url");
+      const sigOk =
+        Boolean(verifyKey) &&
+        expectedSig.length === actualSig.length &&
+        crypto.timingSafeEqual(expectedSig, actualSig);
+      const nowSec = Math.floor(Date.now() / 1000);
       if (
+        !sigOk ||
         !["ES256", "RS256", "PS256", "EdDSA"].includes(hdr?.alg) ||
+        pld?.iss !== "https://sso.ssra.gov.ss/realms/ssra" ||
         pld?.aud !== "ssra-web-bff" ||
         pld?.nonce !== undefined ||
+        typeof pld?.jti !== "string" ||
+        typeof pld?.iat !== "number" ||
+        typeof pld?.exp !== "number" ||
+        nowSec > pld.exp ||
+        Math.abs(nowSec - pld.iat) > 120 ||
         !pld?.events?.["http://schemas.openid.net/event/backchannel-logout"] ||
         (!pld?.sid && !pld?.sub)
       ) {

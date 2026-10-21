@@ -29,16 +29,16 @@ COPY --chown=10001:10001 infra/keycloak/ssra-realm.json /opt/keycloak/data/impor
 
 ENV KC_DB=postgres \
     KC_TRANSACTION_XA_ENABLED=false \
+    KC_TRANSACTION_DEFAULT_TIMEOUT=60s \
     KC_DB_POOL_INITIAL_SIZE=5 \
     KC_DB_POOL_MIN_SIZE=5 \
     KC_DB_POOL_MAX_SIZE=30 \
-    KC_DB_CONNECT_TIMEOUT=10s \
+    KC_DB_URL_PROPERTIES="?connectTimeout=10" \
     KC_HEALTH_ENABLED=true \
     KC_METRICS_ENABLED=true \
     KC_HTTP_ENABLED=true \
     KC_HTTP_MANAGEMENT_PORT=9000 \
     KC_HTTP_MAX_QUEUED_REQUESTS=256 \
-    KC_SHUTDOWN_TIMEOUT=15s \
     KC_PROXY_HEADERS=xforwarded \
     KC_CACHE=ispn \
     KC_FEATURES=passkeys,token-exchange-standard:v2,dpop \

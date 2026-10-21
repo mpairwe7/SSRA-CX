@@ -77,6 +77,7 @@ export function validateBffCsrfMutation(input: {
 }
 
 const ALLOWED_LOGOUT_ALGS = new Set(["ES256", "RS256", "PS256", "EdDSA"]);
+const MAX_CONSUMED_LOGOUT_JTIS = 4096;
 const CONSUMED_LOGOUT_JTIS = new Map<string, number>();
 
 function decodeBase64UrlJson(segment: string): Record<string, unknown> | null {
@@ -95,6 +96,7 @@ function decodeBase64UrlJson(segment: string): Record<string, unknown> | null {
 export function verifyOidcBackchannelLogoutJwt(input: {
   readonly logoutToken: string;
   readonly expectedAudience: string;
+  readonly verifySignature: (signingInput: string, signatureB64Url: string, alg: string) => boolean;
   readonly expectedIssuer?: string;
   readonly nowMs?: number;
 }): {
@@ -117,6 +119,10 @@ export function verifyOidcBackchannelLogoutJwt(input: {
   const alg = typeof header.alg === "string" ? header.alg : "";
   if (!ALLOWED_LOGOUT_ALGS.has(alg)) {
     return { valid: false, reason: "UNSUPPORTED_OR_NONE_LOGOUT_ALG_CVE_2026_18569" };
+  }
+  const signingInput = `${parts[0]}.${parts[1]}`;
+  if (!input.verifySignature(signingInput, parts[2], alg)) {
+    return { valid: false, reason: "INVALID_LOGOUT_JWT_SIGNATURE" };
   }
   const jti = typeof payload.jti === "string" ? payload.jti : "";
   const iss = typeof payload.iss === "string" ? payload.iss : "";
@@ -147,6 +153,9 @@ export function verifyOidcBackchannelLogoutJwt(input: {
   }
   if (CONSUMED_LOGOUT_JTIS.has(jti)) {
     return { valid: false, reason: "REPLAYED_BACKCHANNEL_LOGOUT_JTI" };
+  }
+  if (CONSUMED_LOGOUT_JTIS.size >= MAX_CONSUMED_LOGOUT_JTIS) {
+    return { valid: false, reason: "LOGOUT_JTI_CACHE_SATURATED" };
   }
   CONSUMED_LOGOUT_JTIS.set(jti, exp);
   return {
