@@ -23,7 +23,7 @@
 | Component | Spoofing | Tampering | Repudiation | Information Disclosure | Denial of Service | Elevation of Privilege |
 |---|---|---|---|---|---|---|
 | **Channels & `services/channel-gateway`** | Forged WhatsApp/SMS webhooks; SIM-swap on `+211` number | Modified webhook payload in transit | Disputed consent or scam report | PII in unencrypted SMS/USSD | Webhook flood / replay storm | Injecting admin/staff commands via public channel |
-| **`apps/web` & `apps/console` (Next.js 16 BFF)** | Phishing / fake SSRA domain; session hijacking | CSRF on state-changing BFF routes; DOM XSS via generative UI | Unlogged staff console approval | OAuth tokens leaked to browser JS; shared-device PWA cache leak | Bot scraping / chat flood (denial-of-wallet) | Privilege escalation from `agent` to `legal_approver` |
+| **`apps/web` & `apps/console` (public BFF + staff preview)** | Phishing / fake SSRA domain; session hijacking; browser-selected staff persona | CSRF on state-changing BFF routes; DOM XSS via generative UI; spoofed `X-SSRA-Staff-Id` | Unlogged staff console approval or false success feedback | OAuth tokens leaked to browser JS; shared-device PWA cache leak; fabricated/stale metrics mistaken as live | Bot scraping / chat flood (denial-of-wallet) | Client-selected role or subject ref treated as identity; staff API access before approved IdP/session integration |
 | **`services/agent-runtime` (LangGraph)** | Confused-deputy subject spoofing in tool args | Indirect prompt injection via uploaded PDF or retrieved doc | Non-reconstructable LLM turn | Cross-taxpayer context bleed; PII leaked in OTel traces/logs | Infinite agent loop / recursive tool calls | Model bypassing `T4` human-only restriction |
 | **`agentgateway` & `mcp-servers/*`** | Rogue MCP server or tool description rug-pull | Replaying a `T2`/`T3` write call without fresh confirmation | Missing audit link between trace and tool call | Verbose upstream error leaking stack traces or other TINs | Upstream e-Tax exhaustion | Calling a `T1`–`T3` tool with `T0` anonymous session |
 | **Data & Knowledge Pipeline (`PostgreSQL 18`, `workers`)** | Unauthorized knowledge snapshot publication | Knowledge-base or `TaxFact` poisoning; tampering with `AuditEvent` | Unattributed rate change in `tax_facts` | Backup or non-prod dump containing real taxpayer data | Vector scan starvation | Bypassing office/region RLS in staff queries |
@@ -31,6 +31,10 @@
 ---
 
 ## 3. OWASP Top 10 for Agentic Applications (2026) `ASI01`–`ASI10` & Required Abuse Cases
+
+### Frontend trust boundary (October 2026 audit)
+
+The public BFF now accepts chat turns only through the sanitizer-backed `/api/turns` route and allows direct `/v1/*` access only for feedback submission. Staff API routes in the server-rendered console fail closed until OQ-014 is resolved. The console currently renders a non-operational preview; browser-selected personas do not authorize access. Live metrics must include trusted source and observation time, and must distinguish stale, unavailable, and synthetic data. See [ADR-018](../adr/0018-staff-console-preview-and-trusted-session-gate.md).
 
 Every required abuse case from Section 12.2 is mapped below to its OWASP Agentic risk code, deterministic control, and automated red-team verification suite:
 

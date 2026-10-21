@@ -146,9 +146,9 @@ const MICROCOPY_BY_PHASE: Readonly<
   Record<AssistantPhase, { readonly en: string; readonly ar: string; readonly pga: string }>
 > = {
   idle: {
-    en: "Ready — all tax figures verified against official SSRA sources.",
-    ar: "جاهز — جميع الأرقام الضريبية موثقة من مصادر هيئة الإيرادات الرسمية.",
-    pga: "Jahiz — kullu hisabat muwathaq min SSRA.",
+    en: "Ready. I’ll cite approved SSRA sources when they support an answer.",
+    ar: "جاهز. سأذكر مصادر هيئة الإيرادات المعتمدة عندما تدعم الإجابة.",
+    pga: "Jahiz. Gaaid azkur maraji SSRA lama yisandu al-ijaba.",
   },
   thinking: {
     en: "Reviewing your question…",
@@ -222,6 +222,7 @@ export interface GroupedConversationRail {
   readonly yesterday: readonly ConversationSummaryItem[];
   readonly previous7Days: readonly ConversationSummaryItem[];
   readonly older: readonly ConversationSummaryItem[];
+  readonly dateUnavailable: readonly ConversationSummaryItem[];
 }
 
 export function groupConversationsByRecency(
@@ -229,33 +230,68 @@ export function groupConversationsByRecency(
   nowMs: number,
   searchQuery = "",
 ): GroupedConversationRail {
-  const q = searchQuery.trim().toLowerCase();
-  const filtered = q ? items.filter((item) => item.title.toLowerCase().includes(q)) : [...items];
-  const sorted = [...filtered].sort((a, b) => b.updatedAtMs - a.updatedAtMs);
+  const normalizeSearch = (value: string) => value.normalize("NFKC").toLocaleLowerCase();
+  const q = normalizeSearch(searchQuery.trim());
+  const filtered = q ? items.filter((item) => normalizeSearch(item.title).includes(q)) : [...items];
+  const timestamp = (value: number) =>
+    Number.isFinite(value) && Math.abs(value) <= 8.64e15 ? value : Number.NEGATIVE_INFINITY;
+  const sorted = [...filtered].sort((a, b) => {
+    const delta = timestamp(b.updatedAtMs) - timestamp(a.updatedAtMs);
+    return Number.isNaN(delta) || delta === 0 ? a.id.localeCompare(b.id) : delta;
+  });
 
   const pinned: ConversationSummaryItem[] = [];
   const today: ConversationSummaryItem[] = [];
   const yesterday: ConversationSummaryItem[] = [];
   const previous7Days: ConversationSummaryItem[] = [];
   const older: ConversationSummaryItem[] = [];
+  const dateUnavailable: ConversationSummaryItem[] = [];
 
-  const dayMs = 86_400_000;
+  const dayOrdinal = (value: number): number | null => {
+    const ms = timestamp(value);
+    if (!Number.isFinite(ms)) return null;
+    try {
+      const parts = new Intl.DateTimeFormat("en", {
+        timeZone: "Africa/Juba",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(new Date(ms));
+      const part = (type: Intl.DateTimeFormatPartTypes) =>
+        Number(parts.find((entry) => entry.type === type)?.value);
+      const year = part("year");
+      const month = part("month");
+      const day = part("day");
+      return Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)
+        ? Math.floor(Date.UTC(year, month - 1, day) / 86_400_000)
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  const todayOrdinal = dayOrdinal(nowMs);
   for (const item of sorted) {
     if (item.pinned) {
       pinned.push(item);
       continue;
     }
-    const ageMs = Math.max(0, nowMs - item.updatedAtMs);
-    if (ageMs < dayMs) {
+    const itemOrdinal = dayOrdinal(item.updatedAtMs);
+    const ageDays =
+      todayOrdinal === null || itemOrdinal === null ? null : todayOrdinal - itemOrdinal;
+    if (ageDays === null || ageDays < 0) {
+      dateUnavailable.push(item);
+      continue;
+    }
+    if (ageDays === 0) {
       today.push(item);
-    } else if (ageMs < 2 * dayMs) {
+    } else if (ageDays === 1) {
       yesterday.push(item);
-    } else if (ageMs < 7 * dayMs) {
+    } else if (ageDays <= 7) {
       previous7Days.push(item);
     } else {
       older.push(item);
     }
   }
 
-  return { pinned, today, yesterday, previous7Days, older };
+  return { pinned, today, yesterday, previous7Days, older, dateUnavailable };
 }

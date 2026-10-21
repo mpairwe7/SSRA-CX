@@ -1,9 +1,8 @@
 /**
- * Production Node.js HTTP & BFF Server for SSRA Assist Staff, Admin & Auditor Console (`apps/console/server.js`).
+ * Non-operational prototype preview server for the SSRA Assist Staff Console (`apps/console/server.js`).
  *
- * Uses the unified `FinalYearProject`-inspired Operations Console & `.staff-rail` Sidebar design system
- * (`packages/ui/ops-console.js`) with OWASP ASVS 5.0 Level 3 headers, method allowlisting, W3C traceparent,
- * and upstream timeout bounds.
+ * Serves the preview shell with security headers. Staff data and action routes are denied until
+ * server-verified identity, role mapping, and audited API authorization are implemented.
  */
 
 import crypto from "node:crypto";
@@ -13,28 +12,16 @@ import { renderOpsDashboardHtml } from "../../packages/ui/ops-console.js";
 
 const PORT = Number.parseInt(process.env.PORT ?? "3001", 10);
 const HOSTNAME = process.env.HOSTNAME ?? "0.0.0.0";
-const INTERNAL_API_URL = (process.env.INTERNAL_API_URL ?? "http://ssra-api:8000").replace(
-  /\/$/,
-  "",
-);
-const INTERNAL_RUNTIME_URL = (
-  process.env.INTERNAL_RUNTIME_URL ?? "http://ssra-agent-runtime:8001"
-).replace(/\/$/, "");
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "OPTIONS"]);
-const ALLOWED_CONSOLE_READ_STAFF = new Set([
-  "secops_admin",
-  "ssra_admin",
-  "stf_01",
-  "stf_supervisor_02",
-  "ssra_auditor",
-]);
-const ALLOWED_CONSOLE_WRITE_STAFF = new Set([
-  "secops_admin",
-  "ssra_admin",
-  "stf_01",
-  "stf_supervisor_02",
-]);
+function denyStaffApi(res, secHeaders) {
+  res.writeHead(403, {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    ...secHeaders,
+  });
+  res.end(JSON.stringify({ error: "AUTHENTICATED_STAFF_SESSION_REQUIRED" }));
+}
 
 async function readConsoleBody(req) {
   const chunks = [];
@@ -47,15 +34,6 @@ async function readConsoleBody(req) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks).toString("utf-8");
-}
-
-function createTraceparent(existing) {
-  if (typeof existing === "string" && /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/.test(existing)) {
-    return existing;
-  }
-  const traceId = crypto.randomBytes(16).toString("hex");
-  const spanId = crypto.randomBytes(8).toString("hex");
-  return `00-${traceId}-${spanId}-01`;
 }
 
 function buildConsoleHeaders(nonce) {
@@ -164,8 +142,6 @@ const server = http.createServer(async (req, res) => {
   }
 
   const isGetOrHead = method === "GET" || method === "HEAD";
-  const traceparent = createTraceparent(req.headers.traceparent);
-
   if (isGetOrHead && pathname === "/robots.txt") {
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", ...secHeaders });
     res.end("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /v1/\n");
@@ -177,105 +153,29 @@ const server = http.createServer(async (req, res) => {
     res.end(
       JSON.stringify({
         status: "ok",
-        service: "ssra-console",
-        internal_api_url: INTERNAL_API_URL,
-        internal_runtime_url: INTERNAL_RUNTIME_URL,
+        service: "ssra-console-preview",
       }),
     );
     return;
   }
 
-  if (isGetOrHead && pathname === "/api/scorecard") {
-    try {
-      const upstream = await fetch(`${INTERNAL_API_URL}/v1/analytics/cx-scorecard`, {
-        headers: { Accept: "application/json", traceparent },
-        signal: AbortSignal.timeout(15_000),
-      });
-      const text = await upstream.text();
-      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
-      res.end(text);
-    } catch {
-      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
-      res.end(JSON.stringify({ status: "unavailable" }));
-    }
+  if (pathname === "/api/scorecard") {
+    denyStaffApi(res, secHeaders);
     return;
   }
 
   if (pathname === "/api/flags") {
-    const callerStaff = String(req.headers["x-ssra-staff-id"] ?? "").trim();
-    const allowedSet = method === "POST" ? ALLOWED_CONSOLE_WRITE_STAFF : ALLOWED_CONSOLE_READ_STAFF;
-    if (!allowedSet.has(callerStaff)) {
-      res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
-      res.end(JSON.stringify({ error: "STAFF_AUTHORIZATION_REQUIRED" }));
-      return;
-    }
-    try {
-      const bodyStr = method === "POST" ? await readConsoleBody(req) : undefined;
-      const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/feature-flags`, {
-        method,
-        headers: {
-          Accept: "application/json",
-          ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
-          "X-SSRA-Staff-Id": callerStaff,
-          traceparent,
-        },
-        body: bodyStr,
-        signal: AbortSignal.timeout(15_000),
-      });
-      const text = await upstream.text();
-      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
-      res.end(text);
-    } catch {
-      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
-      res.end(JSON.stringify({ status: "unavailable" }));
-    }
+    denyStaffApi(res, secHeaders);
     return;
   }
 
   if (pathname === "/api/kill-switches") {
-    const callerStaff = String(req.headers["x-ssra-staff-id"] ?? "").trim();
-    const allowedSet = method === "POST" ? ALLOWED_CONSOLE_WRITE_STAFF : ALLOWED_CONSOLE_READ_STAFF;
-    if (!allowedSet.has(callerStaff)) {
-      res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
-      res.end(JSON.stringify({ error: "STAFF_AUTHORIZATION_REQUIRED" }));
-      return;
-    }
-    try {
-      const bodyStr = method === "POST" ? await readConsoleBody(req) : undefined;
-      const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/kill-switches`, {
-        method,
-        headers: {
-          Accept: "application/json",
-          ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
-          "X-SSRA-Staff-Id": callerStaff,
-          traceparent,
-        },
-        body: bodyStr,
-        signal: AbortSignal.timeout(15_000),
-      });
-      const text = await upstream.text();
-      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
-      res.end(text);
-    } catch {
-      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
-      res.end(JSON.stringify({ status: "unavailable" }));
-    }
+    denyStaffApi(res, secHeaders);
     return;
   }
 
-  if (isGetOrHead && pathname === "/v1/runtime/stack-status") {
-    try {
-      const upstream = await fetch(`${INTERNAL_RUNTIME_URL}/v1/runtime/stack-status`, {
-        headers: { Accept: "application/json", traceparent },
-        signal: AbortSignal.timeout(15_000),
-      });
-      const text = await upstream.text();
-      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
-      res.end(text);
-    } catch {
-      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
-      res.end(JSON.stringify({ status: "unavailable" }));
-    }
+  if (pathname === "/v1/runtime/stack-status") {
+    denyStaffApi(res, secHeaders);
     return;
   }
 

@@ -1,8 +1,8 @@
 /**
- * Production Node.js HTTP & BFF Server for SSRA Assist Taxpayer Web PWA & Operations Console (`apps/web/server.js`).
+ * Production Node.js HTTP & BFF Server for the public SSRA Assist Taxpayer Web PWA (`apps/web/server.js`).
  *
  * Implements the October 2026 `chatv2` MainChat + Sidebar (`ConversationRail`, `ConversationSearch`, `AccountRail`, `SettingsDialog`),
- * unified Operations Console (`/admin`, `/agent`, `/calls`, `/analytics`, `/ops`), and OWASP ASVS 5.0 / WCAG 2.2 AA / ADR-011 hardening:
+ * and OWASP ASVS 5.0 / WCAG 2.2 AA / ADR-011 hardening:
  * - Republic of South Sudan & SSRA/NRA Natural Civic Palette (`#091310` Nile Dusk, `#F6F7F2` Savanna Cotton Paper, `#078930` Equatoria Green,
  *   `#0F47AF` White Nile Azure, `#F4C430` Guiding Star Gold, `#DA121A` Sovereign Crimson, and `.ssra-flag-ribbon`)
  * - Shared-device Zero-PII storage hygiene (`T0`-only persistence in `localStorage`, PII scrubbing, `SSRA_LOGOUT_PURGE` dispatch)
@@ -20,7 +20,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 import { ICONS } from "../../packages/ui/icons.js";
-import { isOpsDashboardPath, renderOpsDashboardHtml } from "../../packages/ui/ops-console.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
@@ -35,26 +34,8 @@ const INTERNAL_RUNTIME_URL = (
 
 const SUPPORTED_LOCALES = new Set(["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]);
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
-const VALID_SUBJECT_REF_RE = /^sub_[A-Za-z0-9_-]{3,64}$/;
 const VALID_OPAQUE_HEADER_RE = /^[\x21-\x7e]{1,128}$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "DELETE", "OPTIONS"]);
-
-function sanitizeHeaderToken(raw) {
-  let out = "";
-  for (const ch of String(raw ?? "")) {
-    const cp = ch.codePointAt(0) ?? 0;
-    const keep =
-      (cp >= 0x30 && cp <= 0x39) ||
-      (cp >= 0x41 && cp <= 0x5a) ||
-      (cp >= 0x61 && cp <= 0x7a) ||
-      cp === 0x2d ||
-      cp === 0x5f ||
-      cp === 0x2e ||
-      cp === 0x3a;
-    if (keep) out += ch;
-  }
-  return out;
-}
 
 function createTraceparent(existing) {
   if (typeof existing === "string" && /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/.test(existing)) {
@@ -303,6 +284,9 @@ function renderPwaShellHtml(locale, nonce) {
     /* App Shell Grid (chatv2) */
     .app-shell { display: grid; grid-template-columns: 288px minmax(0, 1fr); height: 100dvh; width: 100%; transition: grid-template-columns 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
     .app-shell[data-sidebar="collapsed"] { grid-template-columns: 0px minmax(0, 1fr); }
+    @media (min-width: 961px) {
+      .app-shell[data-sidebar="collapsed"] .rail-wrap { visibility: hidden; pointer-events: none; }
+    }
     .rail-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 45; }
     @media (max-width: 960px) {
       .app-shell { grid-template-columns: minmax(0, 1fr); }
@@ -337,7 +321,7 @@ function renderPwaShellHtml(locale, nonce) {
     }
     .rail-top-actions { display: flex; align-items: center; gap: 4px; }
     .rail-icon-btn {
-      width: 32px; height: 32px; border-radius: 8px; background: transparent;
+      width: 44px; height: 44px; border-radius: 8px; background: transparent;
       border: 1px solid transparent; color: var(--text-2); cursor: pointer;
       display: inline-flex; align-items: center; justify-content: center; font-size: 0.86rem;
     }
@@ -345,6 +329,7 @@ function renderPwaShellHtml(locale, nonce) {
 
     .rail-new-btn {
       margin: 0.75rem 0.85rem 0.45rem; padding: 0.62rem 0.9rem; border-radius: var(--radius-md);
+      min-height: 44px;
       background: var(--grad-primary); color: #fff; border: 1px solid rgba(255,255,255,0.14);
       font-weight: 600; font-size: 0.86rem; cursor: pointer;
       display: flex; align-items: center; justify-content: space-between;
@@ -378,7 +363,7 @@ function renderPwaShellHtml(locale, nonce) {
     }
     .rail-row:hover .rail-row-actions, .rail-row:focus-within .rail-row-actions { display: inline-flex; }
     .rail-act-mini {
-      width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent;
+      width: 44px; height: 44px; border-radius: 6px; border: none; background: transparent;
       color: var(--text-2); cursor: pointer; font-size: 0.74rem; display: inline-flex;
       align-items: center; justify-content: center;
     }
@@ -390,7 +375,7 @@ function renderPwaShellHtml(locale, nonce) {
       background: var(--surface-1); position: relative; display: flex; flex-direction: column; gap: 0.45rem;
     }
     .acct-rail-trigger {
-      width: 100%; padding: 0.5rem 0.6rem; border-radius: var(--radius-sm);
+      width: 100%; min-height: 44px; padding: 0.5rem 0.6rem; border-radius: var(--radius-sm);
       background: var(--surface-2); border: 1px solid var(--border-1); color: var(--text-0);
       cursor: pointer; display: flex; align-items: center; gap: 0.6rem; text-align: start; font-family: inherit;
     }
@@ -417,7 +402,7 @@ function renderPwaShellHtml(locale, nonce) {
     .acct-popover.open { display: flex; }
     .acct-pop-section { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); padding: 4px 8px 2px; }
     .acct-pop-item {
-      padding: 6px 8px; border-radius: 7px; border: none; background: transparent;
+      min-height: 44px; padding: 8px; border-radius: 7px; border: none; background: transparent;
       color: var(--text-1); font-size: 0.78rem; font-family: inherit; cursor: pointer;
       display: flex; align-items: center; justify-content: space-between; text-decoration: none; text-align: start; width: 100%;
     }
@@ -429,12 +414,16 @@ function renderPwaShellHtml(locale, nonce) {
     .chat-header { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1.25rem; gap: 0.75rem; border-bottom: 1px solid var(--border-0); background: rgba(9, 19, 16, 0.52); backdrop-filter: blur(16px); z-index: 10; }
     :root[data-theme="light"] .chat-header { background: rgba(246, 247, 242, 0.82); }
     .header-left, .header-right { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-    .icon-btn { min-height: 36px; min-width: 36px; padding: 0.36rem 0.68rem; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-0); border: 1px solid var(--border-1); cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; text-decoration: none; }
+    .icon-btn { min-height: 44px; min-width: 44px; padding: 0.36rem 0.68rem; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-0); border: 1px solid var(--border-1); cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; text-decoration: none; }
     .icon-btn:hover { background: var(--surface-3); border-color: var(--border-2); }
     .call-btn { background: linear-gradient(135deg, rgba(7, 137, 48, 0.24), rgba(15, 71, 175, 0.28)); border-color: rgba(46, 204, 113, 0.45); color: var(--text-0); }
     .ops-link-btn { border-color: rgba(244, 196, 48, 0.45); color: var(--ssra-gold); }
     .status-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.28rem 0.65rem; border-radius: var(--radius-pill); background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.32); color: var(--success); font-size: 0.73rem; font-weight: 600; }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .status-badge[data-connection="offline"] { background: rgba(218, 18, 26, 0.12); border-color: rgba(218, 18, 26, 0.45); color: #ffb2b5; }
+    .status-badge[data-connection="offline"] .status-dot { background: #ff6269; box-shadow: 0 0 8px #ff6269; }
+    .status-badge[data-connection="low-data"] { background: rgba(244, 196, 48, 0.12); border-color: rgba(244, 196, 48, 0.45); color: var(--ssra-gold); }
+    .status-badge[data-connection="low-data"] .status-dot { background: var(--ssra-gold); box-shadow: 0 0 8px var(--ssra-gold); }
 
     /* Main Content Area */
     .app-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
@@ -444,7 +433,7 @@ function renderPwaShellHtml(locale, nonce) {
     .ldv2-headline { font-size: clamp(1.65rem, 3.2vw, 2.35rem); font-weight: 800; color: var(--text-0); margin: 0 0 0.5rem; letter-spacing: -0.02em; line-height: 1.2; }
     .landing-sub { font-size: 0.96rem; color: var(--text-2); margin: 0; line-height: 1.5; }
     .landing-prompts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.65rem; width: 100%; }
-    .landing-chip { padding: 0.8rem 0.95rem; border-radius: var(--radius-md); background: var(--surface-1); border: 1px solid var(--border-1); color: var(--text-1); text-align: start; cursor: pointer; display: flex; flex-direction: column; gap: 0.28rem; transition: all 0.15s ease; }
+    .landing-chip { min-height: 64px; padding: 0.8rem 0.95rem; border-radius: var(--radius-md); background: var(--surface-1); border: 1px solid var(--border-1); color: var(--text-1); text-align: start; cursor: pointer; display: flex; flex-direction: column; gap: 0.28rem; transition: all 0.15s ease; text-decoration: none; }
     .landing-chip:hover { background: var(--surface-2); border-color: var(--ssra-teal-light); transform: translateY(-2px); box-shadow: var(--shadow-md); }
     .ldv2-cat { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ssra-gold); }
     .landing-chip-text { font-size: 0.85rem; font-weight: 500; color: var(--text-0); line-height: 1.35; }
@@ -471,9 +460,9 @@ function renderPwaShellHtml(locale, nonce) {
     .ssra-guided-steps { margin: 0.4rem 0; padding-inline-start: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.88rem; }
     .ssra-citation-badges { list-style: none; padding: 0; margin: 0.65rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
     .citation-pill { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); background: rgba(7, 137, 48, 0.14); border: 1px solid rgba(46, 204, 113, 0.35); color: var(--ssra-teal-light); font-size: 0.74rem; font-weight: 600; }
-    .confirm-btn { margin-top: 0.65rem; padding: 0.55rem 1rem; border-radius: var(--radius-sm); background: var(--grad-gold); color: #091310; font-weight: 700; border: none; cursor: pointer; font-size: 0.84rem; }
+    .confirm-btn { min-height: 44px; margin-top: 0.65rem; padding: 0.55rem 1rem; border-radius: var(--radius-sm); background: var(--grad-gold); color: #091310; font-weight: 700; border: none; cursor: pointer; font-size: 0.84rem; }
     .turn-actions { display: flex; align-items: center; gap: 0.45rem; margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid var(--border-0); }
-    .turn-act-btn { padding: 0.25rem 0.6rem; border-radius: 6px; background: var(--surface-1); border: 1px solid var(--border-0); color: var(--text-2); font-size: 0.74rem; cursor: pointer; }
+    .turn-act-btn { min-height: 44px; padding: 0.25rem 0.75rem; border-radius: 6px; background: var(--surface-1); border: 1px solid var(--border-0); color: var(--text-2); font-size: 0.74rem; cursor: pointer; }
     .turn-act-btn:hover { color: var(--text-0); border-color: var(--border-1); }
 
     /* Composer Dock */
@@ -483,7 +472,7 @@ function renderPwaShellHtml(locale, nonce) {
     .composer-textarea { width: 100%; min-height: 46px; max-height: 140px; resize: none; border: none; background: transparent; color: var(--text-0); font: inherit; font-size: 0.95rem; outline: none; line-height: 1.45; }
     .composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
     .composer-tools-left, .composer-tools-right { display: flex; align-items: center; gap: 0.45rem; }
-    .send-btn { min-height: 38px; padding: 0 1rem; border-radius: var(--radius-pill); background: var(--grad-primary); color: #fff; border: none; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; }
+    .send-btn { min-height: 44px; padding: 0 1rem; border-radius: var(--radius-pill); background: var(--grad-primary); color: #fff; border: none; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; }
     .send-btn:disabled { opacity: 0.48; cursor: not-allowed; }
     .composer-waveform { display: inline-flex; align-items: center; gap: 3px; height: 16px; }
     .composer-waveform span { width: 3px; height: 12px; border-radius: 2px; background: var(--ssra-gold); display: inline-block; }
@@ -533,6 +522,10 @@ function renderPwaShellHtml(locale, nonce) {
     .gen-confirm-title { font-size: 0.84rem; font-weight: 600; color: var(--ssra-gold); }
     .turn-content-text { white-space: pre-wrap; }
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: var(--text-3); }
+    :focus-visible { outline: 3px solid var(--ssra-gold); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
     .jump-open-tag { font-size: 0.7rem; color: var(--text-3); }
   </style>
 </head>
@@ -543,7 +536,7 @@ function renderPwaShellHtml(locale, nonce) {
   <div id="ssra-app-shell" class="app-shell chatv2" data-sidebar="open" data-mobile-rail="closed" data-locale="${locale}">
     <div id="rail-mobile-backdrop" class="rail-mobile-backdrop" aria-hidden="true"></div>
     <!-- Left Conversation Rail (ConversationRail.tsx + AccountRail.tsx pattern) -->
-    <aside class="rail-wrap" aria-label="Conversation history and account">
+    <aside class="rail-wrap" id="conversation-rail" aria-label="Conversation history and account">
       <div class="rail-top">
         <div class="rail-brand">
           <div class="rail-mark" aria-hidden="true">${ICONS.ssraCrest}</div>
@@ -554,7 +547,7 @@ function renderPwaShellHtml(locale, nonce) {
         </div>
         <div class="rail-top-actions">
           <button type="button" id="rail-search-btn" class="rail-icon-btn" title="Search conversations (Ctrl+K)" aria-label="Search conversations">${ICONS.search}</button>
-          <button type="button" id="rail-collapse-btn" class="rail-icon-btn" title="Collapse sidebar" aria-label="Toggle sidebar">${ICONS.panelLeft}</button>
+          <button type="button" id="rail-collapse-btn" class="rail-icon-btn" title="Collapse sidebar" aria-label="Collapse conversations sidebar" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
         </div>
       </div>
 
@@ -567,37 +560,23 @@ function renderPwaShellHtml(locale, nonce) {
 
       <!-- AccountRail Footer & Upward Popover Menu -->
       <div class="rail-footer">
-        <div id="acct-popover" class="acct-popover" role="menu" aria-label="Account, Identity &amp; Operations Menu">
-          <div class="acct-pop-section" role="presentation">Taxpayer Session Identity</div>
-          <button type="button" class="acct-pop-item" role="menuitemradio" aria-checked="true" data-select-identity="ANONYMOUS"><span>Public Visitor (T0 Anonymous)</span><span id="chk-anon">${ICONS.check}</span></button>
-          <button type="button" class="acct-pop-item" role="menuitemradio" aria-checked="false" data-select-identity="sub_taxpayer_amina_01"><span>Amina M. — TIN ••••1234 (T1/T2)</span><span id="chk-amina"></span></button>
-          <button type="button" class="acct-pop-item" role="menuitemradio" aria-checked="false" data-select-identity="sub_taxpayer_deng_02"><span>Deng Trading — TIN ••••5678 (T1/T2)</span><span id="chk-deng"></span></button>
-          <hr class="acct-pop-hr" role="separator" />
-          <div class="acct-pop-section" role="presentation">SSRA Operations Console (Staff / Admin / Audit)</div>
-          <a href="/admin" class="acct-pop-item" role="menuitem"><span>${ICONS.gauge} Operations Overview</span><span>${ICONS.arrowUpRight}</span></a>
-          <a href="/agent" class="acct-pop-item" role="menuitem"><span>${ICONS.inbox} Agent Queue &amp; Copilot</span><span>${ICONS.arrowUpRight}</span></a>
-          <a href="/calls" class="acct-pop-item" role="menuitem"><span>${ICONS.phone} AI Phone Call Desk</span><span>${ICONS.arrowUpRight}</span></a>
-          <a href="/analytics" class="acct-pop-item" role="menuitem"><span>${ICONS.chart} Analytics &amp; CX Scorecard</span><span>${ICONS.arrowUpRight}</span></a>
-          <a href="/admin/flags" class="acct-pop-item" role="menuitem"><span>${ICONS.flag} Flags &amp; Knowledge Release</span><span>${ICONS.arrowUpRight}</span></a>
-          <a href="/admin/audit" class="acct-pop-item" role="menuitem"><span>${ICONS.shieldCheck} WORM Audit &amp; Forensic Replay</span><span>${ICONS.arrowUpRight}</span></a>
+        <div id="acct-popover" class="acct-popover" role="menu" aria-label="Account and privacy menu">
+          <div class="acct-pop-section" role="presentation">Public conversation</div>
+          <p class="acct-pop-item" role="presentation">Personal balances and filing records require secure sign-in.</p>
+          <a href="https://etax.nra.gov.ss/" class="acct-pop-item" role="menuitem" rel="noopener noreferrer"><span>Open official e-Tax portal</span><span>${ICONS.arrowUpRight}</span></a>
           <hr class="acct-pop-hr" role="separator" />
           <button type="button" id="open-settings-btn" class="acct-pop-item" role="menuitem"><span>${ICONS.settings} Settings &amp; Privacy</span><span>Ctrl+,</span></button>
         </div>
 
-        <button type="button" id="acct-rail-trigger" class="acct-rail-trigger" aria-expanded="false" aria-haspopup="menu">
+        <button type="button" id="acct-rail-trigger" class="acct-rail-trigger" aria-expanded="false" aria-haspopup="menu" aria-controls="acct-popover">
           <div class="acct-avatar"><span id="acct-badge-text">PV</span><span class="acct-dot"></span></div>
           <div class="acct-meta">
-            <span class="acct-name" id="acct-name-text">Public Visitor</span>
-            <span class="acct-sub" id="acct-sub-text">Tier T0 · Click to switch TIN or open Ops</span>
+            <span class="acct-name" id="acct-name-text">Public chat</span>
+            <span class="acct-sub" id="acct-sub-text">No account details are shown here</span>
           </div>
           <span class="acct-chevron">${ICONS.chevronUpDown}</span>
         </button>
 
-        <select id="ssra-identity-select" class="sr-only" aria-label="Select taxpayer identity mode">
-          <option value="ANONYMOUS">Public Visitor (T0 Anonymous)</option>
-          <option value="sub_taxpayer_amina_01">Amina M. — Compliant TIN ••••1234 (T1/T2)</option>
-          <option value="sub_taxpayer_deng_02">Deng Trading Co. — Overdue TIN ••••5678 (T1/T2)</option>
-        </select>
       </div>
     </aside>
 
@@ -605,13 +584,12 @@ function renderPwaShellHtml(locale, nonce) {
     <div class="app-main-col">
       <header class="chat-header">
         <div class="header-left">
-          <button type="button" id="header-rail-btn" class="icon-btn" aria-label="Open conversations">${ICONS.panelLeft}</button>
+          <button type="button" id="header-rail-btn" class="icon-btn" aria-label="Open conversations" aria-expanded="false" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
           <span id="active-conv-title" class="active-conv-title">New Conversation</span>
-          <span id="net-status-badge" class="status-badge" title="Governed Knowledge Snapshot 2026.10.1"><span class="status-dot"></span><span id="net-status-text">Snapshot 2026.10.1</span></span>
+          <span id="net-status-badge" class="status-badge" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="net-status-text">Official sources cited per answer</span></span>
         </div>
         <div class="header-right">
-          <a href="/admin" class="icon-btn ops-link-btn" title="Open SSRA Staff, Admin &amp; Auditor Operations Console">${ICONS.gauge} Operations</a>
-          <button type="button" id="open-call-btn" class="icon-btn call-btn" aria-label="Call SSRA AI Receptionist">${ICONS.phone} Call SSRA</button>
+          <button type="button" id="open-call-btn" class="icon-btn call-btn" aria-label="Open voice input options">${ICONS.mic} Voice input</button>
           <select id="locale-select" class="icon-btn" aria-label="Select language">
             <option value="en" ${locale === "en" ? "selected" : ""}>English (en)</option>
             <option value="pga" ${locale === "pga" ? "selected" : ""}>Juba Arabic (pga)</option>
@@ -623,7 +601,7 @@ function renderPwaShellHtml(locale, nonce) {
             <option value="shk" ${locale === "shk" ? "selected" : ""}>Dhøg Cøllø Shilluk (shk)</option>
           </select>
           <button type="button" id="theme-toggle-btn" class="icon-btn" title="Switch color theme">${ICONS.moon} Dark</button>
-          <button type="button" id="clear-chat-btn" class="icon-btn" aria-label="Clear conversation">${ICONS.trash} Clear</button>
+          <button type="button" id="clear-chat-btn" class="icon-btn" aria-label="Delete all saved conversations on this device">${ICONS.trash} Clear all</button>
         </div>
       </header>
 
@@ -633,7 +611,7 @@ function renderPwaShellHtml(locale, nonce) {
           <div class="landing-brand">
             <div class="eyebrow-pill">${ICONS.ssraCrest} Republic of South Sudan · SSRA / NRA Grounded AI Assistant</div>
             <h1 id="landing-headline" class="ldv2-headline">How can I help with your South Sudan taxes today?</h1>
-            <p id="landing-subtitle" class="landing-sub">Instant, statute-grounded guidance on TIN registration, PAYE &amp; Withholding Tax calculators, Tax Compliance Certificates (TCC), customs duties, and e-Tax bank payments.</p>
+            <p id="landing-subtitle" class="landing-sub">Ask about TIN registration, PAYE, TCC, customs, or e-Tax. Answers cite approved sources when available. If a source cannot be confirmed, SSRA Assist will say so and offer staff help.</p>
           </div>
 
           <div class="landing-prompts" role="group" aria-label="Suggested tax questions">
@@ -665,10 +643,10 @@ function renderPwaShellHtml(locale, nonce) {
               <span class="ldv2-cat">Juba Arabic (pga)</span>
               <span class="landing-chip-text">Kif ana aml tasjil ta TIN fi SSRA?</span>
             </button>
-            <button type="button" class="landing-chip" data-prompt="Check my tax balance and check my TCC status and open a support case" data-demo-subject="sub_taxpayer_amina_01">
-              <span class="ldv2-cat">Authenticated Self-Service (T1/T2)</span>
-              <span class="landing-chip-text">Check my tax balance, TCC status &amp; open a support case</span>
-            </button>
+            <a class="landing-chip" href="https://etax.nra.gov.ss/" rel="noopener noreferrer">
+              <span class="ldv2-cat">Personal e-Tax services</span>
+              <span class="landing-chip-text">Sign in to check your own balance or filing status</span>
+            </a>
           </div>
         </div>
 
@@ -687,7 +665,7 @@ function renderPwaShellHtml(locale, nonce) {
                 <button type="button" id="voice-dictate-btn" class="icon-btn" title="Voice Dictation (Whisper-SALT / Speech API)" aria-label="Voice Dictation">
                   ${ICONS.mic} <span class="composer-waveform" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
                 </button>
-                <span id="composer-hint" class="composer-hint">Enter to send · Shift+Enter for newline · Ctrl+K search</span>
+                <span id="composer-hint" class="composer-hint" role="status" aria-live="polite">Enter to send · Shift+Enter for newline · Ctrl+K search</span>
               </div>
               <div class="composer-tools-right">
                 <button type="submit" id="ssra-chat-submit" class="send-btn">${ICONS.send} Send</button>
@@ -702,16 +680,15 @@ function renderPwaShellHtml(locale, nonce) {
   <!-- AI Call Receptionist Modal (CallScreen & CallOrb) -->
   <div id="call-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="call-modal-title">
     <div class="call-modal">
-      <div class="eyebrow-pill">${ICONS.phone} SSRA Toll-Free AI Voice Receptionist</div>
-      <h2 id="call-modal-title" class="call-modal-title">SSRA Voice Assistant</h2>
-      <div id="call-orb" class="call-orb">LISTENING</div>
-      <p id="call-transcript-live" class="call-transcript-live">Speak in English, Juba Arabic, Arabic, or Dinka — or tap a quick voice prompt below.</p>
+    <div class="eyebrow-pill">${ICONS.mic} Browser voice input</div>
+      <h2 id="call-modal-title" class="call-modal-title">Speak or choose a sample question</h2>
+      <p id="call-transcript-live" class="call-transcript-live">Voice typing depends on your browser and is currently available only in English and Arabic. Your browser may process audio outside SSRA. Do not speak or type a TIN, balance, or other private account details in this public chat.</p>
       <div class="call-prompts-row">
-        <button type="button" class="icon-btn call-sample-btn" data-voice-q="How much is PAYE on 350,000 SSP per month?">${ICONS.mic} "PAYE on 350,000 SSP"</button>
-        <button type="button" class="icon-btn call-sample-btn" data-voice-q="My goods are held at Nimule border and e-Tax is not working!">${ICONS.mic} "Nimule Customs Urgent Help"</button>
+        <button type="button" class="icon-btn call-sample-btn" data-voice-q="Where can I find general e-Tax filing guidance?">${ICONS.messageSquare} "General e-Tax guidance"</button>
+        <button type="button" class="icon-btn call-sample-btn" data-voice-q="Where can I find general customs guidance?">${ICONS.messageSquare} "General customs guidance"</button>
       </div>
       <div class="call-actions-row">
-        <button type="button" id="close-call-btn" class="icon-btn danger-outline-btn">${ICONS.close} End Call</button>
+        <button type="button" id="close-call-btn" class="icon-btn danger-outline-btn">${ICONS.close} Close</button>
       </div>
     </div>
   </div>
@@ -719,7 +696,7 @@ function renderPwaShellHtml(locale, nonce) {
   <!-- ConversationSearch Modal (ConversationSearch.tsx pattern, Ctrl+K) -->
   <div id="search-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Search conversations">
     <div class="search-modal">
-      <input id="conv-search-input" class="search-input" type="text" aria-label="Search saved tax conversations" placeholder="Search saved tax conversations or jump to Operations… (Esc to close)" autocomplete="off" />
+  <input id="conv-search-input" class="search-input" type="text" aria-label="Search saved conversations" placeholder="Search saved conversations… (Esc to close)" autocomplete="off" />
       <div id="conv-search-results" class="search-results" role="group" aria-label="Search results"></div>
     </div>
   </div>
@@ -733,7 +710,6 @@ function renderPwaShellHtml(locale, nonce) {
         <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="voice">Voice &amp; Speech</button>
         <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="profile">Taxpayer Profile</button>
         <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="privacy">Privacy &amp; Erasure</button>
-        <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="ops">Operations Console</button>
       </div>
       <div class="settings-pane" role="tabpanel">
         <div class="settings-pane-head">
@@ -779,17 +755,17 @@ function renderPwaShellHtml(locale, nonce) {
       const LOCALE_UI_STRINGS = {
         en: {
           headline: "How can I help with your South Sudan taxes today?",
-          subtitle: "Instant, statute-grounded guidance on TIN registration, PAYE & Withholding Tax calculators, Tax Compliance Certificates (TCC), customs duties, and e-Tax bank payments.",
+          subtitle: "Ask about TIN registration, PAYE, TCC, customs, or e-Tax. Answers cite approved sources when available. If a source cannot be confirmed, SSRA Assist will say so and offer staff help.",
           placeholder: "Ask anything about SSRA taxes, TIN, PAYE, TCC, or customs in English, Arabic, Juba Arabic, or Dinka...",
         },
         pga: {
           headline: "Kif ana agdar asaidu inta fi darayib ta South Sudan al-yom?",
-          subtitle: "Ma'alumat rasmiya min SSRA / NRA ala tasjil ta TIN, hisab ta PAYE wa WHT, shahada ta TCC, wa daf'i fi bank عبر etax.nra.gov.ss.",
+          subtitle: "Is'al an TIN, PAYE, TCC, Jamarik, aw e-Tax. Ijaba bitzkur maraji SSRA lama yisanduha. Iza al-masdar mish mu'akkad, SSRA Assist bitwaddeh da wa bitqaddim musaa'ada min الموظفين.",
           placeholder: "As'al ayi su'al ala TIN, PAYE, TCC, aw Jamarik bi Arabi Juba...",
         },
         ar: {
           headline: "كيف يمكنني مساعدتك في ضرائب جنوب السودان اليوم؟",
-          subtitle: "إرشادات رسمية موثقة من هيئة الإيرادات الوطنية (SSRA / NRA) حول تسجيل الرقم الضريبي TIN، وحاسبة ضريبة الدخل PAYE والاستقطاع WHT، وشهادة الامتثال الضريبي TCC.",
+          subtitle: "اسأل عن تسجيل الرقم الضريبي أو PAYE أو شهادة الامتثال أو الجمارك أو e-Tax. تذكر الإجابات المصادر المعتمدة عند توفرها. إذا تعذر تأكيد المصدر، سنوضح ذلك ونقترح التواصل مع موظف.",
           placeholder: "اسأل عن الرقم الضريبي TIN أو ضريبة الدخل PAYE أو شهادة الامتثال TCC أو الجمارك...",
         },
         din: {
@@ -827,18 +803,11 @@ function renderPwaShellHtml(locale, nonce) {
       const input = document.getElementById("ssra-chat-input");
       const submitBtn = document.getElementById("ssra-chat-submit");
       const localeSelect = document.getElementById("locale-select");
-      const identitySelect = document.getElementById("ssra-identity-select");
       const convListEl = document.getElementById("rail-conv-list");
       const activeTitleEl = document.getElementById("active-conv-title");
       const hintEl = document.getElementById("composer-hint");
       const acctTrigger = document.getElementById("acct-rail-trigger");
       const acctPopover = document.getElementById("acct-popover");
-
-      const IDENTITY_META = {
-        ANONYMOUS: { badge: "PV", name: "Public Visitor", sub: "Tier T0 · Click to switch TIN or open Ops" },
-        sub_taxpayer_amina_01: { badge: "AM", name: "Amina M. (TIN ••••1234)", sub: "Tier T1/T2 Verified · Compliant" },
-        sub_taxpayer_deng_02: { badge: "DT", name: "Deng Trading (TIN ••••5678)", sub: "Tier T1/T2 Verified · Overdue BPT" },
-      };
 
       // Detect 2G / Save-Data network condition (FE-G4)
       const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -850,7 +819,6 @@ function renderPwaShellHtml(locale, nonce) {
       let state = {
         locale: shell?.dataset.locale || "en",
         theme: "dark",
-        identity: "ANONYMOUS",
         lowDataMode: autoLowData,
         autoNarrate: false,
         settingsTab: "general",
@@ -866,8 +834,6 @@ function renderPwaShellHtml(locale, nonce) {
             locale: saved.locale || state.locale,
             lowDataMode: saved.lowDataMode ?? state.lowDataMode,
             autoNarrate: Boolean(saved.autoNarrate),
-            // FE-G1: Always restore in ANONYMOUS mode on shared devices
-            identity: "ANONYMOUS",
             conversations: saved.conversations.filter((c) => !c.isAuthenticated),
           };
         }
@@ -889,6 +855,7 @@ function renderPwaShellHtml(locale, nonce) {
               title: scrubPiiForStorage(c.title),
               pinned: Boolean(c.pinned),
               isAuthenticated: false,
+              updatedAtMs: Number.isFinite(c.updatedAtMs) ? c.updatedAtMs : null,
               turns: (c.turns || [])
                 .filter((t) => !t.meta?.tier || t.meta.tier === "T0")
                 .map((t) => ({
@@ -904,7 +871,6 @@ function renderPwaShellHtml(locale, nonce) {
               theme: state.theme,
               lowDataMode: state.lowDataMode,
               autoNarrate: state.autoNarrate,
-              identity: "ANONYMOUS",
               conversations: publicOnlyConvs,
             }),
           );
@@ -949,52 +915,20 @@ function renderPwaShellHtml(locale, nonce) {
       }
       applyTheme(state.theme || "dark");
 
-      function applyIdentity(idVal) {
-        const prev = state.identity;
-        state.identity = idVal || "ANONYMOUS";
-        if (prev !== "ANONYMOUS" && prev !== state.identity) {
-          // FE-G1: Purge authenticated conversations from memory & SW cache on any subject change
-          state.conversations = state.conversations.filter((c) => !c.isAuthenticated);
-          state.activeId = state.conversations[0]?.id || null;
-          dispatchSwLogoutPurge();
-        }
-        if (identitySelect) identitySelect.value = state.identity;
-        const meta = IDENTITY_META[state.identity] || IDENTITY_META.ANONYMOUS;
-        const bEl = document.getElementById("acct-badge-text");
-        const nEl = document.getElementById("acct-name-text");
-        const sEl = document.getElementById("acct-sub-text");
-        if (bEl) bEl.textContent = meta.badge;
-        if (nEl) nEl.textContent = meta.name;
-        if (sEl) sEl.textContent = meta.sub;
-        const cAnon = document.getElementById("chk-anon");
-        const cAmina = document.getElementById("chk-amina");
-        const cDeng = document.getElementById("chk-deng");
-        if (cAnon) setSafeHtml(cAnon, state.identity === "ANONYMOUS" ? ICONS.check : "");
-        if (cAmina) setSafeHtml(cAmina, state.identity === "sub_taxpayer_amina_01" ? ICONS.check : "");
-        if (cDeng) setSafeHtml(cDeng, state.identity === "sub_taxpayer_deng_02" ? ICONS.check : "");
-        document.querySelectorAll("[data-select-identity]").forEach((btn) => {
-          const isSelected = btn.getAttribute("data-select-identity") === state.identity;
-          btn.setAttribute("aria-checked", String(isSelected));
-          btn.classList.toggle("active", isSelected);
-        });
-        saveState();
-        renderApp();
-      }
-
-      // FE-G4: Safe Offline Resilience Pack — abstain from unverified calculations and route to official SSRA/NRA channels
+      // Offline fallback abstains, preserves request uncertainty, and does not cite a snapshot.
       function computeOfflineResilienceAnswer(text) {
         const q = String(text || "").toLowerCase();
         const isCalcOrRate =
           q.includes("paye") || q.includes("salary") || q.includes("wht") || q.includes("withholding");
         return {
           content: isCalcOrRate
-            ? "[OFFLINE_ABSTENTION · Snapshot 2026.10.1] Connection to the SSRA deterministic tax-facts and calculator engine is currently unavailable. To prevent unverified tax figures, SSRA Assist abstains while offline. Please reconnect or use the official SSRA / NRA portal at https://etax.nra.gov.ss/ (100% cash-free via commercial bank PRN)."
-            : "[OFFLINE_RESILIENCE_PACK · Snapshot 2026.10.1] Connection interrupted. Official SSRA / NRA portal: https://etax.nra.gov.ss/ (100% cash-free; pay only via commercial bank PRN).",
+            ? "The connection was lost before SSRA Assist confirmed a response. I can’t tell whether your request completed. Check with SSRA staff before repeating a consequential request. I can’t calculate or confirm tax figures while offline. You can also visit the official SSRA / NRA e-Tax portal: https://etax.nra.gov.ss/."
+            : "The connection was lost before SSRA Assist confirmed a response. I can’t tell whether your request completed. Check with SSRA staff before repeating a consequential request. Reconnect to continue, or visit the official SSRA / NRA e-Tax portal: https://etax.nra.gov.ss/.",
           meta: {
             tier: "T0",
             intent: isCalcOrRate ? "offline_calculator_abstention" : "offline_resilience_guidance",
             outcome_verified: false,
-            citations: [{ section_anchor: "ssra-official-channels-2026", snapshot_version: "2026.10.1" }],
+            citations: [],
           },
         };
       }
@@ -1059,7 +993,7 @@ function renderPwaShellHtml(locale, nonce) {
 
         const citationsHtml = Array.isArray(meta.citations) && meta.citations.length > 0
           ? '<ul class="ssra-citation-badges">' + meta.citations.map((c) =>
-              '<li class="citation-pill">' + ICONS.bookOpen + " " + escapeHtml(c.section_anchor || c.doc_title || c.id) + " (" + escapeHtml(c.snapshot_version || "2026.10.1") + ")</li>"
+              '<li class="citation-pill">' + ICONS.bookOpen + " " + escapeHtml(c.section_anchor || c.doc_title || c.id || "Approved source") + (c.snapshot_version ? " (" + escapeHtml(c.snapshot_version) + ")" : "") + "</li>"
             ).join("") + "</ul>"
           : "";
 
@@ -1082,15 +1016,72 @@ function renderPwaShellHtml(locale, nonce) {
       function renderConvRow(c) {
         const active = c.id === state.activeId ? " active" : "";
         return '<div class="rail-row' + active + '" role="listitem">' +
-          '<button type="button" class="rail-item" data-conv-id="' + escapeHtml(c.id) + '">' +
+          '<button type="button" class="rail-item" data-conv-id="' + escapeHtml(c.id) + '" aria-label="Open conversation: ' + escapeHtml(c.title) + '"' + (active ? ' aria-current="true"' : "") + '>' +
             (c.pinned ? ICONS.pin + " " : ICONS.messageSquare + " ") + escapeHtml(c.title) +
           "</button>" +
           '<div class="rail-row-actions">' +
-            '<button type="button" class="rail-act-mini" data-pin-conv="' + escapeHtml(c.id) + '" title="Pin conversation">' + ICONS.pin + "</button>" +
-            '<button type="button" class="rail-act-mini" data-rename-conv="' + escapeHtml(c.id) + '" title="Rename conversation">' + ICONS.edit + "</button>" +
-            '<button type="button" class="rail-act-mini" data-del-conv="' + escapeHtml(c.id) + '" title="Delete conversation">' + ICONS.trash + "</button>" +
+            '<button type="button" class="rail-act-mini" data-pin-conv="' + escapeHtml(c.id) + '" aria-label="' + (c.pinned ? "Unpin" : "Pin") + ' conversation: ' + escapeHtml(c.title) + '" title="' + (c.pinned ? "Unpin" : "Pin") + ' conversation">' + ICONS.pin + "</button>" +
+            '<button type="button" class="rail-act-mini" data-rename-conv="' + escapeHtml(c.id) + '" aria-label="Rename conversation: ' + escapeHtml(c.title) + '" title="Rename conversation">' + ICONS.edit + "</button>" +
+            '<button type="button" class="rail-act-mini" data-del-conv="' + escapeHtml(c.id) + '" aria-label="Delete conversation: ' + escapeHtml(c.title) + '" title="Delete conversation">' + ICONS.trash + "</button>" +
           "</div>" +
         "</div>";
+      }
+
+      function focusRailAction(attribute, conversationId) {
+        const buttons = Array.from(convListEl?.querySelectorAll("[" + attribute + "]") || []);
+        buttons.find((button) => button.getAttribute(attribute) === conversationId)?.focus();
+      }
+
+      function localDayOrdinal(timestamp) {
+        const value = Number(timestamp);
+        if (!Number.isFinite(value) || value <= 0) return null;
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Africa/Juba",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).formatToParts(new Date(value));
+        const part = (type) => parts.find((item) => item.type === type)?.value;
+        const year = Number(part("year"));
+        const month = Number(part("month"));
+        const day = Number(part("day"));
+        return Number.isInteger(year) && Number.isInteger(month) && Number.isInteger(day)
+          ? Math.floor(Date.UTC(year, month - 1, day) / 86_400_000)
+          : null;
+      }
+
+      function groupConversationRows(conversations) {
+        const today = localDayOrdinal(Date.now());
+        const groups = new Map([
+          ["Pinned", []],
+          ["Today", []],
+          ["Yesterday", []],
+          ["Previous 7 days", []],
+          ["Older", []],
+          ["Date unavailable", []],
+        ]);
+        const sorted = [...conversations].sort((a, b) => {
+          const aTime = Number.isFinite(a.updatedAtMs) ? a.updatedAtMs : Number.NEGATIVE_INFINITY;
+          const bTime = Number.isFinite(b.updatedAtMs) ? b.updatedAtMs : Number.NEGATIVE_INFINITY;
+          return bTime - aTime || String(a.id).localeCompare(String(b.id));
+        });
+        for (const conversation of sorted) {
+          const day = localDayOrdinal(conversation.updatedAtMs);
+          const age = day === null || today === null ? null : today - day;
+          const label = conversation.pinned
+            ? "Pinned"
+            : age === null || age < 0
+              ? "Date unavailable"
+              : age === 0
+                ? "Today"
+                : age === 1
+                  ? "Yesterday"
+                  : age <= 7
+                    ? "Previous 7 days"
+                    : "Older";
+          groups.get(label)?.push(conversation);
+        }
+        return [...groups.entries()].filter(([, rows]) => rows.length > 0);
       }
 
       function renderApp() {
@@ -1099,18 +1090,12 @@ function renderPwaShellHtml(locale, nonce) {
           if (state.conversations.length === 0) {
             setSafeHtml(
               convListEl,
-              '<div class="rail-empty-hint" role="listitem">Your tax conversations will appear here, grouped by Pinned &amp; Recent.</div>',
+              '<div class="rail-empty-hint" role="listitem">No saved conversations yet. Start a conversation to keep it on this device.</div>',
             );
           } else {
-            const pinned = state.conversations.filter((c) => c.pinned);
-            const recent = state.conversations.filter((c) => !c.pinned);
-            let html = "";
-            if (pinned.length) {
-              html += '<div class="rail-section-label" role="presentation">Pinned</div>' + pinned.map(renderConvRow).join("");
-            }
-            if (recent.length) {
-              html += '<div class="rail-section-label" role="presentation">Today</div>' + recent.map(renderConvRow).join("");
-            }
+            const html = groupConversationRows(state.conversations).map(([label, rows]) =>
+              '<h2 class="rail-section-label">' + escapeHtml(label) + "</h2>" + rows.map(renderConvRow).join("")
+            ).join("");
             setSafeHtml(convListEl, html);
           }
         }
@@ -1143,11 +1128,6 @@ function renderPwaShellHtml(locale, nonce) {
         if (activeTurnAbortController) return;
         const trimmed = String(text || "").trim();
         if (!trimmed) return;
-        if (opts.forceIdentity) {
-          applyIdentity(opts.forceIdentity);
-        }
-        const selectedIdentity = state.identity || "ANONYMOUS";
-        const isSignedIn = selectedIdentity !== "ANONYMOUS";
 
         let conv = state.conversations.find((c) => c.id === state.activeId);
         if (!conv) {
@@ -1155,33 +1135,31 @@ function renderPwaShellHtml(locale, nonce) {
             id: "thr_web_" + Date.now().toString(36),
             title: trimmed.slice(0, 48),
             pinned: false,
-            isAuthenticated: isSignedIn,
+            isAuthenticated: false,
+            updatedAtMs: Date.now(),
             turns: [],
           };
           state.conversations.unshift(conv);
           state.activeId = conv.id;
         }
-        if (isSignedIn) conv.isAuthenticated = true;
+        conv.updatedAtMs = Date.now();
         conv.turns.push({ role: "user", content: trimmed });
         conv.turns.push({ role: "assistant", content: "Searching SSRA statutory corpus & verifying numeric provenance..." });
         renderApp();
 
-        const endpoint = isSignedIn ? "/v1/turns" : "/api/turns";
+        const endpoint = "/api/turns";
         const headers = {
           "Content-Type": "application/json",
           "ngrok-skip-browser-warning": "true",
         };
-        if (isSignedIn) {
-          headers["X-SSRA-Subject-Ref"] = selectedIdentity;
-        }
         const payload = {
           message: trimmed,
           thread_id: opts.threadId || conv.id,
           locale: state.locale,
           channel: "web",
           low_data_mode: Boolean(state.lowDataMode),
-          auth_level: isSignedIn ? "T1_TIN_BOUND" : "ANONYMOUS",
-          subject_ref: isSignedIn ? selectedIdentity : null,
+          auth_level: "ANONYMOUS",
+          subject_ref: null,
           confirmation_token: opts.confirmationToken || null,
           idempotency_key: opts.idempotencyKey || null,
         };
@@ -1230,13 +1208,15 @@ function renderPwaShellHtml(locale, nonce) {
               meta: { tier: "T0", intent: "user_cancelled", outcome_verified: false },
             };
           } else {
-            // FE-G4: Safe Offline Resilience Pack fallback
+            // The server may have received the request before the connection failed.
             const offlineAns = computeOfflineResilienceAnswer(trimmed);
             conv.turns[conv.turns.length - 1] = {
               role: "assistant",
               content: offlineAns.content,
               meta: offlineAns.meta,
             };
+            if (input && !input.value.trim()) input.value = trimmed;
+            if (hintEl) hintEl.textContent = "Connection interrupted. Draft restored; request completion may be unknown.";
           }
         } finally {
           activeTurnAbortController = null;
@@ -1280,11 +1260,10 @@ function renderPwaShellHtml(locale, nonce) {
         }
       });
 
-      document.querySelectorAll(".landing-chip").forEach((btn) => {
+      document.querySelectorAll(".landing-chip[data-prompt]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const prompt = btn.getAttribute("data-prompt");
-          const reqSub = btn.getAttribute("data-demo-subject");
-          sendTurn(prompt, { forceIdentity: reqSub || undefined });
+          sendTurn(prompt);
         });
       });
 
@@ -1296,6 +1275,7 @@ function renderPwaShellHtml(locale, nonce) {
           if (c) c.pinned = !c.pinned;
           saveState();
           renderApp();
+          focusRailAction("data-pin-conv", cid);
           return;
         }
         const renBtn = e.target.closest("[data-rename-conv]");
@@ -1308,6 +1288,7 @@ function renderPwaShellHtml(locale, nonce) {
               c.title = nextTitle.trim().slice(0, 64);
               saveState();
               renderApp();
+              focusRailAction("data-rename-conv", cid);
             }
           }
           return;
@@ -1315,10 +1296,14 @@ function renderPwaShellHtml(locale, nonce) {
         const delBtn = e.target.closest("[data-del-conv]");
         if (delBtn) {
           const cid = delBtn.getAttribute("data-del-conv");
+          if (!window.confirm("Delete this saved conversation from this device? This cannot be undone.")) return;
           state.conversations = state.conversations.filter((x) => x.id !== cid);
           if (state.activeId === cid) state.activeId = state.conversations[0]?.id || null;
           saveState();
           renderApp();
+          const nextConversation = convListEl?.querySelector(".rail-item");
+          if (nextConversation) nextConversation.focus();
+          else document.getElementById("new-chat-btn")?.focus();
           return;
         }
         const btn = e.target.closest("[data-conv-id]");
@@ -1326,6 +1311,11 @@ function renderPwaShellHtml(locale, nonce) {
           state.activeId = btn.getAttribute("data-conv-id");
           saveState();
           renderApp();
+          if (window.matchMedia?.("(max-width: 960px)")?.matches) {
+            shell?.setAttribute("data-mobile-rail", "closed");
+            syncMobileRailA11y(false);
+          }
+          input?.focus();
         }
       });
 
@@ -1400,36 +1390,56 @@ function renderPwaShellHtml(locale, nonce) {
         state.activeId = null;
         saveState();
         renderApp();
+        if (window.matchMedia?.("(max-width: 960px)")?.matches) {
+          shell?.setAttribute("data-mobile-rail", "closed");
+          syncMobileRailA11y(false);
+        }
+        input?.focus();
       });
 
       document.getElementById("clear-chat-btn")?.addEventListener("click", () => {
+        if (!window.confirm("Delete all saved conversations from this device? This cannot be undone.")) return;
         state.conversations = [];
         state.activeId = null;
         dispatchSwLogoutPurge();
         saveState();
         renderApp();
+        input?.focus();
       });
 
       const railAsideEl = document.querySelector(".rail-wrap");
       const syncMobileRailA11y = (moveFocus = false) => {
         const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
+        if (!isMobileViewport) shell?.setAttribute("data-mobile-rail", "closed");
         const isMobOpen = shell?.getAttribute("data-mobile-rail") === "open";
+        const isDesktopCollapsed = shell?.getAttribute("data-sidebar") === "collapsed";
+        const isHidden = isMobileViewport ? !isMobOpen : isDesktopCollapsed;
         if (railAsideEl) {
-          railAsideEl.toggleAttribute("inert", Boolean(isMobileViewport && !isMobOpen));
+          railAsideEl.toggleAttribute("inert", Boolean(isHidden));
         }
-        if (moveFocus && isMobileViewport) {
-          if (isMobOpen) {
-            document.getElementById("new-chat-btn")?.focus();
-          } else {
-            document.getElementById("header-rail-btn")?.focus();
-          }
+        document.querySelector(".app-main-col")?.toggleAttribute("inert", Boolean(isMobileViewport && isMobOpen));
+        const headerRailBtn = document.getElementById("header-rail-btn");
+        headerRailBtn?.setAttribute("aria-expanded", String(!isHidden));
+        headerRailBtn?.setAttribute("aria-label", isHidden ? "Open conversations" : "Close conversations");
+        document.getElementById("rail-collapse-btn")?.setAttribute(
+          "aria-label",
+          isMobileViewport ? "Close conversations sidebar" : "Collapse conversations sidebar",
+        );
+        if (moveFocus && isHidden) {
+          headerRailBtn?.focus();
+        } else if (moveFocus && !isHidden) {
+          document.getElementById("new-chat-btn")?.focus();
         }
       };
       const toggleSidebar = () => {
-        const cur = shell?.getAttribute("data-sidebar");
-        shell?.setAttribute("data-sidebar", cur === "collapsed" ? "open" : "collapsed");
-        const mob = shell?.getAttribute("data-mobile-rail");
-        shell?.setAttribute("data-mobile-rail", mob === "open" ? "closed" : "open");
+        const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
+        if (isMobileViewport) {
+          const mob = shell?.getAttribute("data-mobile-rail");
+          shell?.setAttribute("data-mobile-rail", mob === "open" ? "closed" : "open");
+        } else {
+          const cur = shell?.getAttribute("data-sidebar");
+          shell?.setAttribute("data-sidebar", cur === "collapsed" ? "open" : "collapsed");
+        }
         syncMobileRailA11y(true);
       };
       document.getElementById("rail-collapse-btn")?.addEventListener("click", toggleSidebar);
@@ -1454,12 +1464,16 @@ function renderPwaShellHtml(locale, nonce) {
       // Online / Offline Network Indicator (FE-G4)
       function syncNetworkStatusBadge() {
         const txt = document.getElementById("net-status-text");
-        if (!txt) return;
-        txt.textContent = navigator.onLine === false
-          ? "Offline Resilience Pack 2026.10.1"
-          : state.lowDataMode
-            ? "2G Low-Data · Snapshot 2026.10.1"
-            : "Snapshot 2026.10.1";
+        const badge = document.getElementById("net-status-badge");
+        if (!txt || !badge) return;
+        const offline = navigator.onLine === false;
+        const lowData = !offline && state.lowDataMode;
+        badge.setAttribute("data-connection", offline ? "offline" : lowData ? "low-data" : "available");
+        txt.textContent = offline
+          ? "Offline · reconnect to get current guidance"
+          : lowData
+            ? "Low-data mode · network available"
+            : "Network available · citations shown with answers";
       }
       window.addEventListener("online", syncNetworkStatusBadge);
       window.addEventListener("offline", syncNetworkStatusBadge);
@@ -1477,14 +1491,6 @@ function renderPwaShellHtml(locale, nonce) {
           acctTrigger?.setAttribute("aria-expanded", "false");
         }
       });
-      acctPopover?.addEventListener("click", (e) => {
-        const idBtn = e.target.closest("[data-select-identity]");
-        if (idBtn) {
-          applyIdentity(idBtn.getAttribute("data-select-identity"));
-          acctPopover.classList.remove("open");
-        }
-      });
-
       // Modal focus restoration (FE-G6)
       let modalReturnFocusEl = null;
       function closeAllModals() {
@@ -1502,14 +1508,16 @@ function renderPwaShellHtml(locale, nonce) {
       const searchInput = document.getElementById("conv-search-input");
       const searchResults = document.getElementById("conv-search-results");
       function renderSearchModalList() {
-        const q = (searchInput?.value || "").trim().toLowerCase();
-        const matches = state.conversations.filter((c) => !q || c.title.toLowerCase().includes(q));
+        const q = (searchInput?.value || "").trim().toLocaleLowerCase();
+        const matches = state.conversations.filter((c) => !q || c.title.toLocaleLowerCase().includes(q));
         let html = matches.map((c) =>
           '<button type="button" class="acct-pop-item" data-jump-conv="' + escapeHtml(c.id) + '"><span>' + ICONS.messageSquare + " " + escapeHtml(c.title) + '</span><span class="jump-open-tag">Open</span></button>'
         ).join("");
-        html += '<a href="/admin" class="acct-pop-item"><span>' + ICONS.gauge + " Jump to SSRA Operations Overview (/admin)</span><span>" + ICONS.arrowUpRight + "</span></a>";
-        html += '<a href="/agent" class="acct-pop-item"><span>' + ICONS.inbox + " Jump to Agent Queue &amp; Copilot (/agent)</span><span>" + ICONS.arrowUpRight + "</span></a>";
-        html += '<a href="/analytics" class="acct-pop-item"><span>' + ICONS.chart + " Jump to CX Analytics &amp; Scorecard (/analytics)</span><span>" + ICONS.arrowUpRight + "</span></a>";
+        if (!matches.length && q) {
+          html = '<p class="rail-empty-hint" role="status">No saved conversations match this search.</p>';
+        } else if (!matches.length) {
+          html = '<p class="rail-empty-hint" role="status">No saved conversations yet.</p>';
+        }
         setSafeHtml(searchResults, html);
       }
       function openSearchModal() {
@@ -1532,6 +1540,11 @@ function renderPwaShellHtml(locale, nonce) {
           state.activeId = btn.getAttribute("data-jump-conv");
           closeAllModals();
           renderApp();
+          if (window.matchMedia?.("(max-width: 960px)")?.matches) {
+            shell?.setAttribute("data-mobile-rail", "closed");
+            syncMobileRailA11y(false);
+          }
+          input?.focus();
         }
       });
 
@@ -1548,21 +1561,20 @@ function renderPwaShellHtml(locale, nonce) {
           btn.setAttribute("aria-selected", String(isAct));
         });
         if (state.settingsTab === "voice") {
-          if (settingsTitleEl) settingsTitleEl.textContent = "Voice, Speech & Narration";
+          if (settingsTitleEl) settingsTitleEl.textContent = "Voice typing & reading";
           setSafeHtml(
             settingsBodyEl,
-            "<p><strong>Hybrid Speech Stack:</strong> Whisper-large-v3-turbo (<code>en</code>, <code>ar</code>) + SunflowerASR (<code>din</code>, <code>nus</code>) + Orpheus-3B Multilingual TTS.</p>" +
+            "<p>Voice typing uses your browser's speech recognition when available and currently supports English and Arabic only. Your browser may process audio outside SSRA. Auto-narration uses browser speech synthesis; available voices vary by device.</p>" +
             '<div class="settings-actions-row">' +
               '<button type="button" class="icon-btn" id="toggle-narrate-btn">' + (state.autoNarrate ? ICONS.speaker + " Auto-Narrate Replies: ON" : ICONS.speakerOff + " Auto-Narrate Replies: OFF") + "</button>" +
             "</div>"
           );
         } else if (state.settingsTab === "profile") {
-          if (settingsTitleEl) settingsTitleEl.textContent = "Taxpayer Session Identity";
-          const meta = IDENTITY_META[state.identity] || IDENTITY_META.ANONYMOUS;
+          if (settingsTitleEl) settingsTitleEl.textContent = "Personal e-Tax services";
           setSafeHtml(
             settingsBodyEl,
-            "<p><strong>Active Identity:</strong> " + escapeHtml(meta.name) + " (" + escapeHtml(meta.sub) + ")</p>" +
-            "<p><strong>Zero-Trust Subject Binding:</strong> Verified identities propagate via OAuth 2.1 RFC 8693 + DPoP token exchange; never persisted to shared-device localStorage.</p>"
+            "<p>This public chat does not show personal balances, filing records, or taxpayer identity details.</p>" +
+            '<p><a href="https://etax.nra.gov.ss/" rel="noopener noreferrer">Sign in through the official e-Tax portal</a> for personal services.</p>'
           );
         } else if (state.settingsTab === "privacy") {
           if (settingsTitleEl) settingsTitleEl.textContent = "Privacy, Shared-Device Hygiene & Right to Erasure";
@@ -1570,19 +1582,7 @@ function renderPwaShellHtml(locale, nonce) {
             settingsBodyEl,
             "<p><strong>Shared-Device Protection:</strong> Only anonymous <code>T0</code> public turns are saved locally; <code>T1</code>/<code>T2</code> turns and TINs are scrubbed automatically.</p>" +
             '<div class="settings-actions-row">' +
-              '<button type="button" id="purge-local-btn" class="icon-btn danger-text-btn">' + ICONS.trash + " Purge Local Cache &amp; Episodic Memory</button>" +
-            "</div>"
-          );
-        } else if (state.settingsTab === "ops") {
-          if (settingsTitleEl) settingsTitleEl.textContent = "SSRA Operations Console Shortcuts";
-          setSafeHtml(
-            settingsBodyEl,
-            "<p>Jump directly to the Staff, Administrator, and Read-Only Auditor workbenches:</p>" +
-            '<div class="settings-actions-row">' +
-              '<a href="/admin" class="icon-btn ops-link-btn">' + ICONS.gauge + " Overview (/admin)</a>" +
-              '<a href="/agent" class="icon-btn">' + ICONS.inbox + " Agent Queue (/agent)</a>" +
-              '<a href="/calls" class="icon-btn">' + ICONS.phone + " Call Desk (/calls)</a>" +
-              '<a href="/analytics" class="icon-btn">' + ICONS.chart + " Analytics (/analytics)</a>" +
+              '<button type="button" id="purge-local-btn" class="icon-btn danger-text-btn">' + ICONS.trash + " Clear saved conversations on this device</button>" +
             "</div>"
           );
         } else {
@@ -1592,7 +1592,6 @@ function renderPwaShellHtml(locale, nonce) {
             "<p><strong>Republic of South Sudan Civic Palette:</strong> Nile Dusk (Dark), Savanna Cotton Paper (Light), and WCAG AAA High Contrast.</p>" +
             '<div class="settings-actions-row">' +
               '<button type="button" class="icon-btn" id="toggle-lowdata-btn">' + ICONS.wifi + (state.lowDataMode ? " 2G Low-Data Mode: ON" : " 2G Low-Data Mode: OFF") + "</button>" +
-              '<a href="/admin" class="icon-btn ops-link-btn">' + ICONS.gauge + " Open SSRA Operations Console</a>" +
             "</div>"
           );
         }
@@ -1630,12 +1629,6 @@ function renderPwaShellHtml(locale, nonce) {
           return;
         }
         if (e.target.closest("#purge-local-btn")) {
-          if (state.identity !== "ANONYMOUS") {
-            fetch("/v1/memory/" + encodeURIComponent(state.identity), {
-              method: "DELETE",
-              headers: { "X-SSRA-Subject-Ref": state.identity, "ngrok-skip-browser-warning": "true" },
-            }).catch(() => {});
-          }
           state.conversations = [];
           state.activeId = null;
           dispatchSwLogoutPurge();
@@ -1676,22 +1669,32 @@ function renderPwaShellHtml(locale, nonce) {
           if (searchBackdrop?.classList.contains("open")) closeAllModals();
           else openSearchModal();
         } else if (e.key === "Escape") {
-          closeAllModals();
+          if (openModal) {
+            closeAllModals();
+          } else if (shell?.getAttribute("data-mobile-rail") === "open") {
+            shell.setAttribute("data-mobile-rail", "closed");
+            syncMobileRailA11y(true);
+          }
         }
       });
 
       // Voice Dictation (Web Speech API)
       document.getElementById("voice-dictate-btn")?.addEventListener("click", () => {
+        const speechLocale = state.locale === "ar" ? "ar-SS" : state.locale === "en" ? "en-US" : null;
+        if (!speechLocale) {
+          if (hintEl) hintEl.textContent = "Voice typing is unavailable for this selected language. Type your question instead.";
+          return;
+        }
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) {
-          if (hintEl) hintEl.textContent = "Voice dictation active via Call SSRA modal";
+          if (hintEl) hintEl.textContent = "Voice typing is unavailable in this browser. Type your question instead.";
           modalReturnFocusEl = document.getElementById("voice-dictate-btn");
           document.getElementById("call-modal-backdrop")?.classList.add("open");
           document.getElementById("close-call-btn")?.focus();
           return;
         }
         const rec = new SR();
-        rec.lang = state.locale === "ar" ? "ar-SS" : "en-US";
+        rec.lang = speechLocale;
         if (hintEl) hintEl.textContent = "Listening... speak your tax question";
         rec.onresult = (ev) => {
           const transcript = ev.results?.[0]?.[0]?.transcript || "";
@@ -1722,7 +1725,6 @@ function renderPwaShellHtml(locale, nonce) {
         });
       });
 
-      applyIdentity(state.identity || "ANONYMOUS");
     })();
   </script>
 </body>
@@ -1838,6 +1840,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (/^\/(?:admin|agent|calls|analytics|queue|auditor|ops)(?:\/|$)/.test(pathname)) {
+    res.writeHead(404, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      ...secHeaders,
+    });
+    res.end(JSON.stringify({ error: "NOT_FOUND" }));
+    return;
+  }
+
   if (isGetOrHead && pathname === "/sw.js") {
     const swPath = path.join(__dirname, "public", "sw.js");
     const swContent = fs.existsSync(swPath)
@@ -1868,23 +1880,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (isGetOrHead && pathname === "/api/scorecard") {
-    try {
-      const upstream = await fetch(`${INTERNAL_API_URL}/v1/analytics/cx-scorecard`, {
-        headers: { Accept: "application/json", traceparent },
-        signal: AbortSignal.timeout(15_000),
-      });
-      const text = await upstream.text();
-      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
-      res.end(text);
-    } catch {
-      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
-      res.end(JSON.stringify({ status: "unavailable", service: "ssra-web" }));
-    }
+  if (pathname === "/api/scorecard") {
+    res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
+    res.end(JSON.stringify({ error: "STAFF_CONSOLE_REQUIRED" }));
     return;
   }
 
-  if (isGetOrHead && (pathname === "/api/flags" || pathname === "/api/kill-switches")) {
+  if (pathname === "/api/flags" || pathname === "/api/kill-switches") {
     res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
     res.end(JSON.stringify({ error: "STAFF_CONSOLE_REQUIRED" }));
     return;
@@ -1955,17 +1957,6 @@ const server = http.createServer(async (req, res) => {
       });
       res.end(JSON.stringify({ error: "INVALID_BACKCHANNEL_LOGOUT_REQUEST" }));
     }
-    return;
-  }
-
-  if (isGetOrHead && isOpsDashboardPath(pathname)) {
-    sendBodyWithCompression(
-      req,
-      res,
-      200,
-      { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
-      renderOpsDashboardHtml(pathname, nonce),
-    );
     return;
   }
 
@@ -2044,39 +2035,24 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname.startsWith("/v1/")) {
-    // SEC2-G6: Block staff/admin mutations on the public taxpayer Web BFF proxy
-    if (
-      !isGetOrHead &&
-      (pathname.startsWith("/v1/admin/") ||
-        pathname.endsWith("/takeover") ||
-        pathname.endsWith("/handback"))
-    ) {
-      res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
-      res.end(JSON.stringify({ error: "STAFF_CONSOLE_REQUIRED_FOR_ADMIN_MUTATIONS" }));
+    // The public browser may submit feedback only. Chat requests go through the
+    // subject-stripping /api/turns BFF; other runtime and staff paths are private.
+    if (pathname !== "/v1/analytics/feedback" || method !== "POST") {
+      res.writeHead(403, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        ...secHeaders,
+      });
+      res.end(JSON.stringify({ error: "PUBLIC_BFF_ROUTE_NOT_ALLOWED" }));
       return;
     }
-    const isRuntimeRoute =
-      pathname.startsWith("/v1/turns") ||
-      pathname.startsWith("/v1/agui/") ||
-      pathname.startsWith("/v1/memory/") ||
-      pathname.startsWith("/v1/runtime/") ||
-      pathname.startsWith("/v1/field-officer/");
-    const upstreamBase = isRuntimeRoute ? INTERNAL_RUNTIME_URL : INTERNAL_API_URL;
+    const upstreamBase = INTERNAL_API_URL;
     try {
       const hasBody = method === "POST";
       const bodyStr = hasBody ? await readRequestBody(req) : undefined;
       const fwdHeaders = { Accept: req.headers.accept ?? "application/json", traceparent };
       if (hasBody) {
         fwdHeaders["Content-Type"] = "application/json";
-      }
-      if (req.headers["x-ssra-subject-ref"]) {
-        const cleanSub = sanitizeHeaderToken(req.headers["x-ssra-subject-ref"]);
-        if (!VALID_SUBJECT_REF_RE.test(cleanSub)) {
-          res.writeHead(400, { "Content-Type": "application/json", ...secHeaders });
-          res.end(JSON.stringify({ error: "INVALID_SUBJECT_REF_HEADER" }));
-          return;
-        }
-        fwdHeaders["x-ssra-subject-ref"] = cleanSub;
       }
       for (const hName of ["last-event-id", "idempotency-key"]) {
         if (req.headers[hName]) {

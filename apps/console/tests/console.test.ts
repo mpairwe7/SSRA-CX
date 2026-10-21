@@ -40,6 +40,7 @@ import {
   resolveAgentQueueHotkey,
   resolveCallWorkspaceState,
   resolveExtractedFieldReview,
+  resolveTelemetryProvenance,
   signedInName,
   splitMeasureParts,
   staffDestinationsFor,
@@ -200,20 +201,57 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     });
     expect(fallbackShell.mainId).toBe("staff-main");
     expect(fallbackShell.allGatesPassClaimAllowed).toBe(false);
-    expect(fallbackShell.provenanceBanner).toContain("Illustrative fallback");
+    expect(fallbackShell.provenanceBanner).toContain("Illustrative sample");
+    expect(resolveTelemetryProvenance({ observedAtMs: null, nowMs: 100_000 })).toBe(
+      "UNKNOWN_TELEMETRY",
+    );
+    expect(resolveTelemetryProvenance({ observedAtMs: 10_000, nowMs: 400_001 })).toBe(
+      "STALE_TELEMETRY",
+    );
+    expect(
+      resolveTelemetryProvenance({
+        observedAtMs: 99_000,
+        nowMs: 100_000,
+        isSyntheticBaseline: true,
+      }),
+    ).toBe("ILLUSTRATIVE_FALLBACK");
 
     // Analytics, Evaluation, Quality Audit & Agent Queue Dashboards
+    const telemetryNow = 1_792_152_000_000;
     const analyticsView = buildAnalyticsDashboardView({
       p95TtftMs: 850,
       previousP95TtftMs: 1000,
       containmentRatePct: 96,
       citationPrecisionPct: 100,
       replicaUptimeHours: 72,
+      telemetryObservedAtMs: telemetryNow - 30_000,
+      nowMs: telemetryNow,
     });
     expect(analyticsView.liveGauges).toHaveLength(3);
     expect(analyticsView.ciVerifiedTargets).toHaveLength(3);
     expect(analyticsView.ciVerifiedTargets[0]?.provenance).toBe("CI_VERIFIED_TARGET");
     expect(analyticsView.replicaLifetimeTile.scope).toBe("REPLICA_LIFETIME");
+    expect(analyticsView.shell.allGatesPassClaimAllowed).toBe(true);
+    const unknownAnalyticsView = buildAnalyticsDashboardView({
+      p95TtftMs: 850,
+      containmentRatePct: 96,
+      citationPrecisionPct: 100,
+      replicaUptimeHours: 72,
+      nowMs: telemetryNow,
+    });
+    expect(unknownAnalyticsView.liveGauges[0]?.provenance).toBe("UNKNOWN_TELEMETRY");
+    expect(unknownAnalyticsView.shell.allGatesPassClaimAllowed).toBe(false);
+    expect(unknownAnalyticsView.shell.provenanceBanner).toContain("freshness is unknown");
+    const staleAnalyticsView = buildAnalyticsDashboardView({
+      p95TtftMs: 850,
+      containmentRatePct: 96,
+      citationPrecisionPct: 100,
+      replicaUptimeHours: 72,
+      telemetryObservedAtMs: telemetryNow - 6 * 60_000,
+      nowMs: telemetryNow,
+    });
+    expect(staleAnalyticsView.liveGauges[0]?.provenance).toBe("STALE_TELEMETRY");
+    expect(staleAnalyticsView.shell.allGatesPassClaimAllowed).toBe(false);
 
     const evalView = buildEvaluationDashboardView({
       liveEvalMetrics: null,
@@ -224,6 +262,13 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(evalView.isLive).toBe(false);
     expect(evalView.shell.allGatesPassClaimAllowed).toBe(false);
     expect(evalView.rows[0]?.plainQuestion).toBe("Zero fabricated tax figures");
+    const unTimestampedEvalView = buildEvaluationDashboardView({
+      liveEvalMetrics: [{ name: "numeric_accuracy", value: 1, threshold: 1, passed: true }],
+      staticFallbackMetrics: [],
+      nowMs: telemetryNow,
+    });
+    expect(unTimestampedEvalView.isLive).toBe(false);
+    expect(unTimestampedEvalView.provenance).toBe("UNKNOWN_TELEMETRY");
 
     expect(pointsHint(76, 72)).toBe("up 4 points from 72% in the period before");
     const callHeadline = aiCallsHeadline([

@@ -4,7 +4,7 @@ Every architectural decision with a real reversal cost is recorded here before i
 
 ---
 
-## ADR Catalog (ADR-001 to ADR-017)
+## ADR Catalog (ADR-001 to ADR-018)
 
 | ID | Title | One-Line Problem Statement | Status | Reversal Cost |
 |---|---|---|---|---|
@@ -25,3 +25,4 @@ Every architectural decision with a real reversal cost is recorded here before i
 | **[ADR-015](./0015-supply-chain-hardening-and-sovereign-gitops.md)** | Supply-Chain Hardening (SLSA L3, 7-Day Cooldown) & Sovereign GitOps | How do we defend CI/CD, dependencies, and container images against 2026-class supply-chain compromises (such as the March 2026 LiteLLM/Trivy incident)? | Proposed (Drafted) | Medium |
 | **[ADR-016](./0016-docker-compose-2026-and-sunflower-qwen35-9b.md)** | Docker Compose 2026 Standardization, `Sunbird/Sunflower-Qwen3.5-9B` Local HF Cache, and Omnichannel Workbench/Dashboards | How do we standardize NCA container operations on hardened Docker Compose 2026, run `Sunbird/Sunflower-Qwen3.5-9B` from the local HuggingFace cache, and deliver unified Chatv2/Voice/Document workbenches and 3 role-based dashboards? | Accepted | Low–Medium |
 | **[ADR-017](./0017-agentic-cx-eq-4tier-memory-and-goal-continuation.md)** | October 2026 SSRA Agentic CX Enhancements — Autonomous Goal Planner, Multimodal EQ, 4-Tier Cognitive Memory, `HandoffEnvelope` v2, and Temporal Goal Continuation | How do we evolve SSRA Assist with multi-step autonomous execution, real-time EQ tone/prosody adaptation, consent-gated 4-tier memory, `HandoffEnvelope` v2 officer hand-back, and Temporal post-interaction goal continuation? | Accepted | Low–Medium |
+| **[ADR-018](./0018-staff-console-preview-and-trusted-session-gate.md)** | Staff Console Preview & Trusted Session Gate | How do we prevent unverified browser personas, fabricated metrics, or spoofable staff headers from being treated as operational state? | Accepted | Medium |

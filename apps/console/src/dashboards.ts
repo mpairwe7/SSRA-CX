@@ -14,6 +14,7 @@ import {
   type OpsStatTileDescriptor,
   plainSeconds,
   QUANTILE_PLAIN_LABELS,
+  resolveTelemetryProvenance,
   toDelta,
 } from "./views.js";
 
@@ -311,14 +312,27 @@ export function buildAnalyticsDashboardView(params: {
   readonly containmentRatePct: number;
   readonly citationPrecisionPct: number;
   readonly replicaUptimeHours: number;
+  readonly telemetryObservedAtMs?: number | null | undefined;
+  readonly telemetryIsSyntheticBaseline?: boolean | undefined;
+  readonly nowMs?: number | undefined;
+  readonly maxTelemetryAgeMs?: number | undefined;
 }): AnalyticsDashboardView {
+  const provenance = resolveTelemetryProvenance({
+    observedAtMs: params.telemetryObservedAtMs,
+    nowMs: params.nowMs,
+    maxAgeMs: params.maxTelemetryAgeMs,
+    isSyntheticBaseline: params.telemetryIsSyntheticBaseline,
+  });
   const shell = buildOpsPageShell({
     eyebrow: "Observe",
     title: "Service analytics & SLOs",
     description:
       "Plain-language supervisor observability across Web, WhatsApp, SMS, USSD, and Voice",
-    provenance: "LIVE_TELEMETRY",
-    allMetricsPassed: params.p95TtftMs <= 1500 && params.citationPrecisionPct >= 98,
+    provenance,
+    allMetricsPassed:
+      provenance === "LIVE_TELEMETRY" &&
+      params.p95TtftMs <= 1500 &&
+      params.citationPrecisionPct >= 98,
   });
 
   const liveGauges: OpsStatTileDescriptor[] = [
@@ -326,7 +340,7 @@ export function buildAnalyticsDashboardView(params: {
       label: QUANTILE_PLAIN_LABELS.p95,
       technicalSubtitle: "Chat p95 TTFT (target <= 1.5s)",
       formattedValue: plainSeconds(params.p95TtftMs),
-      provenance: "LIVE_TELEMETRY",
+      provenance,
       scope: "WINDOW_SCOPED",
       delta: toDelta(params.p95TtftMs, params.previousP95TtftMs),
       higherIsBetter: false,
@@ -335,7 +349,7 @@ export function buildAnalyticsDashboardView(params: {
       label: "Questions resolved without needing an officer",
       technicalSubtitle: "Quality-adjusted containment rate",
       formattedValue: `${params.containmentRatePct}%`,
-      provenance: "LIVE_TELEMETRY",
+      provenance,
       scope: "WINDOW_SCOPED",
       higherIsBetter: true,
     }),
@@ -343,7 +357,7 @@ export function buildAnalyticsDashboardView(params: {
       label: EVAL_METRIC_PLAIN_LABELS.citation_precision?.plainLabel ?? "Verified legal citations",
       technicalSubtitle: "citation_precision (gate >= 98%)",
       formattedValue: `${params.citationPrecisionPct}%`,
-      provenance: "LIVE_TELEMETRY",
+      provenance,
       scope: "WINDOW_SCOPED",
       higherIsBetter: true,
     }),
@@ -377,7 +391,7 @@ export function buildAnalyticsDashboardView(params: {
     label: "Current container uptime",
     technicalSubtitle: "Replica process lifetime (does not change with period picker)",
     formattedValue: `${params.replicaUptimeHours} hours`,
-    provenance: "LIVE_TELEMETRY",
+    provenance,
     scope: "REPLICA_LIFETIME",
   });
 
@@ -399,16 +413,29 @@ export interface EvalMetricItem {
 export function buildEvaluationDashboardView(params: {
   readonly liveEvalMetrics: readonly EvalMetricItem[] | null;
   readonly staticFallbackMetrics: readonly EvalMetricItem[];
+  readonly liveEvalObservedAtMs?: number | null | undefined;
+  readonly liveEvalIsSyntheticBaseline?: boolean | undefined;
+  readonly nowMs?: number | undefined;
+  readonly maxTelemetryAgeMs?: number | undefined;
 }) {
-  const isLive = Boolean(params.liveEvalMetrics && params.liveEvalMetrics.length > 0);
+  const hasMetrics = Boolean(params.liveEvalMetrics && params.liveEvalMetrics.length > 0);
+  const provenance = hasMetrics
+    ? resolveTelemetryProvenance({
+        observedAtMs: params.liveEvalObservedAtMs,
+        nowMs: params.nowMs,
+        maxAgeMs: params.maxTelemetryAgeMs,
+        isSyntheticBaseline: params.liveEvalIsSyntheticBaseline,
+      })
+    : "ILLUSTRATIVE_FALLBACK";
+  const isLive = provenance === "LIVE_TELEMETRY";
   const activeMetrics =
-    isLive && params.liveEvalMetrics ? params.liveEvalMetrics : params.staticFallbackMetrics;
+    hasMetrics && params.liveEvalMetrics ? params.liveEvalMetrics : params.staticFallbackMetrics;
   const allPass = activeMetrics.length > 0 && activeMetrics.every((m) => m.passed);
   const shell = buildOpsPageShell({
     eyebrow: "Observe",
     title: "Answer evaluation",
     description: "RAG groundedness, numeric provenance, and OWASP ASI01-ASI10 red-team gates",
-    provenance: isLive ? "LIVE_TELEMETRY" : "ILLUSTRATIVE_FALLBACK",
+    provenance,
     allMetricsPassed: allPass,
   });
 
@@ -423,6 +450,7 @@ export function buildEvaluationDashboardView(params: {
   return {
     shell,
     isLive,
+    provenance,
     rows,
   };
 }

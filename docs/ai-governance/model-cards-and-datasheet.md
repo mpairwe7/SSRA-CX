@@ -29,6 +29,11 @@
 - **Hosting:** Offline HuggingFace cache `/home/developer/huggingface_cache` (`Sunbird/SunflowerASR-51-african-languages` @ `4583c9dd251c422a4325fb0a0a509a3828097be2`, `Sunbird/orpheus-3b-tts-multilingual` @ `c44496fdfa162c4ecd15c846fcbcac15bba28951`, and `facebook/mms-tts-*` VITS checkpoints).
 - **Launch Gate & Controls:** A language is enabled on Voice/IVR only when its measured Word Error Rate (WER) on SSRA test sets is `<= 0.12` (`MAX_VOICE_WER_GATE`). Includes locale-scoped speaker catalog resolution (`resolve_tts_voice`), sentence-chunked TTS + barge-in cancellation (`VoiceStreamSession`), adaptive room-floor end-of-turn detection (`EndOfTurnDetector`), WCAG 2.2 SC 1.4.2 `NarrationBar` (`buildNarrationBarView`), and privacy-preserving SHA-256 voice consent auditing (`build_voice_consent_audit_entry`, `store_raw_audio=False`).
 
+### 1.5 Model/UI deployment boundary
+- The October 2026 frontend audit did not change model weights, prompts, retrieval, or output-guard behavior. UI status labels and local role selections are not model evidence or authorization.
+- The staff console remains a non-operational preview until OQ-014 is approved. Do not interpret browser-rendered case examples, historical sample metrics, or local preview personas as real taxpayer records, current service state, or authenticated roles.
+- Public chat fallback text does not claim a KnowledgeSnapshot citation while offline. A response can claim source support only when the runtime supplies the approved citation metadata.
+
 ---
 
 ## 2. Datasheet for the SSRA Knowledge Corpus (`knowledge/`)

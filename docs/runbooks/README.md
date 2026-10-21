@@ -25,6 +25,8 @@
 
 ## 2. Emergency Kill Switches (Model, Tool, Channel)
 
+> **Staff console access gate (2026-10-21):** `apps/console` currently serves a non-operational preview. Its scorecard, feature-flag, kill-switch, and runtime-status browser APIs deliberately return `403 AUTHENTICATED_STAFF_SESSION_REQUIRED` until OQ-014 is resolved and server-verified staff authorization is implemented. Do not use the preview to inspect taxpayer work or issue operational commands. Follow the SSRA-approved incident procedure and authenticated control-plane access method for live interventions.
+
 1. **Model Kill Switch / Force Degradation Ladder (`GET /v1/admin/kill-switches`):**
    - Setting `SSRA_FORCE_DEGRADATION_LEVEL=4` in `services/agent-runtime` bypasses LLM generation and serves **Retrieval-Only Cited Answer Cards + Deterministic Calculators** (Degradation Step 4).
    - Setting `SSRA_FORCE_DEGRADATION_LEVEL=5` serves **Static Approved FAQs + Callback Intake** (Degradation Step 5).

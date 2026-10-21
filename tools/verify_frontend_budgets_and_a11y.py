@@ -91,7 +91,7 @@ def main() -> None:
         "Ngrok interstitial cache-poisoning guard missing in apps/web/public/sw.js"
     )
 
-    # FE-G2: OWASP ASVS 5.0 V3/V4 headers, method allowlist, AbortSignal.timeout & traceparent
+    # FE-G2: Public BFF uses bounded upstream calls; staff preview has no upstream API proxy.
     for srv_name, srv_src in [
         ("apps/web/server.js", web_srv_src),
         ("apps/console/server.js", con_srv_src),
@@ -99,9 +99,18 @@ def main() -> None:
         assert "Cross-Origin-Opener-Policy" in srv_src and "ALLOWED_METHODS" in srv_src, (
             f"FE-G2 COOP header or ALLOWED_METHODS missing in {srv_name}"
         )
-        assert "AbortSignal.timeout(15_000)" in srv_src and "createTraceparent" in srv_src, (
-            f"FE-G2 upstream timeout or W3C traceparent missing in {srv_name}"
-        )
+    assert "AbortSignal.timeout(15_000)" in web_srv_src and "createTraceparent" in web_srv_src, (
+        "FE-G2 public BFF upstream timeout or W3C traceparent missing in apps/web/server.js"
+    )
+    assert (
+        "denyStaffApi" in con_srv_src
+        and "AUTHENTICATED_STAFF_SESSION_REQUIRED" in con_srv_src
+        and "X-SSRA-Staff-Id" not in con_srv_src
+        and "INTERNAL_API_URL" not in con_srv_src
+        and "fetch(" not in con_srv_src
+    ), (
+        "Staff console preview must deny APIs and must not trust browser identity or proxy staff data"
+    )
 
     # FE-G3: W3C Trusted Types & 6-char escapeHtml (including &#39; and &#96;)
     for ui_name, src in [
@@ -141,23 +150,27 @@ def main() -> None:
         and not emoji_re.search(con_srv_src)
     ), "Emoji characters found or SVG icon library missing in frontend UI"
     assert (
-        "prev !== state.identity" in web_srv_src
+        'auth_level: "ANONYMOUS"' in web_srv_src
+        and "subject_ref: null" in web_srv_src
+        and "PUBLIC_BFF_ROUTE_NOT_ALLOWED" in web_srv_src
         and "outcome_verified: false" in web_srv_src
-        and "STAFF_CONSOLE_REQUIRED_FOR_ADMIN_MUTATIONS" in web_srv_src
-        and "VALID_SUBJECT_REF_RE" in web_srv_src
         and "x-ssra-staff-id" not in web_srv_src
         and "activeTurnAbortController" in web_srv_src
         and "cleanTextForSpeech" in web_srv_src
         and "data-csat=" in web_srv_src
         and "trapModalTabFocus" in web_srv_src
         and "trapModalTabFocus" in ops_ui_src
-        and "data-set-degrade=" in ops_ui_src
-        and "/api/kill-switches" in con_srv_src
-        and "Array.isArray(flData)" in ops_ui_src
+        and "fetch(" not in ops_ui_src
+        and "X-SSRA-Staff-Id" not in ops_ui_src
+        and "AUTHENTICATED_STAFF_SESSION_REQUIRED" in con_srv_src
+        and "resolveTelemetryProvenance"
+        in (ROOT / "apps" / "console" / "src" / "views.ts").read_text(encoding="utf-8")
+        and "UNKNOWN_TELEMETRY"
+        in (ROOT / "apps" / "console" / "src" / "views.ts").read_text(encoding="utf-8")
         and "cmdkReturnFocusEl.isConnected" in ops_ui_src
         and "e.ctrlKey || e.metaKey || e.altKey" in ops_ui_src
     ), (
-        "FE-G8 / FE2-G1..G8 / SEC2-G6 cross-subject purge, BFF admin mutation block, AbortController, modal focus trap, or CSAT guard missing"
+        "FE-G8 / FE2-G1..G8 / SEC2-G6 anonymous BFF, staff preview gate, AbortController, modal focus trap, or telemetry freshness checks missing"
     )
 
     # 6. CSP Level 3 strict-dynamic, zero inline style="...", Lighthouse & Mobile Responsiveness verification
@@ -183,14 +196,18 @@ def main() -> None:
         and "z-index: 25" in ops_ui_src
         and 'id="rail-mobile-backdrop"' in web_srv_src
         and "syncMobileRailA11y" in web_srv_src
-        and 'btn.setAttribute("aria-checked", String(isSelected))' in web_srv_src
+        and 'aria-current="true"' in web_srv_src
         and 'btn.setAttribute("aria-checked", String(isSelected))' in ops_ui_src
+        and 'railEl?.addEventListener("focusin"' in ops_ui_src
+        and 'railEl?.addEventListener("focusout"' in ops_ui_src
+        and 'railEl?.matches(":hover")' in ops_ui_src
+        and 'railEl.classList.remove("is-collapsed")' in ops_ui_src
         and '<h2 id="settings-pane-title"' in web_srv_src
     ), (
         "Lighthouse / Mobile Responsiveness / WCAG 2.2 AA invariants missing (compression, robots.txt, meta description, aria-checked, or mobile drawer)"
     )
 
-    # 7. Executable verification of Accept-Encoding q-value negotiation and mobile drawer open/close interactions
+    # 7. Executable verification of public BFF denial, staff API denial, compression, and preview rendering.
     import http.client
     import os
     import shutil
@@ -238,12 +255,69 @@ def main() -> None:
         conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
         conn.request("GET", "/admin", headers={"Accept-Encoding": "identity"})
         resp_ops = conn.getresponse()
-        html_ops = resp_ops.read().decode("utf-8")
-        assert 'id="mobile-ops-nav-btn"' in html_ops and 'id="ops-mobile-backdrop"' in html_ops
+        assert resp_ops.status == 404, f"Public web BFF exposed staff route: HTTP {resp_ops.status}"
+        resp_ops.read()
+        conn.close()
+
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request("GET", "/v1/turns", headers={"Accept-Encoding": "identity"})
+        resp_direct_runtime = conn.getresponse()
+        assert resp_direct_runtime.status == 403, (
+            f"Public web BFF exposed direct runtime route: HTTP {resp_direct_runtime.status}"
+        )
+        resp_direct_runtime.read()
         conn.close()
     finally:
         proc.terminate()
         proc.wait(timeout=5)
+
+    console_proc = subprocess.Popen(  # noqa: S603
+        [node_bin, str(ROOT / "apps" / "console" / "server.js")],
+        env={**os.environ, "PORT": "39124"},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        for _ in range(30):
+            try:
+                conn = http.client.HTTPConnection("127.0.0.1", 39124, timeout=0.2)
+                conn.request("GET", "/healthz")
+                if conn.getresponse().status == 200:
+                    conn.close()
+                    break
+                conn.close()
+            except Exception:
+                time.sleep(0.1)
+
+        conn = http.client.HTTPConnection("127.0.0.1", 39124, timeout=2.0)
+        conn.request("GET", "/admin", headers={"Accept-Encoding": "identity"})
+        preview = conn.getresponse()
+        html_ops = preview.read().decode("utf-8")
+        assert preview.status == 200
+        assert 'id="mobile-ops-nav-btn"' in html_ops and 'id="ops-mobile-backdrop"' in html_ops
+        assert "Preview only · no authenticated staff session" in html_ops
+        assert "Live Sovereign GPU Stack" not in html_ops
+        conn.close()
+
+        for method, route in [
+            ("GET", "/api/scorecard"),
+            ("GET", "/api/flags"),
+            ("POST", "/api/flags"),
+            ("GET", "/api/kill-switches"),
+            ("POST", "/api/kill-switches"),
+            ("GET", "/v1/runtime/stack-status"),
+        ]:
+            conn = http.client.HTTPConnection("127.0.0.1", 39124, timeout=2.0)
+            conn.request(method, route, headers={"X-SSRA-Staff-Id": "ssra_admin"})
+            denied = conn.getresponse()
+            assert denied.status == 403, (
+                f"Staff API {method} {route} was not denied: HTTP {denied.status}"
+            )
+            assert "AUTHENTICATED_STAFF_SESSION_REQUIRED" in denied.read().decode("utf-8")
+            conn.close()
+    finally:
+        console_proc.terminate()
+        console_proc.wait(timeout=5)
 
     print(
         f"Frontend budget & WCAG 2.2 AA check passed (FE-G1..FE-G8 verified): public gzip size={gzip_kb:.2f} KB (<= {TARGET_FIRST_LOAD_JS_GZIP_KB} KB target)."
