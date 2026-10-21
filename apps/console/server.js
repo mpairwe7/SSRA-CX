@@ -21,6 +21,32 @@ const INTERNAL_RUNTIME_URL = (
 ).replace(/\/$/, "");
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "OPTIONS"]);
+const ALLOWED_CONSOLE_READ_STAFF = new Set([
+  "secops_admin",
+  "ssra_admin",
+  "stf_01",
+  "stf_supervisor_02",
+  "ssra_auditor",
+]);
+const ALLOWED_CONSOLE_WRITE_STAFF = new Set([
+  "secops_admin",
+  "ssra_admin",
+  "stf_01",
+  "stf_supervisor_02",
+]);
+
+async function readConsoleBody(req) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > 262_144) {
+      throw new Error("PAYLOAD_TOO_LARGE");
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf-8");
+}
 
 function createTraceparent(existing) {
   if (typeof existing === "string" && /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/.test(existing)) {
@@ -113,10 +139,56 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (isGetOrHead && pathname === "/api/flags") {
+  if (pathname === "/api/flags") {
+    const callerStaff = String(req.headers["x-ssra-staff-id"] ?? "").trim();
+    const allowedSet = method === "POST" ? ALLOWED_CONSOLE_WRITE_STAFF : ALLOWED_CONSOLE_READ_STAFF;
+    if (!allowedSet.has(callerStaff)) {
+      res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ error: "STAFF_AUTHORIZATION_REQUIRED" }));
+      return;
+    }
     try {
+      const bodyStr = method === "POST" ? await readConsoleBody(req) : undefined;
       const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/feature-flags`, {
-        headers: { Accept: "application/json", traceparent },
+        method,
+        headers: {
+          Accept: "application/json",
+          ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+          "X-SSRA-Staff-Id": callerStaff,
+          traceparent,
+        },
+        body: bodyStr,
+        signal: AbortSignal.timeout(15_000),
+      });
+      const text = await upstream.text();
+      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
+      res.end(text);
+    } catch {
+      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ status: "unavailable" }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/kill-switches") {
+    const callerStaff = String(req.headers["x-ssra-staff-id"] ?? "").trim();
+    const allowedSet = method === "POST" ? ALLOWED_CONSOLE_WRITE_STAFF : ALLOWED_CONSOLE_READ_STAFF;
+    if (!allowedSet.has(callerStaff)) {
+      res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ error: "STAFF_AUTHORIZATION_REQUIRED" }));
+      return;
+    }
+    try {
+      const bodyStr = method === "POST" ? await readConsoleBody(req) : undefined;
+      const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/kill-switches`, {
+        method,
+        headers: {
+          Accept: "application/json",
+          ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+          "X-SSRA-Staff-Id": callerStaff,
+          traceparent,
+        },
+        body: bodyStr,
         signal: AbortSignal.timeout(15_000),
       });
       const text = await upstream.text();

@@ -208,6 +208,7 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     );
     expect(handoffCard.mode).toBe("component");
     expect(handoffCard.safeHtml).toContain("SSRA Officer Assistance (DOMESTIC_TAX)");
+    expect(escapeHtmlStrict("`backtick` & 'quote'")).toContain("&#96;backtick&#96;");
 
     const microAr = buildHumanSubtleMicrocopy("searching", "ar", false);
     expect(microAr.dir).toBe("rtl");

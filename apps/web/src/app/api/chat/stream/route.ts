@@ -5,6 +5,9 @@
  */
 
 import type { LocaleCode } from "@ssra/contracts";
+import { ROADMAP_LOCALES } from "@ssra/i18n";
+
+const MAX_BFF_MESSAGE_CHARS = 4000;
 
 export interface BffStreamProxyInput {
   readonly message: string;
@@ -69,7 +72,16 @@ export async function POST(
       headers: { "Content-Type": "application/json" },
     });
   }
-  const locale = (typeof raw.locale === "string" ? raw.locale : "en") as LocaleCode;
+  if (message.length > MAX_BFF_MESSAGE_CHARS) {
+    return new Response(JSON.stringify({ error: "MESSAGE_TOO_LONG" }), {
+      status: 413,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const rawLocale = typeof raw.locale === "string" ? raw.locale.trim().toLowerCase() : "en";
+  const locale = (
+    (ROADMAP_LOCALES as readonly string[]).includes(rawLocale) ? rawLocale : "en"
+  ) as LocaleCode;
   const lastEventId =
     request.headers.get("Last-Event-ID") ??
     (typeof raw.lastEventId === "string" ? raw.lastEventId : undefined);
