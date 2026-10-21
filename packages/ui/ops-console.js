@@ -10,6 +10,8 @@
  * - Live telemetry wiring to `/api/scorecard` (`/v1/analytics/cx-scorecard`), `/v1/runtime/stack-status`, and `/api/status`
  */
 
+import { ICONS } from "./icons.js";
+
 const OPS_ROUTE_PREFIXES = [
   "/admin",
   "/agent",
@@ -586,19 +588,19 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     <nav id="staff-rail" class="staff-rail is-expanded" aria-label="SSRA Operations Navigation">
       <div class="staff-rail-head">
         <a class="staff-brand" href="/admin" aria-label="SSRA Operations Console">
-          <span class="staff-brand-mark" aria-hidden="true">SSRA</span>
+          <span class="staff-brand-mark" aria-hidden="true">${ICONS.ssraCrest}</span>
           <span class="staff-brand-text">
             Operations
             <span class="staff-brand-sub">Taxpayer assistant</span>
           </span>
         </a>
-        <button type="button" id="rail-pin-btn" class="staff-rail-pin is-on" aria-pressed="true" title="Collapse or pin the sidebar">«</button>
+        <button type="button" id="rail-pin-btn" class="staff-rail-pin is-on" aria-pressed="true" title="Collapse or pin the sidebar">${ICONS.chevronsLeft}</button>
       </div>
 
       <div class="staff-rail-search">
         <button type="button" id="cmdk-open-btn" class="ops-cmdk-trigger" aria-haspopup="dialog" aria-label="Search console destinations">
-          <span>🔍 <span class="ops-cmdk-trigger-text">Search console…</span></span>
-          <kbd class="ops-kbd ops-cmdk-kbd">⌘K</kbd>
+          <span>${ICONS.search} <span class="ops-cmdk-trigger-text">Search console…</span></span>
+          <kbd class="ops-kbd ops-cmdk-kbd">Ctrl+K</kbd>
         </button>
       </div>
 
@@ -607,16 +609,16 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       <div class="staff-rail-foot">
         <div id="staff-acct-menu" class="staff-acct-menu" role="menu" aria-label="Officer account and console settings">
           <div style="padding:4px 8px;font-size:10px;text-transform:uppercase;color:var(--text-3);font-weight:700;">Active Officer Role</div>
-          <button type="button" class="staff-acct-item" data-set-role="ssra_admin" role="menuitemradio"><span>AD · Administrator (Juba HQ)</span><span>✓</span></button>
+          <button type="button" class="staff-acct-item" data-set-role="ssra_admin" role="menuitemradio"><span>AD · Administrator (Juba HQ)</span><span>${ICONS.check}</span></button>
           <button type="button" class="staff-acct-item" data-set-role="ssra_staff" role="menuitemradio"><span>ST · Tax Agent (Live Queue)</span><span></span></button>
           <button type="button" class="staff-acct-item" data-set-role="ssra_auditor" role="menuitemradio"><span>AU · Auditor (Read-Only SoD)</span><span></span></button>
           <hr style="border:0;border-top:1px solid var(--ops-hairline);margin:4px 0;" />
           <div style="padding:4px 8px;font-size:10px;text-transform:uppercase;color:var(--text-3);font-weight:700;">Appearance</div>
-          <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio"><span>🌙 Dark Mesh</span></button>
-          <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio"><span>☀️ Light Paper</span></button>
-          <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio"><span>◐ High Contrast (WCAG AAA)</span></button>
+          <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio"><span>${ICONS.moon} Dark Mesh</span></button>
+          <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio"><span>${ICONS.sun} Light Paper</span></button>
+          <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio"><span>${ICONS.contrast} High Contrast (WCAG AAA)</span></button>
           <hr style="border:0;border-top:1px solid var(--ops-hairline);margin:4px 0;" />
-          <a href="/en" class="staff-acct-item" role="menuitem"><span>💬 Return to Taxpayer MainChat</span><span>↗</span></a>
+          <a href="/en" class="staff-acct-item" role="menuitem"><span>${ICONS.messageSquare} Return to Taxpayer MainChat</span><span>${ICONS.arrowUpRight}</span></a>
         </div>
         <button type="button" id="staff-acct-trigger" class="staff-acct-trigger" aria-expanded="false" aria-haspopup="menu">
           <span class="staff-acct-avatar"><span id="acct-initials">AD</span><span class="staff-acct-dot" title="Live escalation stream connected"></span></span>
@@ -624,7 +626,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             <span class="staff-acct-name" id="acct-display-name">Grace A. · Juba HQ</span>
             <span class="staff-acct-role" id="acct-role-label">Administrator · Passkey L3</span>
           </span>
-          <span style="color:var(--text-3);font-size:11px;">⇅</span>
+          <span style="color:var(--text-3);font-size:11px;">${ICONS.chevronUpDown}</span>
         </button>
       </div>
     </nav>
@@ -634,14 +636,14 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       <!-- Live CallConsoleBar (StaffCallLayer.tsx pattern) -->
       <div class="call-console-bar" id="call-console-bar" role="region" aria-label="Live Call &amp; Escalation Status Bar">
         <div class="call-bar-left">
-          <span class="presence-pill">● Officer Desk Ready · Juba HQ</span>
-          <span>📞 <strong>2</strong> Live AI Receptionist Calls (<code>en</code>, <code>din</code>)</span>
-          <span>⏳ <strong>1</strong> Caller Waiting for Officer Transfer (<code>TIC-8F3A19C0</code>)</span>
+          <span class="presence-pill">Officer Desk Ready · Juba HQ</span>
+          <span>${ICONS.phone} <strong>2</strong> Live AI Receptionist Calls (<code>en</code>, <code>din</code>)</span>
+          <span>${ICONS.clock} <strong>1</strong> Caller Waiting for Officer Transfer (<code>TIC-8F3A19C0</code>)</span>
         </div>
         <div class="call-bar-right">
-          <a href="/calls" class="ops-btn">Open Call Desk →</a>
-          <a href="/agent" class="ops-btn">My Queue (3) →</a>
-          <a href="/en" class="ops-btn primary">💬 Taxpayer MainChat</a>
+          <a href="/calls" class="ops-btn">Open Call Desk ${ICONS.arrowUpRight}</a>
+          <a href="/agent" class="ops-btn">My Queue (3) ${ICONS.arrowUpRight}</a>
+          <a href="/en" class="ops-btn primary">${ICONS.messageSquare} Taxpayer MainChat</a>
         </div>
       </div>
 
@@ -665,21 +667,22 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
 
   <script nonce="${nonce}">
     (() => {
+      const ICONS = ${JSON.stringify(ICONS)};
       const DESTINATIONS = [
-        { href: "/admin", label: "Operations overview", navLabel: "Overview", group: "Work", icon: "◈", blurb: "Service levels, officers on duty, answer authority", roles: ["ssra_admin", "ssra_auditor", "ssra_staff"] },
-        { href: "/agent", label: "My queue & Copilot", navLabel: "My queue", group: "Work", icon: "📥", blurb: "Claim a case, review AI cited draft, and reply", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
-        { href: "/admin/tickets", label: "All tickets", navLabel: "All tickets", group: "Work", icon: "☰", blurb: "Every escalation, every status, every team", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
-        { href: "/calls", label: "Phone calls desk", navLabel: "Calls", group: "Work", icon: "📞", blurb: "AI phone receptionist: live calls, transfers & takeover", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
-        { href: "/admin/quality", label: "Service quality audit", navLabel: "Quality audit", group: "Audit", icon: "✓", blurb: "Where answers went wrong, from taxpayers' ratings", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/audit", label: "WORM Audit trail", navLabel: "Audit trail", group: "Audit", icon: "🛡", blurb: "Who changed or read what, and Merkle seal proof", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/replay", label: "Forensic turn replay", navLabel: "Forensic replay", group: "Audit", icon: "↺", blurb: "Turn-by-turn redacted replay & numeric provenance", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/flags", label: "Flags & kill switches", navLabel: "Flags", group: "Configure", icon: "⚑", blurb: "Degradation ladder and feature flags served right now", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/discrepancies", label: "Knowledge & Bug Reports", navLabel: "Bug Reports", group: "Configure", icon: "!", blurb: "Taxpayer-reported inaccuracies and knowledge discrepancies", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
-        { href: "/admin/overrides", label: "Knowledge release & overrides", navLabel: "Overrides", group: "Configure", icon: "⚙", blurb: "6-step KnowledgeSnapshot pipeline & verified staff replies", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/outbox", label: "Notification outbox", navLabel: "Outbox", group: "Configure", icon: "✉", blurb: "Queued SMS, WhatsApp, and email rows", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/connectors", label: "MCP System connectors", navLabel: "Connectors", group: "Configure", icon: "⚡", blurb: "Health and circuit-breaker state for 11 MCP servers", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
-        { href: "/analytics", label: "Analytics & CX Scorecard", navLabel: "Analytics", group: "Observe", icon: "📈", blurb: "Service levels, topics, retrieval and satisfaction", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/analytics/evaluation", label: "Answer evaluation", navLabel: "Evaluation", group: "Observe", icon: "🧪", blurb: "RAG & numeric provenance metrics against thresholds", roles: ["ssra_admin", "ssra_auditor"] },
+        { href: "/admin", label: "Operations overview", navLabel: "Overview", group: "Work", icon: ICONS.gauge, blurb: "Service levels, officers on duty, answer authority", roles: ["ssra_admin", "ssra_auditor", "ssra_staff"] },
+        { href: "/agent", label: "My queue & Copilot", navLabel: "My queue", group: "Work", icon: ICONS.inbox, blurb: "Claim a case, review AI cited draft, and reply", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
+        { href: "/admin/tickets", label: "All tickets", navLabel: "All tickets", group: "Work", icon: ICONS.list, blurb: "Every escalation, every status, every team", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
+        { href: "/calls", label: "Phone calls desk", navLabel: "Calls", group: "Work", icon: ICONS.phone, blurb: "AI phone receptionist: live calls, transfers & takeover", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
+        { href: "/admin/quality", label: "Service quality audit", navLabel: "Quality audit", group: "Audit", icon: ICONS.clipboardCheck, blurb: "Where answers went wrong, from taxpayers' ratings", roles: ["ssra_admin", "ssra_auditor"] },
+        { href: "/admin/audit", label: "WORM Audit trail", navLabel: "Audit trail", group: "Audit", icon: ICONS.shieldCheck, blurb: "Who changed or read what, and Merkle seal proof", roles: ["ssra_admin", "ssra_auditor"] },
+        { href: "/admin/replay", label: "Forensic turn replay", navLabel: "Forensic replay", group: "Audit", icon: ICONS.history, blurb: "Turn-by-turn redacted replay & numeric provenance", roles: ["ssra_admin", "ssra_auditor"] },
+        { href: "/admin/flags", label: "Flags & kill switches", navLabel: "Flags", group: "Configure", icon: ICONS.flag, blurb: "Degradation ladder and feature flags served right now", roles: ["ssra_admin", "ssra_auditor"] },
+        { href: "/admin/discrepancies", label: "Knowledge & Bug Reports", navLabel: "Bug Reports", group: "Configure", icon: ICONS.alertTriangle, blurb: "Taxpayer-reported inaccuracies and knowledge discrepancies", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
+        { href: "/admin/overrides", label: "Knowledge release & overrides", navLabel: "Overrides", group: "Configure", icon: ICONS.sliders, blurb: "6-step KnowledgeSnapshot pipeline & verified staff replies", roles: ["ssra_admin", "ssra_auditor"] },
+        { href: "/admin/outbox", label: "Notification outbox", navLabel: "Outbox", group: "Configure", icon: ICONS.send, blurb: "Queued SMS, WhatsApp, and email rows", roles: ["ssra_admin", "ssra_auditor"] },
+        { href: "/admin/connectors", label: "MCP System connectors", navLabel: "Connectors", group: "Configure", icon: ICONS.plug, blurb: "Health and circuit-breaker state for 11 MCP servers", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
+        { href: "/analytics", label: "Analytics & CX Scorecard", navLabel: "Analytics", group: "Observe", icon: ICONS.chart, blurb: "Service levels, topics, retrieval and satisfaction", roles: ["ssra_admin", "ssra_auditor"] },
+        { href: "/analytics/evaluation", label: "Answer evaluation", navLabel: "Evaluation", group: "Observe", icon: ICONS.beaker, blurb: "RAG & numeric provenance metrics against thresholds", roles: ["ssra_admin", "ssra_auditor"] },
       ];
 
       const ROLE_META = {
@@ -775,7 +778,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         }
         if (pinBtn) {
           pinBtn.classList.toggle("is-on", state.railMode === "always-open");
-          pinBtn.textContent = state.railMode === "always-open" ? "«" : "»";
+          setSafeHtml(pinBtn, state.railMode === "always-open" ? ICONS.chevronsLeft : ICONS.chevronsRight);
         }
         const rm = ROLE_META[state.role] || ROLE_META.ssra_admin;
         const initEl = document.getElementById("acct-initials");
@@ -809,8 +812,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
 
       function renderPageHeader(eyebrow, title, desc) {
         const readOnlyBadge = state.role === "ssra_auditor"
-          ? '<span class="ops-chip info">🔒 Auditor Read-Only Separation of Duties</span>'
-          : '<span class="ops-chip good">● Live Sovereign GPU Stack</span>';
+          ? '<span class="ops-chip info">' + ICONS.lock + " Auditor Read-Only Separation of Duties</span>"
+          : '<span class="ops-chip good">' + ICONS.shieldCheck + " Live Sovereign GPU Stack</span>";
         return '<header class="ops-page-head">' +
           "<div>" +
             '<span class="ops-eyebrow">' + escapeHtml(eyebrow) + "</span>" +
@@ -824,7 +827,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
                 '<button type="button" class="ops-seg-btn' + (state.periodDays === d ? " active" : "") + '" data-period="' + d + '">' + d + "d</button>"
               ).join("") +
             "</div>" +
-            '<button type="button" class="ops-btn" id="ops-refresh-btn">↻ Refresh</button>' +
+            '<button type="button" class="ops-btn" id="ops-refresh-btn">' + ICONS.refresh + " Refresh</button>" +
           "</div>" +
         "</header>";
       }
@@ -1045,17 +1048,17 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
                 '<div style="font-size:13px;color:var(--text-0);">' + escapeHtml(active.userMsg) + "</div>" +
               "</div>" +
               '<div style="margin-bottom:10px;">' +
-                '<label for="copilot-draft-box" style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--accent);margin-bottom:6px;">✦ AI Copilot Cited Draft (Principle 1 Verified)</label>' +
+                '<label for="copilot-draft-box" style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--accent);margin-bottom:6px;">' + ICONS.sparkles + " AI Copilot Cited Draft (Principle 1 Verified)</label>" +
                 '<textarea id="copilot-draft-box" rows="5" style="width:100%;padding:10px;border-radius:8px;background:var(--ops-panel);color:var(--text-0);border:1px solid var(--ops-line-strong);font-family:inherit;font-size:13px;">' + escapeHtml(active.draftReply) + "</textarea>" +
               "</div>" +
               '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">' +
-                active.citations.map((c) => '<span class="ops-chip good">📜 ' + escapeHtml(c) + " (2026.10.1)</span>").join("") +
+                active.citations.map((c) => '<span class="ops-chip good">' + ICONS.bookOpen + " " + escapeHtml(c) + " (2026.10.1)</span>").join("") +
               "</div>" +
               (isAuditor
-                ? '<div class="ops-chip warn">🔒 Auditor Role (ssra_auditor) is strictly read-only and cannot send taxpayer replies (Separation of Duties).</div>'
+                ? '<div class="ops-chip warn">' + ICONS.lock + " Auditor Role (ssra_auditor) is strictly read-only and cannot send taxpayer replies (Separation of Duties).</div>"
                 : '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-                    '<button type="button" class="ops-btn gold" id="approve-send-btn">✓ Approve &amp; Send Cited Reply</button>' +
-                    '<button type="button" class="ops-btn primary" id="maker-checker-btn">🛡 Sign T3 Maker-Checker Approval</button>' +
+                    '<button type="button" class="ops-btn gold" id="approve-send-btn">' + ICONS.check + " Approve &amp; Send Cited Reply</button>" +
+                    '<button type="button" class="ops-btn primary" id="maker-checker-btn">' + ICONS.shieldCheck + " Sign T3 Maker-Checker Approval</button>" +
                   "</div>"
               ) +
               '<div id="agent-action-status" style="margin-top:10px;font-size:12px;color:var(--ops-good-ink);"></div>' +
@@ -1099,10 +1102,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
               "</dl>" +
               '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
                 (state.role === "ssra_auditor"
-                  ? '<span class="ops-chip warn">🔒 Auditor Read-Only: Live audio takeover disabled</span>'
-                  : '<button type="button" class="ops-btn gold" id="takeover-call-btn">📞 Take Over Audio Stream</button>'
+                  ? '<span class="ops-chip warn">' + ICONS.lock + " Auditor Read-Only: Live audio takeover disabled</span>"
+                  : '<button type="button" class="ops-btn gold" id="takeover-call-btn">' + ICONS.phone + " Take Over Audio Stream</button>"
                 ) +
-                '<a href="/en" class="ops-btn">Open Taxpayer Voice Modal ↗</a>' +
+                '<a href="/en" class="ops-btn">Open Taxpayer Voice Modal ' + ICONS.arrowUpRight + "</a>" +
               "</div>" +
             "</div>" +
           "</section>" +
@@ -1454,12 +1457,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         }
         if (e.target.closest("#approve-send-btn")) {
           const st = document.getElementById("agent-action-status");
-          if (st) st.textContent = "✓ Cited reply approved and dispatched to taxpayer with KnowledgeSnapshot 2026.10.1 provenance.";
+          if (st) st.textContent = "Cited reply approved and dispatched to taxpayer with KnowledgeSnapshot 2026.10.1 provenance.";
           return;
         }
         if (e.target.closest("#maker-checker-btn")) {
           const st = document.getElementById("agent-action-status");
-          if (st) st.textContent = "🛡 T3 Maker-Checker cryptographic countersignature recorded in WORM Audit Trail.";
+          if (st) st.textContent = "T3 Maker-Checker cryptographic countersignature recorded in WORM Audit Trail.";
           return;
         }
         if (e.target.closest("#takeover-call-btn")) {

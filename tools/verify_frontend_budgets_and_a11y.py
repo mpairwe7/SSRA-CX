@@ -127,7 +127,19 @@ def main() -> None:
         "FE-G7 Auditor read-only SoD or South Sudan civic palette missing in packages/ui/ops-console.js"
     )
 
-    # FE-G8, FE2-G1..G8 & SEC2-G6/G7: Executable verification of cross-subject purge, safe offline abstention, BFF staff-header stripping, AbortController cancellation, modal focus trap & CSAT feedback
+    # FE-G8, FE2-G1..G8 & SEC2-G6/G7: Executable verification of cross-subject purge, safe offline abstention, BFF staff-header stripping, AbortController cancellation, modal focus trap, CSAT feedback & SVG icon library
+    import re
+
+    icons_src = (ROOT / "packages" / "ui" / "icons.js").read_text(encoding="utf-8")
+    emoji_re = re.compile(r"[\U0001F300-\U0001FAFF\U0001F1E6-\U0001F1FF]")
+    assert (
+        '<svg class="ui-icon"' in icons_src
+        and "ICONS." in web_srv_src
+        and "ICONS." in ops_ui_src
+        and not emoji_re.search(web_srv_src)
+        and not emoji_re.search(ops_ui_src)
+        and not emoji_re.search(con_srv_src)
+    ), "Emoji characters found or SVG icon library missing in frontend UI"
     assert (
         "prev !== state.identity" in web_srv_src
         and "outcome_verified: false" in web_srv_src
