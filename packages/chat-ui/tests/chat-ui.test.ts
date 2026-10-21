@@ -407,6 +407,15 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(grouped.pinned).toHaveLength(1);
     expect(grouped.today).toHaveLength(1);
     expect(grouped.yesterday).toHaveLength(1);
+    expect(grouped.dateUnavailable).toHaveLength(0);
+    const corruptDated = groupConversationsByRecency(
+      [
+        { id: "invalid", title: "Unreadable date", updatedAtMs: Number.NaN },
+        { id: "future", title: "Future date", updatedAtMs: nowMs + 8 * 86_400_000 },
+      ],
+      nowMs,
+    );
+    expect(corruptDated.dateUnavailable.map((item) => item.id)).toEqual(["future", "invalid"]);
 
     // Call Receptionist (Pre-call consent, CallLanguageChip, CallOrb echo tie-breaker, scroll pin)
     const preCall = buildCallReceptionistScreen({

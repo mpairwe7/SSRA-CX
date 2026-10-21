@@ -15,6 +15,7 @@ This file is the authoritative engineering and safety rulebook for all coding ag
 7. **Single governed egress:** All LLM, MCP (`2026-07-28` stateless Streamable HTTP), and future A2A (`1.0`) calls from `services/agent-runtime` must transit `agentgateway`.
 8. **Zero trust for model arguments & strict subject binding:** OTP and identity verification run outside the LLM in `deterministic_router`. Verified identity binds an opaque `subject_ref` to the thread and propagates via OAuth 2.1 RFC 8693 token exchange. Never trust a TIN or subject identifier emitted by a model.
 9. **Closed Generative UI Registry:** The agent may only request registered components (`BalanceCard`, `FilingStatusTimeline`, `PaymentInstructionsCard`, `CalculatorForm`, `CitationList`, `ConfirmActionSheet`, `HandoffCard`) validated by Zod 4. Never emit raw HTML or JavaScript from a model.
+10. **Truthful interface state:** Never present local-storage role choices as authorization, client-selected staff IDs as identity, or sample/stale telemetry as live. Staff dashboards and actions require server-verified staff sessions and server-side authorization. Every displayed live metric needs a trusted source and observation time; missing or stale provenance must be visible.
 
 ---
 

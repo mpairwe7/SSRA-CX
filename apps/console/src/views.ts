@@ -15,7 +15,38 @@ import {
   KNOWLEDGE_RELEASE_STEPS,
 } from "./proxy.js";
 
-export type TelemetryProvenance = "LIVE_TELEMETRY" | "CI_VERIFIED_TARGET" | "ILLUSTRATIVE_FALLBACK";
+export type TelemetryProvenance =
+  | "LIVE_TELEMETRY"
+  | "STALE_TELEMETRY"
+  | "UNKNOWN_TELEMETRY"
+  | "CI_VERIFIED_TARGET"
+  | "ILLUSTRATIVE_FALLBACK";
+
+/** Resolve a dashboard data label from an observation time; missing timestamps fail closed. */
+export function resolveTelemetryProvenance(params: {
+  readonly observedAtMs?: number | null | undefined;
+  readonly nowMs?: number | undefined;
+  readonly maxAgeMs?: number | undefined;
+  readonly isSyntheticBaseline?: boolean | undefined;
+}): TelemetryProvenance {
+  if (params.isSyntheticBaseline) return "ILLUSTRATIVE_FALLBACK";
+  const observedAtMs = params.observedAtMs;
+  const nowMs = params.nowMs ?? Date.now();
+  const maxAgeMs = params.maxAgeMs ?? 5 * 60_000;
+  if (
+    observedAtMs == null ||
+    !Number.isFinite(observedAtMs) ||
+    observedAtMs <= 0 ||
+    !Number.isFinite(nowMs) ||
+    !Number.isFinite(maxAgeMs) ||
+    maxAgeMs < 0
+  ) {
+    return "UNKNOWN_TELEMETRY";
+  }
+  const ageMs = nowMs - observedAtMs;
+  if (ageMs < -60_000) return "UNKNOWN_TELEMETRY";
+  return ageMs <= maxAgeMs ? "LIVE_TELEMETRY" : "STALE_TELEMETRY";
+}
 
 export type TelemetryScope = "WINDOW_SCOPED" | "REPLICA_LIFETIME";
 
@@ -271,9 +302,13 @@ export function buildOpsPageShell(params: {
     description: params.description,
     provenanceBanner: isLive
       ? null
-      : params.provenance === "CI_VERIFIED_TARGET"
-        ? "Target verified in CI release pipeline — not a live runtime gauge."
-        : "Illustrative fallback sample — run `task eval` or connect live telemetry for measured evidence.",
+      : params.provenance === "STALE_TELEMETRY"
+        ? "Telemetry is stale. Check the observation time before using these values."
+        : params.provenance === "UNKNOWN_TELEMETRY"
+          ? "Telemetry freshness is unknown because a trusted observation time is unavailable."
+          : params.provenance === "CI_VERIFIED_TARGET"
+            ? "Target verified in CI release pipeline — not a live runtime gauge."
+            : "Illustrative sample — not measured runtime evidence.",
     allGatesPassClaimAllowed: isLive && params.allMetricsPassed,
   };
 }

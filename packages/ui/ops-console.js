@@ -1,5 +1,5 @@
 /**
- * SSRA Assist Operations Console & Staff Sidebar Design System (`packages/ui/ops-console.js`).
+ * SSRA Assist Operations Console Preview & Staff Sidebar Design System (`packages/ui/ops-console.js`).
  *
  * Inspired by the `FinalYearProject` (`urabot`) Operations Console & `StaffGuard` architecture:
  * - `.ops-*` design tokens (`--ops-font-sans`, `--ops-font-mono`, 8-step type scale, 4pt grid, 5-ingredient `.ops-glass`)
@@ -7,7 +7,7 @@
  * - 4-group navigation hierarchy (`Work` / `Audit` / `Configure` / `Observe`) + `AccountMenu` upward popover
  * - `CommandPalette` (`⌘K` / `Ctrl+K`) modal with keyboard navigation and role-scoped destinations
  * - `OpsPage`, `OpsPanel` (`default`, `is-bare`, `is-glass`), `StatCard` (`splitMeasure`, `.ops-delta`, SVG `Sparkline`)
- * - Live telemetry wiring to `/api/scorecard` (`/v1/analytics/cx-scorecard`), `/v1/runtime/stack-status`, and `/api/status`
+ * - Explicit non-operational preview until authenticated staff sessions and provenance-bearing data are available
  */
 
 import { ICONS } from "./icons.js";
@@ -64,8 +64,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="SSRA Assist Operations, Agent Queue, AI Call Desk, CX Analytics, and WORM Audit Console for the South Sudan Revenue Authority (NRA)." />
-  <title>SSRA Operations Console — South Sudan Revenue Authority</title>
+  <meta name="description" content="Non-operational preview of SSRA Assist staff navigation. No live taxpayer data, service telemetry, or staff actions." />
+  <title>SSRA Operations Console Preview — South Sudan Revenue Authority</title>
   <style nonce="${nonce}">
     :root {
       color-scheme: dark;
@@ -634,6 +634,14 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     .ops-degrade-label { font-size: 12px; font-weight: 600; color: var(--text-0); }
     .ops-release-steps { margin: 0; padding-inline-start: 18px; display: grid; gap: 8px; font-size: 13px; }
     .ops-panel-mt { margin-top: 24px; }
+    .ops-preview-banner { margin: 14px 20px 0; padding: 14px 16px; border: 2px solid #F4C430; border-radius: var(--ops-radius-md); background: rgba(244, 196, 48, 0.12); color: var(--text-0); line-height: 1.5; }
+    .ops-preview-banner strong { display: block; margin-bottom: 3px; color: #F4C430; }
+    .ops-preview-card { max-width: 760px; margin: 28px auto; padding: 24px; }
+    .ops-preview-card h1 { margin: 8px 0; }
+    .ops-preview-card p, .ops-preview-card li { line-height: 1.6; }
+    .ops-preview-card ul { padding-inline-start: 1.25rem; }
+    .ops-preview-chip { display: inline-block; padding: 4px 9px; border: 1px solid #F4C430; border-radius: 999px; color: #F4C430; font-weight: 700; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
   </style>
 </head>
 <body>
@@ -643,16 +651,16 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
   <div class="staff-shell" id="ssra-staff-shell">
     <div id="ops-mobile-backdrop" class="ops-mobile-backdrop" aria-hidden="true"></div>
     <!-- Left Vertical Operations Rail (StaffGuard.tsx pattern) -->
-    <nav id="staff-rail" class="staff-rail is-expanded" aria-label="SSRA Operations Navigation">
+    <nav id="staff-rail" class="staff-rail is-expanded" aria-label="Staff console preview navigation">
       <div class="staff-rail-head">
-        <a class="staff-brand" href="/admin" aria-label="SSRA Operations Console">
+        <a class="staff-brand" href="/admin" aria-label="SSRA Operations Console preview">
           <span class="staff-brand-mark" aria-hidden="true">${ICONS.ssraCrest}</span>
           <span class="staff-brand-text">
             Operations
             <span class="staff-brand-sub">Taxpayer assistant</span>
           </span>
         </a>
-        <button type="button" id="rail-pin-btn" class="staff-rail-pin is-on" aria-pressed="true" title="Collapse or pin the sidebar">${ICONS.chevronsLeft}</button>
+        <button type="button" id="rail-pin-btn" class="staff-rail-pin is-on" aria-label="Toggle preview navigation width" aria-pressed="true" title="Toggle preview navigation width">${ICONS.chevronsLeft}</button>
       </div>
 
       <div class="staff-rail-search">
@@ -666,10 +674,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
 
       <div class="staff-rail-foot">
         <div id="staff-acct-menu" class="staff-acct-menu" role="menu" aria-label="Officer account and console settings">
-          <div class="staff-acct-heading" role="presentation">Active Officer Role</div>
-          <button type="button" class="staff-acct-item" data-set-role="ssra_admin" role="menuitemradio" aria-checked="true"><span>AD · Administrator (Juba HQ)</span><span>${ICONS.check}</span></button>
-          <button type="button" class="staff-acct-item" data-set-role="ssra_staff" role="menuitemradio" aria-checked="false"><span>ST · Tax Agent (Live Queue)</span><span></span></button>
-          <button type="button" class="staff-acct-item" data-set-role="ssra_auditor" role="menuitemradio" aria-checked="false"><span>AU · Auditor (Read-Only SoD)</span><span></span></button>
+          <div class="staff-acct-heading" role="presentation">Preview persona · not access control</div>
+          <button type="button" class="staff-acct-item" data-set-role="ssra_admin" role="menuitemradio" aria-checked="true"><span>Administrator view (preview)</span><span>${ICONS.check}</span></button>
+          <button type="button" class="staff-acct-item" data-set-role="ssra_staff" role="menuitemradio" aria-checked="false"><span>Tax agent view (preview)</span><span></span></button>
+          <button type="button" class="staff-acct-item" data-set-role="ssra_auditor" role="menuitemradio" aria-checked="false"><span>Auditor view (preview)</span><span></span></button>
           <hr class="staff-acct-hr" role="separator" />
           <div class="staff-acct-heading" role="presentation">Appearance</div>
           <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio" aria-checked="true"><span>${ICONS.moon} Dark Mesh</span></button>
@@ -678,11 +686,11 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           <hr class="staff-acct-hr" role="separator" />
           <a href="/en" class="staff-acct-item" role="menuitem"><span>${ICONS.messageSquare} Return to Taxpayer MainChat</span><span>${ICONS.arrowUpRight}</span></a>
         </div>
-        <button type="button" id="staff-acct-trigger" class="staff-acct-trigger" aria-expanded="false" aria-haspopup="menu">
-          <span class="staff-acct-avatar"><span id="acct-initials">AD</span><span class="staff-acct-dot" title="Live escalation stream connected"></span></span>
+        <button type="button" id="staff-acct-trigger" class="staff-acct-trigger" aria-label="Preview persona menu; not signed in" aria-expanded="false" aria-haspopup="menu">
+          <span class="staff-acct-avatar"><span id="acct-initials">P</span></span>
           <span class="staff-acct-meta">
-            <span class="staff-acct-name" id="acct-display-name">Grace A. · Juba HQ</span>
-            <span class="staff-acct-role" id="acct-role-label">Administrator · Passkey L3</span>
+            <span class="staff-acct-name" id="acct-display-name">Preview persona</span>
+            <span class="staff-acct-role" id="acct-role-label">Not signed in · preview only</span>
           </span>
           <span class="staff-acct-chevron">${ICONS.chevronUpDown}</span>
         </button>
@@ -691,17 +699,14 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
 
     <!-- Main Operations Content Column -->
     <div class="staff-shell-content">
-      <!-- Live CallConsoleBar (StaffCallLayer.tsx pattern) -->
-      <div class="call-console-bar" id="call-console-bar" role="region" aria-label="Live Call &amp; Escalation Status Bar">
+      <!-- Preview status: operational data is hidden until an authenticated staff session is configured. -->
+      <div class="call-console-bar" id="call-console-bar" role="note" aria-label="Staff console preview status">
         <div class="call-bar-left">
-          <button type="button" id="mobile-ops-nav-btn" class="ops-btn mobile-nav-btn" aria-label="Open navigation menu">${ICONS.panelLeft} Menu</button>
-          <span class="presence-pill">Officer Desk Ready · Juba HQ</span>
-          <span>${ICONS.phone} <strong>2</strong> Live AI Receptionist Calls (<code>en</code>, <code>din</code>)</span>
-          <span>${ICONS.clock} <strong>1</strong> Caller Waiting for Officer Transfer (<code>TIC-8F3A19C0</code>)</span>
+          <button type="button" id="mobile-ops-nav-btn" class="ops-btn mobile-nav-btn" aria-label="Open preview navigation" aria-expanded="false" aria-controls="staff-rail">${ICONS.panelLeft} Menu</button>
+          <span class="presence-pill">Preview only · no authenticated staff session</span>
+          <span>No live calls, taxpayer records, or service telemetry are shown.</span>
         </div>
         <div class="call-bar-right">
-          <a href="/calls" class="ops-btn">Open Call Desk ${ICONS.arrowUpRight}</a>
-          <a href="/agent" class="ops-btn">My Queue (3) ${ICONS.arrowUpRight}</a>
           <a href="/en" class="ops-btn primary">${ICONS.messageSquare} Taxpayer MainChat</a>
         </div>
       </div>
@@ -715,11 +720,11 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
   <!-- Command Palette Dialog (⌘K / Ctrl+K) -->
   <div id="cmdk-backdrop" class="ops-cmdk-backdrop" role="dialog" aria-modal="true" aria-label="Command palette">
     <div class="ops-cmdk-dialog">
-      <input id="cmdk-input" class="ops-cmdk-input" type="text" aria-label="Search operations commands" placeholder="Jump to any SSRA Operations page or run a command… (type to filter)" autocomplete="off" />
+      <input id="cmdk-input" class="ops-cmdk-input" type="text" aria-label="Search preview navigation" placeholder="Search preview pages… (type to filter)" autocomplete="off" />
       <ul id="cmdk-list" class="ops-cmdk-list" role="listbox" aria-label="Available commands"></ul>
       <div class="ops-cmdk-foot">
         <span>↑↓ to navigate · Enter to open · Esc to close</span>
-        <span>SSRA Assist Operations · ISO/IEC 42001</span>
+        <span>Preview only · no staff session</span>
       </div>
     </div>
   </div>
@@ -745,9 +750,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       ];
 
       const ROLE_META = {
-        ssra_admin: { initials: "AD", name: "Grace A. · Juba HQ", label: "Administrator · Passkey L3" },
-        ssra_staff: { initials: "ST", name: "Deng M. · Officer Desk 4", label: "Tax Agent · Live Queue" },
-        ssra_auditor: { initials: "AU", name: "Nyabol K. · Internal Audit", label: "Auditor · Read-Only SoD" },
+        ssra_admin: { initials: "P", name: "Preview persona", label: "Not signed in · preview only" },
+        ssra_staff: { initials: "P", name: "Preview persona", label: "Not signed in · preview only" },
+        ssra_auditor: { initials: "P", name: "Preview persona", label: "Not signed in · preview only" },
       };
 
       const mainEl = document.getElementById("staff-main");
@@ -757,25 +762,25 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       const acctTrigger = document.getElementById("staff-acct-trigger");
       const acctMenu = document.getElementById("staff-acct-menu");
 
+      function readUiPreference(key, fallback) {
+        try {
+          return localStorage.getItem(key) || fallback;
+        } catch {
+          return fallback;
+        }
+      }
+
+      function writeUiPreference(key, value) {
+        try {
+          localStorage.setItem(key, value);
+        } catch {}
+      }
+
       let state = {
         route: mainEl?.getAttribute("data-route") || "/admin",
-        role: localStorage.getItem("ssra-ops-role") || "ssra_admin",
-        theme: localStorage.getItem("ssra-ops-theme") || "dark",
-        railMode: localStorage.getItem("ssra-ops-rail-mode") || "always-open",
-        periodDays: 30,
-        degradationLevel: 1,
-        disabledTools: [],
-        disabledChannels: [],
-        scorecard: null,
-        stackStatus: null,
-        publicStatus: null,
-        selectedTicketIdx: 0,
-        flagOverrides: {
-          "kill_switch.disable_tier2_writes": false,
-          "degrade.retrieval_only_mode": false,
-          "voice.enable_orpheus_tts": true,
-          "memory.enable_qdrant_episodic_sync": true,
-        },
+        role: readUiPreference("ssra-ops-preview-persona", "ssra_admin"),
+        theme: readUiPreference("ssra-ops-theme", "dark"),
+        railMode: readUiPreference("ssra-ops-rail-mode", "always-open"),
       };
 
       function escapeHtml(s) {
@@ -796,56 +801,19 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         el.innerHTML = ttPolicy ? ttPolicy.createHTML(htmlStr) : htmlStr;
       }
 
-      function renderSparklineSvg(points, color = "var(--ssra-teal-light)") {
-        if (!Array.isArray(points) || points.length < 2) return "";
-        const min = Math.min(...points);
-        const max = Math.max(...points);
-        const span = max - min || 1;
-        const w = 160;
-        const h = 26;
-        const coords = points.map((p, i) => {
-          const x = ((i / (points.length - 1)) * w).toFixed(1);
-          const y = (h - 3 - ((p - min) / span) * (h - 6)).toFixed(1);
-          return x + "," + y;
-        });
-        return '<svg class="ops-sparkline" viewBox="0 0 ' + w + " " + h + '" aria-hidden="true">' +
-          '<polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + coords.join(" ") + '" />' +
-        "</svg>";
-      }
-
-      function renderStatCard({ label, figure, unit, deltaText, deltaGood, hint, sparkline, href }) {
-        const tag = href ? "a" : "div";
-        const hrefAttr = href ? ' href="' + escapeHtml(href) + '" data-nav="' + escapeHtml(href) + '"' : "";
-        const deltaCls = deltaGood === true ? " is-good" : deltaGood === false ? " is-bad" : "";
-        return "<" + tag + ' class="ops-stat"' + hrefAttr + ">" +
-          '<span class="ops-stat-label">' + escapeHtml(label) + "</span>" +
-          '<span class="ops-stat-row">' +
-            '<strong class="ops-stat-value">' + escapeHtml(figure) + (unit ? '<span class="ops-stat-unit"> ' + escapeHtml(unit) + "</span>" : "") + "</strong>" +
-            (deltaText ? '<span class="ops-delta' + deltaCls + '">' + escapeHtml(deltaText) + "</span>" : "") +
-          "</span>" +
-          (hint ? '<span class="ops-stat-hint">' + escapeHtml(hint) + "</span>" : "") +
-          (sparkline ? renderSparklineSvg(sparkline) : "") +
-        "</" + tag + ">";
-      }
-
       function applyChrome() {
+        if (!["dark", "light", "high-contrast"].includes(state.theme)) state.theme = "dark";
+        if (!ROLE_META[state.role]) state.role = "ssra_admin";
+        if (!["always-open", "hover"].includes(state.railMode)) state.railMode = "always-open";
+
         document.documentElement.setAttribute("data-theme", state.theme);
         document.documentElement.setAttribute("data-rail-mode", state.railMode);
-        if (railEl) {
-          railEl.classList.toggle("is-expanded", state.railMode === "always-open");
-          railEl.classList.toggle("is-collapsed", state.railMode !== "always-open");
-        }
-        if (pinBtn) {
-          pinBtn.classList.toggle("is-on", state.railMode === "always-open");
-          setSafeHtml(pinBtn, state.railMode === "always-open" ? ICONS.chevronsLeft : ICONS.chevronsRight);
-        }
-        const rm = ROLE_META[state.role] || ROLE_META.ssra_admin;
-        const initEl = document.getElementById("acct-initials");
-        const nameEl = document.getElementById("acct-display-name");
-        const roleEl = document.getElementById("acct-role-label");
-        if (initEl) initEl.textContent = rm.initials;
-        if (nameEl) nameEl.textContent = rm.name;
-        if (roleEl) roleEl.textContent = rm.label;
+        railEl?.classList.toggle("is-expanded", state.railMode === "always-open");
+        railEl?.classList.toggle("is-collapsed", state.railMode !== "always-open");
+        pinBtn?.classList.toggle("is-on", state.railMode === "always-open");
+        pinBtn?.setAttribute("aria-pressed", String(state.railMode === "always-open"));
+        if (pinBtn) setSafeHtml(pinBtn, state.railMode === "always-open" ? ICONS.chevronsLeft : ICONS.chevronsRight);
+
         document.querySelectorAll("[data-set-role]").forEach((btn) => {
           const isSelected = btn.getAttribute("data-set-role") === state.role;
           btn.setAttribute("aria-checked", String(isSelected));
@@ -861,577 +829,44 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           btn.classList.toggle("active", isSelected);
         });
 
-        // Render grouped navigation in rail
         const groups = ["Work", "Audit", "Configure", "Observe"];
         if (railGroupsEl) {
           setSafeHtml(
             railGroupsEl,
-            groups.map((g) => {
-              const items = DESTINATIONS.filter((d) => d.group === g && d.roles.includes(state.role));
-              if (!items.length) return "";
+            groups.map((group) => {
+              const destinations = DESTINATIONS.filter((item) => item.group === group && item.roles.includes(state.role));
+              if (!destinations.length) return "";
               return '<div class="staff-rail-group">' +
-                '<p class="staff-rail-group-label">' + escapeHtml(g) + "</p>" +
-                "<ul>" + items.map((item) => {
+                '<p class="staff-rail-group-label">' + escapeHtml(group) + "</p>" +
+                "<ul>" + destinations.map((item) => {
                   const active = item.href === state.route;
-                  return '<li><a href="' + escapeHtml(item.href) + '" data-nav="' + escapeHtml(item.href) + '" class="nav-item' + (active ? " active" : "") + '" title="' + escapeHtml(item.label) + '">' +
+                  return '<li><a href="' + escapeHtml(item.href) + '" data-nav="' + escapeHtml(item.href) + '" class="nav-item' + (active ? " active" : "") + '" title="' + escapeHtml(item.label) + '"' + (active ? ' aria-current="page"' : "") + ">" +
                     '<span class="staff-rail-icon" aria-hidden="true">' + item.icon + "</span>" +
                     '<span class="staff-rail-label">' + escapeHtml(item.navLabel) + "</span>" +
                   "</a></li>";
                 }).join("") + "</ul></div>";
-            }).join("")
+            }).join(""),
           );
         }
-      }
-
-      function renderPageHeader(eyebrow, title, desc) {
-        const readOnlyBadge = state.role === "ssra_auditor"
-          ? '<span class="ops-chip info">' + ICONS.lock + " Auditor Read-Only Separation of Duties</span>"
-          : '<span class="ops-chip good">' + ICONS.shieldCheck + " Live Sovereign GPU Stack</span>";
-        return '<header class="ops-page-head">' +
-          "<div>" +
-            '<span class="ops-eyebrow">' + escapeHtml(eyebrow) + "</span>" +
-            "<h1>" + escapeHtml(title) + "</h1>" +
-            '<p class="ops-page-desc">' + escapeHtml(desc) + "</p>" +
-          "</div>" +
-          '<div class="ops-page-actions">' +
-            readOnlyBadge +
-            '<div class="ops-segmented" role="group" aria-label="Comparison window">' +
-              [7, 30, 90].map((d) =>
-                '<button type="button" class="ops-seg-btn' + (state.periodDays === d ? " active" : "") + '" data-period="' + d + '">' + d + "d</button>"
-              ).join("") +
-            "</div>" +
-            '<button type="button" class="ops-btn" id="ops-refresh-btn">' + ICONS.refresh + " Refresh</button>" +
-          "</div>" +
-        "</header>";
-      }
-
-      function renderOverviewOrQuality(isQuality) {
-        const sc = state.scorecard?.metrics || {};
-        const qdrantPts = state.stackStatus?.qdrant?.points_count ?? 0;
-        const statsHtml = '<div class="ops-stat-grid cols-3">' +
-          renderStatCard({
-            label: "AI Answers in Chat (CSAT)",
-            figure: "4.8/5",
-            unit: "",
-            deltaText: "▲ +3.4%",
-            deltaGood: true,
-            hint: "94.2% satisfied (4 or 5) across en, pga, ar, din · vs previous " + state.periodDays + "d",
-            sparkline: [88, 90, 91, 92, 93, 94.2],
-            href: "/admin/quality",
-          }) +
-          renderStatCard({
-            label: "AI on Phone Calls",
-            figure: ((sc.voice_call_deflection_rate ?? 0.84) * 100).toFixed(1),
-            unit: "%",
-            deltaText: "▲ +2.8%",
-            deltaGood: true,
-            hint: "Resolved by Whisper-SALT + Orpheus-3B TTS without transfer",
-            sparkline: [78, 80, 81, 82.5, 83.4, 84.0],
-            href: "/calls",
-          }) +
-          renderStatCard({
-            label: "Officer Chats & SLA",
-            figure: "98.6",
-            unit: "%",
-            deltaText: "▲ +1.1%",
-            deltaGood: true,
-            hint: "Median first officer response: 4m 12s (target <= 15m)",
-            sparkline: [96, 97, 97.5, 98, 98.2, 98.6],
-            href: "/agent",
-          }) +
-          renderStatCard({
-            label: "Numeric Provenance Gate",
-            figure: ((sc.numeric_provenance_pass_rate ?? 1.0) * 100).toFixed(0),
-            unit: "%",
-            deltaText: "→ 100%",
-            deltaGood: true,
-            hint: "Zero unverified SSP tax rates, thresholds, or balances emitted",
-            sparkline: [100, 100, 100, 100, 100, 100],
-            href: "/analytics/evaluation",
-          }) +
-          renderStatCard({
-            label: "GPU Turn Latency (p50)",
-            figure: "4.2",
-            unit: " milliseconds",
-            deltaText: "▼ -92%",
-            deltaGood: true,
-            hint: "13.2x fast-path graph execution · 355.5 turns/sec live Ngrok",
-            sparkline: [55, 24, 12, 6, 4.5, 4.2],
-            href: "/analytics",
-          }) +
-          renderStatCard({
-            label: "Qdrant Episodic Memory",
-            figure: String(qdrantPts),
-            unit: "vectors",
-            deltaText: "● Active",
-            deltaGood: true,
-            hint: "Collection ssra_episodic_memory_v1 (384-d cosine, GDPR erasure ready)",
-            sparkline: [0, 8, 16, 24, 32, Number(qdrantPts) || 12],
-            href: "/admin/connectors",
-          }) +
-        "</div>";
-
-        const gpuServices = state.stackStatus?.services || {
-          vllm_sunflower_9b: "healthy (GPU 4 · :8011)",
-          vllm_reasoner_27b: "healthy (GPU 7 · :8012)",
-          orpheus_tts: "healthy (GPU 3 · :18100)",
-          qdrant_vector_db: "healthy (:6333)",
-          postgres_18: "healthy (:5432)",
-          valkey_8: "healthy (:6379)",
-        };
-
-        return renderPageHeader(
-          isQuality ? "Audit · Service Quality" : "Work · Operations Overview",
-          isQuality ? "Service quality audit" : "Operations overview",
-          isQuality
-            ? "Where answers went wrong or triggered escalation across AI chat, AI voice calls, and officer handoffs."
-            : "How each of the four service streams was rated, what is waiting in the Needs Review queue, who is on duty at Juba HQ, and whether the KnowledgeSnapshot authority manifest is fresh."
-        ) +
-        statsHtml +
-        '<div class="ov-cols">' +
-          '<div class="ov-side">' +
-            '<section class="ops-panel is-bare" aria-label="Needs review queue">' +
-              '<div class="ops-panel-head"><h2>Needs review (4 open)</h2><a href="/agent" data-nav="/agent" class="ops-btn">Open Agent Queue →</a></div>' +
-              '<div class="ops-panel-body">' +
-                '<ul class="ov-review-list">' +
-                  '<li class="ov-review-item"><div class="ov-review-top"><span class="ops-chip warn">AI call · Dinka (din)</span><span class="ops-meta-xs">12m ago · TIC-8F3A19C0</span></div><a href="/calls" data-nav="/calls" class="ops-review-link">Nimule border customs valuation dispute &amp; urgent release</a><p class="ops-review-quote">Asked: <q>My goods are held at Nimule border and e-Tax is showing pending assessment</q></p></li>' +
-                  '<li class="ov-review-item"><div class="ov-review-top"><span class="ops-chip info">AI chat · Juba Arabic (pga)</span><span class="ops-meta-xs">28m ago · TIC-4C91B20E</span></div><a href="/agent" data-nav="/agent" class="ops-review-link">T4 Penalty Waiver Request — routed to human officer per risk-tiers.yaml</a><p class="ops-review-quote">Asked: <q>Please waive my late filing penalty for Q3 Business Profits Tax</q></p></li>' +
-                  '<li class="ov-review-item"><div class="ov-review-top"><span class="ops-chip good">Officer chat · Maker-Checker T3</span><span class="ops-meta-xs">41m ago · TIC-7E22D91A</span></div><a href="/agent" data-nav="/agent" class="ops-review-link">TCC Revival &amp; Ledger Adjustment awaiting second officer approval</a><p class="ops-review-quote">Maker: Officer Deng M. · Citations attached: <code>ssra-tcc-guide-2026:sec-4</code></p></li>' +
-                "</ul>" +
-              "</div>" +
-            "</section>" +
-            '<section class="ops-panel" aria-label="Sovereign GPU and Local HF Cache Stack">' +
-              '<div class="ops-panel-head"><h2>Sovereign GPU &amp; Air-Gapped HF Cache Stack</h2><span class="ops-chip good">10/10 Containers Healthy</span></div>' +
-              '<div class="ops-panel-body">' +
-                '<table class="ops-table"><thead><tr><th>Component</th><th>Model / Engine</th><th>Status</th></tr></thead><tbody>' +
-                  '<tr><td>Primary LLM (:8011)</td><td><code>Sunbird/Sunflower-Qwen3.5-9B</code> (vLLM GPU 4)</td><td><span class="ops-chip good">● Healthy</span></td></tr>' +
-                  '<tr><td>Reasoner LLM (:8012)</td><td><code>Qwen/Qwen3.8-27B-FP8</code> (vLLM GPU 7)</td><td><span class="ops-chip good">● Healthy</span></td></tr>' +
-                  '<tr><td>Multilingual TTS (:18100)</td><td><code>Sunbird/orpheus-3b-tts-multilingual</code> (GPU 3)</td><td><span class="ops-chip good">● Healthy</span></td></tr>' +
-                  '<tr><td>Agent Runtime (:18001)</td><td><code>ssra-agent-runtime</code> + Whisper-SALT (GPU 2)</td><td><span class="ops-chip good">● Healthy</span></td></tr>' +
-                  '<tr><td>Episodic Vector DB (:26333)</td><td><code>Qdrant v1.13.4</code> (<code>ssra_episodic_memory_v1</code>)</td><td><span class="ops-chip good">● ' + escapeHtml(qdrantPts) + ' points</span></td></tr>' +
-                  '<tr><td>Core DB &amp; Cache</td><td><code>PostgreSQL 18</code> + <code>Valkey 8.1</code></td><td><span class="ops-chip good">● Healthy</span></td></tr>' +
-                "</tbody></table>" +
-              "</div>" +
-            "</section>" +
-          "</div>" +
-          '<div class="ov-side">' +
-            '<section class="ops-panel is-bare" aria-label="Officers on duty">' +
-              '<div class="ops-panel-head"><h2>Officers on duty (Juba HQ)</h2><span class="ops-chip good">4 active</span></div>' +
-              '<div class="ops-panel-body">' +
-                '<p class="ops-duty-lead"><strong>4 officers</strong> online across Domestic Taxes, Customs (Nimule/Juba), and e-Tax Helpdesk.</p>' +
-                '<dl class="ov-kv">' +
-                  '<div><dt>Grace A. (Supervisor)</dt><dd><span class="ops-chip good">Online · 0 active</span></dd></div>' +
-                  '<div><dt>Deng M. (Domestic Taxes)</dt><dd><span class="ops-chip info">In case · TIC-8F3A19C0</span></dd></div>' +
-                  '<div><dt>Taban L. (Customs &amp; ASYCUDA)</dt><dd><span class="ops-chip good">Ready · Voice &amp; Chat</span></dd></div>' +
-                  '<div><dt>Nyabol K. (Internal Audit)</dt><dd><span class="ops-chip">Read-Only Auditor</span></dd></div>' +
-                "</dl>" +
-              "</div>" +
-            "</section>" +
-            '<section class="ops-panel is-bare" aria-label="Answer authority manifest">' +
-              '<div class="ops-panel-head"><h2>Answer authority</h2><span class="ops-chip good">Fresh</span></div>' +
-              '<div class="ops-panel-body">' +
-                '<dl class="ov-kv">' +
-                  '<div><dt>Active KnowledgeSnapshot</dt><dd><code>2026.10.1</code></dd></div>' +
-                  '<div><dt>Statutory Sources Checked</dt><dd>14 / 14 valid (0 stale)</dd></div>' +
-                  '<div><dt>Effective Tax Jurisdiction</dt><dd>South Sudan (Africa/Juba UTC+02:00)</dd></div>' +
-                  '<div><dt>Cosign &amp; CycloneDX 1.6 ML-BOM</dt><dd><span class="ops-chip good">Verified</span></dd></div>' +
-                "</dl>" +
-              "</div>" +
-            "</section>" +
-          "</div>" +
-        "</div>";
-      }
-
-      function renderAgentQueue() {
-        const tickets = [
-          {
-            id: "TIC-8F3A19C0",
-            priority: "URGENT",
-            priCls: "bad",
-            wait: "12m · ok",
-            locale: "din · Voice/Chat",
-            subject: "Deng Trading Co. (TIN ••••5678)",
-            title: "Goods held at Nimule border & overdue BPT balance reconciliation",
-            eq: "anxious_distressed → calm_reassuring",
-            userMsg: "My truck is stuck at Nimule customs and e-Tax says my TIN has an overdue Q3 balance. How do I clear this today?",
-            draftReply: "I understand your shipment at Nimule is time-sensitive. Under the South Sudan Taxation Act and Customs Harmonized Procedure (ssra-customs-2026:sec-9), you can generate a PRN on https://etax.nra.gov.ss/ for the outstanding 420,000 SSP Q3 assessment and present the commercial bank receipt to the Nimule ASYCUDA desk for immediate provisional release.",
-            citations: ["ssra-customs-2026:sec-9", "ssra-fin-act-2025-2026:sec-22"],
-          },
-          {
-            id: "TIC-4C91B20E",
-            priority: "HIGH",
-            priCls: "warn",
-            wait: "28m · warn",
-            locale: "pga · WhatsApp",
-            subject: "Amina M. (TIN ••••1234)",
-            title: "T4 Penalty Waiver Escalation — Statutory Officer Review",
-            eq: "frustrated → empathetic_deescalation",
-            userMsg: "Kif ana agdar asheel al gharama ta takhir? System kan gaflan.",
-            draftReply: "Under Risk Tier T4 (ai/policies/risk-tiers.yaml), penalty waivers require formal review by an SSRA Domestic Taxes Officer. I have attached your e-Tax outage timestamp to case TIC-4C91B20E under Section 48 of the Taxation Act.",
-            citations: ["ssra-taxation-act-rev:sec-48-waivers"],
-          },
-          {
-            id: "TIC-7E22D91A",
-            priority: "NORMAL",
-            priCls: "info",
-            wait: "41m · ok",
-            locale: "en · Web",
-            subject: "Juba Logistics Ltd (TIN ••••9012)",
-            title: "T3 Maker-Checker Approval: TCC Status Revival after Bank Settlement",
-            eq: "standard_clear",
-            userMsg: "We paid our WHT arrears at Ivory Bank yesterday. Please update our TCC status.",
-            draftReply: "Your commercial bank settlement (Receipt #IVB-2026-99412) has been verified by Maker Officer Deng M. and countersigned under T3 Maker-Checker control. Your Tax Compliance Certificate is now ACTIVE on https://etax.nra.gov.ss/.",
-            citations: ["ssra-tcc-guide-2026:sec-4"],
-          },
-        ];
-        const active = tickets[state.selectedTicketIdx] || tickets[0];
-        const isAuditor = state.role === "ssra_auditor";
-
-        return renderPageHeader(
-          "Work · Omnichannel Agent Queue & Copilot",
-          "My queue & AI Copilot workbench",
-          "One case at a time: inspect taxpayer context, affective EQ telemetry, and statutory citations before approving or editing the AI-drafted reply."
-        ) +
-        '<div class="ov-cols">' +
-          '<section class="ops-panel" aria-label="Escalated ticket queue">' +
-            '<div class="ops-panel-head"><h2>Active Escalations (3)</h2><span class="ops-meta-xs">Hotkeys: j/k move · r reply</span></div>' +
-            '<div class="ops-panel-body">' +
-              '<ul class="ov-review-list">' +
-                tickets.map((t, idx) =>
-                  '<li class="ov-review-item is-clickable' + (idx === state.selectedTicketIdx ? " is-selected" : "") + '" data-ticket-idx="' + idx + '">' +
-                    '<div class="ov-review-top">' +
-                      '<span class="ops-chip ' + t.priCls + '">' + escapeHtml(t.priority) + " · " + escapeHtml(t.id) + "</span>" +
-                      '<span class="ops-chip">' + escapeHtml(t.wait) + "</span>" +
-                    "</div>" +
-                    '<div class="ops-ticket-title">' + escapeHtml(t.title) + "</div>" +
-                    '<div class="ops-meta-xs">' + escapeHtml(t.subject) + " · " + escapeHtml(t.locale) + "</div>" +
-                  "</li>"
-                ).join("") +
-              "</ul>" +
-            "</div>" +
-          "</section>" +
-          '<section class="ops-panel is-glass" aria-label="Selected case and Copilot draft">' +
-            '<div class="ops-panel-head">' +
-              "<h2>Case " + escapeHtml(active.id) + " — " + escapeHtml(active.subject) + "</h2>" +
-              '<span class="ops-chip info">EQ: ' + escapeHtml(active.eq) + "</span>" +
-            "</div>" +
-            '<div class="ops-panel-body">' +
-              '<div class="ops-msg-box">' +
-                '<div class="ops-msg-head">TAXPAYER MESSAGE (' + escapeHtml(active.locale) + ')</div>' +
-                '<div class="ops-msg-body">' + escapeHtml(active.userMsg) + "</div>" +
-              "</div>" +
-              '<div class="ops-draft-wrap">' +
-                '<label for="copilot-draft-box" class="ops-draft-label">' + ICONS.sparkles + " AI Copilot Cited Draft (Principle 1 Verified)</label>" +
-                '<textarea id="copilot-draft-box" rows="5" class="ops-draft-textarea">' + escapeHtml(active.draftReply) + "</textarea>" +
-              "</div>" +
-              '<div class="ops-chips-row">' +
-                active.citations.map((c) => '<span class="ops-chip good">' + ICONS.bookOpen + " " + escapeHtml(c) + " (2026.10.1)</span>").join("") +
-              "</div>" +
-              (isAuditor
-                ? '<div class="ops-chip warn">' + ICONS.lock + " Auditor Role (ssra_auditor) is strictly read-only and cannot send taxpayer replies (Separation of Duties).</div>"
-                : '<div class="ops-actions-row">' +
-                    '<button type="button" class="ops-btn gold" id="approve-send-btn">' + ICONS.check + " Approve &amp; Send Cited Reply</button>" +
-                    '<button type="button" class="ops-btn primary" id="maker-checker-btn">' + ICONS.shieldCheck + " Sign T3 Maker-Checker Approval</button>" +
-                  "</div>"
-              ) +
-              '<div id="agent-action-status" class="ops-status-msg"></div>' +
-            "</div>" +
-          "</section>" +
-        "</div>";
-      }
-
-      function renderCallsDesk() {
-        return renderPageHeader(
-          "Work · AI Phone Receptionist & Officer Call Desk",
-          "Phone calls & G122 carryover workspace",
-          "Monitor live toll-free AI voice sessions (Whisper-SALT + Orpheus-3B TTS), inspect pre-call chat carryover briefs, and take over transferred calls."
-        ) +
-        '<div class="ops-stat-grid cols-4">' +
-          renderStatCard({ label: "Waiting for Officer", figure: "1", unit: "caller", deltaText: "0m 42s wait", deltaGood: true, hint: "Dinka (din) · Nimule Customs" }) +
-          renderStatCard({ label: "AI Receptionist Live", figure: "2", unit: "calls", deltaText: "● Streaming", deltaGood: true, hint: "Juba Arabic (pga) & English (en)" }) +
-          renderStatCard({ label: "ASR Word Error Rate", figure: "8.4", unit: "%", deltaText: "<= 12% gate", deltaGood: true, hint: "Whisper-large-v3-turbo + SunflowerASR" }) +
-          renderStatCard({ label: "TTS Phrase Cache Hit", figure: "91.5", unit: "%", deltaText: "▲ +4.0%", deltaGood: true, hint: "Orpheus-3B-TTS magic-byte verified" }) +
-        "</div>" +
-        '<div class="ov-cols">' +
-          '<section class="ops-panel" aria-label="4-section call desk queue">' +
-            '<div class="ops-panel-head"><h2>Call Desk Queue (4 Sections)</h2><span class="ops-chip good">VAD Barge-In Active</span></div>' +
-            '<div class="ops-panel-body">' +
-              '<table class="ops-table"><thead><tr><th>Section</th><th>Caller / Locale</th><th>Topic &amp; Carryover</th><th>State</th></tr></thead><tbody>' +
-                '<tr><td><strong>1. Waiting Transfer</strong></td><td>+211 •••• 4412 (<code>din</code>)</td><td>Customs valuation at Nimule (from Web Chat)</td><td><span class="ops-chip warn">Ringing Desk 4</span></td></tr>' +
-                '<tr><td><strong>2. Active Officer</strong></td><td>+211 •••• 8801 (<code>en</code>)</td><td>TIN Registration biometric appointment</td><td><span class="ops-chip info">03:18 · Deng M.</span></td></tr>' +
-                '<tr><td><strong>3. AI Receptionist</strong></td><td>+211 •••• 1920 (<code>pga</code>)</td><td>PAYE monthly salary calculation (250k SSP)</td><td><span class="ops-chip good">AI Answering</span></td></tr>' +
-                '<tr><td><strong>4. Callbacks</strong></td><td>+211 •••• 7734 (<code>ar</code>)</td><td>TCC portal password reset follow-up</td><td><span class="ops-chip">Scheduled 14:30 CAT</span></td></tr>' +
-              "</tbody></table>" +
-            "</div>" +
-          "</section>" +
-          '<section class="ops-panel is-glass" aria-label="Officer call brief and G122 carryover">' +
-            '<div class="ops-panel-head"><h2>G122 Chat-to-Call Carryover Brief</h2><span class="ops-chip info">Zero Context Repetition</span></div>' +
-            '<div class="ops-panel-body">' +
-              '<dl class="ov-kv">' +
-                '<div><dt>Prior Chat Thread</dt><dd><code>thr_web_nimule_01</code> (3 turns)</dd></div>' +
-                '<div><dt>Verified Identity</dt><dd><code>sub_taxpayer_deng_02</code> (TIN ••••5678)</dd></div>' +
-                '<div><dt>Paused Workflow Step</dt><dd>Step 2 of 3 — Bank PRN Settlement</dd></div>' +
-                '<div><dt>Voice Consent Audit</dt><dd>SHA-256 Hash Only (<code>store_raw_audio=false</code>)</dd></div>' +
-              "</dl>" +
-              '<div class="ops-actions-row-mt">' +
-                (state.role === "ssra_auditor"
-                  ? '<span class="ops-chip warn">' + ICONS.lock + " Auditor Read-Only: Live audio takeover disabled</span>"
-                  : '<button type="button" class="ops-btn gold" id="takeover-call-btn">' + ICONS.phone + " Take Over Audio Stream</button>"
-                ) +
-                '<a href="/en" class="ops-btn">Open Taxpayer Voice Modal ' + ICONS.arrowUpRight + "</a>" +
-              "</div>" +
-            "</div>" +
-          "</section>" +
-        "</div>";
-      }
-
-      function renderAnalyticsOrEval(isEval) {
-        const sc = state.scorecard?.metrics || {};
-        return renderPageHeader(
-          isEval ? "Observe · Answer Evaluation & Provenance" : "Observe · Production Analytics & CX Scorecard",
-          isEval ? "Answer evaluation against launch gates" : "Analytics & 2026 Agentic CX Scorecard",
-          "Plain-language observability across all 8 South Sudan languages (en, pga, ar, din, nus, bfa, zne, shk) with explicit telemetry provenance (LIVE_TELEMETRY vs CI_VERIFIED_TARGET)."
-        ) +
-        '<div class="ops-stat-grid cols-3">' +
-          renderStatCard({
-            label: "Quality-Adjusted Resolution",
-            figure: ((sc.quality_adjusted_resolution_rate ?? 0.91) * 100).toFixed(1),
-            unit: "%",
-            deltaText: "LIVE_TELEMETRY",
-            deltaGood: true,
-            hint: "Grounded resolution with verified citations & zero user re-asks",
-            sparkline: [85, 87, 88.5, 89.2, 90.4, 91.0],
-          }) +
-          renderStatCard({
-            label: "Zero Fabricated Tax Figures",
-            figure: ((sc.numeric_provenance_pass_rate ?? 1.0) * 100).toFixed(0),
-            unit: "%",
-            deltaText: "Gate: 100%",
-            deltaGood: true,
-            hint: "technicalKey: numeric_accuracy · Enforced by numeric_provenance validator",
-            sparkline: [100, 100, 100, 100, 100, 100],
-          }) +
-          renderStatCard({
-            label: "Legal Citation Precision",
-            figure: "100",
-            unit: "%",
-            deltaText: "Gate: 100%",
-            deltaGood: true,
-            hint: "technicalKey: citation_precision · Every anchor resolves to KnowledgeSnapshot 2026.10.1",
-            sparkline: [100, 100, 100, 100, 100, 100],
-          }) +
-          renderStatCard({
-            label: "Faithfulness to SSRA Corpus",
-            figure: "99.4",
-            unit: "%",
-            deltaText: "Gate >= 97%",
-            deltaGood: true,
-            hint: "technicalKey: faithfulness · Grounded or silent invariant",
-            sparkline: [98.1, 98.5, 98.9, 99.1, 99.3, 99.4],
-          }) +
-          renderStatCard({
-            label: "T4 Abstention & Handoff Precision",
-            figure: "100",
-            unit: "%",
-            deltaText: "Gate: 100%",
-            deltaGood: true,
-            hint: "technicalKey: abstention_precision · Waivers & disputes always route to staff",
-            sparkline: [100, 100, 100, 100, 100, 100],
-          }) +
-          renderStatCard({
-            label: "Public Bundle Gzip Budget",
-            figure: "18.6",
-            unit: "KB",
-            deltaText: "Target <= 120 KB",
-            deltaGood: true,
-            hint: "CI_VERIFIED_TARGET · WCAG 2.2 AA & 2G low-bandwidth budget",
-            sparkline: [22, 20, 19.5, 19.0, 18.6, 18.6],
-          }) +
-        "</div>" +
-        '<section class="ops-panel" aria-label="South Sudan 8-language parity and evaluation matrix">' +
-          '<div class="ops-panel-head"><h2>South Sudan 8-Language Parity &amp; Benchmark Verification (20,000 Scenarios)</h2><span class="ops-chip good">20,000 / 20,000 Passed</span></div>' +
-          '<div class="ops-panel-body">' +
-            '<table class="ops-table"><thead><tr><th>BCP-47 Locale</th><th>Language Name</th><th>Tier</th><th>Citation &amp; Numeric Parity</th><th>Voice / TTS Route</th></tr></thead><tbody>' +
-              '<tr><td><code>en</code></td><td>English (Official)</td><td>Tier A</td><td><span class="ops-chip good">100% Pass</span></td><td>Whisper-v3-turbo + Orpheus-3B</td></tr>' +
-              '<tr><td><code>pga</code></td><td>Juba Arabic (Lingua Franca)</td><td>Tier A</td><td><span class="ops-chip good">100% Pass</span></td><td>Whisper-SALT + Orpheus-3B</td></tr>' +
-              '<tr><td><code>ar</code></td><td>Arabic (RTL)</td><td>Tier A</td><td><span class="ops-chip good">100% Pass</span></td><td>Whisper-v3-turbo + MMS-TTS-ara</td></tr>' +
-              '<tr><td><code>din</code></td><td>Thuɔŋjäŋ (Dinka)</td><td>Tier B</td><td><span class="ops-chip good">100% Pass</span></td><td>SunflowerASR + MMS-TTS-dik</td></tr>' +
-              '<tr><td><code>nus</code></td><td>Thok Naath (Nuer)</td><td>Tier B</td><td><span class="ops-chip good">100% Pass</span></td><td>SunflowerASR + Honest MT Badge</td></tr>' +
-              '<tr><td><code>bfa</code> / <code>zne</code> / <code>shk</code></td><td>Bari, Pazande, Shilluk</td><td>Tier C</td><td><span class="ops-chip good">100% Pass</span></td><td>Glossary-Grounded + Officer Assist</td></tr>' +
-            "</tbody></table>" +
-          "</div>" +
-        "</section>";
-      }
-
-      function renderConfigureView() {
-        return renderPageHeader(
-          "Configure · Control Plane, Flags, Knowledge Release & MCP Connectors",
-          "Flags, 6-Step Knowledge Release & 11 MCP Connectors",
-          "Manage runtime degradation switches, inspect the 6-step immutable KnowledgeSnapshot release pipeline, and verify all 11 governed MCP servers."
-        ) +
-        '<div class="ov-cols">' +
-          '<section class="ops-panel is-glass" aria-label="Feature flags and degradation ladder">' +
-            '<div class="ops-panel-head"><h2>Degradation Ladder (L1–L5) &amp; Feature Flags</h2><span class="ops-chip info">Replica-Synced</span></div>' +
-            '<div class="ops-panel-body">' +
-              '<div class="ops-degrade-bar">' +
-                '<span class="ops-degrade-label">Active SecOps Degradation Level: <code>L' + escapeHtml(state.degradationLevel) + "</code></span>" +
-                (state.role === "ssra_auditor"
-                  ? '<span class="ops-chip">L' + escapeHtml(state.degradationLevel) + " (Read-Only)</span>"
-                  : '<div class="ops-segmented" role="group" aria-label="Select degradation level">' +
-                      [1, 2, 3, 4, 5].map((lvl) =>
-                        '<button type="button" class="ops-seg-btn' + (state.degradationLevel === lvl ? " active" : "") + '" data-set-degrade="' + lvl + '">L' + lvl + "</button>"
-                      ).join("") +
-                    "</div>"
-                ) +
-              "</div>" +
-              '<table class="ops-table"><thead><tr><th>Flag Key</th><th>Purpose</th><th>State</th></tr></thead><tbody>' +
-                Object.entries(state.flagOverrides).map(([k, v]) =>
-                  "<tr><td><code>" + escapeHtml(k) + "</code></td><td>Runtime safety / capability toggle</td>" +
-                  "<td>" +
-                  (state.role === "ssra_auditor"
-                    ? '<span class="ops-chip">' + (v ? "ON (Read-Only)" : "OFF (Read-Only)") + "</span>"
-                    : '<button type="button" class="ops-btn ' + (v ? "gold" : "") + '" data-toggle-flag="' + escapeHtml(k) + '">' + (v ? "ON (Enabled)" : "OFF (Disabled)") + "</button>"
-                  ) +
-                  "</td></tr>"
-                ).join("") +
-              "</tbody></table>" +
-            "</div>" +
-          "</section>" +
-          '<section class="ops-panel" aria-label="6-step knowledge release pipeline">' +
-            '<div class="ops-panel-head"><h2>6-Step KnowledgeSnapshot Release Pipeline</h2><span class="ops-chip good">2026.10.1 PUBLISHED</span></div>' +
-            '<div class="ops-panel-body">' +
-              '<ol class="ops-release-steps">' +
-                '<li><strong>1. DRAFT:</strong> Legal &amp; Policy team authors Markdown + section anchors (<span class="ops-chip good">COMPLETED</span>)</li>' +
-                '<li><strong>2. LEGAL_REVIEW:</strong> Statutory citation &amp; effective-date verification (<span class="ops-chip good">COMPLETED</span>)</li>' +
-                '<li><strong>3. APPROVED:</strong> Dual-officer maker-checker sign-off (<span class="ops-chip good">COMPLETED</span>)</li>' +
-                '<li><strong>4. PUBLISHED:</strong> Immutable snapshot <code>2026.10.1</code> sealed (<span class="ops-chip good">ACTIVE</span>)</li>' +
-                '<li><strong>5. EVAL_GATE:</strong> 100% numeric provenance &amp; golden regression gate (<span class="ops-chip good">PASSED</span>)</li>' +
-                '<li><strong>6. 1_STEP_ROLLBACK:</strong> Instant pointer revert to prior snapshot ready (<span class="ops-chip">STANDBY</span>)</li>' +
-              "</ol>" +
-            "</div>" +
-          "</section>" +
-        "</div>" +
-        '<section class="ops-panel ops-panel-mt" aria-label="11 MCP servers health">' +
-          '<div class="ops-panel-head"><h2>11 Governed MCP Servers (Streamable HTTP 2026-07-28 via agentgateway)</h2><span class="ops-chip good">11 / 11 Healthy</span></div>' +
-          '<div class="ops-panel-body">' +
-            '<table class="ops-table"><thead><tr><th>MCP Server</th><th>Risk Tier Scope</th><th>Auth &amp; Subject Binding</th><th>Status</th></tr></thead><tbody>' +
-              '<tr><td><code>mcp-tax-facts</code> / <code>mcp-knowledge-search</code> / <code>mcp-calculators</code></td><td>Tier T0 (Public Deterministic)</td><td>Snapshot <code>2026.10.1</code></td><td><span class="ops-chip good">● Healthy</span></td></tr>' +
-              '<tr><td><code>mcp-etax-partner</code> / <code>mcp-ledger</code> / <code>mcp-payments</code> / <code>mcp-customs</code></td><td>Tier T1 / T2 (TIN-Bound)</td><td>RFC 8693 + DPoP <code>subject_ref</code></td><td><span class="ops-chip good">● Healthy</span></td></tr>' +
-              '<tr><td><code>mcp-identity</code> / <code>mcp-cases</code> / <code>mcp-notifications</code> / <code>mcp-analytics-audit</code></td><td>Tier T1–T3 (Governed)</td><td>OPA Policy Gate + WORM Audit</td><td><span class="ops-chip good">● Healthy</span></td></tr>' +
-            "</tbody></table>" +
-          "</div>" +
-        "</section>";
-      }
-
-      function renderAuditOrReplay(isReplay) {
-        return renderPageHeader(
-          isReplay ? "Audit · Turn-by-Turn Forensic Replay" : "Audit · WORM Audit Trail & Merkle Seal",
-          isReplay ? "Forensic conversation replay & provenance" : "WORM Audit trail & cryptographic Merkle seal",
-          "Tamper-evident SHA-256 Merkle chain of every administrative change, tool invocation, and Presidio-redacted conversation turn."
-        ) +
-        '<div class="ops-stat-grid cols-3">' +
-          renderStatCard({ label: "WORM Merkle Chain Seal", figure: "VERIFIED", unit: "", deltaText: "0 tampered", deltaGood: true, hint: "PostgreSQL 18 WORM audit partition + SHA-256 chain" }) +
-          renderStatCard({ label: "PII Redaction Gate", figure: "100", unit: "%", deltaText: "Presidio Active", deltaGood: true, hint: "TINs, phones & national IDs masked before log/index" }) +
-          renderStatCard({ label: "OPA Policy Gate Decisions", figure: "100", unit: "%", deltaText: "Zero bypasses", deltaGood: true, hint: "Dual enforcement in agent-runtime & agentgateway" }) +
-        "</div>" +
-        '<section class="ops-panel is-glass" aria-label="Forensic turn replay and audit entries">' +
-          '<div class="ops-panel-head"><h2>Turn-by-Turn Forensic Replay &amp; Audit Ledger</h2><span class="ops-chip good">SHA-256 Chain Intact</span></div>' +
-          '<div class="ops-panel-body">' +
-            '<table class="ops-table"><thead><tr><th>Timestamp (CAT)</th><th>Actor / Thread</th><th>Stage / Action</th><th>Provenance &amp; Policy Verdict</th></tr></thead><tbody>' +
-              '<tr><td><code>2026-10-21 08:40:12</code></td><td><code>thr_web_paye_01</code></td><td>1. Ingress &amp; Presidio Redaction</td><td><span class="ops-chip good">PII Masked · Locale: en</span></td></tr>' +
-              '<tr><td><code>2026-10-21 08:40:12</code></td><td><code>deterministic_router</code></td><td>2. Statutory PAYE Calculator (250,000 SSP)</td><td><span class="ops-chip good">Tier T0 · Tool: calculate_paye</span></td></tr>' +
-              '<tr><td><code>2026-10-21 08:40:12</code></td><td><code>numeric_provenance</code></td><td>3. Output Guardrail &amp; Citation Check</td><td><span class="ops-chip good">PASS · ssra-fin-act-2025-2026:sec-14-paye</span></td></tr>' +
-              '<tr><td><code>2026-10-21 08:38:04</code></td><td><code>sub_taxpayer_amina_01</code></td><td>4. Compound T1→T2 Confirmation Token</td><td><span class="ops-chip info">HMAC Bound · create_support_ticket</span></td></tr>' +
-            "</tbody></table>" +
-          "</div>" +
-        "</section>";
       }
 
       function renderCurrentRoute() {
         applyChrome();
         if (!mainEl) return;
-        const r = state.route;
-        let html = "";
-        if (r === "/agent" || r === "/admin/tickets") {
-          html = renderAgentQueue();
-        } else if (r === "/calls") {
-          html = renderCallsDesk();
-        } else if (r === "/analytics" || r === "/analytics/evaluation") {
-          html = renderAnalyticsOrEval(r === "/analytics/evaluation");
-        } else if (
-          r === "/admin/flags" ||
-          r === "/admin/overrides" ||
-          r === "/admin/discrepancies" ||
-          r === "/admin/outbox" ||
-          r === "/admin/connectors"
-        ) {
-          html = renderConfigureView();
-        } else if (r === "/admin/audit" || r === "/admin/replay") {
-          html = renderAuditOrReplay(r === "/admin/replay");
-        } else {
-          html = renderOverviewOrQuality(r === "/admin/quality");
-        }
-        setSafeHtml(mainEl, html);
-      }
-
-      function activeStaffHeaderId() {
-        if (state.role === "ssra_auditor") return "ssra_auditor";
-        if (state.role === "ssra_staff") return "stf_01";
-        return "ssra_admin";
-      }
-
-      async function fetchLiveTelemetry() {
-        const staffHdr = {
-          "ngrok-skip-browser-warning": "true",
-          "X-SSRA-Staff-Id": activeStaffHeaderId(),
-        };
-        try {
-          const [scRes, stRes, flRes, ksRes] = await Promise.allSettled([
-            fetch("/api/scorecard", { headers: staffHdr }),
-            fetch("/v1/runtime/stack-status", { headers: staffHdr }),
-            fetch("/api/flags", { headers: staffHdr }),
-            fetch("/api/kill-switches", { headers: staffHdr }),
-          ]);
-          if (scRes.status === "fulfilled" && scRes.value.ok) {
-            state.scorecard = await scRes.value.json();
-          }
-          if (stRes.status === "fulfilled" && stRes.value.ok) {
-            state.stackStatus = await stRes.value.json();
-          }
-          if (ksRes.status === "fulfilled" && ksRes.value.ok) {
-            const ksData = await ksRes.value.json();
-            if (ksData && typeof ksData.degradation_level === "number") {
-              state.degradationLevel = ksData.degradation_level;
-            }
-            if (Array.isArray(ksData?.disabled_tools)) {
-              state.disabledTools = ksData.disabled_tools;
-            }
-            if (Array.isArray(ksData?.disabled_channels)) {
-              state.disabledChannels = ksData.disabled_channels;
-            }
-          }
-          if (flRes.status === "fulfilled" && flRes.value.ok) {
-            const flData = await flRes.value.json();
-            if (Array.isArray(flData)) {
-              const liveFlags = Object.fromEntries(
-                flData
-                  .filter(
-                    (flag) =>
-                      flag &&
-                      typeof flag.name === "string" &&
-                      typeof flag.enabled === "boolean",
-                  )
-                  .map((flag) => [flag.name, flag.enabled]),
-              );
-              if (Object.keys(liveFlags).length > 0) {
-                state.flagOverrides = liveFlags;
-              }
-            } else if (flData && typeof flData.flags === "object" && flData.flags !== null) {
-              state.flagOverrides = { ...state.flagOverrides, ...flData.flags };
-            }
-          }
-        } catch {}
-        renderCurrentRoute();
+        const route = DESTINATIONS.find((destination) => destination.href === state.route);
+        const title = route?.label || "Operations overview";
+        document.title = "SSRA Operations Console Preview — " + title;
+        setSafeHtml(
+          mainEl,
+          '<section class="ops-panel ops-preview-card" aria-labelledby="preview-title">' +
+            '<span class="ops-preview-chip">Preview only</span>' +
+            '<h1 id="preview-title">' + escapeHtml(title) + "</h1>" +
+            '<p>This screen is not connected to an authenticated staff session. It contains no live taxpayer records, casework, service telemetry, or operational controls.</p>' +
+            '<p>Staff access will be enabled after SSRA approves the identity provider and role mapping, and the service can verify those permissions on the server.</p>' +
+            '<ul><li>Use a staff identity provider with server-validated sessions.</li><li>Show live data only with its source, observation time, and freshness state.</li><li>Require server-side authorization and an audit record for every staff action.</li></ul>' +
+            '<a class="ops-btn primary" href="/en" data-nav="/en">Open the public assistant ' + ICONS.arrowUpRight + "</a>" +
+          "</section>",
+        );
       }
 
       function navigateTo(href) {
@@ -1444,7 +879,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         try { window.history.pushState({}, "", href); } catch {}
         railEl?.classList.remove("is-drawer-open");
         document.getElementById("ops-mobile-backdrop")?.classList.remove("open");
+        syncStaffRailA11y(false);
         renderCurrentRoute();
+        mainEl?.focus();
       }
 
       window.addEventListener("popstate", () => {
@@ -1459,106 +896,41 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           navigateTo(navLink.getAttribute("data-nav"));
           return;
         }
-        const periodBtn = e.target.closest("[data-period]");
-        if (periodBtn) {
-          state.periodDays = Number(periodBtn.getAttribute("data-period")) || 30;
-          renderCurrentRoute();
-          return;
-        }
-        const ticketRow = e.target.closest("[data-ticket-idx]");
-        if (ticketRow) {
-          state.selectedTicketIdx = Number(ticketRow.getAttribute("data-ticket-idx")) || 0;
-          renderCurrentRoute();
-          return;
-        }
-        const degBtn = e.target.closest("[data-set-degrade]");
-        if (degBtn && state.role !== "ssra_auditor") {
-          const prevLvl = state.degradationLevel;
-          const nextLvl = Number(degBtn.getAttribute("data-set-degrade")) || 1;
-          degBtn.disabled = true;
-          fetch("/api/kill-switches", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "ngrok-skip-browser-warning": "true",
-              "X-SSRA-Staff-Id": activeStaffHeaderId(),
-            },
-            body: JSON.stringify({
-              degradation_level: nextLvl,
-              disabled_tools: state.disabledTools,
-              disabled_channels: state.disabledChannels,
-            }),
-          })
-            .then((res) => {
-              state.degradationLevel = res.ok ? nextLvl : prevLvl;
-              renderCurrentRoute();
-            })
-            .catch(() => {
-              state.degradationLevel = prevLvl;
-              renderCurrentRoute();
-            });
-          return;
-        }
-        const flagBtn = e.target.closest("[data-toggle-flag]");
-        if (flagBtn && state.role !== "ssra_auditor") {
-          const k = flagBtn.getAttribute("data-toggle-flag");
-          if (k) {
-            const prevVal = Boolean(state.flagOverrides[k]);
-            const nextVal = !prevVal;
-            flagBtn.disabled = true;
-            fetch("/api/flags", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "true",
-                "X-SSRA-Staff-Id": activeStaffHeaderId(),
-              },
-              body: JSON.stringify({ flag_name: k, enabled: nextVal, rollout_pct: nextVal ? 100 : 0 }),
-            })
-              .then((res) => {
-                state.flagOverrides[k] = res.ok ? nextVal : prevVal;
-                renderCurrentRoute();
-              })
-              .catch(() => {
-                state.flagOverrides[k] = prevVal;
-                renderCurrentRoute();
-              });
-          }
-          return;
-        }
-        if (e.target.closest("#ops-refresh-btn")) {
-          fetchLiveTelemetry();
-          return;
-        }
-        if (e.target.closest("#approve-send-btn")) {
-          const st = document.getElementById("agent-action-status");
-          if (st) st.textContent = "Cited reply approved and dispatched to taxpayer with KnowledgeSnapshot 2026.10.1 provenance.";
-          return;
-        }
-        if (e.target.closest("#maker-checker-btn")) {
-          const st = document.getElementById("agent-action-status");
-          if (st) st.textContent = "T3 Maker-Checker cryptographic countersignature recorded in WORM Audit Trail.";
-          return;
-        }
-        if (e.target.closest("#takeover-call-btn")) {
-          window.location.assign("/en");
-          return;
-        }
       });
 
       // Rail pin toggle, mobile drawer & hover expand
       const mobileBackdrop = document.getElementById("ops-mobile-backdrop");
-      document.getElementById("mobile-ops-nav-btn")?.addEventListener("click", () => {
+      const mobileNavBtn = document.getElementById("mobile-ops-nav-btn");
+      const syncStaffRailA11y = (moveFocus = false) => {
+        const isMobile = window.matchMedia?.("(max-width: 820px)")?.matches ?? false;
+        const isOpen = railEl?.classList.contains("is-drawer-open") ?? false;
+        railEl?.toggleAttribute("inert", isMobile && !isOpen);
+        mobileNavBtn?.setAttribute("aria-expanded", String(isMobile && isOpen));
+        mobileNavBtn?.setAttribute("aria-label", isMobile && isOpen ? "Close preview navigation" : "Open preview navigation");
+        if (moveFocus) {
+          if (isMobile && isOpen) railGroupsEl?.querySelector("a")?.focus();
+          else mobileNavBtn?.focus();
+        }
+      };
+      const closeStaffRail = () => {
+        railEl?.classList.remove("is-drawer-open");
+        mobileBackdrop?.classList.remove("open");
+        syncStaffRailA11y(true);
+      };
+      mobileNavBtn?.addEventListener("click", () => {
         const isOpen = railEl?.classList.toggle("is-drawer-open");
         mobileBackdrop?.classList.toggle("open", Boolean(isOpen));
+        syncStaffRailA11y(true);
       });
-      mobileBackdrop?.addEventListener("click", () => {
-        railEl?.classList.remove("is-drawer-open");
-        mobileBackdrop.classList.remove("open");
+      mobileBackdrop?.addEventListener("click", closeStaffRail);
+      window.addEventListener("resize", () => syncStaffRailA11y(false));
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && railEl?.classList.contains("is-drawer-open")) closeStaffRail();
       });
+      syncStaffRailA11y(false);
       pinBtn?.addEventListener("click", () => {
         state.railMode = state.railMode === "always-open" ? "hover" : "always-open";
-        localStorage.setItem("ssra-ops-rail-mode", state.railMode);
+        writeUiPreference("ssra-ops-rail-mode", state.railMode);
         applyChrome();
       });
       railEl?.addEventListener("mouseenter", () => {
@@ -1586,7 +958,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         const roleBtn = e.target.closest("[data-set-role]");
         if (roleBtn) {
           state.role = roleBtn.getAttribute("data-set-role") || "ssra_admin";
-          localStorage.setItem("ssra-ops-role", state.role);
+          writeUiPreference("ssra-ops-preview-persona", state.role);
           acctMenu.classList.remove("open");
           renderCurrentRoute();
           return;
@@ -1594,7 +966,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         const themeBtn = e.target.closest("[data-set-theme]");
         if (themeBtn) {
           state.theme = themeBtn.getAttribute("data-set-theme") || "dark";
-          localStorage.setItem("ssra-ops-theme", state.theme);
+          writeUiPreference("ssra-ops-theme", state.theme);
           acctMenu.classList.remove("open");
           applyChrome();
         }
@@ -1615,9 +987,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             run: () => navigateTo(d.href),
           })),
           { label: "Open Taxpayer MainChat (/en)", hint: "Surface", run: () => window.location.assign("/en") },
-          { label: "Switch Role: Administrator (ssra_admin)", hint: "Role", run: () => { state.role = "ssra_admin"; renderCurrentRoute(); } },
-          { label: "Switch Role: Tax Agent (ssra_staff)", hint: "Role", run: () => { state.role = "ssra_staff"; renderCurrentRoute(); } },
-          { label: "Switch Role: Read-Only Auditor (ssra_auditor)", hint: "Role", run: () => { state.role = "ssra_auditor"; renderCurrentRoute(); } },
+          { label: "Preview persona: Administrator", hint: "Preview", run: () => { state.role = "ssra_admin"; renderCurrentRoute(); } },
+          { label: "Preview persona: Tax Agent", hint: "Preview", run: () => { state.role = "ssra_staff"; renderCurrentRoute(); } },
+          { label: "Preview persona: Auditor", hint: "Preview", run: () => { state.role = "ssra_auditor"; renderCurrentRoute(); } },
           { label: "Cycle Theme (Dark / Light / High-Contrast)", hint: "Appearance", run: () => {
             state.theme = state.theme === "dark" ? "light" : state.theme === "light" ? "high-contrast" : "dark";
             applyChrome();
@@ -1728,15 +1100,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
         if (tag === "input" || tag === "textarea" || tag === "select") return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
-        if (state.route === "/agent" || state.route === "/admin/tickets") {
-          if (e.key === "j") { e.preventDefault(); state.selectedTicketIdx = (state.selectedTicketIdx + 1) % 3; renderCurrentRoute(); }
-          else if (e.key === "k") { e.preventDefault(); state.selectedTicketIdx = (state.selectedTicketIdx + 2) % 3; renderCurrentRoute(); }
-          else if (e.key === "r") { e.preventDefault(); document.getElementById("copilot-draft-box")?.focus(); }
-        }
       });
 
       renderCurrentRoute();
-      fetchLiveTelemetry();
     })();
   </script>
 </body>

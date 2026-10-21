@@ -4,6 +4,13 @@
 **Current Status:** Phases 0, 1, 2, 3, and 4 Reference Implementations Complete & Verified (`task gen`, `task lint`, `task test`, `task eval` 100% green; October 2026 4-Phase Backend QA, Security Audit, Flow Hardening, `BE-G1`..`BE-G6` Backend Setup/Flow Audit, Docker Compose Frontend/Console Orchestration & 20,000-Scenario Complex Multimodal Live Ngrok Stress/Load Benchmark Verified)  
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
+## 0. Frontend Trust & UX Audit (2026-10-21)
+
+- Reviewed the rendered public chat/sidebar, staff preview shell, and browser-to-BFF paths. See [`docs/product/frontend-ux-audit-2026-10.md`](./product/frontend-ux-audit-2026-10.md) and [ADR-018](./adr/0018-staff-console-preview-and-trusted-session-gate.md).
+- Phase 1 changes on `fix/frontend-trust-ux` remove fabricated identity/status cues, deny unauthenticated staff data/actions, make chat history recency and rail focus predictable, and label analytics provenance by timestamp. `task gen`, `task lint`, and `task test` passed on 2026-10-21; lint includes the frontend budget/runtime gate, traceability, secret scan, package lint, and typechecks. Tests passed Python coverage and mutation gates plus all nine package test tasks. The local Node 20 runtime reports the repository's declared Node >=24 engine requirement as a warning; supported-runtime CI remains the authoritative compatibility check.
+- OQ-014 (staff identity and role authorization) and OQ-013 (analytics provenance) remain open. Staff dashboards stay in preview until both decisions and the implementation are reviewed.
+- The existing milestone entries below record prior project-reported verification. This audit did not independently reproduce all historical Lighthouse, axe, or device-test claims; Phase 3 requires current device and assistive-technology testing.
+
 ---
 
 ## 1. GitHub Feature Tracking Issues (`mpairwe7/SSRA-CX`)

@@ -1,6 +1,6 @@
 # SSRA Assist — Open Questions Register (`docs/open-questions.md`)
 
-**Last Updated:** 2026-10-16  
+**Last Updated:** 2026-10-21
 **Governance Rule:** Never invent South Sudan tax law, rates, deadlines, penalties, fees, exchange rates, endpoints, or data formats. Whenever an upstream capability, legal rule, or operational parameter is unconfirmed by SSRA, log it here as `OQ-###`, define a clean port interface, build a synthetic mock adapter, and enforce the safest runtime fallback (abstain and offer human handoff).
 
 ---
@@ -22,10 +22,19 @@
 | **OQ-011** | **Official-channel registry and branding** for anti-scam verification | Phase 1 | SSRA Communications & SecOps | 🔴 Open | Seed `official-channels` MCP server with verified domain `etax.nra.gov.ss` and March 2026 cash-free bank-only directive; mark phone/short-code/bank account entries as pending SSRA sign-off. |
 | **OQ-012** | **Procurement:** open-source policy, licensing, export-control and sanctions screening of vendors | Phase 0 (Sign-off) | SSRA Procurement & Legal | 🔴 Open | Restrict Phase 0 stack strictly to permissive/open OSI-approved self-hostable software (Apache-2.0, MIT, BSD, PostgreSQL); generate CycloneDX SBOMs for license audit. |
 | **OQ-013** | **Production Analytics Warehouse & Workforce Telemetry Aggregation:** ClickHouse / Langfuse warehouse schema & staff AHT baseline for live `AgenticCxScorecard` aggregation | Phase 4 | SSRA Operations & ICT | 🔴 Open | Return synthetic baseline metrics explicitly badged with `is_synthetic_baseline: true` and `source_note: "SYNTHETIC_PHASE4_BASELINE_OQ013"` on `GET /v1/analytics/cx-scorecard` until live warehouse aggregation is signed off. |
+| **OQ-014** | **Staff Console Identity, Role Mapping & Session Authorization:** approved IdP, server-side session validation, role claims, step-up requirements and audit attribution | Phase 2 | SSRA ICT, SecOps & Operations | 🔴 Open | Keep the console in non-operational preview mode; deny staff API reads and writes until sessions are server-verified and roles are mapped to approved policy. Never authorize from local storage or `X-SSRA-Staff-Id`. |
 
 ---
 
 ## Detailed Question Records
+
+### OQ-014 — Staff Console Identity, Role Mapping & Session Authorization
+- **Blocks:** Phase 2 (Operational Staff Console)
+- **Context:** The current server-rendered console has no verified staff session. A browser-selected role or caller-supplied staff ID cannot prove identity or permission. Staff screens remain a navigation preview and staff API routes fail closed until this decision is approved.
+- **Specific Questions for SSRA ICT, SecOps & Operations:**
+  1. Which staff identity provider is authoritative, and how will the console validate its issuer, audience, signature, expiry, session revocation and step-up state server-side?
+  2. Which approved role claims map to read, reply, audit, feature-flag and kill-switch permissions, and which actions require maker-checker approval?
+  3. Which audit fields, retention periods and incident procedures are required for each staff read and state-changing action?
 
 ### OQ-001 — e-Tax APIs, Schemas, Authentication & TIN Format
 - **Blocks:** Phase 2 (Authenticated Self-Service)
