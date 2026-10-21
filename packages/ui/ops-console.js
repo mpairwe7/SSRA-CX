@@ -36,13 +36,35 @@ export function normalizeOpsRoute(pathname) {
   return pathname;
 }
 
+function compactOpsHtmlAssetBlocks(html) {
+  return html
+    .replace(/<style([^>]*)>([\s\S]*?)<\/style>/g, (_, attrs, css) => {
+      const minCss = css
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\s+/g, " ")
+        .replace(/\s*([{}:;,>~])\s*/g, "$1")
+        .replace(/;}/g, "}")
+        .trim();
+      return `<style${attrs}>${minCss}</style>`;
+    })
+    .replace(/<script([^>]*)>([\s\S]*?)<\/script>/g, (_, attrs, js) => {
+      const minJs = js
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith("//"))
+        .join("\n");
+      return `<script${attrs}>${minJs}</script>`;
+    });
+}
+
 export function renderOpsDashboardHtml(rawPathname, nonce) {
   const currentPath = normalizeOpsRoute(rawPathname);
-  return `<!DOCTYPE html>
+  const rawHtml = `<!DOCTYPE html>
 <html lang="en" data-theme="dark" data-rail-mode="always-open">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="SSRA Assist Operations, Agent Queue, AI Call Desk, CX Analytics, and WORM Audit Console for the South Sudan Revenue Authority (NRA)." />
   <title>SSRA Operations Console — South Sudan Revenue Authority</title>
   <style nonce="${nonce}">
     :root {
@@ -148,14 +170,15 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       --text-0: #0C1C14;
       --text-1: #1F3329;
       --text-2: #4A5E53;
-      --text-3: #5B7065;
+      --text-3: #4E6358;
+      --accent: #704B00;
       --ops-glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(245, 247, 241, 0.96) 100%);
       --ops-glass-line: rgba(12, 28, 20, 0.13);
       --ops-glass-spec: inset 0 1px 0 rgba(255, 255, 255, 0.85);
       --ops-glass-cast: 0 8px 24px rgba(12, 28, 20, 0.07);
-      --ops-good-ink: #07792B;
-      --ops-warn-ink: #B45309;
-      --ops-bad-ink: #C81E1E;
+      --ops-good-ink: #066926;
+      --ops-warn-ink: #853A06;
+      --ops-bad-ink: #B91C1C;
       --ops-info-ink: #0F47AF;
       --ops-focus: #078930;
     }
@@ -435,9 +458,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       background: var(--ops-row); border: 1px solid var(--ops-line);
     }
     .ops-seg-btn {
-      padding: 4px 10px; border-radius: var(--ops-radius-xs); border: none;
+      min-height: 28px; min-width: 36px; padding: 5px 10px; border-radius: var(--ops-radius-xs); border: none;
       background: transparent; color: var(--text-2); font-size: var(--ops-text-xs);
       font-weight: var(--ops-weight-medium); cursor: pointer; font-family: inherit;
+      display: inline-flex; align-items: center; justify-content: center;
     }
     .ops-seg-btn.active { background: var(--ops-row-active); color: var(--text-0); font-weight: var(--ops-weight-semi); }
 
@@ -450,6 +474,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     .ops-btn:hover { background: var(--ops-row-hover); border-color: var(--ops-line-strong); }
     .ops-btn.primary { background: linear-gradient(135deg, #07792B 0%, #0D6E38 50%, #0F47AF 100%); color: #fff; border-color: rgba(255,255,255,0.18); }
     .ops-btn.gold { background: var(--accent); color: #0B1220; border-color: transparent; font-weight: var(--ops-weight-bold); }
+    :root[data-theme="light"] .ops-btn.gold { color: #FFFFFF; }
 
     /* StatCard Grid */
     .ops-stat-grid {
@@ -511,7 +536,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     .ops-panel.is-bare .ops-panel-head { padding: 0 0 var(--ops-space-2); border-bottom: 1px solid var(--ops-line); }
     .ops-panel-head h2 { margin: 0; font-size: var(--ops-text-base); font-weight: var(--ops-weight-semi); color: var(--text-0); }
     .ops-panel.is-bare .ops-panel-head h2 { font-size: var(--ops-text-lg); }
-    .ops-panel-body { padding: var(--ops-space-4); }
+    .ops-panel-body { padding: var(--ops-space-4); overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .ops-panel.is-bare .ops-panel-body { padding: var(--ops-space-4) 0 0; }
 
     /* Lists, Tables & Chips */
@@ -572,10 +597,16 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       font-size: var(--ops-text-2xs); color: var(--text-3); display: flex; justify-content: space-between;
     }
 
+    .mobile-nav-btn { display: none; }
+    .ops-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 25; }
     @media (max-width: 820px) {
       .staff-shell { --rail-w: 0px !important; }
-      .staff-rail { transform: translateX(-100%); width: 230px !important; transition: transform var(--ops-dur-base) var(--ops-ease); }
-      .staff-rail.is-drawer-open { transform: translateX(0); }
+      .staff-rail { transform: translateX(-100%); visibility: hidden; width: min(240px, 84vw) !important; transition: transform var(--ops-dur-base) var(--ops-ease), visibility var(--ops-dur-base) var(--ops-ease); }
+      .staff-rail.is-drawer-open { transform: translateX(0); visibility: visible; }
+      .ops-mobile-backdrop.open { display: block; }
+      .mobile-nav-btn { display: inline-flex; }
+      .ops-page { padding: var(--ops-space-4) var(--ops-space-3) var(--ops-space-8); }
+      .call-console-bar { padding: 8px var(--ops-space-3); }
     }
     .staff-acct-heading { padding: 4px 8px; font-size: 10px; text-transform: uppercase; color: var(--text-3); font-weight: 700; }
     .staff-acct-hr { border: 0; border-top: 1px solid var(--ops-hairline); margin: 4px 0; }
@@ -610,6 +641,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
   <a class="staff-skip" href="#staff-main">Skip to content</a>
 
   <div class="staff-shell" id="ssra-staff-shell">
+    <div id="ops-mobile-backdrop" class="ops-mobile-backdrop" aria-hidden="true"></div>
     <!-- Left Vertical Operations Rail (StaffGuard.tsx pattern) -->
     <nav id="staff-rail" class="staff-rail is-expanded" aria-label="SSRA Operations Navigation">
       <div class="staff-rail-head">
@@ -634,16 +666,16 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
 
       <div class="staff-rail-foot">
         <div id="staff-acct-menu" class="staff-acct-menu" role="menu" aria-label="Officer account and console settings">
-          <div class="staff-acct-heading">Active Officer Role</div>
-          <button type="button" class="staff-acct-item" data-set-role="ssra_admin" role="menuitemradio"><span>AD · Administrator (Juba HQ)</span><span>${ICONS.check}</span></button>
-          <button type="button" class="staff-acct-item" data-set-role="ssra_staff" role="menuitemradio"><span>ST · Tax Agent (Live Queue)</span><span></span></button>
-          <button type="button" class="staff-acct-item" data-set-role="ssra_auditor" role="menuitemradio"><span>AU · Auditor (Read-Only SoD)</span><span></span></button>
-          <hr class="staff-acct-hr" />
-          <div class="staff-acct-heading">Appearance</div>
-          <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio"><span>${ICONS.moon} Dark Mesh</span></button>
-          <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio"><span>${ICONS.sun} Light Paper</span></button>
-          <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio"><span>${ICONS.contrast} High Contrast (WCAG AAA)</span></button>
-          <hr class="staff-acct-hr" />
+          <div class="staff-acct-heading" role="presentation">Active Officer Role</div>
+          <button type="button" class="staff-acct-item" data-set-role="ssra_admin" role="menuitemradio" aria-checked="true"><span>AD · Administrator (Juba HQ)</span><span>${ICONS.check}</span></button>
+          <button type="button" class="staff-acct-item" data-set-role="ssra_staff" role="menuitemradio" aria-checked="false"><span>ST · Tax Agent (Live Queue)</span><span></span></button>
+          <button type="button" class="staff-acct-item" data-set-role="ssra_auditor" role="menuitemradio" aria-checked="false"><span>AU · Auditor (Read-Only SoD)</span><span></span></button>
+          <hr class="staff-acct-hr" role="separator" />
+          <div class="staff-acct-heading" role="presentation">Appearance</div>
+          <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio" aria-checked="true"><span>${ICONS.moon} Dark Mesh</span></button>
+          <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio" aria-checked="false"><span>${ICONS.sun} Light Paper</span></button>
+          <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio" aria-checked="false"><span>${ICONS.contrast} High Contrast (WCAG AAA)</span></button>
+          <hr class="staff-acct-hr" role="separator" />
           <a href="/en" class="staff-acct-item" role="menuitem"><span>${ICONS.messageSquare} Return to Taxpayer MainChat</span><span>${ICONS.arrowUpRight}</span></a>
         </div>
         <button type="button" id="staff-acct-trigger" class="staff-acct-trigger" aria-expanded="false" aria-haspopup="menu">
@@ -662,6 +694,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       <!-- Live CallConsoleBar (StaffCallLayer.tsx pattern) -->
       <div class="call-console-bar" id="call-console-bar" role="region" aria-label="Live Call &amp; Escalation Status Bar">
         <div class="call-bar-left">
+          <button type="button" id="mobile-ops-nav-btn" class="ops-btn mobile-nav-btn" aria-label="Open navigation menu">${ICONS.panelLeft} Menu</button>
           <span class="presence-pill">Officer Desk Ready · Juba HQ</span>
           <span>${ICONS.phone} <strong>2</strong> Live AI Receptionist Calls (<code>en</code>, <code>din</code>)</span>
           <span>${ICONS.clock} <strong>1</strong> Caller Waiting for Officer Transfer (<code>TIC-8F3A19C0</code>)</span>
@@ -682,8 +715,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
   <!-- Command Palette Dialog (⌘K / Ctrl+K) -->
   <div id="cmdk-backdrop" class="ops-cmdk-backdrop" role="dialog" aria-modal="true" aria-label="Command palette">
     <div class="ops-cmdk-dialog">
-      <input id="cmdk-input" class="ops-cmdk-input" type="text" placeholder="Jump to any SSRA Operations page or run a command… (type to filter)" autocomplete="off" />
-      <ul id="cmdk-list" class="ops-cmdk-list" role="listbox"></ul>
+      <input id="cmdk-input" class="ops-cmdk-input" type="text" aria-label="Search operations commands" placeholder="Jump to any SSRA Operations page or run a command… (type to filter)" autocomplete="off" />
+      <ul id="cmdk-list" class="ops-cmdk-list" role="listbox" aria-label="Available commands"></ul>
       <div class="ops-cmdk-foot">
         <span>↑↓ to navigate · Enter to open · Esc to close</span>
         <span>SSRA Assist Operations · ISO/IEC 42001</span>
@@ -813,6 +846,20 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         if (initEl) initEl.textContent = rm.initials;
         if (nameEl) nameEl.textContent = rm.name;
         if (roleEl) roleEl.textContent = rm.label;
+        document.querySelectorAll("[data-set-role]").forEach((btn) => {
+          const isSelected = btn.getAttribute("data-set-role") === state.role;
+          btn.setAttribute("aria-checked", String(isSelected));
+          btn.classList.toggle("active", isSelected);
+          const checkSpan = btn.querySelector("span:last-child");
+          if (checkSpan && checkSpan !== btn.firstElementChild) {
+            setSafeHtml(checkSpan, isSelected ? ICONS.check : "");
+          }
+        });
+        document.querySelectorAll("[data-set-theme]").forEach((btn) => {
+          const isSelected = btn.getAttribute("data-set-theme") === state.theme;
+          btn.setAttribute("aria-checked", String(isSelected));
+          btn.classList.toggle("active", isSelected);
+        });
 
         // Render grouped navigation in rail
         const groups = ["Work", "Audit", "Configure", "Observe"];
@@ -1395,6 +1442,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         }
         state.route = href;
         try { window.history.pushState({}, "", href); } catch {}
+        railEl?.classList.remove("is-drawer-open");
+        document.getElementById("ops-mobile-backdrop")?.classList.remove("open");
         renderCurrentRoute();
       }
 
@@ -1497,7 +1546,16 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         }
       });
 
-      // Rail pin toggle & hover expand
+      // Rail pin toggle, mobile drawer & hover expand
+      const mobileBackdrop = document.getElementById("ops-mobile-backdrop");
+      document.getElementById("mobile-ops-nav-btn")?.addEventListener("click", () => {
+        const isOpen = railEl?.classList.toggle("is-drawer-open");
+        mobileBackdrop?.classList.toggle("open", Boolean(isOpen));
+      });
+      mobileBackdrop?.addEventListener("click", () => {
+        railEl?.classList.remove("is-drawer-open");
+        mobileBackdrop.classList.remove("open");
+      });
       pinBtn?.addEventListener("click", () => {
         state.railMode = state.railMode === "always-open" ? "hover" : "always-open";
         localStorage.setItem("ssra-ops-rail-mode", state.railMode);
@@ -1683,4 +1741,5 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
   </script>
 </body>
 </html>`;
+  return compactOpsHtmlAssetBlocks(rawHtml);
 }
