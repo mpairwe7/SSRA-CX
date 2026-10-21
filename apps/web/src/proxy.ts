@@ -59,7 +59,7 @@ export function buildSecurityHeaders(nonce: string, strictConsole = false): Reco
   const safeNonce = nonce.replace(/[^A-Za-z0-9+/=_-]/g, "");
   const cspDirectives = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${safeNonce}' 'strict-dynamic'`,
+    `script-src 'nonce-${safeNonce}' 'strict-dynamic'`,
     `style-src 'self' 'nonce-${safeNonce}'`,
     "img-src 'self' data: blob:",
     "font-src 'self'",

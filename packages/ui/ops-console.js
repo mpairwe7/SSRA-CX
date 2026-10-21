@@ -577,6 +577,32 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       .staff-rail { transform: translateX(-100%); width: 230px !important; transition: transform var(--ops-dur-base) var(--ops-ease); }
       .staff-rail.is-drawer-open { transform: translateX(0); }
     }
+    .staff-acct-heading { padding: 4px 8px; font-size: 10px; text-transform: uppercase; color: var(--text-3); font-weight: 700; }
+    .staff-acct-hr { border: 0; border-top: 1px solid var(--ops-hairline); margin: 4px 0; }
+    .staff-acct-chevron { color: var(--text-3); font-size: 11px; }
+    .ops-stat-grid.cols-3 { --ops-stat-cols: 3; }
+    .ops-stat-grid.cols-4 { --ops-stat-cols: 4; }
+    .ops-meta-xs { font-size: 11px; color: var(--text-3); }
+    .ops-review-link { color: var(--text-0); font-weight: 600; text-decoration: none; }
+    .ops-review-quote { margin: 0; font-size: 12px; color: var(--text-2); }
+    .ops-duty-lead { margin: 0 0 12px; font-size: 13px; color: var(--text-2); }
+    .ov-review-item.is-clickable { cursor: pointer; }
+    .ov-review-item.is-selected { border-color: var(--accent); }
+    .ops-ticket-title { font-weight: 600; color: var(--text-0); font-size: 13px; }
+    .ops-msg-box { padding: 10px 12px; border-radius: 8px; background: var(--ops-row); border: 1px solid var(--ops-line); margin-bottom: 12px; }
+    .ops-msg-head { font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
+    .ops-msg-body { font-size: 13px; color: var(--text-0); }
+    .ops-draft-wrap { margin-bottom: 10px; }
+    .ops-draft-label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+    .ops-draft-textarea { width: 100%; padding: 10px; border-radius: 8px; background: var(--ops-panel); color: var(--text-0); border: 1px solid var(--ops-line-strong); font-family: inherit; font-size: 13px; }
+    .ops-chips-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .ops-actions-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .ops-actions-row-mt { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .ops-status-msg { margin-top: 10px; font-size: 12px; color: var(--ops-good-ink); }
+    .ops-degrade-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--ops-hairline); }
+    .ops-degrade-label { font-size: 12px; font-weight: 600; color: var(--text-0); }
+    .ops-release-steps { margin: 0; padding-inline-start: 18px; display: grid; gap: 8px; font-size: 13px; }
+    .ops-panel-mt { margin-top: 24px; }
   </style>
 </head>
 <body>
@@ -608,16 +634,16 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
 
       <div class="staff-rail-foot">
         <div id="staff-acct-menu" class="staff-acct-menu" role="menu" aria-label="Officer account and console settings">
-          <div style="padding:4px 8px;font-size:10px;text-transform:uppercase;color:var(--text-3);font-weight:700;">Active Officer Role</div>
+          <div class="staff-acct-heading">Active Officer Role</div>
           <button type="button" class="staff-acct-item" data-set-role="ssra_admin" role="menuitemradio"><span>AD · Administrator (Juba HQ)</span><span>${ICONS.check}</span></button>
           <button type="button" class="staff-acct-item" data-set-role="ssra_staff" role="menuitemradio"><span>ST · Tax Agent (Live Queue)</span><span></span></button>
           <button type="button" class="staff-acct-item" data-set-role="ssra_auditor" role="menuitemradio"><span>AU · Auditor (Read-Only SoD)</span><span></span></button>
-          <hr style="border:0;border-top:1px solid var(--ops-hairline);margin:4px 0;" />
-          <div style="padding:4px 8px;font-size:10px;text-transform:uppercase;color:var(--text-3);font-weight:700;">Appearance</div>
+          <hr class="staff-acct-hr" />
+          <div class="staff-acct-heading">Appearance</div>
           <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio"><span>${ICONS.moon} Dark Mesh</span></button>
           <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio"><span>${ICONS.sun} Light Paper</span></button>
           <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio"><span>${ICONS.contrast} High Contrast (WCAG AAA)</span></button>
-          <hr style="border:0;border-top:1px solid var(--ops-hairline);margin:4px 0;" />
+          <hr class="staff-acct-hr" />
           <a href="/en" class="staff-acct-item" role="menuitem"><span>${ICONS.messageSquare} Return to Taxpayer MainChat</span><span>${ICONS.arrowUpRight}</span></a>
         </div>
         <button type="button" id="staff-acct-trigger" class="staff-acct-trigger" aria-expanded="false" aria-haspopup="menu">
@@ -626,7 +652,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             <span class="staff-acct-name" id="acct-display-name">Grace A. · Juba HQ</span>
             <span class="staff-acct-role" id="acct-role-label">Administrator · Passkey L3</span>
           </span>
-          <span style="color:var(--text-3);font-size:11px;">${ICONS.chevronUpDown}</span>
+          <span class="staff-acct-chevron">${ICONS.chevronUpDown}</span>
         </button>
       </div>
     </nav>
@@ -835,7 +861,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       function renderOverviewOrQuality(isQuality) {
         const sc = state.scorecard?.metrics || {};
         const qdrantPts = state.stackStatus?.qdrant?.points_count ?? 0;
-        const statsHtml = '<div class="ops-stat-grid" style="--ops-stat-cols: 3;">' +
+        const statsHtml = '<div class="ops-stat-grid cols-3">' +
           renderStatCard({
             label: "AI Answers in Chat (CSAT)",
             figure: "4.8/5",
@@ -921,9 +947,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
               '<div class="ops-panel-head"><h2>Needs review (4 open)</h2><a href="/agent" data-nav="/agent" class="ops-btn">Open Agent Queue →</a></div>' +
               '<div class="ops-panel-body">' +
                 '<ul class="ov-review-list">' +
-                  '<li class="ov-review-item"><div class="ov-review-top"><span class="ops-chip warn">AI call · Dinka (din)</span><span style="font-size:11px;color:var(--text-3);">12m ago · TIC-8F3A19C0</span></div><a href="/calls" data-nav="/calls" style="color:var(--text-0);font-weight:600;text-decoration:none;">Nimule border customs valuation dispute &amp; urgent release</a><p style="margin:0;font-size:12px;color:var(--text-2);">Asked: <q>My goods are held at Nimule border and e-Tax is showing pending assessment</q></p></li>' +
-                  '<li class="ov-review-item"><div class="ov-review-top"><span class="ops-chip info">AI chat · Juba Arabic (pga)</span><span style="font-size:11px;color:var(--text-3);">28m ago · TIC-4C91B20E</span></div><a href="/agent" data-nav="/agent" style="color:var(--text-0);font-weight:600;text-decoration:none;">T4 Penalty Waiver Request — routed to human officer per risk-tiers.yaml</a><p style="margin:0;font-size:12px;color:var(--text-2);">Asked: <q>Please waive my late filing penalty for Q3 Business Profits Tax</q></p></li>' +
-                  '<li class="ov-review-item"><div class="ov-review-top"><span class="ops-chip good">Officer chat · Maker-Checker T3</span><span style="font-size:11px;color:var(--text-3);">41m ago · TIC-7E22D91A</span></div><a href="/agent" data-nav="/agent" style="color:var(--text-0);font-weight:600;text-decoration:none;">TCC Revival &amp; Ledger Adjustment awaiting second officer approval</a><p style="margin:0;font-size:12px;color:var(--text-2);">Maker: Officer Deng M. · Citations attached: <code>ssra-tcc-guide-2026:sec-4</code></p></li>' +
+                  '<li class="ov-review-item"><div class="ov-review-top"><span class="ops-chip warn">AI call · Dinka (din)</span><span class="ops-meta-xs">12m ago · TIC-8F3A19C0</span></div><a href="/calls" data-nav="/calls" class="ops-review-link">Nimule border customs valuation dispute &amp; urgent release</a><p class="ops-review-quote">Asked: <q>My goods are held at Nimule border and e-Tax is showing pending assessment</q></p></li>' +
+                  '<li class="ov-review-item"><div class="ov-review-top"><span class="ops-chip info">AI chat · Juba Arabic (pga)</span><span class="ops-meta-xs">28m ago · TIC-4C91B20E</span></div><a href="/agent" data-nav="/agent" class="ops-review-link">T4 Penalty Waiver Request — routed to human officer per risk-tiers.yaml</a><p class="ops-review-quote">Asked: <q>Please waive my late filing penalty for Q3 Business Profits Tax</q></p></li>' +
+                  '<li class="ov-review-item"><div class="ov-review-top"><span class="ops-chip good">Officer chat · Maker-Checker T3</span><span class="ops-meta-xs">41m ago · TIC-7E22D91A</span></div><a href="/agent" data-nav="/agent" class="ops-review-link">TCC Revival &amp; Ledger Adjustment awaiting second officer approval</a><p class="ops-review-quote">Maker: Officer Deng M. · Citations attached: <code>ssra-tcc-guide-2026:sec-4</code></p></li>' +
                 "</ul>" +
               "</div>" +
             "</section>" +
@@ -945,7 +971,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             '<section class="ops-panel is-bare" aria-label="Officers on duty">' +
               '<div class="ops-panel-head"><h2>Officers on duty (Juba HQ)</h2><span class="ops-chip good">4 active</span></div>' +
               '<div class="ops-panel-body">' +
-                '<p style="margin:0 0 12px;font-size:13px;color:var(--text-2);"><strong>4 officers</strong> online across Domestic Taxes, Customs (Nimule/Juba), and e-Tax Helpdesk.</p>' +
+                '<p class="ops-duty-lead"><strong>4 officers</strong> online across Domestic Taxes, Customs (Nimule/Juba), and e-Tax Helpdesk.</p>' +
                 '<dl class="ov-kv">' +
                   '<div><dt>Grace A. (Supervisor)</dt><dd><span class="ops-chip good">Online · 0 active</span></dd></div>' +
                   '<div><dt>Deng M. (Domestic Taxes)</dt><dd><span class="ops-chip info">In case · TIC-8F3A19C0</span></dd></div>' +
@@ -1021,17 +1047,17 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         ) +
         '<div class="ov-cols">' +
           '<section class="ops-panel" aria-label="Escalated ticket queue">' +
-            '<div class="ops-panel-head"><h2>Active Escalations (3)</h2><span style="font-size:11px;color:var(--text-3);">Hotkeys: j/k move · r reply</span></div>' +
+            '<div class="ops-panel-head"><h2>Active Escalations (3)</h2><span class="ops-meta-xs">Hotkeys: j/k move · r reply</span></div>' +
             '<div class="ops-panel-body">' +
               '<ul class="ov-review-list">' +
                 tickets.map((t, idx) =>
-                  '<li class="ov-review-item" style="cursor:pointer;border-color:' + (idx === state.selectedTicketIdx ? "var(--accent)" : "var(--ops-hairline)") + ';" data-ticket-idx="' + idx + '">' +
+                  '<li class="ov-review-item is-clickable' + (idx === state.selectedTicketIdx ? " is-selected" : "") + '" data-ticket-idx="' + idx + '">' +
                     '<div class="ov-review-top">' +
                       '<span class="ops-chip ' + t.priCls + '">' + escapeHtml(t.priority) + " · " + escapeHtml(t.id) + "</span>" +
                       '<span class="ops-chip">' + escapeHtml(t.wait) + "</span>" +
                     "</div>" +
-                    '<div style="font-weight:600;color:var(--text-0);font-size:13px;">' + escapeHtml(t.title) + "</div>" +
-                    '<div style="font-size:11px;color:var(--text-3);">' + escapeHtml(t.subject) + " · " + escapeHtml(t.locale) + "</div>" +
+                    '<div class="ops-ticket-title">' + escapeHtml(t.title) + "</div>" +
+                    '<div class="ops-meta-xs">' + escapeHtml(t.subject) + " · " + escapeHtml(t.locale) + "</div>" +
                   "</li>"
                 ).join("") +
               "</ul>" +
@@ -1043,25 +1069,25 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
               '<span class="ops-chip info">EQ: ' + escapeHtml(active.eq) + "</span>" +
             "</div>" +
             '<div class="ops-panel-body">' +
-              '<div style="padding:10px 12px;border-radius:8px;background:var(--ops-row);border:1px solid var(--ops-line);margin-bottom:12px;">' +
-                '<div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">TAXPAYER MESSAGE (' + escapeHtml(active.locale) + ')</div>' +
-                '<div style="font-size:13px;color:var(--text-0);">' + escapeHtml(active.userMsg) + "</div>" +
+              '<div class="ops-msg-box">' +
+                '<div class="ops-msg-head">TAXPAYER MESSAGE (' + escapeHtml(active.locale) + ')</div>' +
+                '<div class="ops-msg-body">' + escapeHtml(active.userMsg) + "</div>" +
               "</div>" +
-              '<div style="margin-bottom:10px;">' +
-                '<label for="copilot-draft-box" style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--accent);margin-bottom:6px;">' + ICONS.sparkles + " AI Copilot Cited Draft (Principle 1 Verified)</label>" +
-                '<textarea id="copilot-draft-box" rows="5" style="width:100%;padding:10px;border-radius:8px;background:var(--ops-panel);color:var(--text-0);border:1px solid var(--ops-line-strong);font-family:inherit;font-size:13px;">' + escapeHtml(active.draftReply) + "</textarea>" +
+              '<div class="ops-draft-wrap">' +
+                '<label for="copilot-draft-box" class="ops-draft-label">' + ICONS.sparkles + " AI Copilot Cited Draft (Principle 1 Verified)</label>" +
+                '<textarea id="copilot-draft-box" rows="5" class="ops-draft-textarea">' + escapeHtml(active.draftReply) + "</textarea>" +
               "</div>" +
-              '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">' +
+              '<div class="ops-chips-row">' +
                 active.citations.map((c) => '<span class="ops-chip good">' + ICONS.bookOpen + " " + escapeHtml(c) + " (2026.10.1)</span>").join("") +
               "</div>" +
               (isAuditor
                 ? '<div class="ops-chip warn">' + ICONS.lock + " Auditor Role (ssra_auditor) is strictly read-only and cannot send taxpayer replies (Separation of Duties).</div>"
-                : '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+                : '<div class="ops-actions-row">' +
                     '<button type="button" class="ops-btn gold" id="approve-send-btn">' + ICONS.check + " Approve &amp; Send Cited Reply</button>" +
                     '<button type="button" class="ops-btn primary" id="maker-checker-btn">' + ICONS.shieldCheck + " Sign T3 Maker-Checker Approval</button>" +
                   "</div>"
               ) +
-              '<div id="agent-action-status" style="margin-top:10px;font-size:12px;color:var(--ops-good-ink);"></div>' +
+              '<div id="agent-action-status" class="ops-status-msg"></div>' +
             "</div>" +
           "</section>" +
         "</div>";
@@ -1073,7 +1099,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           "Phone calls & G122 carryover workspace",
           "Monitor live toll-free AI voice sessions (Whisper-SALT + Orpheus-3B TTS), inspect pre-call chat carryover briefs, and take over transferred calls."
         ) +
-        '<div class="ops-stat-grid" style="--ops-stat-cols: 4;">' +
+        '<div class="ops-stat-grid cols-4">' +
           renderStatCard({ label: "Waiting for Officer", figure: "1", unit: "caller", deltaText: "0m 42s wait", deltaGood: true, hint: "Dinka (din) · Nimule Customs" }) +
           renderStatCard({ label: "AI Receptionist Live", figure: "2", unit: "calls", deltaText: "● Streaming", deltaGood: true, hint: "Juba Arabic (pga) & English (en)" }) +
           renderStatCard({ label: "ASR Word Error Rate", figure: "8.4", unit: "%", deltaText: "<= 12% gate", deltaGood: true, hint: "Whisper-large-v3-turbo + SunflowerASR" }) +
@@ -1100,7 +1126,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
                 '<div><dt>Paused Workflow Step</dt><dd>Step 2 of 3 — Bank PRN Settlement</dd></div>' +
                 '<div><dt>Voice Consent Audit</dt><dd>SHA-256 Hash Only (<code>store_raw_audio=false</code>)</dd></div>' +
               "</dl>" +
-              '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
+              '<div class="ops-actions-row-mt">' +
                 (state.role === "ssra_auditor"
                   ? '<span class="ops-chip warn">' + ICONS.lock + " Auditor Read-Only: Live audio takeover disabled</span>"
                   : '<button type="button" class="ops-btn gold" id="takeover-call-btn">' + ICONS.phone + " Take Over Audio Stream</button>"
@@ -1119,7 +1145,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           isEval ? "Answer evaluation against launch gates" : "Analytics & 2026 Agentic CX Scorecard",
           "Plain-language observability across all 8 South Sudan languages (en, pga, ar, din, nus, bfa, zne, shk) with explicit telemetry provenance (LIVE_TELEMETRY vs CI_VERIFIED_TARGET)."
         ) +
-        '<div class="ops-stat-grid" style="--ops-stat-cols: 3;">' +
+        '<div class="ops-stat-grid cols-3">' +
           renderStatCard({
             label: "Quality-Adjusted Resolution",
             figure: ((sc.quality_adjusted_resolution_rate ?? 0.91) * 100).toFixed(1),
@@ -1200,8 +1226,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           '<section class="ops-panel is-glass" aria-label="Feature flags and degradation ladder">' +
             '<div class="ops-panel-head"><h2>Degradation Ladder (L1–L5) &amp; Feature Flags</h2><span class="ops-chip info">Replica-Synced</span></div>' +
             '<div class="ops-panel-body">' +
-              '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--ops-hairline);">' +
-                '<span style="font-size:12px;font-weight:600;color:var(--text-0);">Active SecOps Degradation Level: <code>L' + escapeHtml(state.degradationLevel) + "</code></span>" +
+              '<div class="ops-degrade-bar">' +
+                '<span class="ops-degrade-label">Active SecOps Degradation Level: <code>L' + escapeHtml(state.degradationLevel) + "</code></span>" +
                 (state.role === "ssra_auditor"
                   ? '<span class="ops-chip">L' + escapeHtml(state.degradationLevel) + " (Read-Only)</span>"
                   : '<div class="ops-segmented" role="group" aria-label="Select degradation level">' +
@@ -1227,7 +1253,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           '<section class="ops-panel" aria-label="6-step knowledge release pipeline">' +
             '<div class="ops-panel-head"><h2>6-Step KnowledgeSnapshot Release Pipeline</h2><span class="ops-chip good">2026.10.1 PUBLISHED</span></div>' +
             '<div class="ops-panel-body">' +
-              '<ol style="margin:0;padding-inline-start:18px;display:grid;gap:8px;font-size:13px;">' +
+              '<ol class="ops-release-steps">' +
                 '<li><strong>1. DRAFT:</strong> Legal &amp; Policy team authors Markdown + section anchors (<span class="ops-chip good">COMPLETED</span>)</li>' +
                 '<li><strong>2. LEGAL_REVIEW:</strong> Statutory citation &amp; effective-date verification (<span class="ops-chip good">COMPLETED</span>)</li>' +
                 '<li><strong>3. APPROVED:</strong> Dual-officer maker-checker sign-off (<span class="ops-chip good">COMPLETED</span>)</li>' +
@@ -1238,7 +1264,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             "</div>" +
           "</section>" +
         "</div>" +
-        '<section class="ops-panel" style="margin-top:24px;" aria-label="11 MCP servers health">' +
+        '<section class="ops-panel ops-panel-mt" aria-label="11 MCP servers health">' +
           '<div class="ops-panel-head"><h2>11 Governed MCP Servers (Streamable HTTP 2026-07-28 via agentgateway)</h2><span class="ops-chip good">11 / 11 Healthy</span></div>' +
           '<div class="ops-panel-body">' +
             '<table class="ops-table"><thead><tr><th>MCP Server</th><th>Risk Tier Scope</th><th>Auth &amp; Subject Binding</th><th>Status</th></tr></thead><tbody>' +
@@ -1256,7 +1282,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           isReplay ? "Forensic conversation replay & provenance" : "WORM Audit trail & cryptographic Merkle seal",
           "Tamper-evident SHA-256 Merkle chain of every administrative change, tool invocation, and Presidio-redacted conversation turn."
         ) +
-        '<div class="ops-stat-grid" style="--ops-stat-cols: 3;">' +
+        '<div class="ops-stat-grid cols-3">' +
           renderStatCard({ label: "WORM Merkle Chain Seal", figure: "VERIFIED", unit: "", deltaText: "0 tampered", deltaGood: true, hint: "PostgreSQL 18 WORM audit partition + SHA-256 chain" }) +
           renderStatCard({ label: "PII Redaction Gate", figure: "100", unit: "%", deltaText: "Presidio Active", deltaGood: true, hint: "TINs, phones & national IDs masked before log/index" }) +
           renderStatCard({ label: "OPA Policy Gate Decisions", figure: "100", unit: "%", deltaText: "Zero bypasses", deltaGood: true, hint: "Dual enforcement in agent-runtime & agentgateway" }) +

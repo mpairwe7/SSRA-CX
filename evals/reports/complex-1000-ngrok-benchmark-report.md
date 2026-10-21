@@ -17,32 +17,32 @@
 
 | Metric | Value |
 |---|---|
-| Concurrency (Persistent TLS Keep-Alive Workers) | `16` |
-| Total Wall-Clock Duration | `38.33 s` |
-| Scenario Throughput | `26.09 scenarios/sec` |
-| Conversational Rate (Turns / sec) | `27.65 turns/sec` (`1659.3 turns/min`) |
-| HTTP Request Rate Over Ngrok | `27.63 req/sec` |
-| Latency `p50` (Median) | `519.74 ms` |
-| Latency `p90` | `797.39 ms` |
-| Latency `p95` | `1040.95 ms` |
-| Latency `p99` | `1352.1 ms` |
-| Latency Mean | `561.03 ms` |
+| Concurrency (Persistent TLS Keep-Alive Workers) | `20` |
+| Total Wall-Clock Duration | `21.77 s` |
+| Scenario Throughput | `45.94 scenarios/sec` |
+| Conversational Rate (Turns / sec) | `48.7 turns/sec` (`2922.0 turns/min`) |
+| HTTP Request Rate Over Ngrok | `48.65 req/sec` |
+| Latency `p50` (Median) | `332.2 ms` |
+| Latency `p90` | `387.83 ms` |
+| Latency `p95` | `668.67 ms` |
+| Latency `p99` | `865.65 ms` |
+| Latency Mean | `366.07 ms` |
 
 ## 2. Accuracy & Latency by Language Family (`en`, `ar`/`pga`, `din`)
 
 | Language Family | Scenarios | Passed | Accuracy | Mean Latency (`ms`) |
 |---|---|---|---|---|
-| `en` | `340` | `340` | **`100.0%`** | `565.26 ms` |
-| `ar` | `330` | `330` | **`100.0%`** | `549.32 ms` |
-| `din` | `330` | `330` | **`100.0%`** | `568.38 ms` |
+| `en` | `340` | `340` | **`100.0%`** | `393.9 ms` |
+| `ar` | `330` | `330` | **`100.0%`** | `346.71 ms` |
+| `din` | `330` | `330` | **`100.0%`** | `356.75 ms` |
 
 ## 3. Accuracy & Latency by Modality (`TTT`, `STT`, `TTS`)
 
 | Modality | Scenarios | Passed | Accuracy | Mean Latency (`ms`) |
 |---|---|---|---|---|
-| `TTT` | `400` | `400` | **`100.0%`** | `624.42 ms` |
-| `STT` | `300` | `300` | **`100.0%`** | `492.44 ms` |
-| `TTS` | `300` | `300` | **`100.0%`** | `545.1 ms` |
+| `TTT` | `400` | `400` | **`100.0%`** | `419.88 ms` |
+| `STT` | `300` | `300` | **`100.0%`** | `323.23 ms` |
+| `TTS` | `300` | `300` | **`100.0%`** | `337.16 ms` |
 
 ## 4. Accuracy by Functional, Long-Horizon, EQ & Security Category
 

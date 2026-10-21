@@ -21,6 +21,7 @@ coverage/
 # Environment & Secrets (NEVER commit secrets or real taxpayer data)
 .env
 .env.*
+infra/compose/.env
 !.env.example
 *.pem
 *.key

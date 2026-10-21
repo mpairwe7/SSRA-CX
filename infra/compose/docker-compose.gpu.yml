@@ -13,6 +13,9 @@
 name: ssra-cx-gpu
 
 x-hardened-gpu-defaults: &hardened-gpu-defaults
+  env_file:
+    - path: ../../.env
+      required: false
   security_opt:
     - no-new-privileges:true
     - seccomp:../policies/seccomp-sovereign-default.json
@@ -169,20 +172,23 @@ services:
       - ssra_sovereign_net
 
   ssra-postgres:
+    env_file:
+      - path: ../../.env
+        required: false
     image: ${SSRA_POSTGRES_IMAGE:-bsms-postgres:18-pgaudit}
     container_name: ssra-postgres
     environment:
-      POSTGRES_USER: ssra
+      POSTGRES_USER: ${POSTGRES_USER:-ssra}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-      POSTGRES_DB: ssra_cx
+      POSTGRES_DB: ${POSTGRES_DB:-ssra_cx}
     ports:
-      - "127.0.0.1:25432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-25432}:5432"
     volumes:
       - ssra_pgdata:/var/lib/postgresql:rw
     networks:
       - ssra_sovereign_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ssra -d ssra_cx"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ssra} -d ${POSTGRES_DB:-ssra_cx}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -196,7 +202,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=32m
       - /data:rw,noexec,nosuid,size=128m
     ports:
-      - "127.0.0.1:26379:6379"
+      - "127.0.0.1:${SSRA_VALKEY_HOST_PORT:-26379}:6379"
     networks:
       - ssra_sovereign_net
     healthcheck:
@@ -211,7 +217,7 @@ services:
     container_name: ssra-qdrant
     ports:
       - "127.0.0.1:6333:6333"
-      - "127.0.0.1:26333:6333"
+      - "127.0.0.1:${SSRA_QDRANT_HOST_PORT:-26333}:6333"
     volumes:
       - ssra_qdrant_data:/qdrant/storage:rw
     networks:
@@ -232,9 +238,9 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     environment:
-      HF_HOME: /home/developer/huggingface_cache
-      HF_HUB_OFFLINE: "1"
-      TRANSFORMERS_OFFLINE: "1"
+      HF_HOME: ${HF_HOME:-/home/developer/huggingface_cache}
+      HF_HUB_OFFLINE: "${HF_HUB_OFFLINE:-1}"
+      TRANSFORMERS_OFFLINE: "${TRANSFORMERS_OFFLINE:-1}"
       SSRA_FEATURE_FLAGS_OVERRIDE_FILE: /tmp/ssra_feature_flag_overrides.json
     volumes:
       - type: bind
@@ -242,8 +248,8 @@ services:
         target: /home/developer/huggingface_cache
         read_only: true
     ports:
-      - "8083:8000"
-      - "127.0.0.1:18000:8000"
+      - "${SSRA_API_PUBLIC_PORT:-8083}:8000"
+      - "127.0.0.1:${SSRA_API_PORT:-18000}:8000"
     networks:
       - ssra_sovereign_net
     depends_on:
@@ -264,19 +270,19 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     environment:
-      HF_HOME: /home/developer/huggingface_cache
-      HF_HUB_OFFLINE: "1"
-      TRANSFORMERS_OFFLINE: "1"
-      LLM_BACKEND: vllm
+      HF_HOME: ${HF_HOME:-/home/developer/huggingface_cache}
+      HF_HUB_OFFLINE: "${HF_HUB_OFFLINE:-1}"
+      TRANSFORMERS_OFFLINE: "${TRANSFORMERS_OFFLINE:-1}"
+      LLM_BACKEND: ${LLM_BACKEND:-vllm}
       LLM_MODEL: "${SUNFLOWER_MODEL:-Sunbird/Sunflower-Qwen3.5-9B}"
-      VLLM_BASE_URL: http://ssra-vllm-sunflower:8001/v1
-      REASONER_BASE_URL: http://ssra-vllm-reasoner:8001/v1
+      VLLM_BASE_URL: ${VLLM_BASE_URL:-http://ssra-vllm-sunflower:8001/v1}
+      REASONER_BASE_URL: ${REASONER_BASE_URL:-http://ssra-vllm-reasoner:8001/v1}
       REASONER_MODEL: "${REASONER_MODEL:-Qwen/Qwen3.8-27B-FP8}"
-      ORPHEUS_TTS_URL: http://ssra-orpheus-tts:8100
-      WHISPER_SALT_MODEL: Sunbird/SunflowerASR-51-african-languages
-      SSRA_MEMORY_VECTOR_BACKEND: qdrant
-      SSRA_QDRANT_URL: http://ssra-qdrant:6333
-      SSRA_REDIS_URL: redis://ssra-valkey:6379/0
+      ORPHEUS_TTS_URL: ${ORPHEUS_TTS_URL:-http://ssra-orpheus-tts:8100}
+      WHISPER_SALT_MODEL: ${WHISPER_SALT_MODEL:-Sunbird/SunflowerASR-51-african-languages}
+      SSRA_MEMORY_VECTOR_BACKEND: ${SSRA_MEMORY_VECTOR_BACKEND:-qdrant}
+      SSRA_QDRANT_URL: ${SSRA_QDRANT_URL:-http://ssra-qdrant:6333}
+      SSRA_REDIS_URL: ${SSRA_REDIS_URL:-redis://ssra-valkey:6379/0}
       SSRA_FEATURE_FLAGS_OVERRIDE_FILE: /tmp/ssra_feature_flag_overrides.json
     volumes:
       - type: bind
@@ -284,7 +290,7 @@ services:
         target: /home/developer/huggingface_cache
         read_only: true
     ports:
-      - "127.0.0.1:18001:8001"
+      - "127.0.0.1:${SSRA_RUNTIME_PORT:-18001}:8001"
     networks:
       - ssra_sovereign_net
     depends_on:
@@ -308,8 +314,8 @@ services:
       context: ../..
       dockerfile: apps/web/Dockerfile
       args:
-        INTERNAL_API_URL: http://ssra-api:8000
-        INTERNAL_RUNTIME_URL: http://ssra-agent-runtime:8001
+        INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
+        INTERNAL_RUNTIME_URL: ${INTERNAL_RUNTIME_URL:-http://ssra-agent-runtime:8001}
     container_name: ssra-frontend
     init: true
     read_only: true
@@ -317,10 +323,10 @@ services:
       - /tmp:rw,noexec,nosuid,size=32m
     environment:
       NODE_ENV: production
-      INTERNAL_API_URL: http://ssra-api:8000
-      INTERNAL_RUNTIME_URL: http://ssra-agent-runtime:8001
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
+      INTERNAL_RUNTIME_URL: ${INTERNAL_RUNTIME_URL:-http://ssra-agent-runtime:8001}
     ports:
-      - "3032:3000"
+      - "${SSRA_NGROK_PORT:-3032}:3000"
       - "127.0.0.1:${SSRA_WEB_PORT:-3033}:3000"
     networks:
       - ssra_sovereign_net
@@ -336,7 +342,7 @@ services:
       context: ../..
       dockerfile: apps/console/Dockerfile
       args:
-        INTERNAL_API_URL: http://ssra-api:8000
+        INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
     container_name: ssra-console
     init: true
     read_only: true
@@ -344,8 +350,8 @@ services:
       - /tmp:rw,noexec,nosuid,size=32m
     environment:
       NODE_ENV: production
-      INTERNAL_API_URL: http://ssra-api:8000
-      INTERNAL_RUNTIME_URL: http://ssra-agent-runtime:8001
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
+      INTERNAL_RUNTIME_URL: ${INTERNAL_RUNTIME_URL:-http://ssra-agent-runtime:8001}
     ports:
       - "127.0.0.1:${SSRA_CONSOLE_PORT:-3034}:3001"
     networks:

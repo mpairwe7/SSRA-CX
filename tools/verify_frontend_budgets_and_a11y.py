@@ -160,6 +160,17 @@ def main() -> None:
         "FE-G8 / FE2-G1..G8 / SEC2-G6 cross-subject purge, BFF admin mutation block, AbortController, modal focus trap, or CSAT guard missing"
     )
 
+    # 6. CSP Level 3 strict-dynamic & zero inline style="..." attribute verification
+    for ui_file in (web_srv_src, ops_ui_src, icons_src):
+        if "style=" in ui_file:
+            raise SystemExit(
+                'CSP style-src-attr violation: inline style="..." attribute detected; move styles to nonced CSS classes'
+            )
+    if "script-src 'self'" in web_srv_src or "script-src 'self'" in con_srv_src:
+        raise SystemExit(
+            "CSP script-src warning: do not combine 'self' with 'strict-dynamic' in script-src"
+        )
+
     print(
         f"Frontend budget & WCAG 2.2 AA check passed (FE-G1..FE-G8 verified): public gzip size={gzip_kb:.2f} KB (<= {TARGET_FIRST_LOAD_JS_GZIP_KB} KB target)."
     )

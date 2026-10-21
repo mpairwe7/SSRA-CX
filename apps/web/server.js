@@ -91,7 +91,7 @@ function negotiateAcceptLanguage(acceptLanguage) {
 
 function buildSecurityHeaders(nonce) {
   return {
-    "Content-Security-Policy": `default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
+    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
     "X-Nonce": nonce,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -416,6 +416,33 @@ function renderPwaShellHtml(locale, nonce) {
     .settings-pane { padding: 1.25rem 1.4rem; display: flex; flex-direction: column; gap: 0.85rem; }
 
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+    .is-hidden { display: none !important; }
+    .rail-brand-sub { font-size: 0.68rem; color: var(--text-2); font-weight: 500; }
+    .rail-kbd { font-size: 0.68rem; opacity: 0.8; font-family: var(--font-mono); }
+    .acct-pop-hr { border: 0; border-top: 1px solid var(--border-0); margin: 3px 0; }
+    .acct-chevron { color: var(--text-3); font-size: 0.75rem; }
+    .active-conv-title { font-weight: 700; font-size: 0.9rem; color: var(--text-0); }
+    .composer-hint { font-size: 0.75rem; color: var(--text-2); }
+    .call-modal-title { margin: 0; color: var(--text-0); font-size: 1.25rem; }
+    .call-transcript-live { margin: 0; font-size: 0.9rem; color: var(--text-1); min-height: 2.5rem; }
+    .call-prompts-row { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
+    .call-actions-row { display: flex; gap: 0.65rem; margin-top: 0.5rem; }
+    .danger-outline-btn { background: rgba(251, 113, 133, 0.2); border-color: var(--danger); color: var(--danger); }
+    .danger-text-btn { color: var(--danger); }
+    .settings-heading { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--text-3); padding: 4px 12px; }
+    .settings-pane-head { display: flex; justify-content: space-between; align-items: center; }
+    .settings-pane-title { margin: 0; color: var(--text-0); font-size: 1.05rem; }
+    .settings-pane-body { font-size: 0.86rem; color: var(--text-2); line-height: 1.55; }
+    .settings-actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+    .gen-resumable { margin-top: 0.45rem; font-size: 0.8rem; color: var(--ssra-gold); }
+    .gen-summary-lg { font-size: 0.9rem; }
+    .gen-summary-md { font-size: 0.86rem; }
+    .gen-periods-list { margin: 0.4rem 0; padding-inline-start: 1.2rem; font-size: 0.85rem; }
+    .gen-confirm-box { margin-top: 0.55rem; padding: 0.65rem; border-radius: 8px; background: rgba(244, 196, 48, 0.1); border: 1px solid rgba(244, 196, 48, 0.35); }
+    .gen-confirm-title { font-size: 0.84rem; font-weight: 600; color: var(--ssra-gold); }
+    .turn-content-text { white-space: pre-wrap; }
+    .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: var(--text-3); }
+    .jump-open-tag { font-size: 0.7rem; color: var(--text-3); }
   </style>
 </head>
 <body>
@@ -430,7 +457,7 @@ function renderPwaShellHtml(locale, nonce) {
           <div class="rail-mark" aria-hidden="true">${ICONS.ssraCrest}</div>
           <div>
             <div>SSRA Assist</div>
-            <div style="font-size:0.68rem;color:var(--text-2);font-weight:500;">National Revenue Authority</div>
+            <div class="rail-brand-sub">National Revenue Authority</div>
           </div>
         </div>
         <div class="rail-top-actions">
@@ -441,7 +468,7 @@ function renderPwaShellHtml(locale, nonce) {
 
       <button type="button" id="new-chat-btn" class="rail-new-btn">
         <span>${ICONS.plus} New Conversation</span>
-        <kbd style="font-size:0.68rem;opacity:0.8;font-family:var(--font-mono);">Ctrl+N</kbd>
+        <kbd class="rail-kbd">Ctrl+N</kbd>
       </button>
 
       <div id="rail-conv-list" class="rail-list" role="list"></div>
@@ -453,7 +480,7 @@ function renderPwaShellHtml(locale, nonce) {
           <button type="button" class="acct-pop-item" data-select-identity="ANONYMOUS"><span>Public Visitor (T0 Anonymous)</span><span id="chk-anon">${ICONS.check}</span></button>
           <button type="button" class="acct-pop-item" data-select-identity="sub_taxpayer_amina_01"><span>Amina M. — TIN ••••1234 (T1/T2)</span><span id="chk-amina"></span></button>
           <button type="button" class="acct-pop-item" data-select-identity="sub_taxpayer_deng_02"><span>Deng Trading — TIN ••••5678 (T1/T2)</span><span id="chk-deng"></span></button>
-          <hr style="border:0;border-top:1px solid var(--border-0);margin:3px 0;" />
+          <hr class="acct-pop-hr" />
           <div class="acct-pop-section">SSRA Operations Console (Staff / Admin / Audit)</div>
           <a href="/admin" class="acct-pop-item"><span>${ICONS.gauge} Operations Overview</span><span>${ICONS.arrowUpRight}</span></a>
           <a href="/agent" class="acct-pop-item"><span>${ICONS.inbox} Agent Queue &amp; Copilot</span><span>${ICONS.arrowUpRight}</span></a>
@@ -461,7 +488,7 @@ function renderPwaShellHtml(locale, nonce) {
           <a href="/analytics" class="acct-pop-item"><span>${ICONS.chart} Analytics &amp; CX Scorecard</span><span>${ICONS.arrowUpRight}</span></a>
           <a href="/admin/flags" class="acct-pop-item"><span>${ICONS.flag} Flags &amp; Knowledge Release</span><span>${ICONS.arrowUpRight}</span></a>
           <a href="/admin/audit" class="acct-pop-item"><span>${ICONS.shieldCheck} WORM Audit &amp; Forensic Replay</span><span>${ICONS.arrowUpRight}</span></a>
-          <hr style="border:0;border-top:1px solid var(--border-0);margin:3px 0;" />
+          <hr class="acct-pop-hr" />
           <button type="button" id="open-settings-btn" class="acct-pop-item"><span>${ICONS.settings} Settings &amp; Privacy</span><span>Ctrl+,</span></button>
         </div>
 
@@ -471,7 +498,7 @@ function renderPwaShellHtml(locale, nonce) {
             <span class="acct-name" id="acct-name-text">Public Visitor</span>
             <span class="acct-sub" id="acct-sub-text">Tier T0 · Click to switch TIN or open Ops</span>
           </div>
-          <span style="color:var(--text-3);font-size:0.75rem;">${ICONS.chevronUpDown}</span>
+          <span class="acct-chevron">${ICONS.chevronUpDown}</span>
         </button>
 
         <select id="ssra-identity-select" class="sr-only" aria-label="Select taxpayer identity mode">
@@ -487,7 +514,7 @@ function renderPwaShellHtml(locale, nonce) {
       <header class="chat-header">
         <div class="header-left">
           <button type="button" id="header-rail-btn" class="icon-btn" aria-label="Open conversations">${ICONS.panelLeft}</button>
-          <span id="active-conv-title" style="font-weight:700;font-size:0.9rem;color:var(--text-0);">New Conversation</span>
+          <span id="active-conv-title" class="active-conv-title">New Conversation</span>
           <span id="net-status-badge" class="status-badge" title="Governed Knowledge Snapshot 2026.10.1"><span class="status-dot"></span><span id="net-status-text">Snapshot 2026.10.1</span></span>
         </div>
         <div class="header-right">
@@ -554,7 +581,7 @@ function renderPwaShellHtml(locale, nonce) {
         </div>
 
         <!-- Active Conversation Message List -->
-        <div id="chat-view" class="chat-area" style="display:none;" aria-label="Chat conversation">
+        <div id="chat-view" class="chat-area is-hidden" aria-label="Chat conversation">
           <div id="ssra-chat-messages" class="message-list" role="log" aria-live="polite"></div>
         </div>
 
@@ -568,7 +595,7 @@ function renderPwaShellHtml(locale, nonce) {
                 <button type="button" id="voice-dictate-btn" class="icon-btn" title="Voice Dictation (Whisper-SALT / Speech API)" aria-label="Voice Dictation">
                   ${ICONS.mic} <span class="composer-waveform" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
                 </button>
-                <span id="composer-hint" style="font-size:0.75rem;color:var(--text-2);">Enter to send · Shift+Enter for newline · Ctrl+K search</span>
+                <span id="composer-hint" class="composer-hint">Enter to send · Shift+Enter for newline · Ctrl+K search</span>
               </div>
               <div class="composer-tools-right">
                 <button type="submit" id="ssra-chat-submit" class="send-btn">${ICONS.send} Send</button>
@@ -584,15 +611,15 @@ function renderPwaShellHtml(locale, nonce) {
   <div id="call-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="call-modal-title">
     <div class="call-modal">
       <div class="eyebrow-pill">${ICONS.phone} SSRA Toll-Free AI Voice Receptionist</div>
-      <h2 id="call-modal-title" style="margin:0;color:var(--text-0);font-size:1.25rem;">SSRA Voice Assistant</h2>
+      <h2 id="call-modal-title" class="call-modal-title">SSRA Voice Assistant</h2>
       <div id="call-orb" class="call-orb">LISTENING</div>
-      <p id="call-transcript-live" style="margin:0;font-size:0.9rem;color:var(--text-1);min-height:2.5rem;">Speak in English, Juba Arabic, Arabic, or Dinka — or tap a quick voice prompt below.</p>
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:center;">
+      <p id="call-transcript-live" class="call-transcript-live">Speak in English, Juba Arabic, Arabic, or Dinka — or tap a quick voice prompt below.</p>
+      <div class="call-prompts-row">
         <button type="button" class="icon-btn call-sample-btn" data-voice-q="How much is PAYE on 350,000 SSP per month?">${ICONS.mic} "PAYE on 350,000 SSP"</button>
         <button type="button" class="icon-btn call-sample-btn" data-voice-q="My goods are held at Nimule border and e-Tax is not working!">${ICONS.mic} "Nimule Customs Urgent Help"</button>
       </div>
-      <div style="display:flex;gap:0.65rem;margin-top:0.5rem;">
-        <button type="button" id="close-call-btn" class="icon-btn" style="background:rgba(251,113,133,0.2);border-color:var(--danger);color:var(--danger);">${ICONS.close} End Call</button>
+      <div class="call-actions-row">
+        <button type="button" id="close-call-btn" class="icon-btn danger-outline-btn">${ICONS.close} End Call</button>
       </div>
     </div>
   </div>
@@ -609,7 +636,7 @@ function renderPwaShellHtml(locale, nonce) {
   <div id="settings-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Settings">
     <div class="settings-modal">
       <div class="settings-tabs" role="tablist">
-        <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;color:var(--text-3);padding:4px 12px;">Settings</div>
+        <div class="settings-heading">Settings</div>
         <button type="button" class="settings-tab-btn active" role="tab" aria-selected="true" data-settings-tab="general">General &amp; Theme</button>
         <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="voice">Voice &amp; Speech</button>
         <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="profile">Taxpayer Profile</button>
@@ -617,11 +644,11 @@ function renderPwaShellHtml(locale, nonce) {
         <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="ops">Operations Console</button>
       </div>
       <div class="settings-pane" role="tabpanel">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <h3 id="settings-pane-title" style="margin:0;color:var(--text-0);font-size:1.05rem;">General &amp; Appearance</h3>
+        <div class="settings-pane-head">
+          <h3 id="settings-pane-title" class="settings-pane-title">General &amp; Appearance</h3>
           <button type="button" id="close-settings-btn" class="icon-btn">${ICONS.close} Close</button>
         </div>
-        <div id="settings-pane-body" style="font-size:0.86rem;color:var(--text-2);line-height:1.55;"></div>
+        <div id="settings-pane-body" class="settings-pane-body"></div>
       </div>
     </div>
   </div>
@@ -888,28 +915,28 @@ function renderPwaShellHtml(locale, nonce) {
           ).join("") + "</ol>";
         }
         if (props.resumable_workflow) {
-          inner += '<div style="margin-top:0.45rem;font-size:0.8rem;color:var(--ssra-gold);">' + ICONS.history + " Resumable Journey Paused: <strong>" + escapeHtml(props.resumable_workflow.journey_intent) + "</strong> (Step " + escapeHtml(props.resumable_workflow.current_step) + " of " + escapeHtml(props.resumable_workflow.total_steps) + ")</div>";
+          inner += '<div class="gen-resumable">' + ICONS.history + " Resumable Journey Paused: <strong>" + escapeHtml(props.resumable_workflow.journey_intent) + "</strong> (Step " + escapeHtml(props.resumable_workflow.current_step) + " of " + escapeHtml(props.resumable_workflow.total_steps) + ")</div>";
         }
         if (props.total_outstanding_ssp !== undefined) {
-          inner += '<div style="font-size:0.9rem;"><strong>Outstanding Balance:</strong> ' + escapeHtml(props.total_outstanding_ssp) + " SSP · <strong>Filing Status:</strong> " + escapeHtml(props.filing_status || "COMPLIANT") + "</div>";
+          inner += '<div class="gen-summary-lg"><strong>Outstanding Balance:</strong> ' + escapeHtml(props.total_outstanding_ssp) + " SSP · <strong>Filing Status:</strong> " + escapeHtml(props.filing_status || "COMPLIANT") + "</div>";
         }
         if (Array.isArray(props.periods) && props.periods.length > 0) {
-          inner += '<ul style="margin:0.4rem 0;padding-inline-start:1.2rem;font-size:0.85rem;">' + props.periods.map((p) =>
+          inner += '<ul class="gen-periods-list">' + props.periods.map((p) =>
             "<li><strong>" + escapeHtml(p.period || p.tax_type || "Period") + ":</strong> " + escapeHtml(p.status || "FILED") + " (Due: " + escapeHtml(p.due_date || "15th CAT") + ")</li>"
           ).join("") + "</ul>";
         }
         if (props.prn || props.approved_banks) {
-          inner += '<div style="font-size:0.86rem;"><strong>Payment Reference (PRN):</strong> <code>' + escapeHtml(props.prn || "PRN-PENDING") + "</code> · <strong>Cash-Free Policy:</strong> Pay only at approved commercial banks via https://etax.nra.gov.ss/</div>";
+          inner += '<div class="gen-summary-md"><strong>Payment Reference (PRN):</strong> <code>' + escapeHtml(props.prn || "PRN-PENDING") + "</code> · <strong>Cash-Free Policy:</strong> Pay only at approved commercial banks via https://etax.nra.gov.ss/</div>";
         }
         if (props.estimated_tax_ssp !== undefined || props.net_pay_ssp !== undefined || props.withholding_tax_ssp !== undefined) {
-          inner += '<div style="font-size:0.9rem;"><strong>Estimated Tax:</strong> ' + escapeHtml(props.estimated_tax_ssp || props.withholding_tax_ssp || "") + " SSP" + (props.net_pay_ssp ? " · <strong>Net Pay:</strong> " + escapeHtml(props.net_pay_ssp) + " SSP" : "") + "</div>";
+          inner += '<div class="gen-summary-lg"><strong>Estimated Tax:</strong> ' + escapeHtml(props.estimated_tax_ssp || props.withholding_tax_ssp || "") + " SSP" + (props.net_pay_ssp ? " · <strong>Net Pay:</strong> " + escapeHtml(props.net_pay_ssp) + " SSP" : "") + "</div>";
         }
         if (props.queue || props.reason || props.case_id) {
-          inner += '<div style="font-size:0.86rem;"><strong>SSRA Officer AssistanceQueue:</strong> ' + escapeHtml(props.queue || "Domestic Taxes Desk") + (props.case_id ? " · <strong>Case ID:</strong> <code>" + escapeHtml(props.case_id) + "</code>" : "") + " · <strong>Duty Hours:</strong> Mon–Fri 08:00–17:00 CAT (Africa/Juba)</div>";
+          inner += '<div class="gen-summary-md"><strong>SSRA Officer AssistanceQueue:</strong> ' + escapeHtml(props.queue || "Domestic Taxes Desk") + (props.case_id ? " · <strong>Case ID:</strong> <code>" + escapeHtml(props.case_id) + "</code>" : "") + " · <strong>Duty Hours:</strong> Mon–Fri 08:00–17:00 CAT (Africa/Juba)</div>";
         }
         if (pendingConfirmation && pendingConfirmation.token) {
-          inner += '<div style="margin-top:0.55rem;padding:0.65rem;border-radius:8px;background:rgba(244,196,48,0.1);border:1px solid rgba(244,196,48,0.35);">' +
-            '<div style="font-size:0.84rem;font-weight:600;color:var(--ssra-gold);">Action Confirmation Required (T2): ' + escapeHtml(pendingConfirmation.summary_text) + "</div>" +
+          inner += '<div class="gen-confirm-box">' +
+            '<div class="gen-confirm-title">Action Confirmation Required (T2): ' + escapeHtml(pendingConfirmation.summary_text) + "</div>" +
             '<button type="button" class="confirm-btn" data-confirm-token="' + escapeHtml(pendingConfirmation.token) + '" data-idem-key="' + escapeHtml(pendingConfirmation.idempotency_key) + '" data-thread-id="' + escapeHtml(threadId) + '">' + ICONS.check + " Confirm &amp; Execute " + escapeHtml(pendingConfirmation.tool) + "</button>" +
           "</div>";
         }
@@ -942,7 +969,7 @@ function renderPwaShellHtml(locale, nonce) {
         return '<article class="message-row message-row-assistant">' +
           '<div class="bubble assistant">' +
             (pills.length ? '<div class="turn-meta-bar">' + pills.join("") + "</div>" : "") +
-            '<div style="white-space:pre-wrap;">' + escapeHtml(turn.content) + "</div>" +
+            '<div class="turn-content-text">' + escapeHtml(turn.content) + "</div>" +
             renderGenerativeCard(meta.ui_component, meta.pending_confirmation, meta.thread_id) +
             citationsHtml +
             '<div class="turn-actions">' +
@@ -975,7 +1002,7 @@ function renderPwaShellHtml(locale, nonce) {
           if (state.conversations.length === 0) {
             setSafeHtml(
               convListEl,
-              '<div style="padding:0.75rem;font-size:0.78rem;color:var(--text-3);">Your tax conversations will appear here, grouped by Pinned &amp; Recent.</div>',
+              '<div class="rail-empty-hint">Your tax conversations will appear here, grouped by Pinned &amp; Recent.</div>',
             );
           } else {
             const pinned = state.conversations.filter((c) => c.pinned);
@@ -991,12 +1018,12 @@ function renderPwaShellHtml(locale, nonce) {
           }
         }
         if (!activeConv || activeConv.turns.length === 0) {
-          if (landingView) landingView.style.display = "flex";
-          if (chatView) chatView.style.display = "none";
+          landingView?.classList.remove("is-hidden");
+          chatView?.classList.add("is-hidden");
           if (activeTitleEl) activeTitleEl.textContent = "New Conversation";
         } else {
-          if (landingView) landingView.style.display = "none";
-          if (chatView) chatView.style.display = "flex";
+          landingView?.classList.add("is-hidden");
+          chatView?.classList.remove("is-hidden");
           if (activeTitleEl) activeTitleEl.textContent = activeConv.title;
           if (msgList) {
             setSafeHtml(msgList, activeConv.turns.map(renderTurnHtml).join(""));
@@ -1140,13 +1167,13 @@ function renderPwaShellHtml(locale, nonce) {
         }
         const val = input.value;
         input.value = "";
-        input.style.height = "auto";
+        input.rows = 1;
         sendTurn(val);
       });
 
       input?.addEventListener("input", () => {
-        input.style.height = "auto";
-        input.style.height = Math.min(140, input.scrollHeight) + "px";
+        const lines = String(input.value || "").split("\n").length;
+        input.rows = Math.min(5, Math.max(1, lines));
       });
 
       input?.addEventListener("keydown", (e) => {
@@ -1359,7 +1386,7 @@ function renderPwaShellHtml(locale, nonce) {
         const q = (searchInput?.value || "").trim().toLowerCase();
         const matches = state.conversations.filter((c) => !q || c.title.toLowerCase().includes(q));
         let html = matches.map((c) =>
-          '<button type="button" class="acct-pop-item" data-jump-conv="' + escapeHtml(c.id) + '"><span>' + ICONS.messageSquare + " " + escapeHtml(c.title) + '</span><span style="font-size:0.7rem;color:var(--text-3);">Open</span></button>'
+          '<button type="button" class="acct-pop-item" data-jump-conv="' + escapeHtml(c.id) + '"><span>' + ICONS.messageSquare + " " + escapeHtml(c.title) + '</span><span class="jump-open-tag">Open</span></button>'
         ).join("");
         html += '<a href="/admin" class="acct-pop-item"><span>' + ICONS.gauge + " Jump to SSRA Operations Overview (/admin)</span><span>" + ICONS.arrowUpRight + "</span></a>";
         html += '<a href="/agent" class="acct-pop-item"><span>' + ICONS.inbox + " Jump to Agent Queue &amp; Copilot (/agent)</span><span>" + ICONS.arrowUpRight + "</span></a>";
@@ -1406,7 +1433,7 @@ function renderPwaShellHtml(locale, nonce) {
           setSafeHtml(
             settingsBodyEl,
             "<p><strong>Hybrid Speech Stack:</strong> Whisper-large-v3-turbo (<code>en</code>, <code>ar</code>) + SunflowerASR (<code>din</code>, <code>nus</code>) + Orpheus-3B Multilingual TTS.</p>" +
-            '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;">' +
+            '<div class="settings-actions-row">' +
               '<button type="button" class="icon-btn" id="toggle-narrate-btn">' + (state.autoNarrate ? ICONS.speaker + " Auto-Narrate Replies: ON" : ICONS.speakerOff + " Auto-Narrate Replies: OFF") + "</button>" +
             "</div>"
           );
@@ -1423,8 +1450,8 @@ function renderPwaShellHtml(locale, nonce) {
           setSafeHtml(
             settingsBodyEl,
             "<p><strong>Shared-Device Protection:</strong> Only anonymous <code>T0</code> public turns are saved locally; <code>T1</code>/<code>T2</code> turns and TINs are scrubbed automatically.</p>" +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">' +
-              '<button type="button" id="purge-local-btn" class="icon-btn" style="color:var(--danger);">' + ICONS.trash + " Purge Local Cache &amp; Episodic Memory</button>" +
+            '<div class="settings-actions-row">' +
+              '<button type="button" id="purge-local-btn" class="icon-btn danger-text-btn">' + ICONS.trash + " Purge Local Cache &amp; Episodic Memory</button>" +
             "</div>"
           );
         } else if (state.settingsTab === "ops") {
@@ -1432,7 +1459,7 @@ function renderPwaShellHtml(locale, nonce) {
           setSafeHtml(
             settingsBodyEl,
             "<p>Jump directly to the Staff, Administrator, and Read-Only Auditor workbenches:</p>" +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">' +
+            '<div class="settings-actions-row">' +
               '<a href="/admin" class="icon-btn ops-link-btn">' + ICONS.gauge + " Overview (/admin)</a>" +
               '<a href="/agent" class="icon-btn">' + ICONS.inbox + " Agent Queue (/agent)</a>" +
               '<a href="/calls" class="icon-btn">' + ICONS.phone + " Call Desk (/calls)</a>" +
@@ -1444,7 +1471,7 @@ function renderPwaShellHtml(locale, nonce) {
           setSafeHtml(
             settingsBodyEl,
             "<p><strong>Republic of South Sudan Civic Palette:</strong> Nile Dusk (Dark), Savanna Cotton Paper (Light), and WCAG AAA High Contrast.</p>" +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">' +
+            '<div class="settings-actions-row">' +
               '<button type="button" class="icon-btn" id="toggle-lowdata-btn">' + ICONS.wifi + (state.lowDataMode ? " 2G Low-Data Mode: ON" : " 2G Low-Data Mode: OFF") + "</button>" +
               '<a href="/admin" class="icon-btn ops-link-btn">' + ICONS.gauge + " Open SSRA Operations Console</a>" +
             "</div>"
