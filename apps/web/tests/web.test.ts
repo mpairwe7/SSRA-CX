@@ -191,6 +191,14 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
   });
 
   it("verifies self-hosted ALTCHA proof-of-work bot defence challenge", async () => {
+    const tooLongRes = await streamChatPost(
+      new Request("https://assist.ssra.gov.ss/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "x".repeat(4001), locale: "en" }),
+      }),
+    );
+    expect(tooLongRes.status).toBe(413);
     const challenge = await createAltchaChallenge(42, "salt_ssra_1", "secret_key", 5000, 2_000_000);
     expect(challenge.salt.endsWith("&")).toBe(true);
     await expect(createAltchaChallenge(9000, "salt_ssra_1", "secret_key", 5000)).rejects.toThrow(

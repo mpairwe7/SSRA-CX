@@ -22,6 +22,19 @@ const INTERNAL_RUNTIME_URL = (
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "OPTIONS"]);
 
+async function readConsoleBody(req) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > 262_144) {
+      throw new Error("PAYLOAD_TOO_LARGE");
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf-8");
+}
+
 function createTraceparent(existing) {
   if (typeof existing === "string" && /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/.test(existing)) {
     return existing;
@@ -113,10 +126,42 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (isGetOrHead && pathname === "/api/flags") {
+  if (pathname === "/api/flags") {
     try {
+      const bodyStr = method === "POST" ? await readConsoleBody(req) : undefined;
       const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/feature-flags`, {
-        headers: { Accept: "application/json", traceparent },
+        method,
+        headers: {
+          Accept: "application/json",
+          ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+          "X-SSRA-Staff-Id": "secops_admin",
+          traceparent,
+        },
+        body: bodyStr,
+        signal: AbortSignal.timeout(15_000),
+      });
+      const text = await upstream.text();
+      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
+      res.end(text);
+    } catch {
+      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ status: "unavailable" }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/kill-switches") {
+    try {
+      const bodyStr = method === "POST" ? await readConsoleBody(req) : undefined;
+      const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/kill-switches`, {
+        method,
+        headers: {
+          Accept: "application/json",
+          ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+          "X-SSRA-Staff-Id": "secops_admin",
+          traceparent,
+        },
+        body: bodyStr,
         signal: AbortSignal.timeout(15_000),
       });
       const text = await upstream.text();

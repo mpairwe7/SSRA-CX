@@ -937,6 +937,8 @@ function renderPwaShellHtml(locale, nonce) {
             '<div class="turn-actions">' +
               '<button type="button" class="turn-act-btn" data-speak="' + escapeHtml(turn.content) + '">🔊 Listen</button>' +
               '<button type="button" class="turn-act-btn" data-copy="' + escapeHtml(turn.content) + '">📋 Copy</button>' +
+              '<button type="button" class="turn-act-btn" data-csat="5" data-thread-id="' + escapeHtml(meta.thread_id || state.activeId || "thr_web") + '">👍 Helpful</button>' +
+              '<button type="button" class="turn-act-btn" data-csat="1" data-thread-id="' + escapeHtml(meta.thread_id || state.activeId || "thr_web") + '">👎 Report</button>' +
             "</div>" +
           "</div>" +
         '</article>';
@@ -992,7 +994,18 @@ function renderPwaShellHtml(locale, nonce) {
         }
       }
 
+      let activeTurnAbortController = null;
+
+      function cleanTextForSpeech(raw) {
+        return String(raw || "")
+          .replace(/https?:\\/\\/\\S+/g, "official SSRA portal")
+          .replace(/[*_\\x60#~>-]+/g, " ")
+          .replace(/\\s+/g, " ")
+          .trim();
+      }
+
       async function sendTurn(text, opts = {}) {
+        if (activeTurnAbortController) return;
         const trimmed = String(text || "").trim();
         if (!trimmed) return;
         if (opts.forceIdentity) {
@@ -1039,12 +1052,14 @@ function renderPwaShellHtml(locale, nonce) {
         };
 
         const t0 = performance.now();
-        if (submitBtn) submitBtn.disabled = true;
+        activeTurnAbortController = new AbortController();
+        if (submitBtn) submitBtn.textContent = "Stop ⏹";
         try {
           const res = await fetch(endpoint, {
             method: "POST",
             headers,
             body: JSON.stringify(payload),
+            signal: activeTurnAbortController.signal,
           });
           const data = await res.json();
           const elapsed = Math.round(performance.now() - t0);
@@ -1066,18 +1081,27 @@ function renderPwaShellHtml(locale, nonce) {
           };
           if (state.autoNarrate && "speechSynthesis" in window) {
             window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(new SpeechSynthesisUtterance(replyText));
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance(cleanTextForSpeech(replyText)));
           }
-        } catch {
-          // FE-G4: Deterministic Offline Statutory Resilience Pack fallback
-          const offlineAns = computeOfflineResilienceAnswer(trimmed);
-          conv.turns[conv.turns.length - 1] = {
-            role: "assistant",
-            content: offlineAns.content,
-            meta: offlineAns.meta,
-          };
+        } catch (err) {
+          if (err && err.name === "AbortError") {
+            conv.turns[conv.turns.length - 1] = {
+              role: "assistant",
+              content: "[Request cancelled by user.]",
+              meta: { tier: "T0", intent: "user_cancelled", outcome_verified: false },
+            };
+          } else {
+            // FE-G4: Safe Offline Resilience Pack fallback
+            const offlineAns = computeOfflineResilienceAnswer(trimmed);
+            conv.turns[conv.turns.length - 1] = {
+              role: "assistant",
+              content: offlineAns.content,
+              meta: offlineAns.meta,
+            };
+          }
         } finally {
-          if (submitBtn) submitBtn.disabled = false;
+          activeTurnAbortController = null;
+          if (submitBtn) submitBtn.textContent = "Send ↗";
           saveState();
           renderApp();
         }
@@ -1085,9 +1109,19 @@ function renderPwaShellHtml(locale, nonce) {
 
       form?.addEventListener("submit", (e) => {
         e.preventDefault();
+        if (activeTurnAbortController) {
+          activeTurnAbortController.abort();
+          return;
+        }
         const val = input.value;
         input.value = "";
+        input.style.height = "auto";
         sendTurn(val);
+      });
+
+      input?.addEventListener("input", () => {
+        input.style.height = "auto";
+        input.style.height = Math.min(140, input.scrollHeight) + "px";
       });
 
       input?.addEventListener("keydown", (e) => {
@@ -1161,8 +1195,14 @@ function renderPwaShellHtml(locale, nonce) {
         }
         const speakBtn = e.target.closest("[data-speak]");
         if (speakBtn && "speechSynthesis" in window) {
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(speakBtn.getAttribute("data-speak") || "");
+          if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            speakBtn.textContent = "🔊 Listen";
+            return;
+          }
+          const u = new SpeechSynthesisUtterance(cleanTextForSpeech(speakBtn.getAttribute("data-speak") || ""));
+          u.onend = () => { speakBtn.textContent = "🔊 Listen"; };
+          speakBtn.textContent = "⏹ Stop Audio";
           window.speechSynthesis.speak(u);
           return;
         }
@@ -1170,6 +1210,22 @@ function renderPwaShellHtml(locale, nonce) {
         if (copyBtn && navigator.clipboard) {
           navigator.clipboard.writeText(copyBtn.getAttribute("data-copy") || "");
           copyBtn.textContent = "✓ Copied";
+          return;
+        }
+        const csatBtn = e.target.closest("[data-csat]");
+        if (csatBtn) {
+          const csatScore = Number(csatBtn.getAttribute("data-csat")) || 5;
+          const convId = csatBtn.getAttribute("data-thread-id") || state.activeId || "thr_web";
+          csatBtn.textContent = csatScore >= 4 ? "✓ Helpful" : "✓ Flagged for Audit";
+          fetch("/v1/analytics/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+              conversation_id: convId,
+              csat: csatScore,
+              resolved: csatScore >= 4,
+            }),
+          }).catch(() => {});
         }
       });
 
@@ -1400,7 +1456,31 @@ function renderPwaShellHtml(locale, nonce) {
         }
       });
 
+      function trapModalTabFocus(e, containerEl) {
+        if (!containerEl || e.key !== "Tab") return;
+        const focusables = Array.from(
+          containerEl.querySelectorAll(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+
       window.addEventListener("keydown", (e) => {
+        const openModal = document.querySelector(".modal-backdrop.open");
+        if (openModal && e.key === "Tab") {
+          trapModalTabFocus(e, openModal);
+          return;
+        }
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
           e.preventDefault();
           if (searchBackdrop?.classList.contains("open")) closeAllModals();
@@ -1610,6 +1690,22 @@ const server = http.createServer(async (req, res) => {
   if (isGetOrHead && pathname === "/api/flags") {
     try {
       const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/feature-flags`, {
+        headers: { Accept: "application/json", traceparent },
+        signal: AbortSignal.timeout(15_000),
+      });
+      const text = await upstream.text();
+      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
+      res.end(text);
+    } catch {
+      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ status: "unavailable", service: "ssra-web" }));
+    }
+    return;
+  }
+
+  if (isGetOrHead && pathname === "/api/kill-switches") {
+    try {
+      const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/kill-switches`, {
         headers: { Accept: "application/json", traceparent },
         signal: AbortSignal.timeout(15_000),
       });

@@ -701,6 +701,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         theme: localStorage.getItem("ssra-ops-theme") || "dark",
         railMode: localStorage.getItem("ssra-ops-rail-mode") || "always-open",
         periodDays: 30,
+        degradationLevel: 1,
         scorecard: null,
         stackStatus: null,
         publicStatus: null,
@@ -1192,8 +1193,19 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         ) +
         '<div class="ov-cols">' +
           '<section class="ops-panel is-glass" aria-label="Feature flags and degradation ladder">' +
-            '<div class="ops-panel-head"><h2>Degradation Ladder &amp; Feature Flags</h2><span class="ops-chip info">Replica-Synced</span></div>' +
+            '<div class="ops-panel-head"><h2>Degradation Ladder (L1–L5) &amp; Feature Flags</h2><span class="ops-chip info">Replica-Synced</span></div>' +
             '<div class="ops-panel-body">' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--ops-hairline);">' +
+                '<span style="font-size:12px;font-weight:600;color:var(--text-0);">Active SecOps Degradation Level: <code>L' + escapeHtml(state.degradationLevel) + "</code></span>" +
+                (state.role === "ssra_auditor"
+                  ? '<span class="ops-chip">L' + escapeHtml(state.degradationLevel) + " (Read-Only)</span>"
+                  : '<div class="ops-segmented" role="group" aria-label="Select degradation level">' +
+                      [1, 2, 3, 4, 5].map((lvl) =>
+                        '<button type="button" class="ops-seg-btn' + (state.degradationLevel === lvl ? " active" : "") + '" data-set-degrade="' + lvl + '">L' + lvl + "</button>"
+                      ).join("") +
+                    "</div>"
+                ) +
+              "</div>" +
               '<table class="ops-table"><thead><tr><th>Flag Key</th><th>Purpose</th><th>State</th></tr></thead><tbody>' +
                 Object.entries(state.flagOverrides).map(([k, v]) =>
                   "<tr><td><code>" + escapeHtml(k) + "</code></td><td>Runtime safety / capability toggle</td>" +
@@ -1286,16 +1298,23 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
 
       async function fetchLiveTelemetry() {
         try {
-          const [scRes, stRes, flRes] = await Promise.allSettled([
+          const [scRes, stRes, flRes, ksRes] = await Promise.allSettled([
             fetch("/api/scorecard", { headers: { "ngrok-skip-browser-warning": "true" } }),
             fetch("/v1/runtime/stack-status", { headers: { "ngrok-skip-browser-warning": "true" } }),
             fetch("/api/flags", { headers: { "ngrok-skip-browser-warning": "true" } }),
+            fetch("/api/kill-switches", { headers: { "ngrok-skip-browser-warning": "true" } }),
           ]);
           if (scRes.status === "fulfilled" && scRes.value.ok) {
             state.scorecard = await scRes.value.json();
           }
           if (stRes.status === "fulfilled" && stRes.value.ok) {
             state.stackStatus = await stRes.value.json();
+          }
+          if (ksRes.status === "fulfilled" && ksRes.value.ok) {
+            const ksData = await ksRes.value.json();
+            if (ksData && typeof ksData.degradation_level === "number") {
+              state.degradationLevel = ksData.degradation_level;
+            }
           }
           if (flRes.status === "fulfilled" && flRes.value.ok) {
             const flData = await flRes.value.json();
@@ -1356,12 +1375,30 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           renderCurrentRoute();
           return;
         }
+        const degBtn = e.target.closest("[data-set-degrade]");
+        if (degBtn && state.role !== "ssra_auditor") {
+          const nextLvl = Number(degBtn.getAttribute("data-set-degrade")) || 1;
+          state.degradationLevel = nextLvl;
+          renderCurrentRoute();
+          fetch("/api/kill-switches", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({ degradation_level: nextLvl, disabled_tools: [], disabled_channels: [] }),
+          }).catch(() => {});
+          return;
+        }
         const flagBtn = e.target.closest("[data-toggle-flag]");
-        if (flagBtn) {
+        if (flagBtn && state.role !== "ssra_auditor") {
           const k = flagBtn.getAttribute("data-toggle-flag");
           if (k) {
-            state.flagOverrides[k] = !state.flagOverrides[k];
+            const nextVal = !state.flagOverrides[k];
+            state.flagOverrides[k] = nextVal;
             renderCurrentRoute();
+            fetch("/api/flags", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+              body: JSON.stringify({ flag_name: k, enabled: nextVal, rollout_pct: nextVal ? 100 : 0 }),
+            }).catch(() => {});
           }
           return;
         }
@@ -1517,6 +1554,25 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         }
       });
 
+      function trapModalTabFocus(e, containerEl) {
+        if (!containerEl || e.key !== "Tab") return;
+        const focusables = Array.from(
+          containerEl.querySelectorAll(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+
       window.addEventListener("keydown", (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
           e.preventDefault();
@@ -1525,6 +1581,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           return;
         }
         if (cmdkBackdrop?.classList.contains("open")) {
+          if (e.key === "Tab") {
+            trapModalTabFocus(e, cmdkBackdrop);
+            return;
+          }
           const cmds = getFilteredCommands(cmdkInput?.value || "");
           if (e.key === "Escape") { e.preventDefault(); closeCmdk(); }
           else if (e.key === "ArrowDown" && cmds.length) { e.preventDefault(); cmdkActiveIdx = (cmdkActiveIdx + 1) % cmds.length; renderCmdkList(); }

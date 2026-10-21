@@ -15,7 +15,8 @@ export function escapeHtmlStrict(raw: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll("'", "&#39;")
+    .replaceAll("`", "&#96;");
 }
 
 export interface RenderedChatCard {

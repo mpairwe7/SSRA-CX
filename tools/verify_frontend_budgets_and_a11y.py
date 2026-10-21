@@ -127,18 +127,25 @@ def main() -> None:
         "FE-G7 Auditor read-only SoD or South Sudan civic palette missing in packages/ui/ops-console.js"
     )
 
-    # FE-G8 & SEC2-G6/G7: Executable verification of cross-subject purge, safe offline abstention, BFF staff-header stripping & admin mutation blocking
+    # FE-G8, FE2-G1..G8 & SEC2-G6/G7: Executable verification of cross-subject purge, safe offline abstention, BFF staff-header stripping, AbortController cancellation, modal focus trap & CSAT feedback
     assert (
         "prev !== state.identity" in web_srv_src
         and "outcome_verified: false" in web_srv_src
         and "STAFF_CONSOLE_REQUIRED_FOR_ADMIN_MUTATIONS" in web_srv_src
         and "VALID_SUBJECT_REF_RE" in web_srv_src
         and "x-ssra-staff-id" not in web_srv_src
+        and "activeTurnAbortController" in web_srv_src
+        and "cleanTextForSpeech" in web_srv_src
+        and "data-csat=" in web_srv_src
+        and "trapModalTabFocus" in web_srv_src
+        and "trapModalTabFocus" in ops_ui_src
+        and "data-set-degrade=" in ops_ui_src
+        and "/api/kill-switches" in con_srv_src
         and "Array.isArray(flData)" in ops_ui_src
         and "cmdkReturnFocusEl.isConnected" in ops_ui_src
         and "e.ctrlKey || e.metaKey || e.altKey" in ops_ui_src
     ), (
-        "FE-G8 / SEC2-G6 cross-subject purge, BFF admin mutation block, or focus/hotkey guard missing"
+        "FE-G8 / FE2-G1..G8 / SEC2-G6 cross-subject purge, BFF admin mutation block, AbortController, modal focus trap, or CSAT guard missing"
     )
 
     print(
