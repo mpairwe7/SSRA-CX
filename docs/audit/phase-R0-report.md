@@ -1,8 +1,10 @@
 # Phase R0 Report — Baseline and Triage
 
-**Status:** Complete evidence collection; Gate R0 not approved.
+**Status:** Complete evidence collection; Gate R0 approved for R1 remediation.
 
 **Baseline commit:** 7ca1f26e83b08decf64eacf02af059b537e69db7
+
+**Approval record:** Gate R0 was approved in the active project session on 2026-10-22. The approver identity and authorization record are retained outside the repository; this approval authorizes R1 remediation only.
 
 **No remediation performed:** This phase changed documentation only. It did not alter code, CI, secrets, policy, risk tiers, branch protection, deployments, or production data.
 
@@ -15,7 +17,7 @@
 | Architecture and ADR claims assessed | Met |
 | Standards checked against primary sources | Met |
 | S0 incident owner assigned | Not applicable: no S0 was found |
-| SSRA technical-lead approval | Pending |
+| SSRA technical-lead approval | Met — approval recorded in the active project session on 2026-10-22 |
 
 ## Material result
 
@@ -47,11 +49,11 @@ Nine S2 items and one S3 reproducibility item are recorded in the findings regis
 
 ## Decisions required before R1–R5
 
-1. The SSRA technical lead must approve the severity and phase assignment of this R0 register.
+1. Complete — the project authority approved the severity and phase assignment of this R0 register in the active project session on 2026-10-22.
 2. OQ-015 owners must choose the authoritative PostgreSQL, checkpoint, outbox, RLS, retention, and recovery design before R3 implementation.
 3. OQ-018 owners must approve the artifact registry, signing identity, trust roots, and deployment verification mechanism before R1/R4 supply-chain work.
 4. OQ-019 owners must approve the lifecycle and expiry model for any offline statutory snapshot before AUD-011 remediation.
 
 ## Exit statement
 
-Gate R0 remains blocked pending explicit technical-lead approval. No later phase should start from this branch until that approval is recorded.
+Gate R0 is approved. R1 may begin under its own controls and gate; no later phase is authorized until its preceding gate is approved.

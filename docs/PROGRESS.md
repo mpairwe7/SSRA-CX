@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-10-22
 
-**Current Status:** Phases 0–4 contain reference implementations; production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, and the R0 assurance gate. Local verification is separate from production approval.
+**Current Status:** Phases 0–4 contain reference implementations; Gate R0 is approved and R1 remediation is authorized. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
 ## 0. Frontend Trust & UX Audit (2026-10-21)
@@ -29,7 +29,7 @@
 - Independently reproduced local lint, test, eval, and full-history secret-scan evidence at commit 7ca1f26e83b08decf64eacf02af059b537e69db7. No S0 compromise indicator was found.
 - Recorded three S1 blockers: process-local conversation state, direct GPU-profile egress around agentgateway, and no transactional durable API outbox. The report also records supply-chain, Compose, frontend/browser-flow, offline statutory-data, MCP-topology, telemetry, and reproducibility gaps.
 - Added OQ-018 for artifact/model trust and OQ-019 for offline statutory snapshot governance; both retain safe fail-closed fallbacks until SSRA approves the relevant operating decisions.
-- Gate R0 is pending SSRA technical-lead approval. No remediation phase has begun, and this audit does not advance an operational phase gate.
+- Gate R0 was approved in the active project session on 2026-10-22. R1 remediation is authorized; this approval does not advance any operational production gate.
 
 ---
 

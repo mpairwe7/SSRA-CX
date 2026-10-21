@@ -3,7 +3,7 @@
 **Status:** Reference implementation architecture (phases 0–4 code present; production deployment and live integrations remain separately gated)
 **Reconciled:** 2026-10-22
 **Source of Truth:** [`docs/00-master-prompt.md`](../00-master-prompt.md)
-**Assurance status:** R0 evidence and the open remediation register are recorded in [`docs/audit/`](../audit/). Gate R0 is pending SSRA technical-lead approval; this document does not authorize a production deployment or a remediation phase.
+**Assurance status:** R0 evidence and the open remediation register are recorded in [`docs/audit/`](../audit/). Gate R0 was approved in the active project session on 2026-10-22, authorizing R1 remediation only; this document does not authorize a production deployment.
 
 ---
 

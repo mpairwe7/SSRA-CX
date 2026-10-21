@@ -8,7 +8,7 @@
 
 **Scope:** source, configuration, local automated gates, local reference-mode tests, and checked-in documentation. No production credentials, real taxpayer data, deployment, or external state were accessed.
 
-**Status:** Baseline complete. Gate R0 is awaiting SSRA technical-lead approval.
+**Status:** Baseline complete. Gate R0 was approved in the active project session on 2026-10-22, authorizing R1 remediation only.
 
 ## Evidence conditions
 
