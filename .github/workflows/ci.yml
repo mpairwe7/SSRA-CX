@@ -8,8 +8,9 @@ on:
     branches: ["main"]
   pull_request:
 
-permissions:
-  contents: read
+# Jobs must request the smallest token scope they need. This default also keeps
+# future jobs from inheriting write scopes accidentally.
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,6 +21,8 @@ jobs:
     name: Lint, Typecheck, Unit, Contract, Schema & Eval Slice
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -34,17 +37,23 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
         with:
-          version: "9.15.9"
+          version: "10.33.0"
 
-      - name: Setup uv
+      - name: Setup uv (reviewed security fix)
         uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca # v6.0.1
+        with:
+          version: "0.13.4"
+          checksum: "2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f"
+          enable-cache: false
 
       - name: Install Gitleaks (SHA-256 verified) & Poppler on runner
         run: |
           sudo apt-get update && sudo apt-get install -y poppler-utils
-          curl -sSL -o /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
-          echo "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba  /tmp/gitleaks.tar.gz" | sha256sum -c -
-          sudo tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 -o /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          printf '%s  %s\n' "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba" "/tmp/gitleaks.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf /tmp/gitleaks.tar.gz -C "$RUNNER_TEMP/bin" gitleaks
+          printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
           rm -f /tmp/gitleaks.tar.gz
 
       - name: Install dependencies (frozen lockfiles + 7-day cooldown)
@@ -59,3 +68,48 @@ jobs:
           pnpm exec task lint
           pnpm exec task test
           pnpm exec task eval
+
+  secret-history:
+    name: Full Git history secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout complete reachable history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Gitleaks (SHA-256 verified)
+        run: |
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 -o /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          printf '%s  %s\n' "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba" "/tmp/gitleaks.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf /tmp/gitleaks.tar.gz -C "$RUNNER_TEMP/bin" gitleaks
+          printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          rm -f /tmp/gitleaks.tar.gz
+
+      - name: Scan full reachable Git history
+        run: gitleaks detect --redact --log-opts="--all"
+
+  workflow-security:
+    name: GitHub Actions workflow security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          advanced-security: false
+          online-audits: low
+          version: "1.30.1"

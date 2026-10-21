@@ -35,7 +35,7 @@
 
 ### OQ-018 — Artifact and Model Trust
 - **Blocks:** R1 supply-chain enforcement and R4 production deployment
-- **Context:** R0 found partial image pinning, no verified per-image SBOM/signature workflow, no approved deployment verification point, and no evidence that model artifacts are signed before load. Selecting trust roots and registry ownership has security and operational reversal cost.
+- **Context:** R0 found partial image pinning, no verified per-image SBOM/signature workflow, no approved deployment verification point, and no evidence that model artifacts are signed before load. R1-A now records a bounded repository security-fix procedure in [`docs/runbooks/dependency-security-exceptions.md`](./runbooks/dependency-security-exceptions.md), but it neither selects an SSRA approval authority nor establishes trust for production artifacts. Selecting trust roots and registry ownership has security and operational reversal cost.
 - **Specific Questions for SSRA ICT, SecOps & Procurement:**
   1. Which in-country registry or approved mirror owns container, model, and SBOM distribution for SSRA Assist?
   2. Which identities may sign images, provenance, and models; which certificate or Sigstore roots, expiry rules, and revocation process must consumers trust?

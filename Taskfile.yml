@@ -1,7 +1,6 @@
 version: "3"
 
 env:
-  PATH: "/home/developer/.nvm/versions/node/v24.16.0/bin:{{.ENV.PATH}}"
   PYTHONUNBUFFERED: "1"
   TZ: "UTC"
 
@@ -21,6 +20,9 @@ tasks:
 
   lint:
     desc: Run Ruff, basedpyright (strict), import-linter, JSON Schema validation, gitleaks, Biome, and TypeScript tsc
+    preconditions:
+      - sh: node tools/verify_node_runtime.mjs
+        msg: Activate a Node.js runtime that satisfies package.json engines.node before running task lint.
     cmds:
       - uv run ruff check .
       - uv run ruff format --check .
@@ -31,21 +33,25 @@ tasks:
       - uv run python tools/verify_frontend_budgets_and_a11y.py
       - uv run python tools/verify_supply_chain_and_signatures.py
       - gitleaks detect --no-git
-      - pnpm run lint
-      - pnpm run typecheck
+      - corepack pnpm run lint
+      - corepack pnpm run typecheck
 
   test:
-    desc: Run Python (pytest + Hypothesis), rules engine mutation testing, coverage gates (>=90% domain, >=80% overall), and TypeScript (Vitest) test suites
+    desc: Run Python (pytest + Hypothesis), rules engine mutation testing, coverage gates (>=98% domain and overall), and TypeScript (Vitest) test suites
+    preconditions:
+      - sh: node tools/verify_node_runtime.mjs
+        msg: Activate a Node.js runtime that satisfies package.json engines.node before running task test.
     cmds:
-      - uv run pytest -q
+      # Do not inherit a shared or mounted TMPDIR: pytest requires an owner-safe local root.
+      - PYTEST_DEBUG_TEMPROOT=/tmp uv run pytest -q
       - uv run python tools/verify_rules_mutations.py
-      - uv run python tools/check_coverage_gate.py
-      - pnpm run test
+      - PYTEST_DEBUG_TEMPROOT=/tmp uv run python tools/check_coverage_gate.py
+      - corepack pnpm run test
 
   eval:
     desc: Run SSRA Assist evaluations, benchmark ASGI SLOs, and audit phase evidence/blockers without advancing gates
     cmds:
-      - uv run pytest evals/suites evals/redteam -q
+      - PYTEST_DEBUG_TEMPROOT=/tmp uv run pytest evals/suites evals/redteam -q
       - uv run python tools/run_eval_report.py
       - uv run python tools/benchmark_asgi.py
       - uv run python tools/run_dr_restore_drill.py

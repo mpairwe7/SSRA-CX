@@ -37,10 +37,13 @@
 | AUD-012 | ASVS v5.0.0-16.1.1, 16.2.1, 16.5.2 | ASI08 | SSDF PW.8 |
 | AUD-013 | — | — | SSDF PO.3 and PW.8 |
 
-## Control observations that R0 did verify
+## Control observations that R0 verified and R1-A implements
 
-- Current GitHub Actions uses full-length action SHAs and read-only contents permission; it has no pull_request_target trigger.
+- R1-A sets an empty workflow permission default, declares minimal job scopes, requires 40-character action SHAs, prohibits `pull_request_target`, and requires non-persisted checkout credentials.
+- R1-A adds a full-reachable-history Gitleaks CI job, pinned zizmor workflow audit, and SecOps ownership for workflow files. Local CI-policy regression tests reject a mutable action tag and omitted workflow-default permissions.
+- R1-A applies pnpm's age, provenance, exotic-subdependency, and build-script policy together with uv's rolling one-week cooldown. The bounded uv security-fix record does not select artifact trust roots or create a broad exclusion.
+- OQ-018 remains open: no observation here asserts production image/model signing, registry trust, or pre-start verification.
 - The public BFF constructs a new safe turn body and suppresses client subject references before forwarding to the runtime.
 - The reference runtime defaults to production mode and returns unavailable for unset or unknown mode values.
 - Numeric-provenance, tool description hash, confirmation-token, PII-redaction, and hash-chain tests pass in the reference suite.
-- Full-history gitleaks passed manually. This finding is evidence only until its equivalent is enforced in CI.
+- Full-history Gitleaks passed manually at R0 and is now represented by a CI job; pull-request CI evidence is required before AUD-006 is closed.

@@ -1,0 +1,36 @@
+# Dependency update policy for the SSRA Assist reference repository.
+# Version updates wait seven days; security updates remain eligible immediately.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "02:00"
+      timezone: "Africa/Juba"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "02:15"
+      timezone: "Africa/Juba"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "02:30"
+      timezone: "Africa/Juba"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5

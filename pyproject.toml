@@ -61,8 +61,10 @@ dev = [
 ]
 
 [tool.uv]
-# Section 12.4: Mandatory 7-day dependency cooldown (verified on 2026-10-16 -> cutoff 2026-10-09)
-exclude-newer = "2026-10-09T23:59:59Z"
+# Relative dependency cooldowns require uv >= 0.9.17. uv 0.13.4 is a
+# reviewed security-fix exception recorded in docs/runbooks/dependency-security-exceptions.md.
+required-version = "==0.13.4"
+exclude-newer = "1 week"
 
 [tool.uv.workspace]
 members = [
@@ -116,6 +118,11 @@ ignore = ["S101", "E501", "RUF001"]
 [tool.basedpyright]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
+# The uv workspace creates this project-local environment. Declaring both
+# values makes the command-line analyzer resolve its installed packages and
+# editable workspace members instead of silently analyzing against typeshed.
+venvPath = "."
+venv = ".venv"
 include = ["libs", "services", "mcp-servers", "evals", "tools"]
 exclude = ["**/node_modules", "**/.venv", "**/__pycache__"]
 reportMissingTypeStubs = false

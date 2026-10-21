@@ -2,9 +2,11 @@
 """Supply-Chain Hardening Verifier (Section 12.4 & ADR-015).
 
 Verifies:
-1. Every `uses:` action in `.github/workflows/*.yml` is pinned by an immutable 40-char commit SHA.
-2. `pnpm-workspace.yaml` enforces `minimumReleaseAge >= 10080` (7 days).
-3. `pyproject.toml` enforces `[tool.uv] exclude-newer`.
+1. GitHub Actions workflows have explicit least-privilege permissions, immutable action SHAs,
+   safe checkout settings, no `pull_request_target`, and required R1 scanner jobs.
+2. `pnpm-workspace.yaml`, `pyproject.toml`, and Dependabot enforce a rolling seven-day
+   cooldown and the selected package-manager trust policies.
+3. The deployed frontend is the explicit Node BFF runtime, without stale Next.js configuration.
 4. `ai/routing/model-routing.yaml` keeps `external_providers.enabled: false` by default (`OQ-004`).
 """
 
@@ -19,39 +21,292 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 _ACTION_SHA_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
+_PULL_REQUEST_TARGET_RE = re.compile(r"(?m)^\s*pull_request_target\s*:")
+_ZIZMOR_ACTION = "zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482"
+_GITLEAKS_ARCHIVE_SHA256 = "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
+_PNPM_VERSION = "10.33.0"
+_PNPM_INTEGRITY = (
+    "sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544"
+    "c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
+)
+_UV_VERSION = "0.13.4"
+_UV_ARCHIVE_SHA256 = "2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f"
+_DEPENDABOT_ECOSYSTEMS = ("npm", "uv", "github-actions")
+
+
+def _load_workflow(workflow_path: Path) -> dict[object, object]:
+    """Load one workflow and fail with a useful message when its shape is invalid."""
+    raw = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    assert isinstance(raw, dict), f"Workflow {workflow_path.name} must be a YAML mapping"
+    return raw
+
+
+def _workflow_steps(
+    job: object, workflow_path: Path, job_name: object
+) -> list[dict[object, object]]:
+    """Return typed workflow steps while keeping policy failures actionable."""
+    assert isinstance(job, dict), f"Job '{job_name}' in {workflow_path.name} must be a mapping"
+    steps = job.get("steps", [])
+    assert isinstance(steps, list), f"Job '{job_name}' in {workflow_path.name} must list steps"
+    assert all(isinstance(step, dict) for step in steps), (
+        f"Job '{job_name}' in {workflow_path.name} contains an invalid step"
+    )
+    return steps
+
+
+def verify_workflow_integrity(workflows_dir: Path) -> None:
+    """Enforce immutable GitHub Actions and least-privilege workflow defaults.
+
+    This function accepts a directory so the regression suite can prove that a
+    tag-pinned action or a missing permissions declaration is rejected.
+    """
+    workflow_paths = sorted(workflows_dir.glob("*.yml"))
+    assert workflow_paths, f"No GitHub Actions workflows found in {workflows_dir}"
+    for workflow_path in workflow_paths:
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        assert not _PULL_REQUEST_TARGET_RE.search(workflow_text), (
+            f"Workflow {workflow_path.name} must not use pull_request_target"
+        )
+        workflow = _load_workflow(workflow_path)
+        assert workflow.get("permissions") == {}, (
+            f"Workflow {workflow_path.name} must set permissions: {{}} at workflow scope"
+        )
+        jobs = workflow.get("jobs")
+        assert isinstance(jobs, dict) and jobs, f"Workflow {workflow_path.name} must define jobs"
+        for job_name, job in jobs.items():
+            assert isinstance(job, dict), (
+                f"Job '{job_name}' in {workflow_path.name} must be a mapping"
+            )
+            assert isinstance(job.get("permissions"), dict), (
+                f"Job '{job_name}' in {workflow_path.name} must declare explicit permissions"
+            )
+            for step in _workflow_steps(job, workflow_path, job_name):
+                uses = step.get("uses")
+                if uses:
+                    assert _ACTION_SHA_RE.fullmatch(str(uses)), (
+                        f"Unpinned GitHub Action '{uses}' in {workflow_path.name}; must use 40-char SHA"
+                    )
+                    if str(uses).startswith("actions/checkout@"):
+                        step_with = step.get("with", {})
+                        assert (
+                            isinstance(step_with, dict)
+                            and step_with.get("persist-credentials") is False
+                        ), (
+                            f"actions/checkout in {workflow_path.name} must set persist-credentials: false"
+                        )
+
+
+def _find_step_with_uses(
+    steps: list[dict[object, object]], action: str, workflow_name: str
+) -> dict[object, object]:
+    """Find an exact action reference in a required workflow job."""
+    for step in steps:
+        if step.get("uses") == action:
+            return step
+    raise AssertionError(f"{workflow_name} must use {action}")
+
+
+def verify_ci_security_policy(repo_root: Path) -> None:
+    """Verify the blocking R1 CI controls and workflow CODEOWNERS protection."""
+    ci_path = repo_root / ".github" / "workflows" / "ci.yml"
+    ci_workflow = _load_workflow(ci_path)
+    jobs = ci_workflow.get("jobs")
+    assert isinstance(jobs, dict), "ci.yml must define jobs"
+
+    expected_permissions = {
+        "verify": {"contents": "read"},
+        "secret-history": {"contents": "read"},
+        "workflow-security": {"actions": "read", "contents": "read"},
+    }
+    for job_name, expected in expected_permissions.items():
+        job = jobs.get(job_name)
+        assert isinstance(job, dict), f"ci.yml must define the '{job_name}' blocking job"
+        assert job.get("permissions") == expected, (
+            f"ci.yml job '{job_name}' must use only {expected} permissions"
+        )
+
+    verify_steps = _workflow_steps(jobs["verify"], ci_path, "verify")
+    pnpm_step = _find_step_with_uses(
+        verify_steps,
+        "pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda",
+        "verify",
+    )
+    pnpm_with = pnpm_step.get("with", {})
+    assert isinstance(pnpm_with, dict) and pnpm_with.get("version") == _PNPM_VERSION, (
+        f"verify must pin pnpm {_PNPM_VERSION}"
+    )
+    uv_step = _find_step_with_uses(
+        verify_steps,
+        "astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca",
+        "verify",
+    )
+    uv_with = uv_step.get("with", {})
+    assert isinstance(uv_with, dict) and uv_with.get("version") == _UV_VERSION, (
+        f"verify must pin uv {_UV_VERSION}"
+    )
+    assert uv_with.get("checksum") == _UV_ARCHIVE_SHA256, (
+        "verify must validate the pinned uv release archive checksum"
+    )
+
+    history_job = jobs["secret-history"]
+    history_steps = _workflow_steps(history_job, ci_path, "secret-history")
+    checkout = _find_step_with_uses(
+        history_steps,
+        "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+        "secret-history",
+    )
+    checkout_with = checkout.get("with", {})
+    assert isinstance(checkout_with, dict) and checkout_with.get("fetch-depth") == 0, (
+        "secret-history must checkout full reachable history with fetch-depth: 0"
+    )
+    history_run = "\n".join(str(step.get("run", "")) for step in history_steps)
+    assert _GITLEAKS_ARCHIVE_SHA256 in history_run and "sha256sum --check" in history_run, (
+        "secret-history must verify the pinned Gitleaks archive checksum"
+    )
+    assert 'gitleaks detect --redact --log-opts="--all"' in history_run, (
+        "secret-history must scan all reachable Git history with redacted output"
+    )
+
+    workflow_security = jobs["workflow-security"]
+    security_steps = _workflow_steps(workflow_security, ci_path, "workflow-security")
+    zizmor_step = _find_step_with_uses(security_steps, _ZIZMOR_ACTION, "workflow-security")
+    zizmor_with = zizmor_step.get("with", {})
+    assert isinstance(zizmor_with, dict), "workflow-security must configure zizmor"
+    assert zizmor_with.get("advanced-security") is False, (
+        "workflow-security must fail directly instead of relying on optional Advanced Security"
+    )
+    assert zizmor_with.get("version") == "1.30.1", (
+        "workflow-security must pin the zizmor engine version"
+    )
+
+    codeowners_path = repo_root / ".github" / "CODEOWNERS"
+    codeowners_rules = codeowners_path.read_text(encoding="utf-8").splitlines()
+    assert any(
+        rule.startswith("/.github/workflows/**") and "@ssra-org/secops" in rule.split()
+        for rule in codeowners_rules
+    ), "CODEOWNERS must require SSRA SecOps review for .github/workflows/**"
+    assert any(
+        rule.startswith("/.github/dependabot.yml") and "@ssra-org/secops" in rule.split()
+        for rule in codeowners_rules
+    ), "CODEOWNERS must require SSRA SecOps review for .github/dependabot.yml"
+
+
+def verify_dependabot_policy(repo_root: Path) -> None:
+    """Require a seven-day Dependabot cooldown for managed repository ecosystems."""
+    dependabot_path = repo_root / ".github" / "dependabot.yml"
+    raw = yaml.safe_load(dependabot_path.read_text(encoding="utf-8"))
+    assert isinstance(raw, dict), ".github/dependabot.yml must be a YAML mapping"
+    assert raw.get("version") == 2, ".github/dependabot.yml must declare version: 2"
+    updates = raw.get("updates")
+    assert isinstance(updates, list), ".github/dependabot.yml must list update policies"
+
+    by_ecosystem: dict[str, dict[object, object]] = {}
+    for update in updates:
+        assert isinstance(update, dict), "Each Dependabot update policy must be a mapping"
+        ecosystem = update.get("package-ecosystem")
+        if isinstance(ecosystem, str):
+            by_ecosystem[ecosystem] = update
+
+    for ecosystem in _DEPENDABOT_ECOSYSTEMS:
+        policy = by_ecosystem.get(ecosystem)
+        assert policy is not None, f".github/dependabot.yml must manage the '{ecosystem}' ecosystem"
+        assert policy.get("directory") == "/", (
+            f"Dependabot '{ecosystem}' updates must be rooted at the repository root"
+        )
+        schedule = policy.get("schedule")
+        assert isinstance(schedule, dict) and schedule.get("interval") == "weekly", (
+            f"Dependabot '{ecosystem}' updates must run weekly"
+        )
+        cooldown = policy.get("cooldown")
+        assert isinstance(cooldown, dict) and int(cooldown.get("default-days", 0)) >= 7, (
+            f"Dependabot '{ecosystem}' updates must enforce a seven-day cooldown"
+        )
 
 
 def main() -> None:
     """Verify CI action SHA pinning, 7-day cooldowns, contract SHA parity, and Docker Compose hardening."""
-    # 1. Verify GitHub Actions 40-char SHA pinning & persist-credentials: false (March 2026 LiteLLM/Trivy lesson)
+    # 1. Verify GitHub Actions integrity, explicit token scopes, scanners, and workflow ownership.
     wf_dir = ROOT / ".github" / "workflows"
-    for wf_path in sorted(wf_dir.glob("*.yml")):
-        raw = yaml.safe_load(wf_path.read_text(encoding="utf-8"))
-        for _job_name, job in raw.get("jobs", {}).items():
-            for step in job.get("steps", []):
-                uses = step.get("uses")
-                if uses:
-                    assert _ACTION_SHA_RE.match(str(uses)), (
-                        f"Unpinned GitHub Action '{uses}' in {wf_path.name}; must use 40-char SHA"
-                    )
-                    if str(uses).startswith("actions/checkout@"):
-                        assert step.get("with", {}).get("persist-credentials") is False, (
-                            f"actions/checkout in {wf_path.name} must set persist-credentials: false"
-                        )
+    verify_workflow_integrity(wf_dir)
+    verify_ci_security_policy(ROOT)
+    verify_dependabot_policy(ROOT)
 
-    # 2. Verify pnpm 7-day dependency cooldown (`minimumReleaseAge: 10080`)
+    # 2. Verify pnpm's 7-day cooldown, provenance downgrade protection, and build-script deny-list.
     pnpm_ws = yaml.safe_load((ROOT / "pnpm-workspace.yaml").read_text(encoding="utf-8"))
     min_age = int(pnpm_ws.get("minimumReleaseAge", 0))
     assert min_age >= 10080, f"pnpm minimumReleaseAge {min_age} < 10080 (7 days)"
+    assert pnpm_ws.get("trustPolicy") == "no-downgrade", (
+        "pnpm-workspace.yaml must set trustPolicy: no-downgrade"
+    )
+    assert pnpm_ws.get("blockExoticSubdeps") is True, (
+        "pnpm-workspace.yaml must set blockExoticSubdeps: true"
+    )
+    assert pnpm_ws.get("allowBuilds") == {}, (
+        "pnpm-workspace.yaml must deny dependency build scripts until individually reviewed"
+    )
+    assert not pnpm_ws.get("minimumReleaseAgeExclude"), (
+        "pnpm cooldown exclusions require a reviewed, time-bounded exception before use"
+    )
+    root_package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    assert root_package.get("packageManager") == f"pnpm@{_PNPM_VERSION}+{_PNPM_INTEGRITY}", (
+        "package.json must pin the verified pnpm package-manager artifact"
+    )
+    taskfile = (ROOT / "Taskfile.yml").read_text(encoding="utf-8")
+    assert "node tools/verify_node_runtime.mjs" in taskfile, (
+        "Taskfile.yml must fail before JavaScript gates run on an unsupported Node.js runtime"
+    )
+    for command in ("lint", "typecheck", "test"):
+        assert f"corepack pnpm run {command}" in taskfile, (
+            f"Taskfile.yml must invoke the project-pinned pnpm through Corepack for {command}"
+        )
 
-    # 3. Verify uv 7-day dependency cooldown (`exclude-newer`)
+    # 3. Verify uv's pinned feature level and rolling 7-day dependency cooldown.
     pyproj = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    exclude_newer = pyproj.get("tool", {}).get("uv", {}).get("exclude-newer")
-    assert exclude_newer is not None and len(str(exclude_newer)) >= 10, (
-        "pyproject.toml missing [tool.uv] exclude-newer 7-day cooldown"
+    uv_settings = pyproj.get("tool", {}).get("uv", {})
+    assert uv_settings.get("required-version") == f"=={_UV_VERSION}", (
+        f"pyproject.toml must pin uv to =={_UV_VERSION}"
+    )
+    assert uv_settings.get("exclude-newer") == "1 week", (
+        "pyproject.toml must set a rolling seven-day uv exclude-newer cooldown"
+    )
+    assert not uv_settings.get("exclude-newer-package"), (
+        "uv cooldown exclusions require a reviewed, time-bounded exception before use"
+    )
+    uv_lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
+    assert uv_lock.get("options", {}).get("exclude-newer-span") == "P1W", (
+        "uv.lock must retain the rolling one-week cooldown span"
     )
 
-    # 4. Verify external AI providers remain disabled by default until OQ-004 sign-off
+    # 4. The deployed applications are Node BFF servers. Fail if stale Next.js configuration resurfaces.
+    for config_rel in ("apps/web/next.config.ts", "apps/console/next.config.ts"):
+        assert not (ROOT / config_rel).exists(), (
+            f"{config_rel} is stale: the deployed application runs its Node BFF server directly"
+        )
+    for package_rel in ("apps/web/package.json", "apps/console/package.json"):
+        package = json.loads((ROOT / package_rel).read_text(encoding="utf-8"))
+        declared = {
+            dependency
+            for field in (
+                "dependencies",
+                "devDependencies",
+                "peerDependencies",
+                "optionalDependencies",
+            )
+            for dependency in package.get(field, {})
+        }
+        assert "next" not in declared, (
+            f"{package_rel} must not declare Next.js without an explicit runtime decision"
+        )
+    for dockerfile_rel, command in (
+        ("apps/web/Dockerfile", 'CMD ["node", "apps/web/server.js"]'),
+        ("apps/console/Dockerfile", 'CMD ["node", "apps/console/server.js"]'),
+    ):
+        dockerfile = (ROOT / dockerfile_rel).read_text(encoding="utf-8")
+        assert command in dockerfile and "NEXT_TELEMETRY_DISABLED" not in dockerfile, (
+            f"{dockerfile_rel} must identify the Node BFF server as its deployed runtime"
+        )
+
+    # 5. Verify external AI providers remain disabled by default until OQ-004 sign-off.
     routing = yaml.safe_load(
         (ROOT / "ai" / "routing" / "model-routing.yaml").read_text(encoding="utf-8")
     )
@@ -117,9 +372,15 @@ def main() -> None:
                 f"Runbook {rb_path.name} still contains decommissioned Kubernetes term '{forbidden}'"
             )
 
-    # 7. Verify Living Docs, ADR Catalog (ADR-001..ADR-016), Model Card & CycloneDX 1.6 ML-BOM Traceability
+    # 7. Verify Living Docs, ADR catalog, phase evidence, model card, and CycloneDX 1.6 ML-BOM traceability.
     trace_skill = ROOT / ".agents" / "skills" / "living-docs-adr-runbooks-traceability" / "SKILL.md"
     assert trace_skill.is_file(), "Missing living-docs-adr-runbooks-traceability skill"
+    r1_report = ROOT / "docs" / "audit" / "phase-R1-report.md"
+    assert r1_report.is_file(), "Missing R1 assurance evidence report"
+    r1_report_text = r1_report.read_text(encoding="utf-8")
+    assert "Gate R1" in r1_report_text and "OQ-018" in r1_report_text, (
+        "R1 assurance report must retain gate and artifact-trust disposition"
+    )
     adr_readme = (ROOT / "docs" / "adr" / "README.md").read_text(encoding="utf-8")
     for adr_file in sorted((ROOT / "docs" / "adr").glob("00*.md")):
         assert adr_file.name in adr_readme, (
@@ -264,7 +525,9 @@ def main() -> None:
     )
 
     print(
-        "Supply-chain, infra & living-docs traceability verification passed: 40-char SHA CI actions, 7-day cooldowns, contract SHA parity, non-root Dockerfiles, Seccomp, OTel memory_limiter, 11-server gateway, ADR catalog, and ML-BOM verified."
+        "Supply-chain, infra & living-docs traceability verification passed: 40-char SHA CI actions, "
+        "Dependabot and package-manager 7-day cooldowns, contract SHA parity, non-root Dockerfiles, "
+        "Seccomp, OTel memory_limiter, 11-server gateway, ADR catalog, and ML-BOM verified."
     )
 
 

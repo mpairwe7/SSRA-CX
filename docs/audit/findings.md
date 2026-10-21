@@ -65,33 +65,33 @@
 
 ### AUD-006 · S2 · CI assurance · Supply-chain checks are incomplete and workflow review is not protected
 
-- Location: .github/workflows/ci.yml:7–60; .github/CODEOWNERS:1–7; Taskfile.yml:22–35.
-- Evidence: All current uses entries are full SHAs and no pull_request_target event exists. CI uses gitleaks detect --no-git, has no zizmor job, and CODEOWNERS has no .github/workflows rule. Full-history gitleaks passed manually but is not a CI gate.
+- Location: .github/workflows/ci.yml; .github/CODEOWNERS; tools/verify_supply_chain_and_signatures.py; libs/ssra_security/tests/test_supply_chain_policy.py.
+- Evidence: R1-A adds workflow-default `permissions: {}`, explicit least-privilege job permissions, a `.github/workflows/**` SecOps ownership rule, full-reachable-history Gitleaks, and a pinned zizmor gate. The repository verifier rejects `pull_request_target`, mutable action tags, missing workflow permissions, and persisted checkout credentials. The regression fixture proves a tag-pinned action is rejected.
 - Standard: SLSA v1.2 Build L3; NIST SSDF v1.1 PO.3, PW.7, and RV.1; OWASP ASVS v5.0.0-15.1.2 and v5.0.0-15.2.1.
 - Impact: A future workflow regression, history secret, or unsafe workflow pattern can merge without the required second-control and security-owner review.
-- Fix: Add a blocking zizmor job, full-history and PR-aware gitleaks scanning, workflow-specific CODEOWNERS, explicit workflow permissions policy, and adversarial fixtures that prove a tag-pinned action fails CI.
-- Verification: CI rejects a tag action, unsafe permission, and synthetic secret in a reachable commit; protected workflow changes request Security review.
-- Phase: R1 · Owner: DevSecOps · Estimated PRs: 2 · Status: Open.
+- Fix: Implemented in R1-A. CI must now run the required checks and repository branch protection must enforce the workflow ownership rule before this finding can be marked fully remediated.
+- Verification: The local verifier and adversarial fixture cover tag actions and missing permissions. CI confirmation must demonstrate the new full-history scan and workflow audit on the pull request.
+- Phase: R1 · Owner: DevSecOps · Estimated PRs: 2 · Status: Implemented in source; CI and branch-protection evidence pending.
 
 ### AUD-007 · S2 · Artifact and dependency integrity · Cooldown and image-verification claims are only partial
 
-- Location: pnpm-workspace.yaml:6; pyproject.toml; mcp-servers/*/Dockerfile:2; infra/observability/slsa-provenance-v1.json; tools/verify_supply_chain_and_signatures.py.
-- Evidence: pnpm has minimumReleaseAge 10080 but no trustPolicy no-downgrade. uv uses a fixed exclude-newer timestamp rather than a continuously auditable seven-day policy. Eleven MCP Dockerfiles use python:3.14-slim by tag. No installed or CI-referenced cosign, syft, or model-signing verifier was found.
+- Location: pnpm-workspace.yaml; package.json; pyproject.toml; uv.lock; docs/runbooks/dependency-security-exceptions.md; mcp-servers/*/Dockerfile; infra/observability/slsa-provenance-v1.json; tools/verify_supply_chain_and_signatures.py.
+- Evidence: R1-A enforces pnpm's rolling seven-day age, provenance downgrade protection, exotic-subdependency blocking, and an empty reviewed build-script allow-list. uv uses a rolling one-week limit, pins its resolver version, and retains the span in `uv.lock`. Dependabot holds pnpm, uv, and Actions version updates for seven days. DEP-EXC-001 records the exact early security-fix artifact and expiry without adding a package exclusion. Eleven MCP Dockerfiles still use `python:3.14-slim` by tag, and no approved production image/model signature verifier or trust root exists.
 - Standard: SLSA v1.2 Build L3; NIST SSDF v1.1 PO.3 and PS.3; OWASP ASVS v5.0.0-15.1.2, v5.0.0-15.2.1, and v5.0.0-15.2.4; CycloneDX 1.7; OpenSSF Model Signing.
 - Impact: Lockfiles and some digest pins provide protection, but artifacts and models cannot be shown to be signed, verified, or safely refreshed. Tag resolution makes future builds non-reproducible.
-- Fix: Define the approved security-fix exception process; enforce relative cooldowns supported by the selected toolchain; set pnpm trustPolicy; digest-pin every Dockerfile base; produce per-image CycloneDX 1.7 SBOMs, signatures, and provenance; verify before pull/start; verify model signatures before load.
-- Verification: A too-new package and unapproved exception fail; a tag base fails policy; an unsigned or retagged image/model fails the deployment test.
-- Phase: R1 · Owner: DevSecOps and Platform · Estimated PRs: 3 · Status: Open.
+- Fix: R1-A implements the dependency-policy portion, Dependabot cooldown, and a bounded security-fix procedure. Digest-pinning every Dockerfile base, per-image SBOMs, signing, registry trust, and pre-start image/model verification remain blocked by OQ-018.
+- Verification: Repository policy checks the rolling cooldowns, exact tool pin, and absence of broad exclusions. A tag-base, unsigned, or retagged image/model test remains future work after OQ-018 selects the trust model.
+- Phase: R1 · Owner: DevSecOps and Platform · Estimated PRs: 3 · Status: Partially remediated in R1-A; OQ-018 remains open.
 
 ### AUD-008 · S2 · Frontend dependency hygiene · Next.js configuration is stale and advisory posture is ambiguous
 
-- Location: apps/web/next.config.ts:1–11; apps/console/next.config.ts; apps/web/package.json:12–25; apps/web/Dockerfile:23–32.
-- Evidence: pnpm why next sharp react-server-dom-* produced no served dependency. The web image starts node apps/web/server.js, while next.config.ts declares Next 16.3.8 and Cache Components.
+- Location: apps/web/server.js; apps/console/server.js; apps/web/package.json; apps/console/package.json; apps/web/Dockerfile; apps/console/Dockerfile; ADR-020.
+- Evidence: R1-A removes both stale `next.config.ts` files and unused Next telemetry settings. The application manifests do not declare Next.js, and containers explicitly start their Node BFF servers. The repository verifier rejects a reintroduced configuration file or undeclared framework/runtime mismatch.
 - Standard: OWASP ASVS v5.0.0-15.1.1 and v5.0.0-15.2.1; NIST SSDF v1.1 PO.3 and PW.7. The 14 October 2026 official Next.js advisory is not applicable to a currently served Next package, but the stale configuration prevents a durable proof of that status.
 - Impact: Security response and user-interface maintenance can target the wrong runtime. A future build may unintentionally introduce an affected Next version or Cache Components without an explicit dependency decision.
-- Fix: Decide and document the production frontend runtime. Remove unused Next configuration or add an explicitly pinned, patched, built-and-tested Next runtime with a CI policy test.
-- Verification: package inspection and container build prove the selected runtime; CI rejects affected Next/sharp versions if Next is adopted.
-- Phase: R1 · Owner: Frontend and DevSecOps · Estimated PRs: 1 · Status: Open.
+- Fix: Implemented in R1-A through ADR-020. Any future framework adoption needs an explicit dependency, container, security-review, and test decision.
+- Verification: The local verifier checks manifests and container commands; CI confirmation remains pending.
+- Phase: R1 · Owner: Frontend and DevSecOps · Estimated PRs: 1 · Status: Implemented in source; CI evidence pending.
 
 ### AUD-009 · S2 · Quality and UX assurance · No executable browser-flow, route-matrix, or flake gate
 
