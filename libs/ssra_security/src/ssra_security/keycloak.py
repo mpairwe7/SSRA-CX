@@ -18,10 +18,14 @@ from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from ssra_core import McpErrorCode, SSRAError, utc_now
+from ssra_core import McpErrorCode, SSRAError, new_id, utc_now
 
 ALLOWED_WEBAUTHN_ALGORITHMS: frozenset[str] = frozenset({"ES256", "EdDSA", "-7", "-8"})
+ALLOWED_JWT_SIGNING_ALGORITHMS: frozenset[str] = frozenset({"ES256", "RS256", "PS256", "EdDSA"})
 ALLOWED_IDP_ALIASES: frozenset[str] = frozenset({"ssra-national-idp", "keycloak-local"})
+ALLOWED_TOKEN_EXCHANGE_ACTORS: frozenset[str] = frozenset(
+    {"ssra-agent-runtime", "ssra-agentgateway", "ssra-web-bff", "ssra-staff-console"}
+)
 REQUIRED_KEYCLOAK_CLIENTS: frozenset[str] = frozenset(
     {
         "ssra-web-bff",
@@ -83,16 +87,17 @@ def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
         if (
             c.get("enabled") is not True
             or c.get("publicClient") is not False
+            or c.get("implicitFlowEnabled") is not False
             or c.get("directAccessGrantsEnabled") is not False
             or attrs.get("pkce.code.challenge.method") != "S256"
             or attrs.get("token.exchange.standard.enabled") != "true"
         ):
             raise SSRAError(
                 McpErrorCode.VALIDATION_FAILED,
-                f"Keycloak client '{cid}' must be enabled, confidential, forbid direct grants, enforce PKCE S256, and enable standard token exchange V2",
+                f"Keycloak client '{cid}' must be enabled, confidential, forbid implicit/direct grants (CVE-2026-7571), enforce PKCE S256, and enable standard token exchange V2",
                 status_code=400,
             )
-    for dpop_cid in ("ssra-web-bff", "ssra-staff-console", "ssra-agentgateway"):
+    for dpop_cid in ("ssra-web-bff", "ssra-staff-console", "ssra-api", "ssra-agentgateway"):
         dpop_client = client_map[dpop_cid]
         dpop_attrs = dpop_client.get("attributes", {})
         is_interactive_bff = dpop_cid in ("ssra-web-bff", "ssra-staff-console")
@@ -103,14 +108,29 @@ def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
         dpop_ok = (
             dpop_attrs.get("oauth2.dpop.bound.access.tokens") == "true"
             and dpop_attrs.get("backchannel.logout.session.required") == "true"
+            and dpop_attrs.get("backchannel.logout.revoke.offline.tokens") == "true"
             and bcl_url_ok
         )
         if not dpop_ok:
             raise SSRAError(
                 McpErrorCode.VALIDATION_FAILED,
-                f"Keycloak client '{dpop_cid}' must enforce RFC 9449 DPoP-bound access tokens and OIDC backchannel logout session binding",
+                f"Keycloak client '{dpop_cid}' must enforce RFC 9449 DPoP-bound access tokens and OIDC backchannel logout session/offline revocation (CVE-2026-107623)",
                 status_code=400,
             )
+    idps = realm_data.get("identityProviders", [])
+    idp_ok = bool(idps) and all(
+        isinstance(idp, dict)
+        and idp.get("trustEmail") is False
+        and isinstance(idp.get("config"), dict)
+        and idp["config"].get("validateSignature") == "true"
+        for idp in idps
+    )
+    if not idp_ok:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "Keycloak identityProviders must enforce trustEmail=False (CVE-2026-14781) and validateSignature='true' (CVE-2026-18569)",
+            status_code=400,
+        )
     events_ok = (
         realm_data.get("eventsEnabled") is True and realm_data.get("adminEventsEnabled") is True
     )
@@ -150,6 +170,19 @@ class BackchannelLogoutClaims(BaseModel):
     iat: datetime
     exp: datetime
     nonce: str | None = None
+    jwt_alg: str = "ES256"
+
+
+class ParRequestRecord(BaseModel):
+    """RFC 9126 Pushed Authorization Request (`request_uri`) single-use realm-bound record."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    request_uri: str
+    realm: str
+    client_id: str
+    code_challenge_s256: str
+    expires_at: datetime
 
 
 class KeycloakOidcClaims(BaseModel):
@@ -191,6 +224,7 @@ class KeycloakOidcSecurityService:
         self.allowed_idp_aliases = allowed_idp_aliases
         self.enabled_client_ids = enabled_client_ids
         self._consumed_jtis: dict[str, datetime] = {}
+        self._par_requests: dict[str, ParRequestRecord] = {}
         self._webauthn_sign_counts = _SHARED_WEBAUTHN_SIGN_COUNTS
 
     def verify_webauthn_sign_count(
@@ -408,7 +442,8 @@ class KeycloakOidcSecurityService:
         current = now or utc_now()
         iat_fresh = abs((current - logout_claims.iat).total_seconds()) <= max_clock_skew_seconds
         valid_bcl = (
-            logout_claims.iss == self.expected_issuer
+            logout_claims.jwt_alg in ALLOWED_JWT_SIGNING_ALGORITHMS
+            and logout_claims.iss == self.expected_issuer
             and logout_claims.aud == expected_audience
             and logout_claims.aud in self.enabled_client_ids
             and logout_claims.nonce is None
@@ -420,8 +455,85 @@ class KeycloakOidcSecurityService:
         if not valid_bcl:
             raise SSRAError(
                 McpErrorCode.VALIDATION_FAILED,
-                "Invalid OIDC Back-Channel Logout token claims (OIDC Back-Channel Logout 1.0 §2.4)",
+                "Invalid OIDC Back-Channel Logout token claims (OIDC Back-Channel Logout 1.0 §2.4 / CVE-2026-18569)",
                 status_code=400,
             )
         self.consume_single_use_jti(logout_claims.jti, exp=logout_claims.exp, now=current)
         return logout_claims
+
+    def issue_and_bind_par_request_uri(
+        self,
+        *,
+        realm: str,
+        client_id: str,
+        code_challenge_s256: str,
+        ttl_seconds: int = 60,
+        now: datetime | None = None,
+    ) -> ParRequestRecord:
+        """Mint an RFC 9126 PAR `request_uri` bound to `(realm, client_id, code_challenge_s256)` (`#50135`)."""
+        current = now or utc_now()
+        req_uri = f"urn:ietf:params:oauth:request_uri:{new_id('par')}"
+        rec = ParRequestRecord(
+            request_uri=req_uri,
+            realm=realm,
+            client_id=client_id,
+            code_challenge_s256=code_challenge_s256,
+            expires_at=current + timedelta(seconds=ttl_seconds),
+        )
+        self._par_requests[req_uri] = rec
+        return rec
+
+    def consume_par_request_uri(
+        self,
+        request_uri: str,
+        *,
+        realm: str,
+        client_id: str,
+        prompt: str | None = None,
+        now: datetime | None = None,
+    ) -> ParRequestRecord:
+        """Atomically consume a single-use PAR `request_uri`, blocking cross-realm/client reuse (`#50135`) and `prompt=none` bypass (`CVE-2026-96446`)."""
+        current = now or utc_now()
+        rec = self._par_requests.pop(request_uri, None)
+        is_valid = (
+            rec is not None
+            and rec.realm == realm
+            and rec.client_id == client_id
+            and current <= rec.expires_at
+            and (prompt or "").strip().lower() != "none"
+        )
+        if not is_valid or rec is None:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "RFC 9126 PAR request_uri invalid, expired, replayed, or prompt=none bypass blocked (CVE-2026-96446)",
+                status_code=400,
+            )
+        return rec
+
+    def validate_token_exchange_delegation(
+        self,
+        *,
+        subject_sub: str,
+        actor_sub: str,
+        audience: str,
+        cnf_jkt: str | None,
+    ) -> dict[str, str]:
+        """Validate RFC 8693 token-exchange delegation (`#52691`), active audience (`CVE-2026-93999`), and sender constraint (`CVE-2026-97846`)."""
+        delegation_ok = (
+            bool(subject_sub.strip())
+            and actor_sub in ALLOWED_TOKEN_EXCHANGE_ACTORS
+            and audience in self.enabled_client_ids
+            and bool(cnf_jkt and len(cnf_jkt.strip()) >= 8)
+        )
+        if not delegation_ok or cnf_jkt is None:
+            raise SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "Token exchange delegation rejected: requires allowlisted actor (#52691), enabled audience (CVE-2026-93999), and DPoP cnf_jkt binding (CVE-2026-97846)",
+                status_code=403,
+            )
+        return {
+            "sub": subject_sub.strip(),
+            "act": actor_sub,
+            "aud": audience,
+            "cnf_jkt": cnf_jkt.strip(),
+        }

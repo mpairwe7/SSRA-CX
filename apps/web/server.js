@@ -1737,6 +1737,57 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (method === "POST" && pathname === "/api/auth/backchannel-logout") {
+    try {
+      const rawBody = await readRequestBody(req);
+      const tokenParam = rawBody.startsWith("{")
+        ? String(JSON.parse(rawBody).logout_token ?? "")
+        : String(new URLSearchParams(rawBody).get("logout_token") ?? "");
+      const parts = tokenParam.trim().split(".");
+      if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+        res.writeHead(400, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          ...secHeaders,
+        });
+        res.end(JSON.stringify({ error: "UNSIGNED_OR_MALFORMED_LOGOUT_JWT" }));
+        return;
+      }
+      const hdr = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf-8"));
+      const pld = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
+      if (
+        !["ES256", "RS256", "PS256", "EdDSA"].includes(hdr?.alg) ||
+        pld?.aud !== "ssra-web-bff" ||
+        pld?.nonce !== undefined ||
+        !pld?.events?.["http://schemas.openid.net/event/backchannel-logout"] ||
+        (!pld?.sid && !pld?.sub)
+      ) {
+        res.writeHead(400, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          ...secHeaders,
+        });
+        res.end(JSON.stringify({ error: "INVALID_BACKCHANNEL_LOGOUT_CLAIMS" }));
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        "Clear-Site-Data": '"cache", "cookies", "storage"',
+        ...secHeaders,
+      });
+      res.end(JSON.stringify({ status: "logged_out", client_id: "ssra-web-bff" }));
+    } catch {
+      res.writeHead(400, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        ...secHeaders,
+      });
+      res.end(JSON.stringify({ error: "INVALID_BACKCHANNEL_LOGOUT_REQUEST" }));
+    }
+    return;
+  }
+
   if (isGetOrHead && isOpsDashboardPath(pathname)) {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...secHeaders });
     res.end(renderOpsDashboardHtml(pathname, nonce));

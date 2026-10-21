@@ -79,7 +79,14 @@
       "providerId": "oidc",
       "enabled": true,
       "trustEmail": false,
-      "storeToken": false
+      "storeToken": false,
+      "config": {
+        "validateSignature": "true",
+        "useJwksUrl": "true",
+        "pkceEnabled": "true",
+        "pkceMethod": "S256",
+        "syncMode": "FORCE"
+      }
     }
   ],
   "clients": [
@@ -88,6 +95,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
@@ -97,6 +105,7 @@
         "token.exchange.standard.enabled": "true",
         "oauth2.dpop.bound.access.tokens": "true",
         "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "true",
         "backchannel.logout.url": "https://assist.ssra.gov.ss/api/auth/backchannel-logout",
         "use.refresh.tokens": "true",
         "client.offline.session.idle.timeout": "0"
@@ -107,6 +116,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
@@ -119,6 +129,7 @@
         "oauth2.dpop.bound.access.tokens": "true",
         "require.pushed.authorization.requests": "true",
         "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "true",
         "backchannel.logout.url": "https://console.ssra.gov.ss/api/auth/backchannel-logout"
       }
     },
@@ -127,6 +138,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "fullScopeAllowed": false,
@@ -134,7 +146,8 @@
         "pkce.code.challenge.method": "S256",
         "token.exchange.standard.enabled": "true",
         "oauth2.dpop.bound.access.tokens": "true",
-        "backchannel.logout.session.required": "true"
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "true"
       }
     },
     {
@@ -142,6 +155,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "fullScopeAllowed": false,
@@ -149,7 +163,8 @@
         "pkce.code.challenge.method": "S256",
         "token.exchange.standard.enabled": "true",
         "oauth2.dpop.bound.access.tokens": "true",
-        "backchannel.logout.session.required": "true"
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "true"
       }
     },
     {
@@ -157,6 +172,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {
@@ -169,6 +185,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {
@@ -181,6 +198,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {
@@ -193,6 +211,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {
@@ -205,6 +224,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {
@@ -217,6 +237,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {
@@ -229,6 +250,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {
@@ -241,6 +263,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {
@@ -253,6 +276,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {
@@ -265,6 +289,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {
@@ -277,6 +302,7 @@
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "attributes": {

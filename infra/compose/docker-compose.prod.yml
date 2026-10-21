@@ -153,11 +153,19 @@ services:
       KC_DB_PASSWORD: ""
       KC_BOOTSTRAP_ADMIN_PASSWORD: ""
       KEYCLOAK_ADMIN_PASSWORD: ""
+      KC_TRANSACTION_XA_ENABLED: "false"
+      KC_DB_POOL_INITIAL_SIZE: "5"
+      KC_DB_POOL_MIN_SIZE: "5"
+      KC_DB_POOL_MAX_SIZE: "30"
+      KC_DB_CONNECT_TIMEOUT: "10s"
       KC_HOSTNAME: ${KC_HOSTNAME:-https://sso.ssra.gov.ss}
       KC_HOSTNAME_STRICT: "true"
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
       KC_HTTP_MANAGEMENT_PORT: "9000"
+      KC_HTTP_MAX_QUEUED_REQUESTS: "256"
+      KC_SHUTDOWN_TIMEOUT: "15s"
+      KC_LOG_CONSOLE_OUTPUT: "json"
       KC_CACHE: ispn
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
