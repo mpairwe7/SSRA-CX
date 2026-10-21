@@ -40,10 +40,10 @@
 ## Control observations that R0 verified and R1-A implements
 
 - R1-A sets an empty workflow permission default, declares minimal job scopes, requires 40-character action SHAs, prohibits `pull_request_target`, and requires non-persisted checkout credentials.
-- R1-A adds a full-reachable-history Gitleaks CI job, pinned zizmor workflow audit, and SecOps ownership for workflow files. Local CI-policy regression tests reject a mutable action tag and omitted workflow-default permissions.
+- R1-A adds a full-reachable-history Gitleaks CI job, pinned zizmor workflow audit, and SecOps ownership for workflow files. PR #71 passed both new CI jobs; local regression tests reject mutable action tags, omitted workflow-default permissions, every valid `pull_request_target` form, and `.yaml` workflow bypasses.
 - R1-A applies pnpm's age, provenance, exotic-subdependency, and build-script policy together with uv's rolling one-week cooldown. The bounded uv security-fix record does not select artifact trust roots or create a broad exclusion.
 - OQ-018 remains open: no observation here asserts production image/model signing, registry trust, or pre-start verification.
 - The public BFF constructs a new safe turn body and suppresses client subject references before forwarding to the runtime.
 - The reference runtime defaults to production mode and returns unavailable for unset or unknown mode values.
 - Numeric-provenance, tool description hash, confirmation-token, PII-redaction, and hash-chain tests pass in the reference suite.
-- Full-history Gitleaks passed manually at R0 and is now represented by a CI job; pull-request CI evidence is required before AUD-006 is closed.
+- Full-history Gitleaks passed manually at R0 and in PR #71 CI. External repository branch-protection evidence remains required before AUD-006 is closed.

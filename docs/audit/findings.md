@@ -66,12 +66,12 @@
 ### AUD-006 · S2 · CI assurance · Supply-chain checks are incomplete and workflow review is not protected
 
 - Location: .github/workflows/ci.yml; .github/CODEOWNERS; tools/verify_supply_chain_and_signatures.py; libs/ssra_security/tests/test_supply_chain_policy.py.
-- Evidence: R1-A adds workflow-default `permissions: {}`, explicit least-privilege job permissions, a `.github/workflows/**` SecOps ownership rule, full-reachable-history Gitleaks, and a pinned zizmor gate. The repository verifier rejects `pull_request_target`, mutable action tags, missing workflow permissions, and persisted checkout credentials. The regression fixture proves a tag-pinned action is rejected.
+- Evidence: R1-A adds workflow-default `permissions: {}`, explicit least-privilege job permissions, a `.github/workflows/**` SecOps ownership rule, full-reachable-history Gitleaks, and a pinned zizmor gate. The repository verifier rejects every valid `pull_request_target` form, mutable action tags, missing workflow permissions, and persisted checkout credentials across `.yml` and `.yaml` workflows. Merged PR #71 passed the full required CI set, including the new full-history secret scan and workflow-security scan.
 - Standard: SLSA v1.2 Build L3; NIST SSDF v1.1 PO.3, PW.7, and RV.1; OWASP ASVS v5.0.0-15.1.2 and v5.0.0-15.2.1.
 - Impact: A future workflow regression, history secret, or unsafe workflow pattern can merge without the required second-control and security-owner review.
-- Fix: Implemented in R1-A. CI must now run the required checks and repository branch protection must enforce the workflow ownership rule before this finding can be marked fully remediated.
-- Verification: The local verifier and adversarial fixture cover tag actions and missing permissions. CI confirmation must demonstrate the new full-history scan and workflow audit on the pull request.
-- Phase: R1 · Owner: DevSecOps · Estimated PRs: 2 · Status: Implemented in source; CI and branch-protection evidence pending.
+- Fix: Implemented in R1-A. CI runs the required checks; repository branch protection still needs external evidence that it enforces the workflow ownership rule before this finding can be marked fully remediated.
+- Verification: The local verifier and adversarial fixtures cover tag actions, missing permissions, all `pull_request_target` forms, and `.yaml` workflow coverage. PR #71 supplied passing full-history and workflow-audit CI evidence.
+- Phase: R1 · Owner: DevSecOps · Estimated PRs: 2 · Status: Implemented and CI verified; branch-protection evidence pending.
 
 ### AUD-007 · S2 · Artifact and dependency integrity · Cooldown and image-verification claims are only partial
 
@@ -90,8 +90,8 @@
 - Standard: OWASP ASVS v5.0.0-15.1.1 and v5.0.0-15.2.1; NIST SSDF v1.1 PO.3 and PW.7. The 14 October 2026 official Next.js advisory is not applicable to a currently served Next package, but the stale configuration prevents a durable proof of that status.
 - Impact: Security response and user-interface maintenance can target the wrong runtime. A future build may unintentionally introduce an affected Next version or Cache Components without an explicit dependency decision.
 - Fix: Implemented in R1-A through ADR-020. Any future framework adoption needs an explicit dependency, container, security-review, and test decision.
-- Verification: The local verifier checks manifests and container commands; CI confirmation remains pending.
-- Phase: R1 · Owner: Frontend and DevSecOps · Estimated PRs: 1 · Status: Implemented in source; CI evidence pending.
+- Verification: The local verifier checks manifests and container commands; PR #71 CI passed the complete repository gate.
+- Phase: R1 · Owner: Frontend and DevSecOps · Estimated PRs: 1 · Status: Implemented and CI verified.
 
 ### AUD-009 · S2 · Quality and UX assurance · No executable browser-flow, route-matrix, or flake gate
 

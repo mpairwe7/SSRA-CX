@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-10-22
 
-**Current Status:** Phases 0–4 contain reference implementations; Gate R0 is approved and R1 remediation is authorized. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, and later phase gates. Local verification is separate from production approval.
+**Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
 ## 0. Frontend Trust & UX Audit (2026-10-21)
@@ -29,7 +29,7 @@
 - Independently reproduced local lint, test, eval, and full-history secret-scan evidence at commit 7ca1f26e83b08decf64eacf02af059b537e69db7. No S0 compromise indicator was found.
 - Recorded three S1 blockers: process-local conversation state, direct GPU-profile egress around agentgateway, and no transactional durable API outbox. The report also records supply-chain, Compose, frontend/browser-flow, offline statutory-data, MCP-topology, telemetry, and reproducibility gaps.
 - Added OQ-018 for artifact/model trust and OQ-019 for offline statutory snapshot governance; both retain safe fail-closed fallbacks until SSRA approves the relevant operating decisions.
-- Gate R0 was approved in the active project session on 2026-10-22. R1 remediation is authorized; this approval does not advance any operational production gate.
+- Gate R0 was approved in the active project session on 2026-10-22. R1 remediation was authorized; this approval did not advance an operational production gate.
 
 ## 0.3 [R1-A CI, Dependency, and Runtime-Declaration Remediation](./audit/phase-R1-report.md) (2026-10-22)
 
@@ -40,7 +40,7 @@
 - Made every Taskfile pytest invocation choose the local `/tmp` root rather than inheriting a shared mounted temporary directory, preserving pytest's owner-safety checks for filesystem fixtures.
 - Declared the project-local uv environment for basedpyright so the strict analyzer resolves the locked third-party packages and editable workspace members in both local and CI task runs.
 - Recorded ADR-020 and removed stale Next.js configuration. The runnable frontend and staff-console reference applications are Node BFF servers; a future framework adoption requires an explicit dependency, container, security-review, and verification decision.
-- AUD-006 and AUD-008 are implemented in source pending pull-request CI and branch-protection evidence. AUD-007 is partially remediated: production artifact/model signing, registry trust, and pre-start verification remain blocked by OQ-018. No production or phase exit gate advanced.
+- Merged PR #71 passed the required CI checks and resolved all actionable review threads. Gate R1 was approved in the active project session on 2026-10-22 for non-production R2 reference remediation; [the approval record](./audit/phase-R1-approval.md) retains the scope. External branch-protection evidence, publishing identity, runner portability, and OQ-018 artifact/model trust remain open. No production or later phase gate advanced.
 
 ---
 
