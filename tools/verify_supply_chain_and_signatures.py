@@ -292,10 +292,12 @@ def verify_uv_cooldown_policy(repo_root: Path) -> None:
         "uv.lock certifi sdist must match the DEP-EXC-002 reviewed checksum"
     )
     wheels = certifi_package.get("wheels")
-    assert isinstance(wheels, list) and any(
-        isinstance(wheel, dict) and wheel.get("hash") == f"sha256:{_CERTIFI_WHEEL_SHA256}"
-        for wheel in wheels
-    ), "uv.lock certifi wheel must match the DEP-EXC-002 reviewed checksum"
+    assert (
+        isinstance(wheels, list)
+        and len(wheels) == 1
+        and isinstance(wheels[0], dict)
+        and wheels[0].get("hash") == f"sha256:{_CERTIFI_WHEEL_SHA256}"
+    ), "uv.lock certifi wheels must be the DEP-EXC-002 reviewed artifact set"
 
 
 def main() -> None:

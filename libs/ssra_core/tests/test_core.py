@@ -270,5 +270,25 @@ def test_feature_flag_engine_rejects_malformed_shared_override_envelopes(tmp_pat
         assert_rejected('{"overrides": []}')
         assert_rejected(signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": []}))
         assert_rejected(signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": {"allowed_channels": None}}))
+        assert_rejected(signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": {"name": 1}}))
+        assert_rejected(signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": {"description": []}}))
+        assert_rejected(signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": {"enabled": "false"}}))
+        assert_rejected(signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": {"rollout_pct": True}}))
+        assert_rejected(signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": {"rollout_pct": 101}}))
+        assert_rejected(
+            signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": {"allowed_channels": "web"}})
+        )
+        assert_rejected(signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": {"allowed_locales": "en"}}))
+        overflowing_overrides = {"FF_AUTONOMOUS_GOAL_PLANNER": {"rollout_pct": float("inf")}}
+        overflowing_canonical = json.dumps(
+            overflowing_overrides, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        overflowing_signature = hmac.new(
+            engine.salt.encode("utf-8"), overflowing_canonical, hashlib.sha256
+        ).hexdigest()
+        assert_rejected(
+            '{"overrides":{"FF_AUTONOMOUS_GOAL_PLANNER":{"rollout_pct":1e999}},'
+            f'"hmac_sha256":"{overflowing_signature}"}}'
+        )
     finally:
         engine.reset_flag_override()

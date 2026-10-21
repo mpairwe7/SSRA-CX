@@ -61,6 +61,28 @@ SSRA_SUPPORTED_LOCALES: tuple[str, ...] = (
     "shk",
 )
 
+SSRA_SUPPORTED_CHANNELS: tuple[str, ...] = (
+    "web",
+    "whatsapp",
+    "sms",
+    "ussd",
+    "voice",
+    "console",
+)
+
+_SHARED_OVERRIDE_RULE_FIELDS = frozenset(
+    {
+        "name",
+        "description",
+        "enabled",
+        "rollout_pct",
+        "allowed_channels",
+        "allowed_locales",
+    }
+)
+_SHARED_OVERRIDE_CHANNELS = frozenset(SSRA_SUPPORTED_CHANNELS)
+_SHARED_OVERRIDE_LOCALES = frozenset(SSRA_SUPPORTED_LOCALES)
+
 
 @dataclass(frozen=True)
 class FeatureFlagRule:
@@ -70,9 +92,7 @@ class FeatureFlagRule:
     description: str
     enabled: bool = True
     rollout_pct: int = 100
-    allowed_channels: tuple[str, ...] = field(
-        default_factory=lambda: ("web", "whatsapp", "sms", "ussd", "voice", "console")
-    )
+    allowed_channels: tuple[str, ...] = field(default_factory=lambda: SSRA_SUPPORTED_CHANNELS)
     allowed_locales: tuple[str, ...] = field(default_factory=lambda: SSRA_SUPPORTED_LOCALES)
 
 
@@ -98,6 +118,78 @@ def compute_deterministic_flag_bucket(
     msg = f"{flag_name}:{clean_subject}".encode()
     digest = hmac.new(salt.encode("utf-8"), msg, hashlib.sha256).hexdigest()
     return int(digest[:8], 16) % 100
+
+
+def _parse_shared_override_scope(
+    value: object,
+    *,
+    field_name: str,
+    permitted_values: frozenset[str],
+) -> tuple[str, ...]:
+    """Validate a persisted cohort scope before it reaches flag evaluation."""
+    if not isinstance(value, list) or not value or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{field_name} must be a non-empty JSON array of strings")
+
+    normalized = tuple(item.strip().lower() for item in value)
+    if (
+        any(not item for item in normalized)
+        or len(set(normalized)) != len(normalized)
+        or not set(normalized).issubset(permitted_values)
+    ):
+        raise ValueError(f"{field_name} must contain distinct supported values")
+    return normalized
+
+
+def _parse_shared_override_rule(flag_name: str, value: object) -> FeatureFlagRule:
+    """Convert one signed JSON override entry into a strictly typed rule."""
+    if not isinstance(value, dict):
+        raise ValueError("Feature-flag override entries must be mappings")
+
+    unexpected_fields = set(value).difference(_SHARED_OVERRIDE_RULE_FIELDS)
+    if unexpected_fields:
+        raise ValueError("Feature-flag override entries may not contain unknown fields")
+
+    name = value.get("name", flag_name)
+    description = value.get("description", "")
+    enabled = value.get("enabled", True)
+    rollout_pct = value.get("rollout_pct", 100)
+    if not isinstance(name, str) or name != flag_name:
+        raise ValueError("Feature-flag override name must match its map key")
+    if not isinstance(description, str):
+        raise ValueError("Feature-flag override description must be a string")
+    if not isinstance(enabled, bool):
+        raise ValueError("Feature-flag override enabled must be a boolean")
+    if isinstance(rollout_pct, bool) or not isinstance(rollout_pct, int):
+        raise ValueError("Feature-flag override rollout_pct must be an integer")
+    if not 0 <= rollout_pct <= 100:
+        raise ValueError("Feature-flag override rollout_pct must be between 0 and 100")
+
+    allowed_channels = (
+        _parse_shared_override_scope(
+            value["allowed_channels"],
+            field_name="allowed_channels",
+            permitted_values=_SHARED_OVERRIDE_CHANNELS,
+        )
+        if "allowed_channels" in value
+        else ("web",)
+    )
+    allowed_locales = (
+        _parse_shared_override_scope(
+            value["allowed_locales"],
+            field_name="allowed_locales",
+            permitted_values=_SHARED_OVERRIDE_LOCALES,
+        )
+        if "allowed_locales" in value
+        else SSRA_SUPPORTED_LOCALES
+    )
+    return FeatureFlagRule(
+        name=name,
+        description=description,
+        enabled=enabled,
+        rollout_pct=rollout_pct,
+        allowed_channels=allowed_channels,
+        allowed_locales=allowed_locales,
+    )
 
 
 class FeatureFlagEngine:
@@ -140,7 +232,7 @@ class FeatureFlagEngine:
                 description=str(f_data.get("description", "")),
                 enabled=bool(f_data.get("enabled", True)),
                 rollout_pct=pct,
-                allowed_channels=chans or ("web", "whatsapp", "sms", "ussd", "voice", "console"),
+                allowed_channels=chans or SSRA_SUPPORTED_CHANNELS,
                 allowed_locales=locs or SSRA_SUPPORTED_LOCALES,
             )
             self._base_rules[str(f_name)] = rule
@@ -173,7 +265,13 @@ class FeatureFlagEngine:
         if not isinstance(data, dict) or not isinstance(sig, str):
             self._overrides.clear()
             return
-        canonical = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        try:
+            canonical = json.dumps(
+                data, sort_keys=True, separators=(",", ":"), allow_nan=False
+            ).encode("utf-8")
+        except (TypeError, ValueError, OverflowError):
+            self._overrides.clear()
+            return
         expected = hmac.new(self.salt.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected):
             self._overrides.clear()
@@ -182,19 +280,10 @@ class FeatureFlagEngine:
         synced: dict[str, FeatureFlagRule] = {}
         try:
             for k, v in data.items():
-                if not isinstance(v, dict):
-                    raise ValueError("Feature-flag override entries must be mappings")
-                synced[str(k)] = FeatureFlagRule(
-                    name=str(v.get("name", k)),
-                    description=str(v.get("description", "")),
-                    enabled=bool(v.get("enabled", True)),
-                    rollout_pct=max(0, min(100, int(v.get("rollout_pct", 100)))),
-                    allowed_channels=tuple(str(c) for c in v.get("allowed_channels", ("web",))),
-                    allowed_locales=tuple(
-                        str(loc) for loc in v.get("allowed_locales", SSRA_SUPPORTED_LOCALES)
-                    ),
-                )
-        except (TypeError, ValueError):
+                if not isinstance(k, str) or not k:
+                    raise ValueError("Feature-flag override names must be non-empty strings")
+                synced[k] = _parse_shared_override_rule(k, v)
+        except (TypeError, ValueError, OverflowError):
             self._overrides.clear()
             return
         self._overrides = synced
@@ -252,11 +341,7 @@ class FeatureFlagEngine:
         chans = (
             tuple(str(c).lower() for c in allowed_channels)
             if allowed_channels is not None
-            else (
-                existing.allowed_channels
-                if existing
-                else ("web", "whatsapp", "sms", "ussd", "voice", "console")
-            )
+            else (existing.allowed_channels if existing else SSRA_SUPPORTED_CHANNELS)
         )
         locs = (
             tuple(str(loc).lower() for loc in allowed_locales)

@@ -32,7 +32,7 @@ The repository enforces a seven-day dependency release cooldown. A security fix 
 | Security reason | GitHub classifies [GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2) as Critical and identifies 2026.10.19 as the first patched release. |
 | Evidence reviewed | The [official certifi 2026.10.19 release](https://github.com/certifi/python-certifi/releases/tag/2026.10.19) and [PyPI release](https://pypi.org/project/certifi/2026.10.19/) publish wheel SHA-256 `42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b` and source SHA-256 `035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae`. |
 | Verification date | 2026-10-22 |
-| Bound | `exclude-newer-package = { certifi = "2026-10-21T00:00:00Z" }` permits only the reviewed release window before the regular seven-day holdback. The verifier requires that exact cutoff in both manifest and lockfile, exactly one `certifi` 2026.10.19 record, the PyPI registry source, and both reviewed hashes. |
+| Bound | `exclude-newer-package = { certifi = "2026-10-21T00:00:00Z" }` permits only the reviewed release window before the regular seven-day holdback. The verifier requires that exact cutoff in both manifest and lockfile, exactly one `certifi` 2026.10.19 record, the PyPI registry source, the reviewed source hash, and exactly one reviewed wheel hash with no additional wheel record. |
 | Expiry | Remove this package-specific cutoff and regenerate `uv.lock` no later than 2026-10-27, when 2026.10.19 reaches the normal seven-day age. |
 | Scope | Source and reference-lock remediation only. Any deployed image must be independently rebuilt and verified under OQ-018; this record does not authorize image, model, or production deployment changes. |
 

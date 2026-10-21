@@ -86,6 +86,7 @@ def _write_uv_policy_fixture(
     *,
     package_name: str = "certifi",
     wheel_hash: str = "42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b",
+    extra_wheel_hash: str | None = None,
 ) -> None:
     """Create the smallest lock pair that satisfies the reviewed uv exception."""
     cutoff = "2026-10-21T00:00:00Z"
@@ -97,6 +98,9 @@ exclude-newer-package = {{ {package_name} = "{cutoff}" }}
 ''',
         encoding="utf-8",
     )
+    wheels = f'{{ hash = "sha256:{wheel_hash}" }}'
+    if extra_wheel_hash is not None:
+        wheels += f', {{ hash = "sha256:{extra_wheel_hash}" }}'
     (tmp_path / "uv.lock").write_text(
         f'''version = 1
 
@@ -111,7 +115,7 @@ name = "certifi"
 version = "2026.10.19"
 source = {{ registry = "https://pypi.org/simple" }}
 sdist = {{ hash = "sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae" }}
-wheels = [{{ hash = "sha256:{wheel_hash}" }}]
+wheels = [{wheels}]
 ''',
         encoding="utf-8",
     )
@@ -231,5 +235,13 @@ def test_uv_policy_rejects_an_unverified_certifi_wheel(tmp_path: Path) -> None:
     """The exception must pin the reviewed certifi artifact, not merely its version."""
     _write_uv_policy_fixture(tmp_path, wheel_hash="0" * 64)
 
-    with pytest.raises(AssertionError, match="reviewed checksum"):
+    with pytest.raises(AssertionError, match="reviewed artifact set"):
+        _uv_cooldown_policy_verifier()(tmp_path)
+
+
+def test_uv_policy_rejects_an_additional_certifi_wheel(tmp_path: Path) -> None:
+    """The reviewed exception permits exactly the expected certifi wheel artifact."""
+    _write_uv_policy_fixture(tmp_path, extra_wheel_hash="0" * 64)
+
+    with pytest.raises(AssertionError, match="reviewed artifact set"):
         _uv_cooldown_policy_verifier()(tmp_path)
