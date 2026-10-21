@@ -18,6 +18,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import zlib from "node:zlib";
 import { ICONS } from "../../packages/ui/icons.js";
 import { isOpsDashboardPath, renderOpsDashboardHtml } from "../../packages/ui/ops-console.js";
 
@@ -105,13 +106,64 @@ function buildSecurityHeaders(nonce) {
   };
 }
 
+function compactHtmlAssetBlocks(html) {
+  return html
+    .replace(/<style([^>]*)>([\s\S]*?)<\/style>/g, (_, attrs, css) => {
+      const minCss = css
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\s+/g, " ")
+        .replace(/\s*([{}:;,>~])\s*/g, "$1")
+        .replace(/;}/g, "}")
+        .trim();
+      return `<style${attrs}>${minCss}</style>`;
+    })
+    .replace(/<script([^>]*)>([\s\S]*?)<\/script>/g, (_, attrs, js) => {
+      const minJs = js
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith("//"))
+        .join("\n");
+      return `<script${attrs}>${minJs}</script>`;
+    });
+}
+
+function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
+  const acceptEnc = String(req.headers["accept-encoding"] ?? "");
+  const buf = Buffer.from(bodyStr, "utf-8");
+  if (buf.length > 512 && /\bbr\b/.test(acceptEnc)) {
+    const compressed = zlib.brotliCompressSync(buf, {
+      params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 },
+    });
+    res.writeHead(statusCode, {
+      ...headers,
+      "Content-Encoding": "br",
+      Vary: "Accept-Encoding",
+    });
+    res.end(compressed);
+    return;
+  }
+  if (buf.length > 512 && /\bgzip\b/.test(acceptEnc)) {
+    const compressed = zlib.gzipSync(buf, { level: 6 });
+    res.writeHead(statusCode, {
+      ...headers,
+      "Content-Encoding": "gzip",
+      Vary: "Accept-Encoding",
+    });
+    res.end(compressed);
+    return;
+  }
+  res.writeHead(statusCode, headers);
+  res.end(buf);
+}
+
 function renderPwaShellHtml(locale, nonce) {
   const dir = locale === "ar" ? "rtl" : "ltr";
-  return `<!DOCTYPE html>
+  const rawHtml = `<!DOCTYPE html>
 <html lang="${locale}" dir="${dir}" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Official South Sudan Revenue Authority (SSRA / NRA) grounded AI tax assistant for TIN registration, PAYE, Withholding Tax, TCC, and customs guidance." />
   <title>SSRA Assist — South Sudan Revenue Authority Official AI Assistant</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <style nonce="${nonce}">
@@ -169,10 +221,13 @@ function renderPwaShellHtml(locale, nonce) {
       --text-0: #0C1C14;
       --text-1: #1F3329;
       --text-2: #4A5E53;
-      --text-3: #5B7065;
+      --text-3: #4E6358;
       --ssra-blue-bright: #0F47AF;
-      --ssra-teal-light: #07792B;
-      --ssra-gold: #9A6B00;
+      --ssra-teal-light: #066926;
+      --ssra-gold: #704B00;
+      --success: #066926;
+      --warning: #853A06;
+      --danger: #B91C1C;
       --grad-user: linear-gradient(135deg, rgba(7, 137, 48, 0.14), rgba(212, 155, 11, 0.12));
       --shadow-md: 0 6px 20px rgba(12, 28, 20, 0.08), 0 0 0 1px rgba(12, 28, 20, 0.05);
       --shadow-lg: 0 16px 44px rgba(12, 28, 20, 0.12), 0 0 0 1px rgba(12, 28, 20, 0.06);
@@ -220,12 +275,22 @@ function renderPwaShellHtml(locale, nonce) {
     .skip-link:focus { top: 10px; }
 
     /* App Shell Grid (chatv2) */
-    .app-shell { display: grid; grid-template-columns: 288px minmax(0, 1fr); height: 100dvh; width: 100vw; transition: grid-template-columns 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+    .app-shell { display: grid; grid-template-columns: 288px minmax(0, 1fr); height: 100dvh; width: 100%; transition: grid-template-columns 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
     .app-shell[data-sidebar="collapsed"] { grid-template-columns: 0px minmax(0, 1fr); }
+    .rail-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 45; }
     @media (max-width: 960px) {
       .app-shell { grid-template-columns: minmax(0, 1fr); }
-      .rail-wrap { position: fixed; inset: 0 auto 0 0; width: 292px; z-index: 50; transform: translateX(-100%); transition: transform 0.22s ease; }
+      .rail-wrap { position: fixed; inset: 0 auto 0 0; width: min(292px, 86vw); z-index: 50; transform: translateX(-100%); transition: transform 0.22s ease; }
+      :root[dir="rtl"] .rail-wrap { inset: 0 0 0 auto; transform: translateX(100%); }
       .app-shell[data-mobile-rail="open"] .rail-wrap { transform: translateX(0); }
+      .app-shell[data-mobile-rail="open"] .rail-mobile-backdrop { display: block; }
+    }
+    @media (max-width: 640px) {
+      .chat-header { padding: 0.55rem 0.75rem; gap: 0.45rem; }
+      .status-badge { display: none; }
+      .landing { padding: 1rem 0.85rem 1.5rem; gap: 0.9rem; justify-content: flex-start; }
+      .landing-prompts { grid-template-columns: minmax(0, 1fr); }
+      .composer-hint { display: none; }
     }
 
     /* ── chatv2 Sidebar (ConversationRail + AccountRail from FinalYearProject) ── */
@@ -287,7 +352,7 @@ function renderPwaShellHtml(locale, nonce) {
     }
     .rail-row:hover .rail-row-actions, .rail-row:focus-within .rail-row-actions { display: inline-flex; }
     .rail-act-mini {
-      width: 24px; height: 24px; border-radius: 6px; border: none; background: transparent;
+      width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent;
       color: var(--text-2); cursor: pointer; font-size: 0.74rem; display: inline-flex;
       align-items: center; justify-content: center;
     }
@@ -449,7 +514,8 @@ function renderPwaShellHtml(locale, nonce) {
   <div class="ssra-flag-ribbon" aria-hidden="true"></div>
   <a class="skip-link" href="#main-content">Skip to main content</a>
 
-  <div id="ssra-app-shell" class="app-shell chatv2" data-sidebar="open" data-locale="${locale}">
+  <div id="ssra-app-shell" class="app-shell chatv2" data-sidebar="open" data-mobile-rail="closed" data-locale="${locale}">
+    <div id="rail-mobile-backdrop" class="rail-mobile-backdrop" aria-hidden="true"></div>
     <!-- Left Conversation Rail (ConversationRail.tsx + AccountRail.tsx pattern) -->
     <aside class="rail-wrap" aria-label="Conversation history and account">
       <div class="rail-top">
@@ -476,20 +542,20 @@ function renderPwaShellHtml(locale, nonce) {
       <!-- AccountRail Footer & Upward Popover Menu -->
       <div class="rail-footer">
         <div id="acct-popover" class="acct-popover" role="menu" aria-label="Account, Identity &amp; Operations Menu">
-          <div class="acct-pop-section">Taxpayer Session Identity</div>
-          <button type="button" class="acct-pop-item" data-select-identity="ANONYMOUS"><span>Public Visitor (T0 Anonymous)</span><span id="chk-anon">${ICONS.check}</span></button>
-          <button type="button" class="acct-pop-item" data-select-identity="sub_taxpayer_amina_01"><span>Amina M. — TIN ••••1234 (T1/T2)</span><span id="chk-amina"></span></button>
-          <button type="button" class="acct-pop-item" data-select-identity="sub_taxpayer_deng_02"><span>Deng Trading — TIN ••••5678 (T1/T2)</span><span id="chk-deng"></span></button>
-          <hr class="acct-pop-hr" />
-          <div class="acct-pop-section">SSRA Operations Console (Staff / Admin / Audit)</div>
-          <a href="/admin" class="acct-pop-item"><span>${ICONS.gauge} Operations Overview</span><span>${ICONS.arrowUpRight}</span></a>
-          <a href="/agent" class="acct-pop-item"><span>${ICONS.inbox} Agent Queue &amp; Copilot</span><span>${ICONS.arrowUpRight}</span></a>
-          <a href="/calls" class="acct-pop-item"><span>${ICONS.phone} AI Phone Call Desk</span><span>${ICONS.arrowUpRight}</span></a>
-          <a href="/analytics" class="acct-pop-item"><span>${ICONS.chart} Analytics &amp; CX Scorecard</span><span>${ICONS.arrowUpRight}</span></a>
-          <a href="/admin/flags" class="acct-pop-item"><span>${ICONS.flag} Flags &amp; Knowledge Release</span><span>${ICONS.arrowUpRight}</span></a>
-          <a href="/admin/audit" class="acct-pop-item"><span>${ICONS.shieldCheck} WORM Audit &amp; Forensic Replay</span><span>${ICONS.arrowUpRight}</span></a>
-          <hr class="acct-pop-hr" />
-          <button type="button" id="open-settings-btn" class="acct-pop-item"><span>${ICONS.settings} Settings &amp; Privacy</span><span>Ctrl+,</span></button>
+          <div class="acct-pop-section" role="presentation">Taxpayer Session Identity</div>
+          <button type="button" class="acct-pop-item" role="menuitemradio" aria-checked="true" data-select-identity="ANONYMOUS"><span>Public Visitor (T0 Anonymous)</span><span id="chk-anon">${ICONS.check}</span></button>
+          <button type="button" class="acct-pop-item" role="menuitemradio" aria-checked="false" data-select-identity="sub_taxpayer_amina_01"><span>Amina M. — TIN ••••1234 (T1/T2)</span><span id="chk-amina"></span></button>
+          <button type="button" class="acct-pop-item" role="menuitemradio" aria-checked="false" data-select-identity="sub_taxpayer_deng_02"><span>Deng Trading — TIN ••••5678 (T1/T2)</span><span id="chk-deng"></span></button>
+          <hr class="acct-pop-hr" role="separator" />
+          <div class="acct-pop-section" role="presentation">SSRA Operations Console (Staff / Admin / Audit)</div>
+          <a href="/admin" class="acct-pop-item" role="menuitem"><span>${ICONS.gauge} Operations Overview</span><span>${ICONS.arrowUpRight}</span></a>
+          <a href="/agent" class="acct-pop-item" role="menuitem"><span>${ICONS.inbox} Agent Queue &amp; Copilot</span><span>${ICONS.arrowUpRight}</span></a>
+          <a href="/calls" class="acct-pop-item" role="menuitem"><span>${ICONS.phone} AI Phone Call Desk</span><span>${ICONS.arrowUpRight}</span></a>
+          <a href="/analytics" class="acct-pop-item" role="menuitem"><span>${ICONS.chart} Analytics &amp; CX Scorecard</span><span>${ICONS.arrowUpRight}</span></a>
+          <a href="/admin/flags" class="acct-pop-item" role="menuitem"><span>${ICONS.flag} Flags &amp; Knowledge Release</span><span>${ICONS.arrowUpRight}</span></a>
+          <a href="/admin/audit" class="acct-pop-item" role="menuitem"><span>${ICONS.shieldCheck} WORM Audit &amp; Forensic Replay</span><span>${ICONS.arrowUpRight}</span></a>
+          <hr class="acct-pop-hr" role="separator" />
+          <button type="button" id="open-settings-btn" class="acct-pop-item" role="menuitem"><span>${ICONS.settings} Settings &amp; Privacy</span><span>Ctrl+,</span></button>
         </div>
 
         <button type="button" id="acct-rail-trigger" class="acct-rail-trigger" aria-expanded="false" aria-haspopup="menu">
@@ -530,7 +596,7 @@ function renderPwaShellHtml(locale, nonce) {
             <option value="zne" ${locale === "zne" ? "selected" : ""}>Pazande (zne)</option>
             <option value="shk" ${locale === "shk" ? "selected" : ""}>Dhøg Cøllø Shilluk (shk)</option>
           </select>
-          <button type="button" id="theme-toggle-btn" class="icon-btn" aria-label="Switch color theme">${ICONS.moon} Dark</button>
+          <button type="button" id="theme-toggle-btn" class="icon-btn" title="Switch color theme">${ICONS.moon} Dark</button>
           <button type="button" id="clear-chat-btn" class="icon-btn" aria-label="Clear conversation">${ICONS.trash} Clear</button>
         </div>
       </header>
@@ -627,16 +693,16 @@ function renderPwaShellHtml(locale, nonce) {
   <!-- ConversationSearch Modal (ConversationSearch.tsx pattern, Ctrl+K) -->
   <div id="search-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Search conversations">
     <div class="search-modal">
-      <input id="conv-search-input" class="search-input" type="text" placeholder="Search saved tax conversations or jump to Operations… (Esc to close)" autocomplete="off" />
-      <div id="conv-search-results" class="search-results" role="listbox"></div>
+      <input id="conv-search-input" class="search-input" type="text" aria-label="Search saved tax conversations" placeholder="Search saved tax conversations or jump to Operations… (Esc to close)" autocomplete="off" />
+      <div id="conv-search-results" class="search-results" role="group" aria-label="Search results"></div>
     </div>
   </div>
 
   <!-- Tabbed SettingsDialog Modal (SettingsDialog.tsx pattern) -->
   <div id="settings-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Settings">
     <div class="settings-modal">
-      <div class="settings-tabs" role="tablist">
-        <div class="settings-heading">Settings</div>
+      <div class="settings-tabs" role="tablist" aria-label="Settings categories">
+        <div class="settings-heading" role="presentation">Settings</div>
         <button type="button" class="settings-tab-btn active" role="tab" aria-selected="true" data-settings-tab="general">General &amp; Theme</button>
         <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="voice">Voice &amp; Speech</button>
         <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="profile">Taxpayer Profile</button>
@@ -645,7 +711,7 @@ function renderPwaShellHtml(locale, nonce) {
       </div>
       <div class="settings-pane" role="tabpanel">
         <div class="settings-pane-head">
-          <h3 id="settings-pane-title" class="settings-pane-title">General &amp; Appearance</h3>
+          <h2 id="settings-pane-title" class="settings-pane-title">General &amp; Appearance</h2>
           <button type="button" id="close-settings-btn" class="icon-btn">${ICONS.close} Close</button>
         </div>
         <div id="settings-pane-body" class="settings-pane-body"></div>
@@ -984,7 +1050,7 @@ function renderPwaShellHtml(locale, nonce) {
 
       function renderConvRow(c) {
         const active = c.id === state.activeId ? " active" : "";
-        return '<div class="rail-row' + active + '">' +
+        return '<div class="rail-row' + active + '" role="listitem">' +
           '<button type="button" class="rail-item" data-conv-id="' + escapeHtml(c.id) + '">' +
             (c.pinned ? ICONS.pin + " " : ICONS.messageSquare + " ") + escapeHtml(c.title) +
           "</button>" +
@@ -1002,17 +1068,17 @@ function renderPwaShellHtml(locale, nonce) {
           if (state.conversations.length === 0) {
             setSafeHtml(
               convListEl,
-              '<div class="rail-empty-hint">Your tax conversations will appear here, grouped by Pinned &amp; Recent.</div>',
+              '<div class="rail-empty-hint" role="listitem">Your tax conversations will appear here, grouped by Pinned &amp; Recent.</div>',
             );
           } else {
             const pinned = state.conversations.filter((c) => c.pinned);
             const recent = state.conversations.filter((c) => !c.pinned);
             let html = "";
             if (pinned.length) {
-              html += '<div class="rail-section-label">Pinned</div>' + pinned.map(renderConvRow).join("");
+              html += '<div class="rail-section-label" role="presentation">Pinned</div>' + pinned.map(renderConvRow).join("");
             }
             if (recent.length) {
-              html += '<div class="rail-section-label">Today</div>' + recent.map(renderConvRow).join("");
+              html += '<div class="rail-section-label" role="presentation">Today</div>' + recent.map(renderConvRow).join("");
             }
             setSafeHtml(convListEl, html);
           }
@@ -1172,7 +1238,7 @@ function renderPwaShellHtml(locale, nonce) {
       });
 
       input?.addEventListener("input", () => {
-        const lines = String(input.value || "").split("\n").length;
+        const lines = String(input.value || "").split("\\n").length;
         input.rows = Math.min(5, Math.max(1, lines));
       });
 
@@ -1321,6 +1387,9 @@ function renderPwaShellHtml(locale, nonce) {
       };
       document.getElementById("rail-collapse-btn")?.addEventListener("click", toggleSidebar);
       document.getElementById("header-rail-btn")?.addEventListener("click", toggleSidebar);
+      document.getElementById("rail-mobile-backdrop")?.addEventListener("click", () => {
+        shell?.setAttribute("data-mobile-rail", "closed");
+      });
 
       document.getElementById("theme-toggle-btn")?.addEventListener("click", () => {
         const next = state.theme === "dark" ? "light" : state.theme === "light" ? "high-contrast" : "dark";
@@ -1608,6 +1677,7 @@ function renderPwaShellHtml(locale, nonce) {
   </script>
 </body>
 </html>`;
+  return compactHtmlAssetBlocks(rawHtml);
 }
 
 async function readRequestBody(req) {
@@ -1683,6 +1753,12 @@ const server = http.createServer(async (req, res) => {
 
   const isGetOrHead = method === "GET" || method === "HEAD";
   const traceparent = createTraceparent(req.headers.traceparent);
+
+  if (isGetOrHead && pathname === "/robots.txt") {
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", ...secHeaders });
+    res.end("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /v1/\n");
+    return;
+  }
 
   if (isGetOrHead && (pathname === "/healthz" || pathname === "/health")) {
     res.writeHead(200, { "Content-Type": "application/json", ...secHeaders });
@@ -1833,8 +1909,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (isGetOrHead && isOpsDashboardPath(pathname)) {
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...secHeaders });
-    res.end(renderOpsDashboardHtml(pathname, nonce));
+    sendBodyWithCompression(
+      req,
+      res,
+      200,
+      { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+      renderOpsDashboardHtml(pathname, nonce),
+    );
     return;
   }
 
@@ -1982,8 +2063,13 @@ const server = http.createServer(async (req, res) => {
   const locale = SUPPORTED_LOCALES.has(seg)
     ? seg
     : negotiateAcceptLanguage(req.headers["accept-language"]);
-  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...secHeaders });
-  res.end(renderPwaShellHtml(locale, nonce));
+  sendBodyWithCompression(
+    req,
+    res,
+    200,
+    { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+    renderPwaShellHtml(locale, nonce),
+  );
 });
 
 server.listen(PORT, HOSTNAME, () => {

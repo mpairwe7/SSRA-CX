@@ -8,6 +8,7 @@
 
 import crypto from "node:crypto";
 import http from "node:http";
+import zlib from "node:zlib";
 import { renderOpsDashboardHtml } from "../../packages/ui/ops-console.js";
 
 const PORT = Number.parseInt(process.env.PORT ?? "3001", 10);
@@ -73,6 +74,35 @@ function buildConsoleHeaders(nonce) {
   };
 }
 
+function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
+  const acceptEnc = String(req.headers["accept-encoding"] ?? "");
+  const buf = Buffer.from(bodyStr, "utf-8");
+  if (buf.length > 512 && /\bbr\b/.test(acceptEnc)) {
+    const compressed = zlib.brotliCompressSync(buf, {
+      params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 },
+    });
+    res.writeHead(statusCode, {
+      ...headers,
+      "Content-Encoding": "br",
+      Vary: "Accept-Encoding",
+    });
+    res.end(compressed);
+    return;
+  }
+  if (buf.length > 512 && /\bgzip\b/.test(acceptEnc)) {
+    const compressed = zlib.gzipSync(buf, { level: 6 });
+    res.writeHead(statusCode, {
+      ...headers,
+      "Content-Encoding": "gzip",
+      Vary: "Accept-Encoding",
+    });
+    res.end(compressed);
+    return;
+  }
+  res.writeHead(statusCode, headers);
+  res.end(buf);
+}
+
 const server = http.createServer(async (req, res) => {
   const nonce = crypto.randomBytes(16).toString("base64");
   const secHeaders = buildConsoleHeaders(nonce);
@@ -109,6 +139,12 @@ const server = http.createServer(async (req, res) => {
 
   const isGetOrHead = method === "GET" || method === "HEAD";
   const traceparent = createTraceparent(req.headers.traceparent);
+
+  if (isGetOrHead && pathname === "/robots.txt") {
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", ...secHeaders });
+    res.end("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /v1/\n");
+    return;
+  }
 
   if (isGetOrHead && (pathname === "/healthz" || pathname === "/health")) {
     res.writeHead(200, { "Content-Type": "application/json", ...secHeaders });
@@ -285,8 +321,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...secHeaders });
-  res.end(renderOpsDashboardHtml(pathname, nonce));
+  sendBodyWithCompression(
+    req,
+    res,
+    200,
+    { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+    renderOpsDashboardHtml(pathname, nonce),
+  );
 });
 
 server.listen(PORT, HOSTNAME, () => {

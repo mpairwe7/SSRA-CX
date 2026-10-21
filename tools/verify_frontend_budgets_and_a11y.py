@@ -160,7 +160,7 @@ def main() -> None:
         "FE-G8 / FE2-G1..G8 / SEC2-G6 cross-subject purge, BFF admin mutation block, AbortController, modal focus trap, or CSAT guard missing"
     )
 
-    # 6. CSP Level 3 strict-dynamic & zero inline style="..." attribute verification
+    # 6. CSP Level 3 strict-dynamic, zero inline style="...", Lighthouse & Mobile Responsiveness verification
     for ui_file in (web_srv_src, ops_ui_src, icons_src):
         if "style=" in ui_file:
             raise SystemExit(
@@ -170,6 +170,19 @@ def main() -> None:
         raise SystemExit(
             "CSP script-src warning: do not combine 'self' with 'strict-dynamic' in script-src"
         )
+    assert (
+        "sendBodyWithCompression" in web_srv_src
+        and "sendBodyWithCompression" in con_srv_src
+        and 'pathname === "/robots.txt"' in web_srv_src
+        and 'pathname === "/robots.txt"' in con_srv_src
+        and 'meta name="description"' in web_srv_src
+        and 'meta name="description"' in ops_ui_src
+        and 'id="mobile-ops-nav-btn"' in ops_ui_src
+        and 'id="rail-mobile-backdrop"' in web_srv_src
+        and '<h2 id="settings-pane-title"' in web_srv_src
+    ), (
+        "Lighthouse / Mobile Responsiveness / WCAG 2.2 AA invariants missing (compression, robots.txt, meta description, or mobile drawer)"
+    )
 
     print(
         f"Frontend budget & WCAG 2.2 AA check passed (FE-G1..FE-G8 verified): public gzip size={gzip_kb:.2f} KB (<= {TARGET_FIRST_LOAD_JS_GZIP_KB} KB target)."
