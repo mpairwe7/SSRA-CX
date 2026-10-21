@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 from hypothesis import given
 from hypothesis import strategies as st
@@ -135,7 +136,6 @@ def test_feature_flag_engine_cohort_bucketing_and_agentic_cx_telemetry() -> None
     """Verify deterministic feature-flag bucketing, validation, shared overrides, and Agentic CX OTel attributes."""
     import os
     import tempfile
-    from pathlib import Path
 
     import pytest
     from ssra_core import (
@@ -212,10 +212,12 @@ def test_feature_flag_engine_cohort_bucketing_and_agentic_cx_telemetry() -> None
 
         # QA-G2: Tampered or corrupted shared override file is rejected by HMAC-SHA256 verification
         override_file = tmp_dir / "overrides.json"
+        prior_mtime_ns = override_file.stat().st_mtime_ns
         override_file.write_text(
             '{"overrides": {"FF_AUTONOMOUS_GOAL_PLANNER": {"enabled": false, "rollout_pct": 0}}, "hmac_sha256": "deadbeef"}',
             encoding="utf-8",
         )
+        os.utime(override_file, ns=(prior_mtime_ns, prior_mtime_ns))
         assert (
             eng.evaluate("FF_AUTONOMOUS_GOAL_PLANNER", subject_ref="sub_taxpayer_amina_01").active
             is True
@@ -239,3 +241,34 @@ def test_feature_flag_engine_cohort_bucketing_and_agentic_cx_telemetry() -> None
     assert otel["ssra.cx.goal.step_count"] == 2
     assert otel["ssra.cx.eq.emotion"] == "frustrated"
     assert otel["ssra.cx.language.locale"] == "pga"
+
+
+def test_feature_flag_engine_rejects_malformed_shared_override_envelopes(tmp_path: Path) -> None:
+    """Invalid shared override content must clear cached overrides and restore reviewed defaults."""
+    import hashlib
+    import hmac
+    import json
+
+    from ssra_core import FeatureFlagEngine
+
+    override_file = tmp_path / "overrides.json"
+    engine = FeatureFlagEngine(shared_override_path=override_file)
+
+    def assert_rejected(raw_override: str) -> None:
+        engine.set_flag_override("FF_AUTONOMOUS_GOAL_PLANNER", enabled=False, rollout_pct=0)
+        override_file.write_text(raw_override, encoding="utf-8")
+        assert engine.evaluate("FF_AUTONOMOUS_GOAL_PLANNER").active is True
+
+    def signed_envelope(overrides: object) -> str:
+        canonical = json.dumps(overrides, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        signature = hmac.new(engine.salt.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
+        return json.dumps({"overrides": overrides, "hmac_sha256": signature})
+
+    try:
+        assert_rejected("{")
+        assert_rejected("[]")
+        assert_rejected('{"overrides": []}')
+        assert_rejected(signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": []}))
+        assert_rejected(signed_envelope({"FF_AUTONOMOUS_GOAL_PLANNER": {"allowed_channels": None}}))
+    finally:
+        engine.reset_flag_override()

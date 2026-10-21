@@ -72,6 +72,51 @@ def _ci_security_policy_verifier() -> Callable[[Path], None]:
     return cast(Callable[[Path], None], module.__dict__["verify_ci_security_policy"])
 
 
+def _uv_cooldown_policy_verifier() -> Callable[[Path], None]:
+    """Load the uv cooldown policy check without making tools a runtime package."""
+    spec = importlib.util.spec_from_file_location("supply_chain_verifier", VERIFY_SUPPLY_CHAIN_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return cast(Callable[[Path], None], module.__dict__["verify_uv_cooldown_policy"])
+
+
+def _write_uv_policy_fixture(
+    tmp_path: Path,
+    *,
+    package_name: str = "certifi",
+    wheel_hash: str = "42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b",
+) -> None:
+    """Create the smallest lock pair that satisfies the reviewed uv exception."""
+    cutoff = "2026-10-21T00:00:00Z"
+    (tmp_path / "pyproject.toml").write_text(
+        f'''[tool.uv]
+required-version = "==0.13.4"
+exclude-newer = "1 week"
+exclude-newer-package = {{ {package_name} = "{cutoff}" }}
+''',
+        encoding="utf-8",
+    )
+    (tmp_path / "uv.lock").write_text(
+        f'''version = 1
+
+[options]
+exclude-newer-span = "P1W"
+
+[options.exclude-newer-package]
+certifi = "{cutoff}"
+
+[[package]]
+name = "certifi"
+version = "2026.10.19"
+source = {{ registry = "https://pypi.org/simple" }}
+sdist = {{ hash = "sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae" }}
+wheels = [{{ hash = "sha256:{wheel_hash}" }}]
+''',
+        encoding="utf-8",
+    )
+
+
 def test_workflow_policy_rejects_tag_pinned_action(tmp_path: Path) -> None:
     """A mutable action tag must fail before an unsafe workflow can merge."""
     workflows_dir = _write_workflow(tmp_path, "actions/checkout@v4")
@@ -172,3 +217,19 @@ def test_ci_policy_rejects_duplicate_pnpm_version_source(tmp_path: Path) -> None
 
     with pytest.raises(AssertionError, match="derive pnpm"):
         _ci_security_policy_verifier()(tmp_path)
+
+
+def test_uv_policy_rejects_an_unreviewed_package_cooldown_exception(tmp_path: Path) -> None:
+    """Only the short-lived, reviewed certifi cutoff may bypass uv's age holdback."""
+    _write_uv_policy_fixture(tmp_path, package_name="requests")
+
+    with pytest.raises(AssertionError, match="DEP-EXC-002"):
+        _uv_cooldown_policy_verifier()(tmp_path)
+
+
+def test_uv_policy_rejects_an_unverified_certifi_wheel(tmp_path: Path) -> None:
+    """The exception must pin the reviewed certifi artifact, not merely its version."""
+    _write_uv_policy_fixture(tmp_path, wheel_hash="0" * 64)
+
+    with pytest.raises(AssertionError, match="reviewed checksum"):
+        _uv_cooldown_policy_verifier()(tmp_path)

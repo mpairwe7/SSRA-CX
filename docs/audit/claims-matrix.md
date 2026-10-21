@@ -35,7 +35,7 @@
 | ADR-012 | BFF auth, Keycloak, passkeys, server sessions. | Proven for public BFF; Unverified for staff session | Identity stripping is tested; staff access is intentionally disabled. | AUD-004, AUD-009 |
 | ADR-013 | Python/FastAPI runtime selection. | Proven in source | FastAPI services and pinned main service bases exist; supported environment consistency is incomplete. | AUD-013 |
 | ADR-014 | Future A2A boundary is disabled. | Proven | Gateway config has a2a enabled false. | — |
-| ADR-015 | Supply-chain source controls and deferred artifact trust. | Partially proven | R1-A adds rolling cooldowns, immutable workflow policy, full-history scan, and a bounded exception record; merged PR #71 supplied passing CI evidence. Dockerfile tag remediation and signed image/model verification remain OQ-018 work. | AUD-006, AUD-007 |
+| ADR-015 | Supply-chain source controls and deferred artifact trust. | Partially proven | R1-A adds rolling cooldowns, immutable workflow policy, full-history scan, and bounded security-fix records. DEP-EXC-002 hash-pins the Critical `certifi` remediation behind one fixed package cutoff; Dockerfile tag remediation and signed image/model verification remain OQ-018 work. | AUD-006, AUD-007 |
 | ADR-016 | Hardened Docker Compose operational standard. | Contradicted | General profile is hardened; GPU profile parity is absent. | AUD-005 |
 | ADR-017 | Four-tier memory and durable goal continuation. | Contradicted | Preference, replay, and graph state are process-local or not restart-proven. | AUD-001, AUD-004 |
 | ADR-018 | Preview-only staff console until trusted session. | Proven | Console behavior is guarded and documented as preview. | AUD-009 |

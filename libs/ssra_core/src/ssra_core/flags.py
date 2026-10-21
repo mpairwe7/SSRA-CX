@@ -126,7 +126,7 @@ class FeatureFlagEngine:
         self.salt: str = salt or str(raw.get("default_salt", "ssra-sovereign-flag-salt-2026-10"))
         self._base_rules: dict[str, FeatureFlagRule] = {}
         self._overrides: dict[str, FeatureFlagRule] = {}
-        self._override_mtime_ns: int | None = None
+        self._override_content_digest: str | None = None
 
         flags_cfg: dict[str, Any] = raw["flags"]
         for f_name, f_data in flags_cfg.items():
@@ -146,26 +146,44 @@ class FeatureFlagEngine:
             self._base_rules[str(f_name)] = rule
 
     def _sync_shared_overrides_from_disk(self) -> None:
-        """Load HMAC-verified shared runtime overrides written by Admin control-plane processes if present."""
+        """Load content-addressed, HMAC-verified shared runtime overrides if present."""
         try:
-            mtime_ns = self.shared_override_path.stat().st_mtime_ns
-        except OSError:
-            self._override_mtime_ns = None
+            raw_override = self.shared_override_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            self._override_content_digest = None
+            self._overrides.clear()
             return
-        if self._override_mtime_ns == mtime_ns:
+
+        content_digest = hashlib.sha256(raw_override.encode("utf-8")).hexdigest()
+        if self._override_content_digest == content_digest:
             return
-        self._override_mtime_ns = mtime_ns
-        envelope = json.loads(self.shared_override_path.read_text(encoding="utf-8"))
-        data = envelope.get("overrides", {})
-        sig = str(envelope.get("hmac_sha256", ""))
+        self._override_content_digest = content_digest
+
+        try:
+            envelope = json.loads(raw_override)
+        except json.JSONDecodeError:
+            self._overrides.clear()
+            return
+        if not isinstance(envelope, dict):
+            self._overrides.clear()
+            return
+
+        data = envelope.get("overrides")
+        sig = envelope.get("hmac_sha256")
+        if not isinstance(data, dict) or not isinstance(sig, str):
+            self._overrides.clear()
+            return
         canonical = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
         expected = hmac.new(self.salt.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected):
             self._overrides.clear()
             return
+
         synced: dict[str, FeatureFlagRule] = {}
-        for k, v in data.items():
-            if isinstance(v, dict):
+        try:
+            for k, v in data.items():
+                if not isinstance(v, dict):
+                    raise ValueError("Feature-flag override entries must be mappings")
                 synced[str(k)] = FeatureFlagRule(
                     name=str(v.get("name", k)),
                     description=str(v.get("description", "")),
@@ -176,6 +194,9 @@ class FeatureFlagEngine:
                         str(loc) for loc in v.get("allowed_locales", SSRA_SUPPORTED_LOCALES)
                     ),
                 )
+        except (TypeError, ValueError):
+            self._overrides.clear()
+            return
         self._overrides = synced
 
     def _persist_shared_overrides_to_disk(self) -> None:
@@ -187,13 +208,16 @@ class FeatureFlagEngine:
         )
         sig = hmac.new(self.salt.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
         envelope = {"overrides": overrides_dict, "hmac_sha256": sig}
+        serialized_envelope = json.dumps(envelope, sort_keys=True)
         tmp_path = self.shared_override_path.with_name(
             f".{self.shared_override_path.name}.{os.getpid()}.tmp"
         )
-        tmp_path.write_text(json.dumps(envelope, sort_keys=True), encoding="utf-8")
+        tmp_path.write_text(serialized_envelope, encoding="utf-8")
         tmp_path.chmod(0o600)
         os.replace(tmp_path, self.shared_override_path)
-        self._override_mtime_ns = self.shared_override_path.stat().st_mtime_ns
+        self._override_content_digest = hashlib.sha256(
+            serialized_envelope.encode("utf-8")
+        ).hexdigest()
 
     def _effective_rules(self) -> dict[str, FeatureFlagRule]:
         """Return base YAML rules merged with any active runtime overrides."""

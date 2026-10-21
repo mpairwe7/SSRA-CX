@@ -30,6 +30,10 @@ _PNPM_INTEGRITY = (
 )
 _UV_VERSION = "0.13.4"
 _UV_ARCHIVE_SHA256 = "2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f"
+_CERTIFI_VERSION = "2026.10.19"
+_CERTIFI_EXCLUDE_NEWER_CUTOFF = "2026-10-21T00:00:00Z"
+_CERTIFI_SDIST_SHA256 = "035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae"
+_CERTIFI_WHEEL_SHA256 = "42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b"
 _DEPENDABOT_ECOSYSTEMS = ("npm", "uv", "github-actions")
 _NODE_ENGINE = ">=24.0.0 <25.0.0"
 
@@ -243,6 +247,57 @@ def verify_dependabot_policy(repo_root: Path) -> None:
         )
 
 
+def verify_uv_cooldown_policy(repo_root: Path) -> None:
+    """Require the rolling uv cooldown and only the reviewed certifi exception."""
+    pyproj = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
+    uv_settings = pyproj.get("tool", {}).get("uv", {})
+    assert isinstance(uv_settings, dict), "pyproject.toml must define [tool.uv]"
+    assert uv_settings.get("required-version") == f"=={_UV_VERSION}", (
+        f"pyproject.toml must pin uv to =={_UV_VERSION}"
+    )
+    assert uv_settings.get("exclude-newer") == "1 week", (
+        "pyproject.toml must set a rolling seven-day uv exclude-newer cooldown"
+    )
+
+    expected_package_cutoffs = {"certifi": _CERTIFI_EXCLUDE_NEWER_CUTOFF}
+    assert uv_settings.get("exclude-newer-package") == expected_package_cutoffs, (
+        "uv cooldown exceptions must be limited to the documented DEP-EXC-002 certifi cutoff"
+    )
+
+    uv_lock = tomllib.loads((repo_root / "uv.lock").read_text(encoding="utf-8"))
+    lock_options = uv_lock.get("options", {})
+    assert isinstance(lock_options, dict), "uv.lock must define [options]"
+    assert lock_options.get("exclude-newer-span") == "P1W", (
+        "uv.lock must retain the rolling one-week cooldown span"
+    )
+    assert lock_options.get("exclude-newer-package") == expected_package_cutoffs, (
+        "uv.lock must retain only the documented DEP-EXC-002 certifi cutoff"
+    )
+
+    certifi_packages = [
+        package
+        for package in uv_lock.get("package", [])
+        if isinstance(package, dict) and package.get("name") == "certifi"
+    ]
+    assert len(certifi_packages) == 1, "uv.lock must contain exactly one certifi package record"
+    certifi_package = certifi_packages[0]
+    assert certifi_package.get("version") == _CERTIFI_VERSION, (
+        f"uv.lock must pin certifi to {_CERTIFI_VERSION} for DEP-EXC-002"
+    )
+    assert certifi_package.get("source") == {"registry": "https://pypi.org/simple"}, (
+        "uv.lock must resolve certifi from the reviewed PyPI registry"
+    )
+    sdist = certifi_package.get("sdist")
+    assert isinstance(sdist, dict) and sdist.get("hash") == f"sha256:{_CERTIFI_SDIST_SHA256}", (
+        "uv.lock certifi sdist must match the DEP-EXC-002 reviewed checksum"
+    )
+    wheels = certifi_package.get("wheels")
+    assert isinstance(wheels, list) and any(
+        isinstance(wheel, dict) and wheel.get("hash") == f"sha256:{_CERTIFI_WHEEL_SHA256}"
+        for wheel in wheels
+    ), "uv.lock certifi wheel must match the DEP-EXC-002 reviewed checksum"
+
+
 def main() -> None:
     """Verify CI action SHA pinning, 7-day cooldowns, contract SHA parity, and Docker Compose hardening."""
     # 1. Verify GitHub Actions integrity, explicit token scopes, scanners, and workflow ownership.
@@ -284,22 +339,8 @@ def main() -> None:
             f"Taskfile.yml must invoke the project-pinned pnpm through Corepack for {command}"
         )
 
-    # 3. Verify uv's pinned feature level and rolling 7-day dependency cooldown.
-    pyproj = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    uv_settings = pyproj.get("tool", {}).get("uv", {})
-    assert uv_settings.get("required-version") == f"=={_UV_VERSION}", (
-        f"pyproject.toml must pin uv to =={_UV_VERSION}"
-    )
-    assert uv_settings.get("exclude-newer") == "1 week", (
-        "pyproject.toml must set a rolling seven-day uv exclude-newer cooldown"
-    )
-    assert not uv_settings.get("exclude-newer-package"), (
-        "uv cooldown exclusions require a reviewed, time-bounded exception before use"
-    )
-    uv_lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
-    assert uv_lock.get("options", {}).get("exclude-newer-span") == "P1W", (
-        "uv.lock must retain the rolling one-week cooldown span"
-    )
+    # 3. Verify uv's pinned feature level, rolling cooldown, and sole reviewed exception.
+    verify_uv_cooldown_policy(ROOT)
 
     # 4. The deployed applications are Node BFF servers. Fail if stale Next.js configuration resurfaces.
     for config_rel in ("apps/web/next.config.ts", "apps/console/next.config.ts"):
