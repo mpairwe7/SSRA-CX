@@ -21,6 +21,19 @@ const INTERNAL_RUNTIME_URL = (
 ).replace(/\/$/, "");
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "OPTIONS"]);
+const ALLOWED_CONSOLE_READ_STAFF = new Set([
+  "secops_admin",
+  "ssra_admin",
+  "stf_01",
+  "stf_supervisor_02",
+  "ssra_auditor",
+]);
+const ALLOWED_CONSOLE_WRITE_STAFF = new Set([
+  "secops_admin",
+  "ssra_admin",
+  "stf_01",
+  "stf_supervisor_02",
+]);
 
 async function readConsoleBody(req) {
   const chunks = [];
@@ -127,6 +140,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/flags") {
+    const callerStaff = String(req.headers["x-ssra-staff-id"] ?? "").trim();
+    const allowedSet = method === "POST" ? ALLOWED_CONSOLE_WRITE_STAFF : ALLOWED_CONSOLE_READ_STAFF;
+    if (!allowedSet.has(callerStaff)) {
+      res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ error: "STAFF_AUTHORIZATION_REQUIRED" }));
+      return;
+    }
     try {
       const bodyStr = method === "POST" ? await readConsoleBody(req) : undefined;
       const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/feature-flags`, {
@@ -134,7 +154,7 @@ const server = http.createServer(async (req, res) => {
         headers: {
           Accept: "application/json",
           ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
-          "X-SSRA-Staff-Id": "secops_admin",
+          "X-SSRA-Staff-Id": callerStaff,
           traceparent,
         },
         body: bodyStr,
@@ -151,6 +171,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/kill-switches") {
+    const callerStaff = String(req.headers["x-ssra-staff-id"] ?? "").trim();
+    const allowedSet = method === "POST" ? ALLOWED_CONSOLE_WRITE_STAFF : ALLOWED_CONSOLE_READ_STAFF;
+    if (!allowedSet.has(callerStaff)) {
+      res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ error: "STAFF_AUTHORIZATION_REQUIRED" }));
+      return;
+    }
     try {
       const bodyStr = method === "POST" ? await readConsoleBody(req) : undefined;
       const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/kill-switches`, {
@@ -158,7 +185,7 @@ const server = http.createServer(async (req, res) => {
         headers: {
           Accept: "application/json",
           ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
-          "X-SSRA-Staff-Id": "secops_admin",
+          "X-SSRA-Staff-Id": callerStaff,
           traceparent,
         },
         body: bodyStr,

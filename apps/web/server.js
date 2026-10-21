@@ -998,7 +998,7 @@ function renderPwaShellHtml(locale, nonce) {
 
       function cleanTextForSpeech(raw) {
         return String(raw || "")
-          .replace(/https?:\\/\\/\\S+/g, "official SSRA portal")
+          .replace(/https?:\\/\\/\\S+/g, "web link")
           .replace(/[*_\\x60#~>-]+/g, " ")
           .replace(/\\s+/g, " ")
           .trim();
@@ -1053,7 +1053,10 @@ function renderPwaShellHtml(locale, nonce) {
 
         const t0 = performance.now();
         activeTurnAbortController = new AbortController();
-        if (submitBtn) submitBtn.textContent = "Stop ⏹";
+        if (submitBtn) {
+          submitBtn.type = "button";
+          submitBtn.textContent = "Stop ⏹";
+        }
         try {
           const res = await fetch(endpoint, {
             method: "POST",
@@ -1087,7 +1090,8 @@ function renderPwaShellHtml(locale, nonce) {
           if (err && err.name === "AbortError") {
             conv.turns[conv.turns.length - 1] = {
               role: "assistant",
-              content: "[Request cancelled by user.]",
+              content:
+                "[Client request stopped. Server execution status is unknown; please check your status or recent activity before retrying any consequential action.]",
               meta: { tier: "T0", intent: "user_cancelled", outcome_verified: false },
             };
           } else {
@@ -1101,11 +1105,21 @@ function renderPwaShellHtml(locale, nonce) {
           }
         } finally {
           activeTurnAbortController = null;
-          if (submitBtn) submitBtn.textContent = "Send ↗";
+          if (submitBtn) {
+            submitBtn.type = "submit";
+            submitBtn.textContent = "Send ↗";
+          }
           saveState();
           renderApp();
         }
       }
+
+      submitBtn?.addEventListener("click", (e) => {
+        if (activeTurnAbortController) {
+          e.preventDefault();
+          activeTurnAbortController.abort();
+        }
+      });
 
       form?.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -1216,16 +1230,31 @@ function renderPwaShellHtml(locale, nonce) {
         if (csatBtn) {
           const csatScore = Number(csatBtn.getAttribute("data-csat")) || 5;
           const convId = csatBtn.getAttribute("data-thread-id") || state.activeId || "thr_web";
-          csatBtn.textContent = csatScore >= 4 ? "✓ Helpful" : "✓ Flagged for Audit";
+          const reason = csatScore >= 4 ? "ACCURATE" : "MISSING_INFO";
+          csatBtn.disabled = true;
           fetch("/v1/analytics/feedback", {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify({
               conversation_id: convId,
               csat: csatScore,
-              resolved: csatScore >= 4,
+              reason,
+              locale: state.locale || "en",
             }),
-          }).catch(() => {});
+          })
+            .then((res) => {
+              csatBtn.textContent = res.ok
+                ? csatScore >= 4
+                  ? "✓ Helpful"
+                  : "✓ Flagged for Audit"
+                : "⚠ Retry";
+            })
+            .catch(() => {
+              csatBtn.textContent = "⚠ Retry";
+            })
+            .finally(() => {
+              csatBtn.disabled = false;
+            });
         }
       });
 
@@ -1476,7 +1505,8 @@ function renderPwaShellHtml(locale, nonce) {
       }
 
       window.addEventListener("keydown", (e) => {
-        const openModal = document.querySelector(".modal-backdrop.open");
+        const openModals = document.querySelectorAll(".modal-backdrop.open");
+        const openModal = openModals.length > 0 ? openModals[openModals.length - 1] : null;
         if (openModal && e.key === "Tab") {
           trapModalTabFocus(e, openModal);
           return;
@@ -1687,35 +1717,9 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (isGetOrHead && pathname === "/api/flags") {
-    try {
-      const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/feature-flags`, {
-        headers: { Accept: "application/json", traceparent },
-        signal: AbortSignal.timeout(15_000),
-      });
-      const text = await upstream.text();
-      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
-      res.end(text);
-    } catch {
-      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
-      res.end(JSON.stringify({ status: "unavailable", service: "ssra-web" }));
-    }
-    return;
-  }
-
-  if (isGetOrHead && pathname === "/api/kill-switches") {
-    try {
-      const upstream = await fetch(`${INTERNAL_API_URL}/v1/admin/kill-switches`, {
-        headers: { Accept: "application/json", traceparent },
-        signal: AbortSignal.timeout(15_000),
-      });
-      const text = await upstream.text();
-      res.writeHead(upstream.status, { "Content-Type": "application/json", ...secHeaders });
-      res.end(text);
-    } catch {
-      res.writeHead(503, { "Content-Type": "application/json", ...secHeaders });
-      res.end(JSON.stringify({ status: "unavailable", service: "ssra-web" }));
-    }
+  if (isGetOrHead && (pathname === "/api/flags" || pathname === "/api/kill-switches")) {
+    res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
+    res.end(JSON.stringify({ error: "STAFF_CONSOLE_REQUIRED" }));
     return;
   }
 

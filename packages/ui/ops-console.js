@@ -702,6 +702,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         railMode: localStorage.getItem("ssra-ops-rail-mode") || "always-open",
         periodDays: 30,
         degradationLevel: 1,
+        disabledTools: [],
+        disabledChannels: [],
         scorecard: null,
         stackStatus: null,
         publicStatus: null,
@@ -1296,13 +1298,23 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         setSafeHtml(mainEl, html);
       }
 
+      function activeStaffHeaderId() {
+        if (state.role === "ssra_auditor") return "ssra_auditor";
+        if (state.role === "ssra_staff") return "stf_01";
+        return "ssra_admin";
+      }
+
       async function fetchLiveTelemetry() {
+        const staffHdr = {
+          "ngrok-skip-browser-warning": "true",
+          "X-SSRA-Staff-Id": activeStaffHeaderId(),
+        };
         try {
           const [scRes, stRes, flRes, ksRes] = await Promise.allSettled([
-            fetch("/api/scorecard", { headers: { "ngrok-skip-browser-warning": "true" } }),
-            fetch("/v1/runtime/stack-status", { headers: { "ngrok-skip-browser-warning": "true" } }),
-            fetch("/api/flags", { headers: { "ngrok-skip-browser-warning": "true" } }),
-            fetch("/api/kill-switches", { headers: { "ngrok-skip-browser-warning": "true" } }),
+            fetch("/api/scorecard", { headers: staffHdr }),
+            fetch("/v1/runtime/stack-status", { headers: staffHdr }),
+            fetch("/api/flags", { headers: staffHdr }),
+            fetch("/api/kill-switches", { headers: staffHdr }),
           ]);
           if (scRes.status === "fulfilled" && scRes.value.ok) {
             state.scorecard = await scRes.value.json();
@@ -1314,6 +1326,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             const ksData = await ksRes.value.json();
             if (ksData && typeof ksData.degradation_level === "number") {
               state.degradationLevel = ksData.degradation_level;
+            }
+            if (Array.isArray(ksData?.disabled_tools)) {
+              state.disabledTools = ksData.disabled_tools;
+            }
+            if (Array.isArray(ksData?.disabled_channels)) {
+              state.disabledChannels = ksData.disabled_channels;
             }
           }
           if (flRes.status === "fulfilled" && flRes.value.ok) {
@@ -1377,28 +1395,56 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         }
         const degBtn = e.target.closest("[data-set-degrade]");
         if (degBtn && state.role !== "ssra_auditor") {
+          const prevLvl = state.degradationLevel;
           const nextLvl = Number(degBtn.getAttribute("data-set-degrade")) || 1;
-          state.degradationLevel = nextLvl;
-          renderCurrentRoute();
+          degBtn.disabled = true;
           fetch("/api/kill-switches", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ degradation_level: nextLvl, disabled_tools: [], disabled_channels: [] }),
-          }).catch(() => {});
+            headers: {
+              "Content-Type": "application/json",
+              "ngrok-skip-browser-warning": "true",
+              "X-SSRA-Staff-Id": activeStaffHeaderId(),
+            },
+            body: JSON.stringify({
+              degradation_level: nextLvl,
+              disabled_tools: state.disabledTools,
+              disabled_channels: state.disabledChannels,
+            }),
+          })
+            .then((res) => {
+              state.degradationLevel = res.ok ? nextLvl : prevLvl;
+              renderCurrentRoute();
+            })
+            .catch(() => {
+              state.degradationLevel = prevLvl;
+              renderCurrentRoute();
+            });
           return;
         }
         const flagBtn = e.target.closest("[data-toggle-flag]");
         if (flagBtn && state.role !== "ssra_auditor") {
           const k = flagBtn.getAttribute("data-toggle-flag");
           if (k) {
-            const nextVal = !state.flagOverrides[k];
-            state.flagOverrides[k] = nextVal;
-            renderCurrentRoute();
+            const prevVal = Boolean(state.flagOverrides[k]);
+            const nextVal = !prevVal;
+            flagBtn.disabled = true;
             fetch("/api/flags", {
               method: "POST",
-              headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+              headers: {
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true",
+                "X-SSRA-Staff-Id": activeStaffHeaderId(),
+              },
               body: JSON.stringify({ flag_name: k, enabled: nextVal, rollout_pct: nextVal ? 100 : 0 }),
-            }).catch(() => {});
+            })
+              .then((res) => {
+                state.flagOverrides[k] = res.ok ? nextVal : prevVal;
+                renderCurrentRoute();
+              })
+              .catch(() => {
+                state.flagOverrides[k] = prevVal;
+                renderCurrentRoute();
+              });
           }
           return;
         }
