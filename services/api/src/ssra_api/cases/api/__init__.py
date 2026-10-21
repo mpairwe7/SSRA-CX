@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
 from ssra_core import McpErrorCode, SSRAError
 
-from ssra_api.cases.application import (
-    open_case_use_case,
-    record_maker_checker_approval_use_case,
-)
+from ssra_api.cases.application import open_case_use_case
 
 router = APIRouter(prefix="/v1/cases", tags=["cases"])
+
+
+def _raise_staff_session_required() -> NoReturn:
+    """Fail closed until an approved server-side staff identity and role provider exists."""
+    raise SSRAError(
+        McpErrorCode.NOT_AUTHORIZED,
+        "Staff case approvals are unavailable until an approved server-verified session and role policy are configured (OQ-014).",
+        status_code=403,
+    )
 
 
 class CreateCaseRequest(BaseModel):
@@ -57,28 +65,14 @@ async def create_case(body: CreateCaseRequest) -> CaseResponse:
     return CaseResponse(id=c.id, case_type=c.case_type, status=c.status, priority=c.priority)
 
 
-@router.post("/{case_id}/maker-checker", response_model=MakerCheckerApprovalResponse)
+@router.post(
+    "/{case_id}/maker-checker",
+    response_model=MakerCheckerApprovalResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def approve_maker_checker(
     case_id: str, body: MakerCheckerApprovalRequest
 ) -> MakerCheckerApprovalResponse:
-    """Approve a Tier T3 case action under two-officer maker-checker control."""
-    if body.maker_staff_id == body.checker_staff_id:
-        raise SSRAError(
-            McpErrorCode.NOT_AUTHORIZED,
-            "Tier T3 maker-checker control requires checker_staff_id != maker_staff_id",
-            status_code=403,
-        )
-    record_maker_checker_approval_use_case(
-        case_id=case_id,
-        maker_staff_id=body.maker_staff_id,
-        checker_staff_id=body.checker_staff_id,
-        action_type=body.action_type,
-        rationale=body.rationale,
-    )
-    return MakerCheckerApprovalResponse(
-        case_id=case_id,
-        maker_staff_id=body.maker_staff_id,
-        checker_staff_id=body.checker_staff_id,
-        action_type=body.action_type,
-        status="MAKER_CHECKER_APPROVED",
-    )
+    """Approve a Tier T3 case only after server-side staff authentication and authorization."""
+    del case_id, body
+    _raise_staff_session_required()

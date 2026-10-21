@@ -3,7 +3,7 @@
     "schemas": {
       "AgenticCxScorecardResponse": {
         "additionalProperties": false,
-        "description": "Synthetic baseline response model for the October 2026 SSRA Agentic CX Scorecard (`OQ-013`).",
+        "description": "Planned scorecard payload; the endpoint returns 503 until governed data is configured (`OQ-013`).",
         "properties": {
           "clean_handoff_rate": {
             "title": "Clean Handoff Rate",
@@ -22,7 +22,6 @@
             "type": "number"
           },
           "is_synthetic_baseline": {
-            "default": true,
             "title": "Is Synthetic Baseline",
             "type": "boolean"
           },
@@ -35,7 +34,6 @@
             "type": "number"
           },
           "source_note": {
-            "default": "SYNTHETIC_PHASE4_BASELINE_OQ013",
             "title": "Source Note",
             "type": "string"
           },
@@ -56,7 +54,9 @@
           "clean_handoff_rate",
           "officer_high_eq_hours_saved_30d",
           "vernacular_parity_gap_pct",
-          "zero_unverified_numeric_claims"
+          "zero_unverified_numeric_claims",
+          "is_synthetic_baseline",
+          "source_note"
         ],
         "title": "AgenticCxScorecardResponse",
         "type": "object"
@@ -953,7 +953,6 @@
             "type": "integer"
           },
           "official_portal": {
-            "default": "https://etax.nra.gov.ss/",
             "title": "Official Portal",
             "type": "string"
           },
@@ -974,7 +973,8 @@
           "degradation_level",
           "active_knowledge_snapshot",
           "channels",
-          "upstreams"
+          "upstreams",
+          "official_portal"
         ],
         "title": "PublicStatusResponse",
         "type": "object"
@@ -1475,7 +1475,7 @@
     },
     "/v1/admin/audit-verify": {
       "get": {
-        "description": "Verify the admin WORM audit chain and return integrity status, event count, and head hash.",
+        "description": "Expose audit-chain records only to a server-verified auditor/staff session.",
         "operationId": "verify_audit_v1_admin_audit_verify_get",
         "responses": {
           "200": {
@@ -1487,6 +1487,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "Verified staff session is required."
           }
         },
         "summary": "Verify Audit",
@@ -1497,20 +1500,8 @@
     },
     "/v1/admin/feature-flags": {
       "get": {
-        "description": "List all registered SSRA Assist cohort/percentage feature flags (requires verified admin/secops staff).",
+        "description": "Read feature flags only after server-side staff authentication and authorization.",
         "operationId": "get_feature_flags_v1_admin_feature_flags_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-SSRA-Staff-Id",
-            "required": false,
-            "schema": {
-              "default": "secops_admin",
-              "title": "X-Ssra-Staff-Id",
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -1526,15 +1517,8 @@
             },
             "description": "Successful Response"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "403": {
+            "description": "Verified staff session is required."
           }
         },
         "summary": "Get Feature Flags",
@@ -1543,20 +1527,8 @@
         ]
       },
       "post": {
-        "description": "Update a cohort/percentage feature flag and append a WORM audit event attributed to the verified staff actor.",
+        "description": "Mutate feature flags only after server-side staff authentication and authorization.",
         "operationId": "set_feature_flag_v1_admin_feature_flags_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-SSRA-Staff-Id",
-            "required": false,
-            "schema": {
-              "default": "secops_admin",
-              "title": "X-Ssra-Staff-Id",
-              "type": "string"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1578,6 +1550,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session is required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -1597,7 +1572,7 @@
     },
     "/v1/admin/jit-elevation": {
       "post": {
-        "description": "Grant time-boxed JIT admin elevation after verifying trusted staff directory & maker-checker controls.",
+        "description": "Never infer passkey verification from request fields; require a trusted session adapter.",
         "operationId": "request_jit_elevation_v1_admin_jit_elevation_post",
         "requestBody": {
           "content": {
@@ -1620,6 +1595,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session and maker-checker policy are required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -1639,7 +1617,7 @@
     },
     "/v1/admin/kill-switches": {
       "get": {
-        "description": "Return the current SecOps degradation level and disabled tools/channels.",
+        "description": "Return kill-switch state only to a server-verified, authorized staff session.",
         "operationId": "get_kill_switches_v1_admin_kill_switches_get",
         "responses": {
           "200": {
@@ -1651,6 +1629,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "Verified staff session is required."
           }
         },
         "summary": "Get Kill Switches",
@@ -1659,20 +1640,8 @@
         ]
       },
       "post": {
-        "description": "Update the active SecOps kill-switches and log the change to the WORM audit ledger.",
+        "description": "Update kill switches only after server-side staff authentication and authorization.",
         "operationId": "set_kill_switches_v1_admin_kill_switches_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-SSRA-Staff-Id",
-            "required": false,
-            "schema": {
-              "default": "secops_admin",
-              "title": "X-Ssra-Staff-Id",
-              "type": "string"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1694,6 +1663,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session is required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -1713,7 +1685,7 @@
     },
     "/v1/admin/public-status": {
       "get": {
-        "description": "Return the public degradation-aware system status and active knowledge snapshot version.",
+        "description": "Return live status only when trusted, fresh monitoring sources are connected.",
         "operationId": "get_public_status_v1_admin_public_status_get",
         "responses": {
           "200": {
@@ -1725,6 +1697,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "503": {
+            "description": "Trusted operational status telemetry is not configured."
           }
         },
         "summary": "Get Public Status",
@@ -1735,7 +1710,7 @@
     },
     "/v1/analytics/cx-scorecard": {
       "get": {
-        "description": "Return the synthetic baseline October 2026 SSRA Agentic CX & Human-AI Workforce Scorecard (`OQ-013`).",
+        "description": "Return a scorecard only when its warehouse provenance and freshness can be established.",
         "operationId": "get_cx_scorecard_v1_analytics_cx_scorecard_get",
         "responses": {
           "200": {
@@ -1747,6 +1722,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "503": {
+            "description": "Approved analytics source is not configured."
           }
         },
         "summary": "Get Cx Scorecard",
@@ -1757,7 +1735,7 @@
     },
     "/v1/analytics/drift-monitors": {
       "get": {
-        "description": "Evaluate 24-hour online drift monitors for intent KL divergence and abstention spikes.",
+        "description": "Do not evaluate caller-provided values as SSRA's live drift telemetry.",
         "operationId": "get_drift_monitors_v1_analytics_drift_monitors_get",
         "parameters": [
           {
@@ -1811,6 +1789,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "description": "Approved analytics source is not configured."
           }
         },
         "summary": "Get Drift Monitors",
@@ -1863,7 +1844,7 @@
     },
     "/v1/analytics/insights": {
       "get": {
-        "description": "Return regional and language containment insights across SSRA offices.",
+        "description": "Return regional metrics only when their governed data source exists.",
         "operationId": "get_insights_v1_analytics_insights_get",
         "responses": {
           "200": {
@@ -1879,6 +1860,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "503": {
+            "description": "Approved analytics source is not configured."
           }
         },
         "summary": "Get Insights",
@@ -1889,7 +1873,7 @@
     },
     "/v1/analytics/summary": {
       "get": {
-        "description": "Return the quality-adjusted containment and safety funnel summary.",
+        "description": "Return operational funnel metrics only when their governed data source exists.",
         "operationId": "get_summary_v1_analytics_summary_get",
         "responses": {
           "200": {
@@ -1901,6 +1885,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "503": {
+            "description": "Approved analytics source is not configured."
           }
         },
         "summary": "Get Summary",
@@ -1911,6 +1898,7 @@
     },
     "/v1/appointments/slots": {
       "get": {
+        "description": "Return current appointment inventory or fail closed when no provider is configured.",
         "operationId": "get_slots_v1_appointments_slots_get",
         "parameters": [
           {
@@ -1948,6 +1936,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "description": "Live office inventory is not configured."
           }
         },
         "summary": "Get Slots",
@@ -2000,7 +1991,7 @@
     },
     "/v1/cases/{case_id}/maker-checker": {
       "post": {
-        "description": "Approve a Tier T3 case action under two-officer maker-checker control.",
+        "description": "Approve a Tier T3 case only after server-side staff authentication and authorization.",
         "operationId": "approve_maker_checker_v1_cases__case_id__maker_checker_post",
         "parameters": [
           {
@@ -2033,6 +2024,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "Verified staff session is required."
           },
           "422": {
             "content": {
@@ -2246,7 +2240,7 @@
     },
     "/v1/conversations/inbox": {
       "get": {
-        "description": "List conversations in the staff inbox scoped by PostgreSQL RLS `office_code`.",
+        "description": "List staff inbox data only to a server-verified, authorized staff session.",
         "operationId": "list_inbox_v1_conversations_inbox_get",
         "parameters": [
           {
@@ -2275,6 +2269,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session is required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2294,7 +2291,7 @@
     },
     "/v1/conversations/inbox/stream": {
       "get": {
-        "description": "Real-time SSE inbox feed for Phase 3 Staff Console (`apps/console` \u2014 Section 11).",
+        "description": "Stream staff inbox data only to a server-verified, authorized staff session.",
         "operationId": "stream_inbox_events_v1_conversations_inbox_stream_get",
         "parameters": [
           {
@@ -2317,6 +2314,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session is required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2336,7 +2336,7 @@
     },
     "/v1/conversations/{conversation_id}/copilot-draft": {
       "post": {
-        "description": "Generate a cited reply draft and next-best action for an SSRA officer.",
+        "description": "Generate staff reply drafts only for a server-verified, authorized session.",
         "operationId": "generate_copilot_draft_v1_conversations__conversation_id__copilot_draft_post",
         "parameters": [
           {
@@ -2370,6 +2370,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session is required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2389,7 +2392,7 @@
     },
     "/v1/conversations/{conversation_id}/handback": {
       "post": {
-        "description": "Hand a conversation back to the AI assistant, optionally attaching a verified officer resolution.",
+        "description": "Hand a conversation back only after server-side staff authentication and authorization.",
         "operationId": "handback_conversation_v1_conversations__conversation_id__handback_post",
         "parameters": [
           {
@@ -2430,6 +2433,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session is required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2449,7 +2455,7 @@
     },
     "/v1/conversations/{conversation_id}/qa-score": {
       "post": {
-        "description": "Record a supervisor QA rubric score for a conversation.",
+        "description": "Record staff QA scores only for a server-verified supervisor session.",
         "operationId": "score_conversation_qa_v1_conversations__conversation_id__qa_score_post",
         "parameters": [
           {
@@ -2483,6 +2489,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session is required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2502,7 +2511,7 @@
     },
     "/v1/conversations/{conversation_id}/takeover": {
       "post": {
-        "description": "Assign a conversation to an SSRA staff officer for human takeover.",
+        "description": "Assign a conversation only after server-side staff authentication and authorization.",
         "operationId": "takeover_conversation_v1_conversations__conversation_id__takeover_post",
         "parameters": [
           {
@@ -2536,6 +2545,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session is required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2555,6 +2567,7 @@
     },
     "/v1/identity-link/document-precheck": {
       "post": {
+        "description": "Fail closed rather than report a clean scan without a real scanner and OCR provider.",
         "operationId": "document_precheck_v1_identity_link_document_precheck_post",
         "requestBody": {
           "content": {
@@ -2586,6 +2599,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "description": "Malware scanning and OCR providers are not configured."
           }
         },
         "summary": "Document Precheck",
@@ -2596,6 +2612,7 @@
     },
     "/v1/identity-link/documents/analyze": {
       "post": {
+        "description": "Fail closed until OCR provenance and approved legal guidance are available.",
         "operationId": "analyze_document_v1_identity_link_documents_analyze_post",
         "requestBody": {
           "content": {
@@ -2627,6 +2644,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "description": "Approved OCR and legal guidance sources are not configured."
           }
         },
         "summary": "Analyze Document",
@@ -2637,7 +2657,7 @@
     },
     "/v1/identity-link/verify-otp": {
       "post": {
-        "description": "Verify TIN, 6-digit OTP, and SIM-swap signal to bind an opaque `subject_ref`.",
+        "description": "Fail closed until an approved identity directory, OTP, and SIM-swap adapter is wired.",
         "operationId": "verify_otp_v1_identity_link_verify_otp_post",
         "requestBody": {
           "content": {
@@ -2669,6 +2689,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "description": "Approved identity and OTP providers are not configured."
           }
         },
         "summary": "Verify Otp",
@@ -2679,6 +2702,7 @@
     },
     "/v1/knowledge-admin/active-snapshot": {
       "get": {
+        "description": "Return snapshot state only to a server-verified, authorized knowledge operator.",
         "operationId": "get_active_snapshot_v1_knowledge_admin_active_snapshot_get",
         "responses": {
           "200": {
@@ -2690,6 +2714,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "Verified staff session is required."
           }
         },
         "summary": "Get Active Snapshot",
@@ -2700,6 +2727,7 @@
     },
     "/v1/knowledge-admin/snapshots": {
       "post": {
+        "description": "Create drafts only after staff identity, role, and durable workflow state are verified.",
         "operationId": "create_draft_snapshot_v1_knowledge_admin_snapshots_post",
         "requestBody": {
           "content": {
@@ -2722,6 +2750,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session is required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2741,6 +2772,7 @@
     },
     "/v1/knowledge-admin/snapshots/rollback": {
       "post": {
+        "description": "Allow rollback only through an approved, authenticated operations workflow.",
         "operationId": "rollback_snapshot_v1_knowledge_admin_snapshots_rollback_post",
         "responses": {
           "200": {
@@ -2752,6 +2784,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "Verified staff session and release policy are required."
           }
         },
         "summary": "Rollback Snapshot",
@@ -2762,6 +2797,7 @@
     },
     "/v1/knowledge-admin/snapshots/{version}/approve": {
       "post": {
+        "description": "Never accept approver identity from request data as evidence of legal authorization.",
         "operationId": "approve_snapshot_v1_knowledge_admin_snapshots__version__approve_post",
         "parameters": [
           {
@@ -2795,6 +2831,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session and maker-checker policy are required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2814,6 +2853,7 @@
     },
     "/v1/knowledge-admin/snapshots/{version}/publish": {
       "post": {
+        "description": "Never trust a caller-supplied regression flag to authorize snapshot publication.",
         "operationId": "publish_snapshot_v1_knowledge_admin_snapshots__version__publish_post",
         "parameters": [
           {
@@ -2847,6 +2887,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "Verified staff session and release policy are required."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2866,6 +2909,7 @@
     },
     "/v1/knowledge-admin/snapshots/{version}/submit-review": {
       "post": {
+        "description": "Submit drafts only through a verified knowledge-release workflow.",
         "operationId": "submit_for_review_v1_knowledge_admin_snapshots__version__submit_review_post",
         "parameters": [
           {
@@ -2888,6 +2932,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "Verified staff session is required."
           },
           "422": {
             "content": {

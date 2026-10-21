@@ -22,6 +22,7 @@ from ssra_core import (
     ensure_w3c_traceparent,
     get_default_feature_flag_engine,
 )
+from ssra_core.deployment import is_reference_mode
 from ssra_security import (
     assert_sovereign_and_production_readiness,
     evaluate_sovereign_and_production_readiness,
@@ -180,6 +181,20 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         """Enforce RFC 9112 Host validation, streaming payload bounds, traceparent, and security headers."""
         raw_path = str(request.scope.get("path", "/"))
         tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
+        if not is_reference_mode():
+            err = SSRAError(
+                McpErrorCode.UPSTREAM_UNAVAILABLE,
+                "Agent runtime is unavailable until durable checkpoints and approved integrations are configured; set SSRA_RUNTIME_MODE=reference only for local fixtures.",
+                status_code=503,
+            )
+            return JSONResponse(
+                status_code=503,
+                content=err.to_problem_details(instance=raw_path, trace_id=tp).model_dump(
+                    mode="json"
+                ),
+                media_type="application/problem+json",
+                headers={"traceparent": tp, **_RUNTIME_SECURITY_HEADERS},
+            )
         host_header = request.headers.get("host", "localhost")
         if not host_header or not _VALID_HOST_RE.match(host_header):
             err = SSRAError(
@@ -210,6 +225,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
                 headers={"traceparent": tp, **_RUNTIME_SECURITY_HEADERS},
             )
         response = await call_next(request)
+        response.headers["X-SSRA-Runtime-Mode"] = "reference"
         response.headers["traceparent"] = tp
         for hk, hv in _RUNTIME_SECURITY_HEADERS.items():
             response.headers.setdefault(hk, hv)

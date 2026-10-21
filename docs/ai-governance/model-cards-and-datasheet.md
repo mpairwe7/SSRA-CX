@@ -33,6 +33,7 @@
 - The October 2026 frontend audit did not change model weights, prompts, retrieval, or output-guard behavior. UI status labels and local role selections are not model evidence or authorization.
 - The staff console remains a non-operational preview until OQ-014 is approved. Do not interpret browser-rendered case examples, historical sample metrics, or local preview personas as real taxpayer records, current service state, or authenticated roles.
 - Public chat fallback text does not claim a KnowledgeSnapshot citation while offline. A response can claim source support only when the runtime supplies the approved citation metadata.
+- The runtime uses process-local `InMemorySaver` and therefore returns 503 outside explicit local/test reference mode. Chat completion, checkpoint continuity, identity verification, document guidance, appointments, staff inbox/actions, knowledge publication, service status, and operational analytics must not be represented as production capabilities until their providers, trusted authorization, provenance, and persistence are approved (OQ-005, OQ-013–OQ-017).
 
 ---
 
@@ -47,5 +48,5 @@
    - March 2026 Cash-Free Bank Remittance Directive
    - Official e-Tax Portal (`https://etax.nra.gov.ss/`) Registration, Filing & TCC Procedures
 3. **Collection & Ingestion Process:** Parsed by legal hierarchy (`Part`, `Chapter`, `Section`, `Subsection`), assigned immutable `section_anchor` IDs and SHA-256 checksums, and aligned with the multilingual tax termbase (`ai/termbase/glossary.yaml`).
-4. **Release & Maintenance:** Governed by the 6-step Knowledge Release workflow in `services/api` (`knowledge_admin`) and `apps/console` (`DRAFT` → `LEGAL_REVIEW` → `APPROVED` → `PUBLISHED` → `EVAL_GATE` → `1_STEP_ROLLBACK`).
+4. **Release & Maintenance:** The six-step Knowledge Release state machine is a reference implementation in `services/api` (`knowledge_admin`) and `apps/console`. Its API routes return 403 until server-verified staff authorization and durable audit/storage exist; no operational publication or rollback is exposed (OQ-014/OQ-015).
 5. **Privacy & Confidentiality:** Contains `PUBLIC` statutory and procedural guidance only; zero taxpayer records or confidential drafts are stored in the corpus (`knowledge/sources.yaml`).

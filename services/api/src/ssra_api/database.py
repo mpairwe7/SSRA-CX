@@ -160,6 +160,8 @@ class AuditEventORM(Base):
 
 
 class OutboxEventORM(Base):
+    """Planned durable outbox mapping; the current reference runtime does not write this model."""
+
     __tablename__ = "outbox_events"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)

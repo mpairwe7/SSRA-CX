@@ -2,10 +2,33 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from ssra_api import create_api_app
+from ssra_api.conversations.domain import ConversationEntity
+from ssra_api.conversations.infrastructure import InMemoryConversationRepository
 from ssra_api.database import POSTGRES18_RLS_AND_WORM_DDL, Base
-from ssra_api.outbox import TransactionalOutboxStore
+from ssra_api.middleware import install_api_conventions_middleware
+from ssra_api.outbox import InMemoryOutboxBuffer
+from ssra_core import McpErrorCode, SSRAError
+
+
+def test_core_api_fails_closed_without_explicit_reference_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SSRA_RUNTIME_MODE", raising=False)
+    client = TestClient(create_api_app())
+    response = client.get("/healthz")
+    assert response.status_code == 503
+    assert response.json()["code"] == "UPSTREAM_UNAVAILABLE"
+
+    monkeypatch.setenv("SSRA_RUNTIME_MODE", "unknown")
+    invalid_mode_response = client.get("/v1/analytics/cx-scorecard")
+    assert invalid_mode_response.status_code == 503
+    assert invalid_mode_response.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
 
 def test_api_health_and_database_ddl_invariants() -> None:
@@ -18,7 +41,7 @@ def test_api_health_and_database_ddl_invariants() -> None:
     assert any("staff_office_isolation_handoffs" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
     assert any("forbid_audit_events_mutation" in stmt for stmt in POSTGRES18_RLS_AND_WORM_DDL)
 
-    outbox = TransactionalOutboxStore()
+    outbox = InMemoryOutboxBuffer()
     evt = outbox.stage_domain_event(
         context_name="cases",
         event_type="ssra.case.created.v1",
@@ -32,36 +55,98 @@ def test_api_health_and_database_ddl_invariants() -> None:
     assert evt.data["nested"]["tin"] == "••••5678"
     assert "+211•••••••78" in evt.data["nested"]["phones"][0]
     assert "[REDACTED_OTP]" in evt.data["nested"]["phones"][1][0]
-    assert outbox.flush_to_jetstream() == 1
-    assert outbox.published_events[0].published_to_nats is True
+    with pytest.raises(SSRAError) as publish_error:
+        outbox.flush_to_jetstream()
+    assert publish_error.value.code == McpErrorCode.UPSTREAM_UNAVAILABLE
+    assert len(outbox.staged_events) == 1
+    assert outbox.staged_events[0].published_to_nats is False
+
+    bounded = InMemoryOutboxBuffer(max_staged_events=1)
+    bounded.stage_domain_event(
+        context_name="cases",
+        event_type="ssra.case.created.v1",
+        subject="case_01",
+        data={},
+    )
+    with pytest.raises(SSRAError):
+        bounded.stage_domain_event(
+            context_name="cases",
+            event_type="ssra.case.created.v1",
+            subject="case_02",
+            data={},
+        )
+    assert len(bounded.staged_events) == 1
 
 
-def test_phase2_identity_step_up_sim_swap_and_document_precheck() -> None:
+def test_reference_outbox_capacity_and_snapshot_state_are_explicit() -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        InMemoryOutboxBuffer(max_staged_events=0)
+
+    outbox = InMemoryOutboxBuffer(max_staged_events=1)
+    assert outbox.active_knowledge_snapshot == "2026.10.1"
+    outbox.stage_domain_event(
+        context_name="knowledge",
+        event_type="ssra.knowledge.snapshot.published.v1",
+        subject="snapshot_2026.10.2",
+        data={"active_version": "2026.10.2"},
+    )
+    assert outbox.active_knowledge_snapshot == "2026.10.2"
+
+    with pytest.raises(SSRAError) as overflow:
+        outbox.stage_domain_event(
+            context_name="knowledge",
+            event_type="ssra.knowledge.snapshot.published.v1",
+            subject="snapshot_2026.10.3",
+            data={"active_version": "2026.10.3"},
+        )
+    assert overflow.value.status_code == 503
+    assert outbox.active_knowledge_snapshot == "2026.10.2"
+    assert len(outbox.staged_events) == 1
+
+
+def test_reference_conversation_repository_scopes_reads_by_office() -> None:
+    repository = InMemoryConversationRepository()
+    conversation = ConversationEntity(
+        id="conv_reference_01",
+        channel="web",
+        locale="en",
+        subject_ref=None,
+        auth_level="anonymous",
+        started_at=datetime(2026, 10, 21, tzinfo=UTC),
+        office_code="JUBA_HQ",
+    )
+    repository.save(conversation)
+
+    assert repository.get(conversation.id) == conversation
+    assert repository.get("missing") is None
+    assert repository.list_by_office("JUBA_HQ") == [conversation]
+    assert repository.list_by_office("Wau") == []
+
+
+def test_appointments_slots_endpoint_abstains_without_inventory_provider() -> None:
+    import asyncio
+
+    from ssra_api.appointments.api import get_slots
+
+    response = TestClient(create_api_app()).get("/v1/appointments/slots?office_code=JUBA_HQ")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "UPSTREAM_UNAVAILABLE"
+    with pytest.raises(SSRAError) as direct_response:
+        asyncio.run(get_slots("JUBA_HQ"))
+    assert direct_response.value.status_code == 503
+
+
+def test_identity_and_document_providers_fail_closed_until_approved() -> None:
     client = TestClient(create_api_app())
 
-    # T1 OTP binding succeeds
     r_otp = client.post(
         "/v1/identity-link/verify-otp",
         json={"tin": "2003005678", "otp_code": "123456", "step_up": True},
     )
-    assert r_otp.status_code == 200
-    assert r_otp.json()["tin_masked"] == "••••5678"
-    assert r_otp.json()["auth_level"] == "T3_STEP_UP"
-    assert r_otp.json()["sim_swap_checked"] is True
+    assert r_otp.status_code == 503
+    assert r_otp.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
-    # SIM-swap recency signal blocks step-up (OQ-005 / Section 12.3)
-    r_sim_swap = client.post(
-        "/v1/identity-link/verify-otp",
-        json={
-            "tin": "2003005678",
-            "otp_code": "123456",
-            "step_up": True,
-            "sim_swap_recent": True,
-        },
-    )
-    assert r_sim_swap.status_code == 403
-
-    # Document pre-check (malware scan + OCR legibility)
     r_doc = client.post(
         "/v1/identity-link/document-precheck",
         json={
@@ -70,12 +155,18 @@ def test_phase2_identity_step_up_sim_swap_and_document_precheck() -> None:
             "sha256_hex": "a" * 64,
         },
     )
-    assert r_doc.status_code == 200
-    assert r_doc.json()["malware_scan_status"] == "CLEAN"
-    assert r_doc.json()["ocr_legible"] is True
+    assert r_doc.status_code == 503
+    assert r_doc.json()["code"] == "UPSTREAM_UNAVAILABLE"
+
+    r_analysis = client.post(
+        "/v1/identity-link/documents/analyze",
+        json={"filename": "receipt.pdf", "text_content": "sample", "size_bytes": 120_000},
+    )
+    assert r_analysis.status_code == 503
+    assert r_analysis.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
 
-def test_phase3_staff_copilot_takeover_handback_and_qa_scoring() -> None:
+def test_phase3_staff_copilot_and_conversation_routes_fail_closed_without_staff_sessions() -> None:
     client = TestClient(create_api_app())
 
     r_conv = client.post(
@@ -86,30 +177,29 @@ def test_phase3_staff_copilot_takeover_handback_and_qa_scoring() -> None:
     assert r_conv.status_code == 200
     conv_id = r_conv.json()["id"]
 
-    # Staff takeover
+    # No route may infer staff identity from a request body or caller-controlled header.
     r_takeover = client.post(
         f"/v1/conversations/{conv_id}/takeover",
         json={"staff_id": "officer_grace_01"},
     )
-    assert r_takeover.status_code == 200
-    assert r_takeover.json()["status"] == "STAFF_TAKEOVER"
-    assert r_takeover.json()["assigned_staff_id"] == "officer_grace_01"
+    assert r_takeover.status_code == 403
+    assert r_takeover.json()["code"] == "NOT_AUTHORIZED"
 
-    # AI Copilot draft with citations
+    r_inbox = client.get("/v1/conversations/inbox?office_code=JUBA_HQ")
+    assert r_inbox.status_code == 403
+    assert r_inbox.json()["code"] == "NOT_AUTHORIZED"
+
+    # A reference response cannot be represented as a staff action or cited draft.
     r_draft = client.post(
         f"/v1/conversations/{conv_id}/copilot-draft",
         json={"taxpayer_question": "How do I pay my business tax on eTax?"},
     )
-    assert r_draft.status_code == 200
-    assert "https://etax.nra.gov.ss/" in r_draft.json()["cited_reply_draft"]
-    assert len(r_draft.json()["citations"]) >= 1
+    assert r_draft.status_code == 403
 
-    # Hand back to AI
+    # Handback and QA scoring also require a verified session.
     r_handback = client.post(f"/v1/conversations/{conv_id}/handback")
-    assert r_handback.status_code == 200
-    assert r_handback.json()["status"] == "HANDED_BACK_TO_AI"
+    assert r_handback.status_code == 403
 
-    # QA Rubric scoring
     r_qa = client.post(
         f"/v1/conversations/{conv_id}/qa-score",
         json={
@@ -119,65 +209,81 @@ def test_phase3_staff_copilot_takeover_handback_and_qa_scoring() -> None:
             "language_quality": 0.96,
         },
     )
-    assert r_qa.status_code == 200
-    assert r_qa.json()["qa_score"] == 0.99
+    assert r_qa.status_code == 403
+    assert r_qa.json()["code"] == "NOT_AUTHORIZED"
 
 
-def test_phase3_knowledge_release_6_step_workflow_and_one_step_rollback() -> None:
+def test_knowledge_release_routes_require_verified_staff_session() -> None:
     client = TestClient(create_api_app())
+    claimed_staff = {"X-SSRA-Staff-Id": "secops_admin"}
 
-    # Step 1: Create draft snapshot
-    r1 = client.post(
-        "/v1/knowledge-admin/snapshots",
-        json={"version": "2026.11.0", "content_digest_input": "Financial Act update"},
+    responses = [
+        client.get("/v1/knowledge-admin/active-snapshot", headers=claimed_staff),
+        client.post(
+            "/v1/knowledge-admin/snapshots",
+            json={"version": "2026.11.0", "content_digest_input": "Financial Act update"},
+            headers=claimed_staff,
+        ),
+        client.post("/v1/knowledge-admin/snapshots/2026.11.0/submit-review", headers=claimed_staff),
+        client.post(
+            "/v1/knowledge-admin/snapshots/2026.11.0/approve",
+            json={"legal_approver": "SSRA Chief Legal Counsel"},
+            headers=claimed_staff,
+        ),
+        client.post(
+            "/v1/knowledge-admin/snapshots/2026.11.0/publish",
+            json={"eval_regression_passed": True},
+            headers=claimed_staff,
+        ),
+        client.post("/v1/knowledge-admin/snapshots/rollback", headers=claimed_staff),
+    ]
+
+    assert all(response.status_code == 403 for response in responses)
+    assert all(response.json()["code"] == "NOT_AUTHORIZED" for response in responses)
+
+
+def test_reference_knowledge_release_engine_transitions_without_http_access() -> None:
+    from ssra_api.knowledge_admin.application import (
+        KnowledgeReleaseWorkflowEngine,
+        get_active_snapshot_use_case,
+        get_workflow_engine,
     )
-    assert r1.status_code == 200
-    assert r1.json()["status"] == "DRAFT"
 
-    # Step 2: Submit for legal review
-    r2 = client.post("/v1/knowledge-admin/snapshots/2026.11.0/submit-review")
-    assert r2.status_code == 200
-    assert r2.json()["status"] == "LEGAL_REVIEW"
+    assert get_workflow_engine() is not None
+    assert get_active_snapshot_use_case().version == "2026.10.1"
+    engine = KnowledgeReleaseWorkflowEngine()
+    assert engine.get_active().version == "2026.10.1"
 
-    # Maker-checker check: draft author cannot self-approve their own snapshot
-    r_self_approve = client.post(
-        "/v1/knowledge-admin/snapshots/2026.11.0/approve",
-        json={"legal_approver": "policy_author_default"},
+    first = "2026.11.0-reference"
+    engine.create_draft(
+        version=first, content_digest_input="synthetic test fixture", created_by="maker"
     )
-    assert r_self_approve.status_code == 403
+    with pytest.raises(SSRAError):
+        engine.publish_snapshot(first, eval_regression_passed=True)
+    assert engine.submit_for_legal_review(first).status == "LEGAL_REVIEW"
+    with pytest.raises(SSRAError) as self_approval:
+        engine.approve_snapshot(first, legal_approver=" maker ")
+    assert self_approval.value.code == McpErrorCode.NOT_AUTHORIZED
+    assert engine.approve_snapshot(first, legal_approver="checker").status == "APPROVED"
+    assert engine.publish_snapshot(first, eval_regression_passed=False).status == "ROLLED_BACK"
 
-    # Step 3: Legal approval by independent counsel
-    r3 = client.post(
-        "/v1/knowledge-admin/snapshots/2026.11.0/approve",
-        json={"legal_approver": "SSRA Chief Legal Counsel"},
+    second = "2026.12.0-reference"
+    engine.create_draft(
+        version=second, content_digest_input="synthetic test fixture", created_by="maker"
     )
-    assert r3.status_code == 200
-    assert r3.json()["status"] == "APPROVED"
-
-    # Step 4 & 5: Publish with passing eval gate
-    r4 = client.post(
-        "/v1/knowledge-admin/snapshots/2026.11.0/publish",
-        json={"eval_regression_passed": True},
-    )
-    assert r4.status_code == 200
-    assert r4.json()["status"] == "PUBLISHED"
-
-    # Step 6: One-step rollback restores 2026.10.1
-    r_rb = client.post("/v1/knowledge-admin/snapshots/rollback")
-    assert r_rb.status_code == 200
-    assert r_rb.json()["version"] == "2026.10.1"
-    assert r_rb.json()["status"] == "PUBLISHED"
+    engine.submit_for_legal_review(second)
+    engine.approve_snapshot(second, legal_approver="checker")
+    assert engine.publish_snapshot(second, eval_regression_passed=True).status == "PUBLISHED"
+    assert engine.get_active().version == second
+    assert engine.rollback_to_previous().version == "2026.10.1"
 
 
 def test_phase4_regional_and_multilingual_insights() -> None:
     """Verify Phase 4 regional insights, JIT admin directory verification, maker-checker 404, and RLS."""
     client = TestClient(create_api_app())
     r = client.get("/v1/analytics/insights")
-    assert r.status_code == 200
-    insights = r.json()
-    assert len(insights) >= 3
-    locales = {i["locale"] for i in insights}
-    assert {"en", "pga", "ar"}.issubset(locales)
+    assert r.status_code == 503
+    assert r.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
     r_fb = client.post(
         "/v1/analytics/feedback",
@@ -192,9 +298,8 @@ def test_phase4_regional_and_multilingual_insights() -> None:
     assert r_fb.json()["csat"] == 5
 
     r_drift = client.get("/v1/analytics/drift-monitors?intent_kl=0.04&abstention_rate=0.07")
-    assert r_drift.status_code == 200
-    assert r_drift.json()["status"] == "HEALTHY"
-    assert r_drift.json()["slo_burn_rate_alert"] is False
+    assert r_drift.status_code == 503
+    assert r_drift.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
     # Long-term consented preferences & per-subject deletion (Section 6.5)
     r_pref = client.put(
@@ -213,7 +318,7 @@ def test_phase4_regional_and_multilingual_insights() -> None:
     assert r_del.status_code == 200
     assert r_del.json()["deleted"] is True
 
-    # Live kill-switch update & audit chain verification (Section 12.3)
+    # Staff controls remain unavailable without a server-verified staff session.
     r_ks = client.post(
         "/v1/admin/kill-switches",
         json={
@@ -222,22 +327,18 @@ def test_phase4_regional_and_multilingual_insights() -> None:
             "disabled_channels": ["voice"],
         },
     )
-    assert r_ks.status_code == 200
-    assert r_ks.json()["degradation_level"] == 4
+    assert r_ks.status_code == 403
 
     r_aud = client.get("/v1/admin/audit-verify")
-    assert r_aud.status_code == 200
-    assert r_aud.json()["integrity_verified"] is True
-    assert r_aud.json()["events_count"] >= 1
+    assert r_aud.status_code == 403
 
     r_status = client.get("/v1/admin/public-status")
-    assert r_status.status_code == 200
-    assert r_status.json()["overall_status"] == "DEGRADED_SAFE_MODE"
-    assert r_status.json()["channels"]["voice"] == "PAUSED"
+    assert r_status.status_code == 503
+    assert r_status.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
     r_slots = client.get("/v1/appointments/slots?office_code=JUBA_HQ")
-    assert r_slots.status_code == 200
-    assert len(r_slots.json()) == 2
+    assert r_slots.status_code == 503
+    assert r_slots.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
     r_case = client.post(
         "/v1/cases",
@@ -259,9 +360,9 @@ def test_phase4_regional_and_multilingual_insights() -> None:
     assert r_consent.json()["active"] is True
 
     r_inbox = client.get("/v1/conversations/inbox?office_code=JUBA_HQ")
-    assert r_inbox.status_code == 200
+    assert r_inbox.status_code == 403
 
-    # JIT Admin elevation with maker-checker & device posture verification (Section 12.3)
+    # Request booleans and staff IDs cannot establish a JIT authorization.
     r_jit_self = client.post(
         "/v1/admin/jit-elevation",
         json={
@@ -275,7 +376,7 @@ def test_phase4_regional_and_multilingual_insights() -> None:
     )
     assert r_jit_self.status_code == 403
 
-    r_jit_ok = client.post(
+    r_jit_claimed = client.post(
         "/v1/admin/jit-elevation",
         json={
             "requester_staff_id": "stf_01",
@@ -286,8 +387,7 @@ def test_phase4_regional_and_multilingual_insights() -> None:
             "reason": "Update routing config",
         },
     )
-    assert r_jit_ok.status_code == 200
-    assert r_jit_ok.json()["granted"] is True
+    assert r_jit_claimed.status_code == 403
 
     r_jit_unverified_staff = client.post(
         "/v1/admin/jit-elevation",
@@ -302,10 +402,9 @@ def test_phase4_regional_and_multilingual_insights() -> None:
     )
     assert r_jit_unverified_staff.status_code == 403
 
-    # Real-time inbox SSE stream & Tier T3 Maker-Checker approval + Postgres RLS context
+    # Inbox streams and Tier T3 approvals require the same trusted session.
     r_inbox_stream = client.get("/v1/conversations/inbox/stream?office_code=JUBA_HQ")
-    assert r_inbox_stream.status_code == 200
-    assert "INBOX_SNAPSHOT" in r_inbox_stream.text
+    assert r_inbox_stream.status_code == 403
 
     r_mc_missing = client.post(
         "/v1/cases/case_nonexistent_999/maker-checker",
@@ -316,7 +415,7 @@ def test_phase4_regional_and_multilingual_insights() -> None:
             "rationale": "Missing case check",
         },
     )
-    assert r_mc_missing.status_code == 404
+    assert r_mc_missing.status_code == 403
 
     r_mc_self = client.post(
         "/v1/cases/case_01/maker-checker",
@@ -338,8 +437,7 @@ def test_phase4_regional_and_multilingual_insights() -> None:
             "rationale": "Verified e-Tax payment slip",
         },
     )
-    assert r_mc_ok.status_code == 200
-    assert r_mc_ok.json()["status"] == "MAKER_CHECKER_APPROVED"
+    assert r_mc_ok.status_code == 403
 
     from ssra_api.repositories import PostgresRlsSessionContext
 
@@ -350,20 +448,28 @@ def test_phase4_regional_and_multilingual_insights() -> None:
 
 
 def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
-    """Verify ETag 304, caller-scoped Idempotency-Key replay, SSE bypass, and timed OTP challenge lockout."""
-    client = TestClient(create_api_app())
+    """Verify ETag middleware plus API idempotency, SSE denial, and bounded request-body behavior."""
+    etag_app = FastAPI()
+    install_api_conventions_middleware(etag_app)
 
-    # 1. GET returns ETag and traceparent; If-None-Match returns 304 Not Modified
-    r_get1 = client.get("/v1/analytics/summary")
+    @etag_app.get("/v1/reference-health")
+    async def reference_health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    etag_client = TestClient(etag_app)
+    # Exercise caching semantics without relying on staff-only snapshot administration.
+    r_get1 = etag_client.get("/v1/reference-health")
     assert r_get1.status_code == 200
     etag = r_get1.headers.get("ETag")
     assert etag is not None
     assert "traceparent" in r_get1.headers
 
-    r_get2 = client.get("/v1/analytics/summary", headers={"If-None-Match": etag})
+    r_get2 = etag_client.get("/v1/reference-health", headers={"If-None-Match": etag})
     assert r_get2.status_code == 304
     assert "Strict-Transport-Security" in r_get1.headers
     assert "Permissions-Policy" in r_get1.headers
+
+    client = TestClient(create_api_app())
 
     # RFC 9457 Problem Details on RequestValidationError (422)
     r_val = client.post("/v1/analytics/feedback", json={"conversation_id": "c1", "csat": 99})
@@ -371,7 +477,7 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     assert r_val.headers["content-type"].startswith("application/problem+json")
     assert r_val.json()["code"] == "VALIDATION_FAILED"
 
-    # Transactional Outbox staged events from mutations
+    # Reference event buffer receives synthetic test mutations but does not publish them.
     from ssra_api.outbox import get_outbox_store
 
     assert len(get_outbox_store().staged_events) >= 1
@@ -409,10 +515,8 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
 
     # 4. SSE stream bypasses ETag body buffering and sets Cache-Control: no-cache, no-transform
     r_sse = client.get("/v1/conversations/inbox/stream?office_code=JUBA_HQ")
-    assert r_sse.status_code == 200
-    assert "ETag" not in r_sse.headers
-    assert "no-transform" in r_sse.headers.get("Cache-Control", "")
-    assert r_sse.headers.get("X-Accel-Buffering") == "no"
+    assert r_sse.status_code == 403
+    assert r_sse.json()["code"] == "NOT_AUTHORIZED"
 
     r_chunked_oversize = client.post(
         "/v1/conversations",
@@ -420,40 +524,7 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     )
     assert r_chunked_oversize.status_code == 413
 
-    # 5. Per-TIN OTP challenge verification & timed brute-force lockout (wrong 6-digit guess also locks out)
-    from datetime import timedelta
-
-    from ssra_api.identity_link.application import (
-        bind_tin_with_otp_use_case,
-        get_otp_state_store,
-        reset_otp_lockout_state,
-    )
-    from ssra_core import utc_now
-
-    reset_otp_lockout_state()
-    get_otp_state_store().issue_challenge("3004009999", "654321")
-    for _ in range(5):
-        r_bad_otp = client.post(
-            "/v1/identity-link/verify-otp",
-            json={"tin": "3004009999", "otp_code": "000000"},
-        )
-        assert r_bad_otp.status_code == 401
-    r_locked_otp = client.post(
-        "/v1/identity-link/verify-otp",
-        json={"tin": "3004009999", "otp_code": "654321"},
-    )
-    assert r_locked_otp.status_code == 429
-    # After lockout window expires, the valid issued challenge succeeds
-    unlocked_binding = bind_tin_with_otp_use_case(
-        tin="3004009999",
-        subject_ref="sub_taxpayer_amina_01",
-        otp_code="654321",
-        now=utc_now() + timedelta(seconds=360),
-    )
-    assert unlocked_binding.tin_masked == "••••9999"
-    reset_otp_lockout_state()
-
-    # 6. Auditor role accepted in PostgresRlsSessionContext
+    # 5. Auditor role accepted in PostgresRlsSessionContext
     from ssra_api.repositories import PostgresRlsSessionContext
 
     aud_rls = PostgresRlsSessionContext(
@@ -483,12 +554,11 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     )
     assert r_prot_flag.status_code == 403
 
-    r_flags = client.get(
+    r_flags_no_session = client.get(
         "/v1/admin/feature-flags",
         headers={"X-SSRA-Staff-Id": "secops_admin"},
     )
-    assert r_flags.status_code == 200
-    assert len(r_flags.json()) >= 6
+    assert r_flags_no_session.status_code == 403
 
     r_flag_upd = client.post(
         "/v1/admin/feature-flags",
@@ -499,31 +569,11 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
             "rollout_pct": 100,
         },
     )
-    assert r_flag_upd.status_code == 200
-    assert r_flag_upd.json()["rollout_pct"] == 100
-
-    from ssra_core import get_default_feature_flag_engine
-
-    get_default_feature_flag_engine().reset_flag_override("FF_AUTONOMOUS_GOAL_PLANNER")
-
-    from ssra_api.analytics_api.application import record_cx_turn_telemetry_use_case
-
-    counters = record_cx_turn_telemetry_use_case(
-        autonomous_resolved=True,
-        cross_session_completed=True,
-        repeated_slot=False,
-        eq_deescalated=True,
-        handoff_occurred=True,
-        handoff_clean=True,
-    )
-    assert counters["total_turns"] >= 1
+    assert r_flag_upd.status_code == 403
 
     r_scorecard = client.get("/v1/analytics/cx-scorecard")
-    assert r_scorecard.status_code == 200
-    assert r_scorecard.json()["zero_unverified_numeric_claims"] is True
-    assert r_scorecard.json()["is_synthetic_baseline"] is True
-    assert r_scorecard.json()["source_note"] == "SYNTHETIC_PHASE4_BASELINE_OQ013"
-    assert r_scorecard.json()["quality_adjusted_autonomous_resolution_rate"] >= 0.78
+    assert r_scorecard.status_code == 503
+    assert r_scorecard.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
     conv_id = r_post1.json()["id"]
     # Body-bearing handback before takeover is rejected with 403
@@ -538,13 +588,12 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     )
     assert r_hb_before_takeover.status_code == 403
 
-    # Takeover by stf_01 first
+    # Caller-supplied staff IDs cannot claim takeover.
     r_to = client.post(
         f"/v1/conversations/{conv_id}/takeover",
         json={"staff_id": "stf_01"},
     )
-    assert r_to.status_code == 200
-    assert r_to.json()["status"] == "STAFF_TAKEOVER"
+    assert r_to.status_code == 403
 
     # Mismatched officer_id on handback is rejected with 403
     r_hb_wrong_officer = client.post(
@@ -568,7 +617,7 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
             "return_to_ai_step": 2,
         },
     )
-    assert r_hb_bad_intent.status_code == 422
+    assert r_hb_bad_intent.status_code == 403
 
     r_hb = client.post(
         f"/v1/conversations/{conv_id}/handback",
@@ -579,13 +628,4 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
             "return_to_ai_step": 2,
         },
     )
-    assert r_hb.status_code == 200
-    hb_json = r_hb.json()
-    assert hb_json["status"] == "HANDED_BACK_TO_AI"
-    assert hb_json["officer_resolution"] is not None
-    assert hb_json["officer_resolution"]["return_to_ai_step"] == 2
-    assert "+211912345678" not in hb_json["officer_resolution"]["resolution_summary"]
-    assert any(
-        ev.type == "ssra.conversation.handback.v1" and ev.data.get("has_officer_resolution") is True
-        for ev in get_outbox_store().staged_events
-    )
+    assert r_hb.status_code == 403

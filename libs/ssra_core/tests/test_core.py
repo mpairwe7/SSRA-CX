@@ -64,6 +64,10 @@ def test_juba_office_hours_and_fiscal_year() -> None:
     assert fiscal_year_for_date(date(2026, 6, 30)) == "2025/2026"
     assert fiscal_year_for_date(date(2026, 7, 1)) == "2026/2027"
 
+    december_due = compute_monthly_filing_deadline(2026, 12)
+    assert december_due.year == 2027
+    assert december_due.month == 1
+
 
 def test_nra_ssra_synonyms_and_errors() -> None:
     expanded = expand_ssra_nra_synonyms("How do I get an NRA TIN certificate?")

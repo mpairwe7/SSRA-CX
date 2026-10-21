@@ -237,6 +237,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     environment:
+      SSRA_RUNTIME_MODE: reference
       HF_HOME: ${HF_HOME:-/home/developer/huggingface_cache}
       HF_HUB_OFFLINE: "${HF_HUB_OFFLINE:-1}"
       TRANSFORMERS_OFFLINE: "${TRANSFORMERS_OFFLINE:-1}"
@@ -269,6 +270,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     environment:
+      SSRA_RUNTIME_MODE: reference
       HF_HOME: ${HF_HOME:-/home/developer/huggingface_cache}
       HF_HUB_OFFLINE: "${HF_HUB_OFFLINE:-1}"
       TRANSFORMERS_OFFLINE: "${TRANSFORMERS_OFFLINE:-1}"

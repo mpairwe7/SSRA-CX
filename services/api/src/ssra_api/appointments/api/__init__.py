@@ -18,13 +18,19 @@ class SlotModel(BaseModel):
     start_eat: str
 
 
-@router.get("/slots", response_model=list[SlotModel])
+@router.get(
+    "/slots",
+    response_model=list[SlotModel],
+    responses={503: {"description": "Live office inventory is not configured."}},
+)
 async def get_slots(office_code: str = "JUBA_HQ") -> list[SlotModel]:
+    """Return current appointment inventory or fail closed when no provider is configured."""
+    slots = list_slots_use_case(office_code)
     return [
         SlotModel(
             slot_id=s.slot_id,
             office_code=s.office_code,
             start_eat=s.start_eat,
         )
-        for s in list_slots_use_case(office_code)
+        for s in slots
     ]

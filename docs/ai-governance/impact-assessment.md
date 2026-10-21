@@ -1,7 +1,8 @@
 # SSRA Assist — AI Impact Assessment & Privacy Impact Assessment (`docs/ai-governance/impact-assessment.md`)
 
-**Status:** v1.0 (Phase 1–4 Governance Deliverable)  
-**Date:** 2026-10-16  
+**Status:** v1.1 (Governance requirements; not operational-readiness evidence)
+
+**Date:** 2026-10-21
 **Standards:** ISO/IEC 42001:2023, NIST AI RMF 1.0 (AI 600-1), South Sudan Constitution Art. 22, AU Malabo Convention  
 **References:** [`docs/00-master-prompt.md`](../00-master-prompt.md) Sections 2, 4, 12.1, 12.5, 18
 
@@ -10,6 +11,8 @@
 ## 1. Purpose & Public-Interest Justification
 
 SSRA Assist improves voluntary tax compliance and taxpayer trust across South Sudan by providing instant, cited, multilingual guidance (`en`, `pga`, `ar`, `din`, `nus`, `bfa`, `zne`, `shk`) over low-bandwidth channels (Web PWA, WhatsApp, SMS, USSD, Voice/IVR), helping citizens and businesses avoid queues and verify official cash-free bank remittance channels (`https://etax.nra.gov.ss/`).
+
+This assessment records the safeguards required for a future service; it does not certify that integrations are live or phases have passed their exit gates. The current API and agent runtime fail closed outside explicit reference mode, and identity, document analysis, appointments, staff operation, and production analytics remain unavailable pending their approvals and implementations (ADR-019; OQ-005, OQ-013–OQ-017).
 
 ---
 

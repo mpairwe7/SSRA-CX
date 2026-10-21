@@ -1,12 +1,5 @@
-"""Domain layer for admin bounded context (Kill switches & audit verification)."""
+"""No operational admin domain state is active before trusted staff integration.
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class KillSwitchState:
-    degradation_level: int
-    disabled_tools: tuple[str, ...]
-    disabled_channels: tuple[str, ...]
+Staff policy and audited control-plane models must be defined with the approved
+identity, persistence, and audit providers before admin actions are enabled.
+"""

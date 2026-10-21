@@ -58,7 +58,7 @@ flowchart LR
 | **Channel Gateway** | `services/channel-gateway/` | WhatsApp HMAC & 24h window (`whatsapp.py`), SMS GSM-7/UCS-2, USSD 182-char menu (`ussd.py`) |
 | **Workers & Voice** | `services/workers/`, `services/voice/` | Legal chunker (`ingestion.py`), SLA timers (`sla.py`), Temporal goal continuation (`continuation.py`), Whisper + Omnilingual ASR WER gate + EQ TTS prosody |
 | **Frontend Experience** | `apps/web/server.js`, `apps/console/server.js`, `packages/*` | Node BFF routes `/api/turns` and `/api/chat/stream`; browser direct `/v1/*` denied except feedback; public history is device-local T0; console is preview-only and staff data/action routes return 403 until trusted sessions are integrated |
-| **Persistence & deployment profiles** | `services/api/alembic/`, `services/api/src/ssra_api/database.py`, `infra/compose/` | PostgreSQL migration `0001` defines relational schema; runtime graph, several API repositories, OTP state, and outbox staging are process-local; ORM memory models lack tables in migration `0001`; GPU Compose adds Qdrant but omits `agentgateway`, Keycloak, and NATS from the general profile; production/DR Compose overlay adds WAL archiving and secret mounts but is not evidence of an active deployment |
+| **Persistence & deployment profiles** | `services/api/alembic/`, `services/api/src/ssra_api/database.py`, `infra/compose/` | PostgreSQL migration `0001` defines relational schema; runtime graph, several API repositories, and outbox staging are process-local; no identity OTP flow is active; ORM memory models lack tables in migration `0001`; GPU Compose adds Qdrant but omits `agentgateway`, Keycloak, and NATS from the general profile; production/DR Compose overlay adds WAL archiving and secret mounts but is not evidence of an active deployment |
 | **Evaluation Harness** | `evals/suites/`, `evals/redteam/` | 600-item Phase 1 golden dataset (`300 en`, `150 ar`, `150 pga`), trajectory/channel checks, OWASP `ASI01`–`ASI10` red-team |
 
 ---
@@ -66,10 +66,12 @@ flowchart LR
 ## 3. Current Trust and Persistence Notes (2026-10-21)
 
 - `apps/web/server.js` sanitizes public chat turns before forwarding to the runtime and denies direct browser proxy access to private `/v1/*` routes other than feedback.
-- `apps/console/server.js` is a non-operational preview. Browser persona selection is presentation state only; the staff data/action APIs fail closed with `AUTHENTICATED_STAFF_SESSION_REQUIRED`.
+- `apps/console/server.js` is a non-operational preview. Browser persona selection is presentation state only; staff inbox, conversation action, case approval, admin control, and console data/action APIs fail closed until trusted sessions and role mapping are integrated.
 - `services/agent-runtime/src/ssra_runtime/graphs/conversation.py` uses LangGraph `InMemorySaver`; it is not a durable database checkpointer.
-- The identity-link API route uses synthetic subject fixtures and process-local OTP state; the appointments route returns fixed sample slots, and analytics includes synthetic scorecard data. These routes are not production systems of record.
-- The API outbox currently stages events in bounded in-process lists; the migrated outbox table and NATS service do not establish durable broker delivery from the current implementation.
+- `SSRA_RUNTIME_MODE` defaults to production; API and agent-runtime requests return 503 outside explicit reference mode. Identity/document, appointment, and operational analytics endpoints also fail closed in reference mode until approved providers exist.
+- Admin controls, JIT elevation, staff inbox/actions, and case maker-checker return 403 in every mode until OQ-014 is closed; public service status returns 503 until trusted health telemetry is configured.
+- No identity-link application or domain helpers remain active. The attachment inspection view shows an unavailable state and does not generate OCR results, portal instructions, TIN checks, or statutory calculations.
+- `InMemoryOutboxBuffer` rejects overflow without evicting events and refuses to claim NATS publication. The migrated outbox table and NATS service do not establish durable broker delivery.
 - The GPU Compose profile declares Qdrant for episodic vectors but does not declare the general profile's `agentgateway`, Keycloak, or NATS services. Verify egress, identity, and outbox wiring before treating it as a deployment topology.
 - `infra/compose/docker-compose.prod.yml` is an overlay on the general profile with production/DR configuration, including PostgreSQL WAL archiving and secret mounts. Its presence does not establish that the overlay is deployed or that recovery objectives have been exercised.
 - See [`docs/architecture/overview.md`](../docs/architecture/overview.md) and [`docs/architecture/data-model.md`](../docs/architecture/data-model.md) for the full component map and persistence caveats.

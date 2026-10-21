@@ -16,12 +16,14 @@
 | P1 | Sidebar labeled all unpinned conversations “Today,” did not sort by activity, and could leave hidden rail controls in keyboard focus. | Added deterministic activity sorting and `Africa/Juba` date groups, active-row semantics, meaningful empty state, `inert` handling for collapsed/closed navigation, and keyboard/pointer recovery for the staff preview's hover rail. |
 | P1 | Compact action controls and motion/focus feedback were inconsistent. | Main chat rail actions now meet the 44px design target, visible keyboard focus is explicit, reduced-motion preferences are honored, and focus follows sidebar open/close state. |
 | P1 | The chat header labeled a sample-prompt modal as a toll-free AI receptionist, and browser speech recognition did not disclose processing limits. | Renamed it to voice input, disclosed browser processing and language limits, and warned against speaking private account details in public chat. |
+| P0 | Attachment inspection could generate TIN verification, portal instructions, and tax-rate/deadline prompts without an approved scan, OCR, or legal source. | Removed generated analysis prompts and assumed portal links; the inspection view now exposes an explicit unavailable state until approved providers return cited results. |
 | P2 | Analytics view-model helpers treated values without observation timestamps as live. | Added `LIVE`, `STALE`, `UNKNOWN`, `CI target` and `illustrative` provenance states. Unknown or stale evidence cannot claim that all gates pass. |
 
 ## Remaining gaps
 
 - Staff dashboards are intentionally not operational; there is no verified staff-session integration in the server-rendered console. OQ-014 blocks release of staff data and actions.
-- OQ-013 remains open for warehouse aggregation and synthetic-baseline metadata. Current runtime UI does not use the newer TypeScript view models as its renderer, so integration must be completed before showing live metrics.
+- OQ-013 remains open for warehouse aggregation and metric provenance. Analytics summary, insight, drift, and scorecard endpoints now return 503, and the staff console continues to return 403 for operational data/actions.
+- `SSRA_RUNTIME_MODE` defaults to `production`; Core API and agent-runtime return 503 unless explicit local/test `reference` mode is selected. The production/DR Compose overlay remains unready until providers and durable state are approved and verified.
 - Current code review cannot confirm that all generated layouts pass screen-reader, zoom, keyboard, 320px reflow, Arabic RTL, or low-end Android user scenarios. Automated accessibility results previously recorded in `docs/PROGRESS.md` must not be treated as a substitute for this review or moderated testing.
 - Language coverage beyond English, Juba Arabic, and Arabic needs qualified human review. Do not publish improvised translations for tax/legal concepts.
 - Forms and consequential flows need an end-to-end error pattern: server-side validation, preserved inputs, linked field errors, a focused error summary, and clear recovery instructions.

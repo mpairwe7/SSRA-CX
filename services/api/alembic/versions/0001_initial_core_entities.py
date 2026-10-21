@@ -169,7 +169,7 @@ UPGRADE_SQL: tuple[str, ...] = (
         PRIMARY KEY (id, at)
     ) PARTITION BY RANGE (at);
     """,
-    # 11. outbox_events (Transactional CloudEvents 1.0 outbox to NATS JetStream)
+    # 11. outbox_events (planned durable CloudEvents 1.0 outbox schema; runtime publisher not wired)
     """
     CREATE TABLE IF NOT EXISTS outbox_events (
         id VARCHAR(64) PRIMARY KEY DEFAULT ('outbox_' || uuidv7()::text),

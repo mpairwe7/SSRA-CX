@@ -13,7 +13,7 @@
 | **OQ-002** | **e-Customs platform and APIs:** declaration status, tariff data, HS code schedule | Phase 2 | SSRA Customs & ICT | 🔴 Open | Define `ECustomsPort`; mock adapter returns synthetic test declarations; public assistant answers only published general customs procedures (T0) and hands off specific declaration/tariff queries. |
 | **OQ-003** | **Hosting:** NCA data-centre capacity (CPU, GPU, storage, network), DR site, any approved regional cloud | Phase 0 (Sign-off) | SSRA ICT & NCA | 🔴 Open | Standardize operational runbooks and deployments on hardened Docker Compose (`infra/compose/docker-compose.yml` + `infra/compose/docker-compose.prod.yml` with `read_only`, `cap_drop: ["ALL"]`, `no-new-privileges:true`, and `sovereign_internal_net`) sized for modular CPU + single/dual GPU profiles; Kubernetes deployment is decommissioned in operational runbooks. |
 | **OQ-004** | **AI providers:** approved external models, data classes allowed to leave the country, zero-retention contracts | Phase 1 | SSRA Management, Legal & SecOps | 🔴 Open | Default all model routing in `ai/routing/` to in-country self-hosted open-weight models (`vLLM`/`SGLang`); keep external provider plug-ins disabled by default behind `agentgateway`. |
-| **OQ-005** | **Identity:** civil-registry or national-ID/passport format (`[RP]\d{7,8}`), OTP delivery partners & verification adapter, SIM-swap signals, staff identity provider | Phase 2 | SSRA ICT, SecOps & Telcos | 🔴 Open | Use local Keycloak realm with mock OTP/SIM-swap provider and conservative `[RP]\d{7,8}` PII redaction in dev/staging; block production T1+ rollout until identity proofing is approved by SSRA SecOps. |
+| **OQ-005** | **Identity:** civil-registry or national-ID/passport format (`[RP]\d{7,8}`), OTP delivery partners & verification adapter, SIM-swap signals, staff identity provider | Phase 2 | SSRA ICT, SecOps & Telcos | 🔴 Open | `/v1/identity-link/verify-otp` returns 503 until approved providers and durable subject binding exist. No local helper may bind a TIN to a taxpayer identity. |
 | **OQ-006** | **Payments:** who may generate payment references, bank and mobile-money partners, Bank of South Sudan integration | Phase 2 | SSRA Finance, BoSS & ICT | 🔴 Open | Provide static, cited instructions for official e-Tax bank remittance only; keep `generate_payment_reference` feature-flagged off (`*` in catalog); never compute FX rates. |
 | **OQ-007** | **Channels:** WhatsApp number and verification, SMS sender ID, USSD short code, toll-free voice line, operator agreements | Phase 1 | SSRA Communications & ICT | 🔴 Open | Build against `ChannelPort` with local webhook/SMPP/USSD simulators in `infra/compose/`; populate placeholder sender IDs clearly marked `UNVERIFIED_DEV_ONLY`. |
 | **OQ-008** | **Languages:** priority order, translation and review capacity, termbase ownership | Phase 1 | SSRA Communications & Legal | 🔴 Open | Scaffold ICU message catalogs and `ai/termbase/` for `en`, `pga`, and `ar` (RTL) for Phase 1, plus `din`, `nus`, `bfa`, `zne`, `shk` placeholders; require human review sign-off before publishing Tier B/C translations. |
@@ -21,8 +21,11 @@
 | **OQ-010** | **Operations:** contact-centre size and hours, escalation matrix, SLAs, console roles | Phase 1 | SSRA Contact Centre & Operations | 🔴 Open | Configure parameterised office hours (`Africa/Juba`), queues, RBAC roles, and SLA timers in `services/api` and Temporal with conservative defaults; route out-of-hours escalations to callback intake. |
 | **OQ-011** | **Official-channel registry and branding** for anti-scam verification | Phase 1 | SSRA Communications & SecOps | 🔴 Open | Seed `official-channels` MCP server with verified domain `etax.nra.gov.ss` and March 2026 cash-free bank-only directive; mark phone/short-code/bank account entries as pending SSRA sign-off. |
 | **OQ-012** | **Procurement:** open-source policy, licensing, export-control and sanctions screening of vendors | Phase 0 (Sign-off) | SSRA Procurement & Legal | 🔴 Open | Restrict Phase 0 stack strictly to permissive/open OSI-approved self-hostable software (Apache-2.0, MIT, BSD, PostgreSQL); generate CycloneDX SBOMs for license audit. |
-| **OQ-013** | **Production Analytics Warehouse & Workforce Telemetry Aggregation:** ClickHouse / Langfuse warehouse schema & staff AHT baseline for live `AgenticCxScorecard` aggregation | Phase 4 | SSRA Operations & ICT | 🔴 Open | Return synthetic baseline metrics explicitly badged with `is_synthetic_baseline: true` and `source_note: "SYNTHETIC_PHASE4_BASELINE_OQ013"` on `GET /v1/analytics/cx-scorecard` until live warehouse aggregation is signed off. |
+| **OQ-013** | **Production Analytics Warehouse & Workforce Telemetry Aggregation:** ClickHouse / Langfuse warehouse schema & staff AHT baseline for live `AgenticCxScorecard` aggregation | Phase 4 | SSRA Operations & ICT | 🔴 Open | Analytics summary, insight, drift, and scorecard APIs return 503; the staff console remains 403 preview-only until a governed warehouse, freshness rules, and metric provenance are approved. |
 | **OQ-014** | **Staff Console Identity, Role Mapping & Session Authorization:** approved IdP, server-side session validation, role claims, step-up requirements and audit attribution | Phase 2 | SSRA ICT, SecOps & Operations | 🔴 Open | Keep the console in non-operational preview mode; deny staff API reads and writes until sessions are server-verified and roles are mapped to approved policy. Never authorize from local storage or `X-SSRA-Staff-Id`. |
+| **OQ-015** | **Durable API and conversation state:** authoritative stores, RLS/session context, encryption/retention, checkpoint recovery, and transactional event delivery | Phase 0–3 | SSRA ICT, SecOps & Operations | 🔴 Open | Production mode returns 503 from the API and agent runtime. Use process-local repositories, `InMemorySaver`, and the event buffer only in explicit reference mode; never claim cross-replica continuity or durable delivery. |
+| **OQ-016** | **Appointment inventory and booking authority:** office calendars, slot reservation, cancellation, timezone, and conflict/idempotency rules | Phase 2 | SSRA Operations & ICT | 🔴 Open | `GET /v1/appointments/slots` returns 503 until an approved live inventory and booking provider is configured. Do not return fixed sample slots as availability. |
+| **OQ-017** | **Document scanning, OCR, and evidence guidance:** approved malware scanner, OCR provenance, retention, source citations, and legal review for any document-derived numeric guidance | Phase 2 | SSRA ICT, SecOps & Legal | 🔴 Open | Document precheck and analysis APIs return 503. Do not report a clean scan, OCR result, statutory rate, deadline, or portal instruction without the corresponding approved provider and source snapshot. |
 
 ---
 
@@ -33,8 +36,33 @@
 - **Context:** The current server-rendered console has no verified staff session. A browser-selected role or caller-supplied staff ID cannot prove identity or permission. Staff screens remain a navigation preview and staff API routes fail closed until this decision is approved.
 - **Specific Questions for SSRA ICT, SecOps & Operations:**
   1. Which staff identity provider is authoritative, and how will the console validate its issuer, audience, signature, expiry, session revocation and step-up state server-side?
-  2. Which approved role claims map to read, reply, audit, feature-flag and kill-switch permissions, and which actions require maker-checker approval?
+  2. Which approved role claims map to read, reply, audit, feature-flag, kill-switch, and knowledge-release permissions, and which approval/publish/rollback actions require maker-checker separation?
   3. Which audit fields, retention periods and incident procedures are required for each staff read and state-changing action?
+
+### OQ-015 — Durable API and Conversation State
+- **Blocks:** Production API and agent-runtime operation
+- **Context:** Several API repositories, consent/preferences, knowledge snapshots, feedback, and event staging are process-local. No identity OTP flow is active. LangGraph currently uses `InMemorySaver`; migration and ORM declarations do not establish runtime persistence, RLS provisioning, checkpoint recovery, or NATS delivery. Production mode therefore returns 503 until these paths have approved implementations.
+- **Specific Questions for SSRA ICT, SecOps & Operations:**
+  1. Which database and schema own each mutable context, and what RLS/session variables bind every query to its verified subject, office, and role?
+  2. What encryption, retention, deletion, backup, restore, and audit controls apply to each state class?
+  3. Which checkpoint store and recovery semantics are approved, and what tests prove restart-safe single-thread and multi-replica continuation?
+  4. Which transactional outbox/broker topology, retry policy, idempotency key, and dead-letter process are approved for domain events?
+
+### OQ-016 — Appointment Inventory and Booking Authority
+- **Blocks:** Phase 2 appointment self-service
+- **Context:** The API previously returned fixed, expired sample slots and has no live office calendar or reservation provider. Listing or booking appointments must not imply a confirmed SSRA reservation without a source-of-truth response.
+- **Specific Questions for SSRA Operations & ICT:**
+  1. Which approved system owns office schedules, closures, slot capacity, and booking identifiers?
+  2. What are the reservation expiry, cancellation, duplicate request, timezone, and conflict-resolution rules?
+  3. What confirmation artifact may be shown to the taxpayer, and what is the staff escalation path when the provider is unavailable?
+
+### OQ-017 — Document Scanning, OCR, and Evidence Guidance
+- **Blocks:** Phase 2 document precheck and analysis
+- **Context:** The prior deterministic document helpers and generated UI guidance have been removed because they could imply malware scanning, OCR, statutory calculations, or legal instructions without approved sources. HTTP handlers and the attachment inspection view fail closed until the relevant providers and provenance rules exist.
+- **Specific Questions for SSRA ICT, SecOps & Legal:**
+  1. Which malware scanning and OCR services are approved, and what evidence demonstrates coverage, versioning, and fail-safe behavior?
+  2. What upload retention, deletion, encryption, size, and access-audit requirements apply?
+  3. Which official knowledge snapshots and numeric tools may support document-derived statutory explanations, and who approves portal troubleshooting guidance?
 
 ### OQ-001 — e-Tax APIs, Schemas, Authentication & TIN Format
 - **Blocks:** Phase 2 (Authenticated Self-Service)
@@ -69,7 +97,7 @@
 
 ### OQ-005 — Taxpayer & Staff Identity Proofing
 - **Blocks:** Phase 2
-- **Context:** `T1`–`T3` tools require verified identity (phone OTP bound to TIN, plus step-up OTP for `T3`). Staff require SSO + WebAuthn passkeys.
+- **Context:** `T1`–`T3` tools require verified identity (phone OTP bound to TIN, plus step-up OTP for `T3`). Staff require SSO + WebAuthn passkeys. The identity HTTP endpoint returns 503; test-only helpers cannot establish a production identity.
 - **Specific Questions for SSRA SecOps & ICT:**
   1. Which mobile network operators (Zain South Sudan, MTN South Sudan, Digitel) or aggregators provide OTP delivery and SIM-swap recency signals?
   2. Does SSRA operate an existing Active Directory / Entra ID / LDAP or Keycloak IdP for staff federation?

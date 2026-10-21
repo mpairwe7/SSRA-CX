@@ -27,5 +27,5 @@ uv run python tools/run_dr_restore_drill.py
 2. **PostgreSQL 18 Point-in-Time Recovery (`postgres` + `postgres-wal-archiver`):**
    - Restore the latest base backup and replay WAL segments from `s3://ssra-nca-backups/postgres18-wal` up to `recovery_target_time` inside the `postgres` Docker Compose service (`RPO <= 5 min`, `RTO <= 1 h`).
 3. **Verify Hash-Chained Audit & Knowledge Snapshot Integrity:**
-   - Call `GET /v1/admin/audit-verify` and `GET /v1/knowledge-admin/active-snapshot` on the restored `api` container (`http://127.0.0.1:8000`).
-   - Run `task eval` against the restored Docker Compose stack to confirm 100% numeric provenance and citation precision before switching DNS/edge traffic.
+   - Admin and knowledge-release API routes currently return `403 NOT_AUTHORIZED`; they do not verify restored operational state. Use SSRA-approved database/backup integrity procedures and authenticated audit tooling for these checks.
+   - Run `task eval` on the reference build to verify software behavior. Do not switch DNS/edge traffic based on a reference-mode test; production API/runtime remain unavailable until approved providers, staff authorization, and durable state are implemented.

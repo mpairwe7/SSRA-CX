@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ssra_core import McpErrorCode, SSRAError, new_id, utc_now
+from ssra_core import new_id, utc_now
 
 from ssra_api.cases.domain import CaseEntity
 from ssra_api.outbox import get_outbox_store
@@ -47,33 +47,3 @@ def open_case_use_case(
         data={"case_type": case_type, "priority": priority},
     )
     return entity
-
-
-def record_maker_checker_approval_use_case(
-    *,
-    case_id: str,
-    maker_staff_id: str,
-    checker_staff_id: str,
-    action_type: str,
-    rationale: str,
-) -> CaseEntity:
-    """Verify the case exists and stage a two-officer Tier T3 maker-checker approval CloudEvent."""
-    existing = _case_store.get(case_id)
-    if existing is None:
-        raise SSRAError(
-            McpErrorCode.NOT_FOUND,
-            f"Case '{case_id}' not found for maker-checker approval",
-            status_code=404,
-        )
-    get_outbox_store().stage_domain_event(
-        context_name="cases",
-        event_type="ssra.case.maker_checker.approved.v1",
-        subject=existing.id,
-        data={
-            "maker_staff_id": maker_staff_id,
-            "checker_staff_id": checker_staff_id,
-            "action_type": action_type,
-            "rationale": rationale,
-        },
-    )
-    return existing

@@ -1,4 +1,4 @@
-"""Application layer for knowledge_admin bounded context (6-Step Knowledge Release Workflow — Section 7)."""
+"""Reference state machine for knowledge release; HTTP operations stay disabled pending authorization and persistence."""
 
 from __future__ import annotations
 
