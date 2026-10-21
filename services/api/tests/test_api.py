@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from ssra_api import create_api_app
 from ssra_api.conversations.domain import ConversationEntity
 from ssra_api.conversations.infrastructure import InMemoryConversationRepository
@@ -14,13 +13,14 @@ from ssra_api.database import POSTGRES18_RLS_AND_WORM_DDL, Base
 from ssra_api.middleware import install_api_conventions_middleware
 from ssra_api.outbox import InMemoryOutboxBuffer
 from ssra_core import McpErrorCode, SSRAError
+from ssra_testing import AsgiTestClient
 
 
 def test_core_api_fails_closed_without_explicit_reference_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("SSRA_RUNTIME_MODE", raising=False)
-    client = TestClient(create_api_app())
+    client = AsgiTestClient(create_api_app())
     response = client.get("/healthz")
     assert response.status_code == 503
     assert response.json()["code"] == "UPSTREAM_UNAVAILABLE"
@@ -128,7 +128,7 @@ def test_appointments_slots_endpoint_abstains_without_inventory_provider() -> No
 
     from ssra_api.appointments.api import get_slots
 
-    response = TestClient(create_api_app()).get("/v1/appointments/slots?office_code=JUBA_HQ")
+    response = AsgiTestClient(create_api_app()).get("/v1/appointments/slots?office_code=JUBA_HQ")
 
     assert response.status_code == 503
     assert response.json()["code"] == "UPSTREAM_UNAVAILABLE"
@@ -138,7 +138,7 @@ def test_appointments_slots_endpoint_abstains_without_inventory_provider() -> No
 
 
 def test_identity_and_document_providers_fail_closed_until_approved() -> None:
-    client = TestClient(create_api_app())
+    client = AsgiTestClient(create_api_app())
 
     r_otp = client.post(
         "/v1/identity-link/verify-otp",
@@ -167,7 +167,7 @@ def test_identity_and_document_providers_fail_closed_until_approved() -> None:
 
 
 def test_phase3_staff_copilot_and_conversation_routes_fail_closed_without_staff_sessions() -> None:
-    client = TestClient(create_api_app())
+    client = AsgiTestClient(create_api_app())
 
     r_conv = client.post(
         "/v1/conversations",
@@ -214,7 +214,7 @@ def test_phase3_staff_copilot_and_conversation_routes_fail_closed_without_staff_
 
 
 def test_knowledge_release_routes_require_verified_staff_session() -> None:
-    client = TestClient(create_api_app())
+    client = AsgiTestClient(create_api_app())
     claimed_staff = {"X-SSRA-Staff-Id": "secops_admin"}
 
     responses = [
@@ -280,7 +280,7 @@ def test_reference_knowledge_release_engine_transitions_without_http_access() ->
 
 def test_phase4_regional_and_multilingual_insights() -> None:
     """Verify Phase 4 regional insights, JIT admin directory verification, maker-checker 404, and RLS."""
-    client = TestClient(create_api_app())
+    client = AsgiTestClient(create_api_app())
     r = client.get("/v1/analytics/insights")
     assert r.status_code == 503
     assert r.json()["code"] == "UPSTREAM_UNAVAILABLE"
@@ -456,7 +456,7 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     async def reference_health() -> dict[str, str]:
         return {"status": "ok"}
 
-    etag_client = TestClient(etag_app)
+    etag_client = AsgiTestClient(etag_app)
     # Exercise caching semantics without relying on staff-only snapshot administration.
     r_get1 = etag_client.get("/v1/reference-health")
     assert r_get1.status_code == 200
@@ -469,7 +469,7 @@ def test_api_conventions_etag_304_idempotency_replay_and_traceparent() -> None:
     assert "Strict-Transport-Security" in r_get1.headers
     assert "Permissions-Policy" in r_get1.headers
 
-    client = TestClient(create_api_app())
+    client = AsgiTestClient(create_api_app())
 
     # RFC 9457 Problem Details on RequestValidationError (422)
     r_val = client.post("/v1/analytics/feedback", json={"conversation_id": "c1", "csat": 99})

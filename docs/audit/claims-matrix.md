@@ -8,7 +8,7 @@
 |---|---|---|---|
 | Public chat runs through a Node BFF and strips browser identity before forwarding turns. | Proven | apps/web/server.js sanitizes public turn bodies and permits only feedback under direct v1 routes. | AUD-009 has remaining fuzz coverage work |
 | Staff console is preview-only and denies staff data/actions without trusted identity. | Proven | Console/source documentation and fail-closed routes; targeted tests pass. | AUD-004, AUD-009 |
-| Core API is unavailable outside explicit reference mode. | Proven | API middleware returns RFC 9457 503; unset and unknown-mode tests pass. | AUD-009 for empty/mixed-case matrix |
+| Core API is unavailable outside explicit reference mode. | Proven in source/reference tests | Contract-derived tests cover all documented Core API operations; an independent per-operation reference-status policy prevents OpenAPI response edits from defining their own expected runtime behavior. Missing, blank, production, and unknown modes return RFC 9457 503, while uppercase `REFERENCE` is normalized deliberately. | AUD-009 for browser/BFF, mutation, and flake evidence |
 | Agent runtime has durable governed conversation state. | Contradicted | InMemorySaver and process-local dictionaries are used. | AUD-001 |
 | All runtime model and MCP egress is governed. | Contradicted | GPU profile points runtime directly at model/TTS URLs and omits agentgateway. | AUD-002 |
 | Eleven MCP servers are available through deployable gateway topology. | Unverified | Routes list eleven hosts, but Compose does not run all eleven and tests are in-process. | AUD-010 |
@@ -39,5 +39,5 @@
 | ADR-016 | Hardened Docker Compose operational standard. | Contradicted | General profile is hardened; GPU profile parity is absent. | AUD-005 |
 | ADR-017 | Four-tier memory and durable goal continuation. | Contradicted | Preference, replay, and graph state are process-local or not restart-proven. | AUD-001, AUD-004 |
 | ADR-018 | Preview-only staff console until trusted session. | Proven | Console behavior is guarded and documented as preview. | AUD-009 |
-| ADR-019 | Fail-closed reference runtime mode. | Proven, with coverage gap | Default/unknown modes fail closed; empty/mixed-case matrix is not automated. | AUD-009 |
+| ADR-019 | Fail-closed reference runtime mode. | Proven in source/reference tests | The contract-derived matrix covers every documented Core API operation in default, blank, production, unknown, and explicit reference modes, with independently governed expected reference statuses. | AUD-009 for browser/BFF, mutation, and flake evidence |
 | ADR-020 | Node BFF runtime and deferred framework adoption. | Implemented in source | Both containers start their Node BFF entry points; stale Next configuration is removed and policy checks enforce the decision. | AUD-008 |

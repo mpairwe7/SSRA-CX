@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Synthetic data factories and test fixtures for SSRA Assist (never real taxpayer data)"
 requires-python = ">=3.12,<3.16"
 dependencies = [
+    "httpx==0.28.1",
     "pydantic==2.14.0",
     "ssra-core",
 ]

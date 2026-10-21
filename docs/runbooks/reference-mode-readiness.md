@@ -10,6 +10,7 @@ Keep process-local stores, synthetic fixtures, and incomplete providers from bei
 - The general and GPU local Compose profiles explicitly set `SSRA_RUNTIME_MODE=reference`. Reference responses include `X-SSRA-Runtime-Mode: reference`.
 - The production/DR Compose overlay explicitly sets `SSRA_RUNTIME_MODE=production`.
 - In production mode, Core API and agent-runtime requests, including `/healthz`, return RFC 9457 `503 UPSTREAM_UNAVAILABLE` until the durable-state and approved-provider work is complete.
+- `services/api/tests/test_route_matrix.py` derives safe synthetic requests for every documented Core API operation. It verifies that every operation returns RFC 9457 `503` outside explicit reference mode and uses an independent, per-operation policy to check the `reference`-mode `200`, `403`, or `503` outcome. OpenAPI declarations are checked for alignment but do not provide the expected runtime result. This is source/reference evidence only.
 - Identity verification, document scanning/analysis, appointment inventory, and analytics endpoints return 503 in every mode until their specific providers are approved and configured.
 - The attachment inspection view reports analysis unavailable; it must not display scan/OCR results, guessed portal links or steps, identity verification, or statutory calculations without approved provenance.
 - The staff console and Core API staff/admin/knowledge-release routes return 403 for staff data/actions until OQ-014 is closed. Caller-supplied IDs and passkey booleans do not authorize actions.

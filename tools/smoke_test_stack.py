@@ -2,7 +2,7 @@
 """End-to-end AG-UI & Long-Horizon Agentic CX Regression Suite (`tools/smoke_test_stack.py`).
 
 Supports:
-1. Default in-process `TestClient` mode (for fast CI verification in `task up` / `task eval`).
+1. Default in-process ASGI transport mode (for fast CI verification in `task up` / `task eval`).
 2. Live HTTP / Ngrok URL mode (`--api-url`, `--runtime-url`, `--qdrant-url`) to verify live Docker GPU +
    Local HF Cache + Qdrant + Valkey + PostgreSQL 18 containers and Ngrok HTTPS tunnels across:
    - Sovereign GPU & Local HF Cache (`Sunflower-Qwen3.5-9B`, `Sunflower-Qwen3.8-27B`, `SunflowerASR`) + Qdrant + Valkey status
@@ -20,9 +20,9 @@ import uuid
 from typing import Any
 
 import httpx
-from fastapi.testclient import TestClient
 from ssra_api import create_api_app
 from ssra_runtime import create_runtime_app
+from ssra_testing import AsgiTestClient
 
 
 def run_regression_assertions(
@@ -378,8 +378,8 @@ def main() -> None:
             print(f"Live stack & Ngrok regression suite passed: {summary}")
             return
 
-    api_client = TestClient(create_api_app())
-    rt_client = TestClient(create_runtime_app())
+    api_client = AsgiTestClient(create_api_app())
+    rt_client = AsgiTestClient(create_runtime_app())
     summary = run_regression_assertions(api_client, rt_client)
     print(f"End-to-end AG-UI hello-world smoke test passed ({summary}).")
 

@@ -43,6 +43,14 @@
 - Recorded ADR-020 and removed stale Next.js configuration. The runnable frontend and staff-console reference applications are Node BFF servers; a future framework adoption requires an explicit dependency, container, security-review, and verification decision.
 - Merged PR #71 passed the required CI checks and resolved all actionable review threads. Gate R1 was approved in the active project session on 2026-10-22 for non-production R2 reference remediation; [the approval record](./audit/phase-R1-approval.md) retains the scope. External branch-protection evidence, publishing identity, runner portability, and OQ-018 artifact/model trust remain open. No production or later phase gate advanced.
 
+## 0.4 [R2-A Core API Route-Matrix Assurance](./audit/phase-R2-A-route-matrix-report.md) (2026-10-22)
+
+- Added a contract-derived matrix with safe synthetic fixtures for all 35 documented Core API operations across 32 OpenAPI paths. Contract drift now fails locally until a reviewer adds a deliberate request sample.
+- The matrix verifies that missing, blank, `production`, and unknown runtime modes return RFC 9457 `503` for every operation. An independently governed per-operation reference-status policy verifies explicit reference behavior, including staff `403` and unavailable-provider `503` paths; OpenAPI response declarations cannot supply their own expected test result.
+- Restricted ETag generation and idempotency replay storage to successful responses. RFC 9457 denial envelopes remain non-cacheable and retain their fail-closed semantics.
+- Added the shared `ssra_testing.AsgiTestClient` to exercise Core API, MCP, runtime, channel, evaluation, gate-verification, benchmark, and smoke-test ASGI paths without the blocking synchronous adapter. The test-support package now declares the existing lock-pinned `httpx==0.28.1` dependency; the lock refresh changed no component version.
+- This is R2 source and reference assurance only. Browser flow, accessibility, low-bandwidth, BFF encoded-path, Schemathesis, mutation, and repeated-run evidence remain open under AUD-009. Gate R2 has not been evaluated or approved.
+
 ---
 
 ## 1. GitHub Feature Tracking Issues (`mpairwe7/SSRA-CX`)

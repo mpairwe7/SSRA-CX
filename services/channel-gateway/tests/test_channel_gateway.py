@@ -6,7 +6,6 @@ import hashlib
 import hmac
 import json
 
-from fastapi.testclient import TestClient
 from ssra_channel_gateway import (
     CHANNEL_PORT_REGISTRY,
     USSD_MAX_CHARS,
@@ -16,6 +15,7 @@ from ssra_channel_gateway import (
     prepare_whatsapp_outbound_message,
     render_ussd_screen,
 )
+from ssra_testing import AsgiTestClient
 
 
 def test_sms_segmentation_gsm7_vs_arabic_ucs2() -> None:
@@ -34,7 +34,7 @@ def test_sms_segmentation_gsm7_vs_arabic_ucs2() -> None:
 
 def test_webhook_hmac_verification_and_deduplication() -> None:
     secret = "test-secret"
-    client = TestClient(create_channel_gateway_app(webhook_secret=secret))
+    client = AsgiTestClient(create_channel_gateway_app(webhook_secret=secret))
     payload = {
         "message_id": "wamid.001",
         "channel": "whatsapp",
@@ -64,7 +64,7 @@ def test_webhook_hmac_verification_and_deduplication() -> None:
     assert r2.json()["status"] == "deduplicated_drop"
 
     # Per-sender rate limiting blocks floods with 429 RATE_LIMITED
-    limited_client = TestClient(
+    limited_client = AsgiTestClient(
         create_channel_gateway_app(webhook_secret=secret, max_requests_per_sender=1)
     )
     p1 = {**payload, "message_id": "wamid.101"}
@@ -94,7 +94,7 @@ def test_webhook_hmac_verification_and_deduplication() -> None:
 
 def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> None:
     """Verify deterministic USSD 182-char menu, SMS follow-up, STOP/START consent, and channel middleware."""
-    client = TestClient(create_channel_gateway_app())
+    client = AsgiTestClient(create_channel_gateway_app())
 
     for opt in ("", "1", "2", "3", "4", "9", "0", "99"):
         screen = render_ussd_screen(session_id="ussd_01", ussd_input=opt)
