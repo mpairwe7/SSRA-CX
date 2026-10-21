@@ -15,7 +15,7 @@
     "@ssra/contracts": "workspace:*",
     "@ssra/i18n": "workspace:*",
     "@ssra/ui": "workspace:*",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@ssra/config": "workspace:*",
