@@ -35,7 +35,7 @@
 
 ### AUD-003 · S1 · Event durability · Core API has no transactional outbox
 
-- Location: services/api/src/ssra_api/outbox.py:48–122; services/api/src/ssra_api/conversations/application/__init__.py; services/api/src/ssra_api/cases/application/__init__.py; services/api/migrations/versions/0001_initial_sovereign_schema.py.
+- Location: services/api/src/ssra_api/outbox.py:48–122; services/api/src/ssra_api/conversations/application/__init__.py; services/api/src/ssra_api/cases/application/__init__.py; services/api/alembic/versions/0001_initial_core_entities.py.
 - Evidence: rg -n "InMemoryOutboxBuffer|stage_domain_event" services/api/src services/api/tests shows a process-local buffer. The migration has schema intent, but R0 found no runtime publisher or transaction coupling state mutation and event persistence.
 - Standard: OWASP Agentic 2026 ASI08; OWASP ASVS v5.0.0-16.5.2; NIST SSDF v1.1 PW.8.
 - Impact: Process death can lose events, duplicate downstream effects, and orphan SLA or audit activity. The transactional-outbox architecture claim is not true at runtime.
@@ -57,7 +57,7 @@
 
 - Location: infra/compose/docker-compose.gpu.yml:16, 148, 175, 178, 279–282; compare infra/compose/docker-compose.yml:1–21 and docker-compose.prod.yml:31–101.
 - Evidence: Static scan finds a tag-pinned Orpheus image, an unpinned PostgreSQL variable default, env_file use, and services outside the general hardened defaults. The general profile uses digest-pinned images and a hardened anchor; R0 could not render Compose because the local plugin failed.
-- Standard: OWASP ASVS v5.0.0-15.2.5 and v5.0.0-16.5.2; CIS Docker Benchmark intent; SLSA v1.2 Build L3.
+- Standard: OWASP ASVS v5.0.0-15.2.5 and v5.0.0-16.5.2; CIS Docker Benchmark intent; NIST SSDF v1.1 PO.3.
 - Impact: GPU deployment cannot inherit the security and reproducibility assertions claimed for the general/production topology.
 - Fix: Make every GPU service use digest-pinned images, non-root users, read-only filesystems with bounded writable mounts, dropped capabilities, no-new-privileges, resource limits, health checks, internal networks, and file/OpenBao-managed secrets.
 - Verification: Rendered profile passes a policy linter; negative tests detect a tag image, missing hardening field, external port, Docker socket, or environment secret.

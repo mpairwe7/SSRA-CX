@@ -27,7 +27,7 @@
 | AUD-002 | ASVS v5.0.0-15.2.5 and 16.5.2 | ASI02, ASI03, ASI08; MCP07/MCP08 advisory; NSA request binding | SSDF PW.8 |
 | AUD-003 | ASVS v5.0.0-16.5.2 | ASI08 | SSDF PW.8 |
 | AUD-004 | ASVS v5.0.0-4.1.3 and 15.3.3 | ASI03, ASI06; NSA authorization | SSDF PW.8 |
-| AUD-005 | ASVS v5.0.0-15.2.5 and 16.5.2 | ASI08 | SLSA Build L3; SSDF PO.3 |
+| AUD-005 | ASVS v5.0.0-15.2.5 and 16.5.2 | ASI08 | SSDF PO.3 |
 | AUD-006 | ASVS v5.0.0-15.1.2 and 15.2.1 | — | SLSA Build L3; SSDF PO.3, PW.7, RV.1 |
 | AUD-007 | ASVS v5.0.0-15.1.2, 15.2.1, and 15.2.4 | ASI04 | SLSA Build L3; CycloneDX 1.7; OMS; SSDF PO.3 and PS.3 |
 | AUD-008 | ASVS v5.0.0-15.1.1 and 15.2.1 | — | SSDF PO.3 and PW.7 |

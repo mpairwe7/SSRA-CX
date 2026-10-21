@@ -27,7 +27,7 @@
 | **OQ-016** | **Appointment inventory and booking authority:** office calendars, slot reservation, cancellation, timezone, and conflict/idempotency rules | Phase 2 | SSRA Operations & ICT | 🔴 Open | `GET /v1/appointments/slots` returns 503 until an approved live inventory and booking provider is configured. Do not return fixed sample slots as availability. |
 | **OQ-017** | **Document scanning, OCR, and evidence guidance:** approved malware scanner, OCR provenance, retention, source citations, and legal review for any document-derived numeric guidance | Phase 2 | SSRA ICT, SecOps & Legal | 🔴 Open | Document precheck and analysis APIs return 503. Do not report a clean scan, OCR result, statutory rate, deadline, or portal instruction without the corresponding approved provider and source snapshot. |
 | **OQ-018** | **Artifact and model trust:** approved registry, signing identity, certificate or Sigstore trust roots, provenance policy, and verification point for images and model artifacts | R1 and R4 | SSRA ICT, SecOps & Procurement | 🔴 Open | Do not deploy or load a new image or model artifact from an unapproved registry. Keep the production runtime fail closed; use only existing local reference artifacts for development. |
-| **OQ-019** | **Offline statutory snapshot lifecycle:** publication authority, signed format, legal effective dates, expiry, emergency revocation, and user-facing unavailable state | R2 | SSRA Legal, Domestic Tax, Communications & SecOps | 🔴 Open | Do not ship new browser-side tax calculations or official-channel claims. When current cited evidence is unavailable, direct the user to reconnect or request human assistance. |
+| **OQ-019** | **Offline statutory snapshot lifecycle:** publication authority, signed format, legal effective dates, expiry, emergency revocation, and user-facing unavailable state | R2 | SSRA Legal, Domestic Tax, Communications & SecOps | 🔴 Open | Do not ship or expose existing or new browser-side statutory values or official-channel claims until an SSRA-approved signed, versioned, expiring snapshot exists. When current cited evidence is unavailable, direct the user to reconnect or request human assistance. |
 
 ---
 
@@ -44,7 +44,7 @@
 
 ### OQ-019 — Offline Statutory Snapshot Lifecycle
 - **Blocks:** R2 offline statutory experience
-- **Context:** The reference chat UI package contains statutory and official-channel values intended for low-connectivity use. R0 found no SSRA-approved publication, signing, expiry, or emergency revocation model for this browser-side data.
+- **Context:** The reference chat UI package contains statutory and official-channel values intended for low-connectivity use. R0 found no SSRA-approved publication, signing, expiry, or emergency revocation model for this browser-side data. Existing values must remain excluded from shipped browser experiences, or resolve to a safe unavailable/reconnect or handoff state, until an approved snapshot exists.
 - **Specific Questions for SSRA Legal, Domestic Tax, Communications & SecOps:**
   1. Which team approves the exact tax facts, office details, and official-channel entries eligible for an offline snapshot, and what citation/effective-date fields must accompany each record?
   2. What maximum offline validity period, renewal behavior, and emergency revocation mechanism apply when law, official channels, or public guidance change?

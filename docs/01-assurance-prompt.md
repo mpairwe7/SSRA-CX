@@ -94,7 +94,7 @@ Every finding you report must be reproducible by someone who has never spoken to
 1. If `graphify-out/` is missing, run `graphify install`, then `graphify claude install`, then `/graphify .`.
 2. Read `graphify-out/GRAPH_REPORT.md` and use `graphify query` to locate code before you grep or open files.
 3. Run `graphify --update` after any structural change you make.
-4. Use an SSRA-approved LLM backend for graphify, and confirm secrets, `.env` files and fixtures are excluded from the graph before you build it.
+4. Use only the local or self-hosted backend permitted by the model-routing policy in `docs/00-master-prompt.md` Section 6.4 and `OQ-004`; do not route graphify to an external provider unless `OQ-004` is formally approved. If no backend is approved for graphify, add a graphify-specific open question and do not build or refresh the graph. Confirm secrets, `.env` files and fixtures are excluded before graph construction.
 
 **4.2 Evidence rules.**
 
@@ -165,7 +165,7 @@ Work through every area below in phase R0, and log a finding for each unchecked 
 
 **D. Backend engineering**
 
-- [ ] Verify every outbound `httpx` call has explicit connect, read and total timeouts, and that retries run only on idempotent operations.
+- [ ] Verify every outbound `httpx` call has explicit connect, read, write and pool phase timeouts plus an outer end-to-end deadline around each request, and that retries run only on idempotent operations.
 - [ ] Verify T2 and T3 tools reject missing, reused, expired or argument-mismatched `confirmation_token`s and replayed `idempotency_key`s, with tests for each case.
 - [ ] Verify MCP servers validate `_meta` protocol version, `Mcp-Method`, `Mcp-Name`, token audience and subject, and return only the typed error set.
 - [ ] Verify the hash-chained `AuditEvent` log detects tampering, and that a test breaks the chain and expects failure.
@@ -191,10 +191,6 @@ Work through every area below in phase R0, and log a finding for each unchecked 
 ## 6. Phased remediation plan
 
 Fix in six phases, ordered so the riskiest exposure closes first: nothing gets built on a pipeline you cannot trust. Each phase ends at a gate a human signs off, and no phase starts until the previous gate passes; S0 findings jump the queue at any point.
-
-&#91;embedded content: remediation roadmap · 6 phases, 5 gates between them\]
-
-Read left to right, then down: each diamond is a gate a human signs before the next phase starts.
 
 ### R0 · Baseline and triage (read-only)
 
@@ -267,7 +263,7 @@ Implement each mechanism once, in a shared library or CI template, then prove it
 | Mechanism | Where it lives | Proof it works |
 | --- | --- | --- |
 | Durable conversation state (Postgres checkpointer) | `services/agent-runtime` | Kill the runtime during a T2 interrupt; resume completes once |
-| Transactional outbox with idempotent consumers | `services/api`, `services/workers` | Crash between commit and publish; event delivered exactly once to the handler |
+| Transactional outbox with idempotent consumers | `services/api`, `services/workers` | Crash between commit and publish; prove durable at-least-once delivery and exactly-once effects through consumer idempotency or deduplication |
 | Timeouts, idempotent-only retries with jitter, circuit breakers, bulkheads | Shared HTTP and MCP client in `libs/` | Fault-injection tests for slow, failing and flapping upstreams; non-idempotent calls never retry |
 | Single-use confirmation tokens bound to argument hash | `libs/ssra_mcp`, `nodes/confirm.py` | Reuse, expiry and changed-argument tests all rejected |
 | Fail-closed defaults | Runtime mode, staff console, identity routes | Route-matrix test in production and reference modes; unknown mode value returns 503 |
