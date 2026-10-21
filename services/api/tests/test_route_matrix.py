@@ -14,6 +14,7 @@ from ssra_api import create_api_app
 
 type HttpMethod = Literal["DELETE", "GET", "PATCH", "POST", "PUT"]
 type OperationKey = tuple[HttpMethod, str]
+type ReferenceStatus = Literal[200, 403, 503]
 
 _OPENAPI_METHODS: dict[str, HttpMethod] = {
     "delete": "DELETE",
@@ -42,6 +43,7 @@ class RouteSample:
     path: str
     query: Mapping[str, str]
     body: Mapping[str, object] | None
+    expected_reference_status: ReferenceStatus
 
     @property
     def key(self) -> OperationKey:
@@ -181,6 +183,47 @@ ROUTE_CASES: dict[OperationKey, RequestData] = {
     ("POST", "/v1/knowledge-admin/snapshots/{version}/submit-review"): _NO_REQUEST,
 }
 
+# This policy is intentionally independent from the OpenAPI response declarations.
+# Each documented operation has an explicit expected reference outcome, so a
+# contract change cannot make a matching runtime regression look acceptable.
+REFERENCE_EXPECTED_STATUSES: dict[OperationKey, ReferenceStatus] = {
+    ("GET", "/healthz"): 200,
+    ("GET", "/v1/admin/audit-verify"): 403,
+    ("GET", "/v1/admin/feature-flags"): 403,
+    ("POST", "/v1/admin/feature-flags"): 403,
+    ("POST", "/v1/admin/jit-elevation"): 403,
+    ("GET", "/v1/admin/kill-switches"): 403,
+    ("POST", "/v1/admin/kill-switches"): 403,
+    ("GET", "/v1/admin/public-status"): 503,
+    ("GET", "/v1/analytics/cx-scorecard"): 503,
+    ("GET", "/v1/analytics/drift-monitors"): 503,
+    ("POST", "/v1/analytics/feedback"): 200,
+    ("GET", "/v1/analytics/insights"): 503,
+    ("GET", "/v1/analytics/summary"): 503,
+    ("GET", "/v1/appointments/slots"): 503,
+    ("POST", "/v1/cases"): 200,
+    ("POST", "/v1/cases/{case_id}/maker-checker"): 403,
+    ("POST", "/v1/consent"): 200,
+    ("DELETE", "/v1/consent/preferences/{subject_ref}"): 200,
+    ("PUT", "/v1/consent/preferences/{subject_ref}"): 200,
+    ("POST", "/v1/conversations"): 200,
+    ("GET", "/v1/conversations/inbox"): 403,
+    ("GET", "/v1/conversations/inbox/stream"): 403,
+    ("POST", "/v1/conversations/{conversation_id}/copilot-draft"): 403,
+    ("POST", "/v1/conversations/{conversation_id}/handback"): 403,
+    ("POST", "/v1/conversations/{conversation_id}/qa-score"): 403,
+    ("POST", "/v1/conversations/{conversation_id}/takeover"): 403,
+    ("POST", "/v1/identity-link/document-precheck"): 503,
+    ("POST", "/v1/identity-link/documents/analyze"): 503,
+    ("POST", "/v1/identity-link/verify-otp"): 503,
+    ("GET", "/v1/knowledge-admin/active-snapshot"): 403,
+    ("POST", "/v1/knowledge-admin/snapshots"): 403,
+    ("POST", "/v1/knowledge-admin/snapshots/rollback"): 403,
+    ("POST", "/v1/knowledge-admin/snapshots/{version}/approve"): 403,
+    ("POST", "/v1/knowledge-admin/snapshots/{version}/publish"): 403,
+    ("POST", "/v1/knowledge-admin/snapshots/{version}/submit-review"): 403,
+}
+
 
 def _contract_operations() -> dict[OperationKey, Mapping[str, object]]:
     """Return documented Core API endpoints while excluding framework pages."""
@@ -206,6 +249,7 @@ def _route_matrix() -> tuple[RouteSample, ...]:
     """Build the concrete request list only after contract coverage is complete."""
     operations = _contract_operations()
     assert set(ROUTE_CASES) == set(operations), "route-matrix coverage drift"
+    assert set(REFERENCE_EXPECTED_STATUSES) == set(operations), "reference-policy coverage drift"
     samples: list[RouteSample] = []
     for (method, template), data in sorted(ROUTE_CASES.items()):
         operation_id = operations[(method, template)].get("operationId")
@@ -218,24 +262,19 @@ def _route_matrix() -> tuple[RouteSample, ...]:
                 path=re.sub(r"\{[^}]+\}", "route-matrix", template),
                 query=data.query,
                 body=data.body,
+                expected_reference_status=REFERENCE_EXPECTED_STATUSES[(method, template)],
             )
         )
     return tuple(samples)
 
 
-def _reference_status(operation: Mapping[str, object]) -> int:
-    """Infer the intended reference result from documented error responses."""
+def _documented_statuses(operation: Mapping[str, object]) -> frozenset[int]:
+    """Return numeric response codes declared by one OpenAPI operation."""
     raw_responses = operation.get("responses")
     assert isinstance(raw_responses, Mapping)
-    statuses = {
+    return frozenset(
         int(status) for status in raw_responses if isinstance(status, str) and status.isdigit()
-    }
-    if 403 in statuses:
-        return 403
-    if 503 in statuses:
-        return 503
-    assert 200 in statuses
-    return 200
+    )
 
 
 async def _request_matrix() -> list[tuple[RouteSample, httpx.Response]]:
@@ -279,7 +318,8 @@ def test_route_matrix_has_one_safe_case_for_every_callable_openapi_operation() -
     for sample in samples:
         assert operations[sample.key].get("operationId") == sample.operation_id
         assert "{" not in sample.path
-        assert _reference_status(operations[sample.key]) in {200, 403, 503}
+        assert sample.expected_reference_status in {200, 403, 503}
+        assert sample.expected_reference_status in _documented_statuses(operations[sample.key])
 
 
 @pytest.mark.parametrize("runtime_mode", [None, "", "production", "unknown"])
@@ -296,15 +336,14 @@ def test_every_contract_route_fails_closed_outside_reference_mode(
         _assert_problem_response(response, expected_status=503, instance=sample.path)
 
 
-def test_reference_mode_matches_documented_contract_route_matrix(
+def test_reference_mode_matches_independent_route_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Reference mode remains explicit while staff and unapproved providers stay unavailable."""
+    """Reference mode matches the independent policy for staff and providers."""
     monkeypatch.setenv("SSRA_RUNTIME_MODE", "reference")
-    operations = _contract_operations()
 
     for sample, response in asyncio.run(_request_matrix()):
-        expected_status = _reference_status(operations[sample.key])
+        expected_status = sample.expected_reference_status
         assert response.headers["x-ssra-runtime-mode"] == "reference"
         if expected_status == 200:
             assert response.status_code == 200

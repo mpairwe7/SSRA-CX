@@ -13,7 +13,7 @@ Gate R1 approval permits non-production R2 reference remediation. This report re
 - `services/api/tests/test_route_matrix.py` derives all callable Core API operations from OpenAPI and requires a consciously reviewed, safe synthetic request fixture for each one.
 - The current contract has 35 operations across 32 paths. Missing fixtures or undocumented operation changes fail the matrix before requests are sent.
 - Missing, blank, `production`, and unknown `SSRA_RUNTIME_MODE` values return RFC 9457 `503 UPSTREAM_UNAVAILABLE` for every covered operation.
-- Explicit `reference` mode continues to expose only documented reference behavior: available routes return `200`, staff routes return `403`, and unapproved providers return `503`.
+- An independently governed status policy assigns the expected `reference`-mode result for each operation: available routes return `200`, staff routes return `403`, and unapproved providers return `503`. The matrix separately requires that this policy remains declared by OpenAPI, so a contract edit cannot redefine its expected runtime outcome.
 - API middleware now creates ETags and stores idempotency responses only for successful responses. RFC 9457 denial envelopes are not entity-cached.
 - `ssra_testing.AsgiTestClient` uses an ASGI transport for Core API, MCP, runtime, channel, evaluation, readiness, benchmark, and smoke paths so the test harness observes real fail-closed responses rather than blocking in a synchronous adapter.
 - The synthetic-test package declares the existing lock-pinned `httpx==0.28.1` dependency. The lock refresh records the package relationship without changing a component version.
