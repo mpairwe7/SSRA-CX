@@ -2,6 +2,7 @@
 FROM quay.io/keycloak/keycloak:26.4.11@sha256:f8f53f5990775d2b3056f5d5e19538909887821b6064232d032a27a4d5014140 AS builder
 
 ENV KC_DB=postgres \
+    KC_TRANSACTION_XA_ENABLED=false \
     KC_HEALTH_ENABLED=true \
     KC_METRICS_ENABLED=true \
     KC_CACHE=ispn \
@@ -11,6 +12,7 @@ WORKDIR /opt/keycloak
 RUN mkdir -p /opt/keycloak/data/tmp /opt/keycloak/data/import && \
     /opt/keycloak/bin/kc.sh build \
     --db=postgres \
+    --transaction-xa-enabled=false \
     --health-enabled=true \
     --metrics-enabled=true \
     --cache=ispn \
@@ -26,14 +28,21 @@ COPY --from=builder --chown=10001:10001 /opt/keycloak/ /opt/keycloak/
 COPY --chown=10001:10001 infra/keycloak/ssra-realm.json /opt/keycloak/data/import/ssra-realm.json
 
 ENV KC_DB=postgres \
+    KC_TRANSACTION_XA_ENABLED=false \
+    KC_TRANSACTION_DEFAULT_TIMEOUT=60s \
+    KC_DB_POOL_INITIAL_SIZE=5 \
+    KC_DB_POOL_MIN_SIZE=5 \
+    KC_DB_POOL_MAX_SIZE=30 \
+    KC_DB_URL_PROPERTIES="?connectTimeout=10" \
     KC_HEALTH_ENABLED=true \
     KC_METRICS_ENABLED=true \
     KC_HTTP_ENABLED=true \
     KC_HTTP_MANAGEMENT_PORT=9000 \
+    KC_HTTP_MAX_QUEUED_REQUESTS=256 \
     KC_PROXY_HEADERS=xforwarded \
     KC_CACHE=ispn \
     KC_FEATURES=passkeys,token-exchange-standard:v2,dpop \
-    JAVA_OPTS_APPEND="-XX:MaxRAMPercentage=70.0 -Djava.security.egd=file:/dev/urandom"
+    JAVA_OPTS_APPEND="-XX:MaxRAMPercentage=70.0 -Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/urandom"
 
 USER 10001:10001
 EXPOSE 8080 9000

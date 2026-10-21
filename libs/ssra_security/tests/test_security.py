@@ -344,6 +344,8 @@ def test_keycloak_26_realm_export_and_docker_invariants() -> None:
         )
     with pytest.raises(SSRAError):
         validate_keycloak_realm_export({**realm_data, "eventsEnabled": False})
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export({**realm_data, "identityProviders": []})
 
     # Verify CVE-2026-93999 disabled-client guard, RFC 9449 DPoP proof verifier & OIDC Back-Channel Logout
     import base64
@@ -487,6 +489,74 @@ def test_keycloak_26_realm_export_and_docker_invariants() -> None:
             ),
             expected_audience="ssra-web-bff",
             now=now,
+        )
+    with pytest.raises(SSRAError):
+        kc.validate_backchannel_logout_token(
+            BackchannelLogoutClaims(
+                jti="jti_bcl_03",
+                iss="https://sso.ssra.gov.ss/realms/ssra",
+                aud="ssra-web-bff",
+                sid="sid_session_01",
+                events={"http://schemas.openid.net/event/backchannel-logout": {}},
+                iat=now,
+                exp=now + timedelta(seconds=300),
+                jwt_alg="none",
+            ),
+            expected_audience="ssra-web-bff",
+            now=now,
+        )
+
+    # RFC 9126 PAR single-use & realm-binding (CVE-2026-96446 & #50135) + RFC 8693 delegation (#52691)
+    par_rec = kc.issue_and_bind_par_request_uri(
+        realm="ssra",
+        client_id="ssra-staff-console",
+        code_challenge_s256="ch_s256_01",
+        now=now,
+    )
+    assert (
+        kc.consume_par_request_uri(
+            par_rec.request_uri,
+            realm="ssra",
+            client_id="ssra-staff-console",
+            now=now,
+        ).code_challenge_s256
+        == "ch_s256_01"
+    )
+    with pytest.raises(SSRAError):
+        kc.consume_par_request_uri(
+            par_rec.request_uri,
+            realm="ssra",
+            client_id="ssra-staff-console",
+            now=now,
+        )
+    par_prompt = kc.issue_and_bind_par_request_uri(
+        realm="ssra",
+        client_id="ssra-staff-console",
+        code_challenge_s256="ch_s256_02",
+        now=now,
+    )
+    with pytest.raises(SSRAError):
+        kc.consume_par_request_uri(
+            par_prompt.request_uri,
+            realm="ssra",
+            client_id="ssra-staff-console",
+            prompt="none",
+            now=now,
+        )
+
+    deleg = kc.validate_token_exchange_delegation(
+        subject_sub="sub_taxpayer_amina_01",
+        actor_sub="ssra-agent-runtime",
+        audience="mcp-ledger",
+        cnf_jkt="jkt_thumbprint_01",
+    )
+    assert deleg["act"] == "ssra-agent-runtime"
+    with pytest.raises(SSRAError):
+        kc.validate_token_exchange_delegation(
+            subject_sub="sub_taxpayer_amina_01",
+            actor_sub="rogue-actor",
+            audience="mcp-ledger",
+            cnf_jkt="jkt_thumbprint_01",
         )
 
 

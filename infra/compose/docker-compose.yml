@@ -87,14 +87,20 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD must be set}
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/ssra_cx
+      KC_DB_URL: jdbc:postgresql://postgres:5432/ssra_cx?connectTimeout=10
       KC_DB_USERNAME: ssra
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       KC_DB_SCHEMA: public
+      KC_TRANSACTION_XA_ENABLED: "false"
+      KC_TRANSACTION_DEFAULT_TIMEOUT: "60s"
+      KC_DB_POOL_INITIAL_SIZE: "5"
+      KC_DB_POOL_MIN_SIZE: "5"
+      KC_DB_POOL_MAX_SIZE: "30"
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
       KC_HTTP_ENABLED: "true"
       KC_HTTP_MANAGEMENT_PORT: "9000"
+      KC_HTTP_MAX_QUEUED_REQUESTS: "256"
       KC_CACHE: ispn
       KC_PROXY_HEADERS: xforwarded
       KC_HOSTNAME_STRICT: "false"

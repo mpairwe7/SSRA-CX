@@ -7,6 +7,7 @@ import {
   buildSessionLogoutHeaders,
   dispatchServiceWorkerLogoutPurge,
   validateBffCsrfMutation,
+  verifyOidcBackchannelLogoutJwt,
 } from "../src/app/api/auth/session/route.js";
 import {
   buildRuntimeStreamRequest,
@@ -111,6 +112,45 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
       }),
     ).toBe(true);
     expect(posted).toEqual([{ type: "SSRA_LOGOUT_PURGE" }]);
+
+    // KC2-G2: OIDC Back-Channel Logout 1.0 JWT verifier (CVE-2026-18569)
+    const bclHdr = btoa(JSON.stringify({ alg: "ES256", typ: "logout+jwt" })).replace(/=+$/, "");
+    const bclPld = btoa(
+      JSON.stringify({
+        jti: "jti_bcl_web_01",
+        iss: "https://sso.ssra.gov.ss/realms/ssra",
+        aud: "ssra-web-bff",
+        sid: "sid_web_01",
+        iat: 1_700_000_000,
+        exp: 1_700_000_300,
+        events: { "http://schemas.openid.net/event/backchannel-logout": {} },
+      }),
+    ).replace(/=+$/, "");
+    const validBclJwt = `${bclHdr}.${bclPld}.sig_es256`;
+    expect(
+      verifyOidcBackchannelLogoutJwt({
+        logoutToken: validBclJwt,
+        expectedAudience: "ssra-web-bff",
+        verifySignature: (_inp, sig, alg) => alg === "ES256" && sig === "sig_es256",
+        nowMs: 1_700_000_010 * 1000,
+      }),
+    ).toEqual({ valid: true, sid: "sid_web_01" });
+    expect(
+      verifyOidcBackchannelLogoutJwt({
+        logoutToken: validBclJwt,
+        expectedAudience: "ssra-web-bff",
+        verifySignature: () => false,
+        nowMs: 1_700_000_010 * 1000,
+      }).valid,
+    ).toBe(false);
+    expect(
+      verifyOidcBackchannelLogoutJwt({
+        logoutToken: `${btoa(JSON.stringify({ alg: "none" })).replace(/=+$/, "")}.${bclPld}.sig`,
+        expectedAudience: "ssra-web-bff",
+        verifySignature: () => true,
+        nowMs: 1_700_000_010 * 1000,
+      }).valid,
+    ).toBe(false);
   });
 
   it("blocks unauthenticated access to /[locale]/account routes", () => {

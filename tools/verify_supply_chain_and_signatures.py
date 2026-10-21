@@ -181,8 +181,11 @@ def main() -> None:
         "@sha256:" in kc_df_txt
         and "/opt/keycloak/data/tmp" in kc_df_txt
         and "KC_HTTP_MANAGEMENT_PORT=9000" in kc_df_txt
+        and "--transaction-xa-enabled=false" in kc_df_txt
+        and "KC_HTTP_MAX_QUEUED_REQUESTS=256" in kc_df_txt
+        and "-Djava.net.preferIPv4Stack=true" in kc_df_txt
     ), (
-        "infra/keycloak/Dockerfile must pin @sha256:, pre-create /opt/keycloak/data/tmp, and set KC_HTTP_MANAGEMENT_PORT=9000"
+        "infra/keycloak/Dockerfile must pin @sha256:, pre-create /opt/keycloak/data/tmp, disable XA, bound queued requests, and set preferIPv4Stack"
     )
     assert "keycloak" in prod_compose.get("services", {}), (
         "docker-compose.prod.yml must define hardened keycloak production overlay"

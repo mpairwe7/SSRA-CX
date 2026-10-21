@@ -217,6 +217,74 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (method === "POST" && pathname === "/api/auth/backchannel-logout") {
+    try {
+      const rawBody = await readConsoleBody(req);
+      const tokenParam = rawBody.startsWith("{")
+        ? String(JSON.parse(rawBody).logout_token ?? "")
+        : String(new URLSearchParams(rawBody).get("logout_token") ?? "");
+      const parts = tokenParam.trim().split(".");
+      if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+        res.writeHead(400, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          ...secHeaders,
+        });
+        res.end(JSON.stringify({ error: "UNSIGNED_OR_MALFORMED_LOGOUT_JWT" }));
+        return;
+      }
+      const hdr = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf-8"));
+      const pld = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
+      const verifyKey = process.env.KEYCLOAK_LOGOUT_VERIFY_KEY ?? "";
+      const expectedSig = verifyKey
+        ? crypto.createHmac("sha256", verifyKey).update(`${parts[0]}.${parts[1]}`).digest()
+        : Buffer.alloc(0);
+      const actualSig = Buffer.from(parts[2], "base64url");
+      const sigOk =
+        Boolean(verifyKey) &&
+        expectedSig.length === actualSig.length &&
+        crypto.timingSafeEqual(expectedSig, actualSig);
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (
+        !sigOk ||
+        !["ES256", "RS256", "PS256", "EdDSA"].includes(hdr?.alg) ||
+        pld?.iss !== "https://sso.ssra.gov.ss/realms/ssra" ||
+        pld?.aud !== "ssra-staff-console" ||
+        pld?.nonce !== undefined ||
+        typeof pld?.jti !== "string" ||
+        typeof pld?.iat !== "number" ||
+        typeof pld?.exp !== "number" ||
+        nowSec > pld.exp ||
+        Math.abs(nowSec - pld.iat) > 120 ||
+        !pld?.events?.["http://schemas.openid.net/event/backchannel-logout"] ||
+        (!pld?.sid && !pld?.sub)
+      ) {
+        res.writeHead(400, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          ...secHeaders,
+        });
+        res.end(JSON.stringify({ error: "INVALID_BACKCHANNEL_LOGOUT_CLAIMS" }));
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        "Clear-Site-Data": '"cache", "cookies", "storage"',
+        ...secHeaders,
+      });
+      res.end(JSON.stringify({ status: "logged_out", client_id: "ssra-staff-console" }));
+    } catch {
+      res.writeHead(400, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        ...secHeaders,
+      });
+      res.end(JSON.stringify({ error: "INVALID_BACKCHANNEL_LOGOUT_REQUEST" }));
+    }
+    return;
+  }
+
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...secHeaders });
   res.end(renderOpsDashboardHtml(pathname, nonce));
 });

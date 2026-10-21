@@ -75,3 +75,92 @@ export function validateBffCsrfMutation(input: {
   }
   return { valid: true };
 }
+
+const ALLOWED_LOGOUT_ALGS = new Set(["ES256", "RS256", "PS256", "EdDSA"]);
+const MAX_CONSUMED_LOGOUT_JTIS = 4096;
+const CONSUMED_LOGOUT_JTIS = new Map<string, number>();
+
+function decodeBase64UrlJson(segment: string): Record<string, unknown> | null {
+  try {
+    const base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    return JSON.parse(atob(padded)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Validate an OIDC Back-Channel Logout 1.0 `logout_token` JWT (mitigating `CVE-2026-18569` unsigned logout bypass).
+ */
+export function verifyOidcBackchannelLogoutJwt(input: {
+  readonly logoutToken: string;
+  readonly expectedAudience: string;
+  readonly verifySignature: (signingInput: string, signatureB64Url: string, alg: string) => boolean;
+  readonly expectedIssuer?: string;
+  readonly nowMs?: number;
+}): {
+  readonly valid: boolean;
+  readonly reason?: string;
+  readonly sid?: string;
+  readonly sub?: string;
+} {
+  const expectedIssuer = input.expectedIssuer ?? "https://sso.ssra.gov.ss/realms/ssra";
+  const nowSec = Math.floor((input.nowMs ?? Date.now()) / 1000);
+  const parts = input.logoutToken.trim().split(".");
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+    return { valid: false, reason: "UNSIGNED_OR_MALFORMED_LOGOUT_JWT" };
+  }
+  const header = decodeBase64UrlJson(parts[0]);
+  const payload = decodeBase64UrlJson(parts[1]);
+  if (!header || !payload) {
+    return { valid: false, reason: "INVALID_LOGOUT_JWT_ENCODING" };
+  }
+  const alg = typeof header.alg === "string" ? header.alg : "";
+  if (!ALLOWED_LOGOUT_ALGS.has(alg)) {
+    return { valid: false, reason: "UNSUPPORTED_OR_NONE_LOGOUT_ALG_CVE_2026_18569" };
+  }
+  const signingInput = `${parts[0]}.${parts[1]}`;
+  if (!input.verifySignature(signingInput, parts[2], alg)) {
+    return { valid: false, reason: "INVALID_LOGOUT_JWT_SIGNATURE" };
+  }
+  const jti = typeof payload.jti === "string" ? payload.jti : "";
+  const iss = typeof payload.iss === "string" ? payload.iss : "";
+  const aud = typeof payload.aud === "string" ? payload.aud : "";
+  const sid = typeof payload.sid === "string" ? payload.sid : undefined;
+  const sub = typeof payload.sub === "string" ? payload.sub : undefined;
+  const iat = typeof payload.iat === "number" ? payload.iat : NaN;
+  const exp = typeof payload.exp === "number" ? payload.exp : NaN;
+  const events = payload.events as Record<string, unknown> | undefined;
+
+  if (
+    !jti ||
+    iss !== expectedIssuer ||
+    aud !== input.expectedAudience ||
+    payload.nonce !== undefined ||
+    !events ||
+    typeof events["http://schemas.openid.net/event/backchannel-logout"] !== "object" ||
+    (!sid && !sub) ||
+    !Number.isFinite(iat) ||
+    !Number.isFinite(exp) ||
+    nowSec > exp ||
+    Math.abs(nowSec - iat) > 120
+  ) {
+    return { valid: false, reason: "INVALID_BACKCHANNEL_LOGOUT_CLAIMS" };
+  }
+  for (const [k, expSec] of CONSUMED_LOGOUT_JTIS.entries()) {
+    if (expSec < nowSec) CONSUMED_LOGOUT_JTIS.delete(k);
+  }
+  if (CONSUMED_LOGOUT_JTIS.has(jti)) {
+    return { valid: false, reason: "REPLAYED_BACKCHANNEL_LOGOUT_JTI" };
+  }
+  if (CONSUMED_LOGOUT_JTIS.size >= MAX_CONSUMED_LOGOUT_JTIS) {
+    return { valid: false, reason: "LOGOUT_JTI_CACHE_SATURATED" };
+  }
+  CONSUMED_LOGOUT_JTIS.set(jti, exp);
+  return {
+    valid: true,
+    ...(sid !== undefined ? { sid } : {}),
+    ...(sub !== undefined ? { sub } : {}),
+  };
+}
