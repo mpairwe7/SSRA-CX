@@ -23,6 +23,7 @@
 | Data | Current implementation | Durability / caveat |
 |---|---|---|
 | Relational service entities | PostgreSQL DDL in migration `0001_initial_core_entities.py`; current ORM and security DDL helpers are in `services/api/src/ssra_api/database.py`. | The ERD describes the logical model. The migration is authoritative for physical column types, indexes, constraints, and partitioned parent definitions. Child partitions and security helpers require separate provisioning and verification. |
+| Conversation `updated_at` | Present in the logical ERD only. | Migration `0001` and `ConversationORM` do not define this column; it is not persisted by the current schema. Treat it as future-only until a reviewed migration and repository implementation add it. |
 | API bounded-context working state | Conversation, case, consent, knowledge-snapshot, analytics-counter, OTP challenge/lockout, and outbox state currently use in-process implementations; the appointments endpoint returns fixed sample slots. | These stores are not durable or shared across API replicas. PostgreSQL DDL and ORM models do not mean request handlers are using PostgreSQL; repository wiring and durable state are required before live operation. Analytics fixtures and sample slots are not operational data. |
 | Conversation working state | The runtime graph uses LangGraph `InMemorySaver` in `services/agent-runtime/src/ssra_runtime/graphs/conversation.py`. | Process-local only. It is not PostgreSQL-backed and does not survive process restart or provide cross-replica checkpoint continuity. |
 | Identity binding | The `identity_link` API context implements OTP checks and binds an opaque `subject_ref` to a thread; the current HTTP route selects from synthetic subject fixtures and OTP challenges are process-local. | No live taxpayer-directory provider or durable `identity_links` table is established. Do not use the reference route for real taxpayer identity or assume encrypted, durable identity-link storage. |
@@ -56,7 +57,7 @@ erDiagram
         varchar auth_level "ANONYMOUS | OTP_PHONE | T1_TIN_BOUND | T3_STEP_UP"
         varchar office_code "RLS scope (default JUBA_HQ)"
         timestamptz started_at PK "Monthly partition key"
-        timestamptz updated_at
+        timestamptz updated_at "Logical only; absent from migration 0001 and ConversationORM"
         varchar status "ACTIVE | HANDED_OFF | CLOSED"
         smallint csat "Nullable 1..5"
     }
