@@ -1545,7 +1545,6 @@ function renderPwaShellHtml(locale, nonce) {
             syncMobileRailA11y(false);
           }
           input?.focus();
-          input?.focus();
         }
       });
 

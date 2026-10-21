@@ -808,8 +808,11 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
 
         document.documentElement.setAttribute("data-theme", state.theme);
         document.documentElement.setAttribute("data-rail-mode", state.railMode);
-        railEl?.classList.toggle("is-expanded", state.railMode === "always-open");
-        railEl?.classList.toggle("is-collapsed", state.railMode !== "always-open");
+        const shouldExpandRail = state.railMode === "always-open" || Boolean(
+          railEl?.matches(":hover") || railEl?.contains(document.activeElement) || acctMenu?.classList.contains("open"),
+        );
+        railEl?.classList.toggle("is-expanded", shouldExpandRail);
+        railEl?.classList.toggle("is-collapsed", !shouldExpandRail);
         pinBtn?.classList.toggle("is-on", state.railMode === "always-open");
         pinBtn?.setAttribute("aria-pressed", String(state.railMode === "always-open"));
         if (pinBtn) setSafeHtml(pinBtn, state.railMode === "always-open" ? ICONS.chevronsLeft : ICONS.chevronsRight);
@@ -934,11 +937,37 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         applyChrome();
       });
       railEl?.addEventListener("mouseenter", () => {
-        if (state.railMode === "hover") railEl.classList.add("is-expanded");
+        if (state.railMode === "hover") {
+          railEl.classList.add("is-expanded");
+          railEl.classList.remove("is-collapsed");
+        }
       });
       railEl?.addEventListener("mouseleave", () => {
-        if (state.railMode === "hover" && !acctMenu?.classList.contains("open")) {
+        if (
+          state.railMode === "hover" &&
+          !acctMenu?.classList.contains("open") &&
+          !railEl.contains(document.activeElement)
+        ) {
           railEl.classList.remove("is-expanded");
+          railEl.classList.add("is-collapsed");
+        }
+      });
+      railEl?.addEventListener("focusin", () => {
+        if (state.railMode === "hover") {
+          railEl.classList.add("is-expanded");
+          railEl.classList.remove("is-collapsed");
+        }
+      });
+      railEl?.addEventListener("focusout", (e) => {
+        const focusMovedOutsideRail = !(e.relatedTarget instanceof Node) || !railEl.contains(e.relatedTarget);
+        if (
+          state.railMode === "hover" &&
+          focusMovedOutsideRail &&
+          !railEl.matches(":hover") &&
+          !acctMenu?.classList.contains("open")
+        ) {
+          railEl.classList.remove("is-expanded");
+          railEl.classList.add("is-collapsed");
         }
       });
 

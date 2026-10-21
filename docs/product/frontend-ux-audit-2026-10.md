@@ -13,7 +13,7 @@
 | P0 | Dashboard samples and no-op buttons were presented as live service/case status and successful staff actions. | Staff pages now show a persistent preview notice and a no-data/no-actions screen. Buttons cannot report an unperformed action as successful. |
 | P1 | Chat displayed fixed snapshot versions and source assurances while offline or regardless of response provenance. | Removed the hardcoded snapshot label/citation from offline fallback; network status describes connection state only. Answers render a source version only when the response supplies one. |
 | P1 | A dropped connection could be mistaken for a failed request; the composer cleared the draft. | The message now says completion status may be unknown, restores the draft if the user has not started another one, and warns users not to repeat a consequential request before checking. |
-| P1 | Sidebar labeled all unpinned conversations “Today,” did not sort by activity, and could leave hidden rail controls in keyboard focus. | Added deterministic activity sorting and `Africa/Juba` date groups, active-row semantics, meaningful empty state, and `inert` handling for collapsed/closed navigation. |
+| P1 | Sidebar labeled all unpinned conversations “Today,” did not sort by activity, and could leave hidden rail controls in keyboard focus. | Added deterministic activity sorting and `Africa/Juba` date groups, active-row semantics, meaningful empty state, `inert` handling for collapsed/closed navigation, and keyboard/pointer recovery for the staff preview's hover rail. |
 | P1 | Compact action controls and motion/focus feedback were inconsistent. | Main chat rail actions now meet the 44px design target, visible keyboard focus is explicit, reduced-motion preferences are honored, and focus follows sidebar open/close state. |
 | P1 | The chat header labeled a sample-prompt modal as a toll-free AI receptionist, and browser speech recognition did not disclose processing limits. | Renamed it to voice input, disclosed browser processing and language limits, and warned against speaking private account details in public chat. |
 | P2 | Analytics view-model helpers treated values without observation timestamps as live. | Added `LIVE`, `STALE`, `UNKNOWN`, `CI target` and `illustrative` provenance states. Unknown or stale evidence cannot claim that all gates pass. |
@@ -34,7 +34,7 @@
 - Fail closed on staff APIs and label the staff shell as a non-operational preview.
 - Show actual connection and citation state; never turn offline fallback into a source citation.
 - Preserve drafts after network loss and state clearly when the request may have reached the server.
-- Make sidebar recency, empty/search states, focus management, touch targets, and reduced-motion behavior predictable.
+- Make sidebar recency, empty/search states, focus management, hover-mode re-pinning, touch targets, and reduced-motion behavior predictable.
 - Describe browser speech recognition accurately, limit it to supported UI languages, and avoid implying an operational phone call.
 - Add freshness-aware provenance to analytics view models.
 

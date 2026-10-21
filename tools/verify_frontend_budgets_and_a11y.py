@@ -198,6 +198,10 @@ def main() -> None:
         and "syncMobileRailA11y" in web_srv_src
         and 'aria-current="true"' in web_srv_src
         and 'btn.setAttribute("aria-checked", String(isSelected))' in ops_ui_src
+        and 'railEl?.addEventListener("focusin"' in ops_ui_src
+        and 'railEl?.addEventListener("focusout"' in ops_ui_src
+        and 'railEl?.matches(":hover")' in ops_ui_src
+        and 'railEl.classList.remove("is-collapsed")' in ops_ui_src
         and '<h2 id="settings-pane-title"' in web_srv_src
     ), (
         "Lighthouse / Mobile Responsiveness / WCAG 2.2 AA invariants missing (compression, robots.txt, meta description, aria-checked, or mobile drawer)"
