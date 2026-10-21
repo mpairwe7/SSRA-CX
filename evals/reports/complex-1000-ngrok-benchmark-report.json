@@ -1,6 +1,6 @@
 {
   "benchmark_version": "2026.10.21",
-  "git_revision": "a22efbc",
+  "git_revision": "53598b5",
   "target_ngrok_url": "https://<redacted-ngrok-tunnel>",
   "total_scenarios": 1000,
   "total_turns_executed": 1060,
@@ -18,16 +18,16 @@
   "qdrant_episodic_points_indexed_at_peak": 40,
   "performance_metrics": {
     "concurrency": 20,
-    "wall_clock_seconds": 21.77,
-    "throughput_scenarios_per_sec": 45.94,
-    "conversational_rate_turns_per_sec": 48.7,
-    "conversational_rate_turns_per_min": 2922.0,
-    "http_requests_per_sec": 48.65,
-    "latency_p50_ms": 332.2,
-    "latency_p90_ms": 387.83,
-    "latency_p95_ms": 668.67,
-    "latency_p99_ms": 865.65,
-    "latency_mean_ms": 366.07
+    "wall_clock_seconds": 21.15,
+    "throughput_scenarios_per_sec": 47.29,
+    "conversational_rate_turns_per_sec": 50.13,
+    "conversational_rate_turns_per_min": 3007.7,
+    "http_requests_per_sec": 50.08,
+    "latency_p50_ms": 326.94,
+    "latency_p90_ms": 385.77,
+    "latency_p95_ms": 663.26,
+    "latency_p99_ms": 867.1,
+    "latency_mean_ms": 358.3
   },
   "stack_status": {
     "service": "ssra-agent-runtime",
@@ -51,19 +51,19 @@
       "total": 340,
       "passed": 340,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 393.9
+      "mean_latency_ms": 380.35
     },
     "ar": {
       "total": 330,
       "passed": 330,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 346.71
+      "mean_latency_ms": 343.07
     },
     "din": {
       "total": 330,
       "passed": 330,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 356.75
+      "mean_latency_ms": 350.8
     }
   },
   "by_modality": {
@@ -71,19 +71,19 @@
       "total": 400,
       "passed": 400,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 419.88
+      "mean_latency_ms": 409.72
     },
     "STT": {
       "total": 300,
       "passed": 300,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 323.23
+      "mean_latency_ms": 316.14
     },
     "TTS": {
       "total": 300,
       "passed": 300,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 337.16
+      "mean_latency_ms": 331.9
     }
   },
   "by_category": {

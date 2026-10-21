@@ -62,7 +62,7 @@ services:
       - --tool-call-parser
       - hermes
     ports:
-      - "8011:8001"
+      - "${SSRA_SUNFLOWER_PORT:-8011}:8001"
     volumes:
       - ${SUNFLOWER_LOCAL_MODEL_DIR:-/mnt/nas1/caches/huggingface_cache/hub/models--Sunbird--Sunflower-Qwen3.5-9B/snapshots/c56081c5024b1c11186a69898f5f6a7a2dabe454}:/model:ro
     ipc: host
@@ -118,7 +118,7 @@ services:
       - --reasoning-parser
       - qwen3
     ports:
-      - "127.0.0.1:8012:8001"
+      - "127.0.0.1:${SSRA_REASONER_PORT:-8012}:8001"
     volumes:
       - ${REASONER_LOCAL_MODEL_DIR:-/mnt/nas1/caches/huggingface_cache/hub/models--Qwen--Qwen3.8-27B-FP8/snapshots/017b9c7af6b5689d5dd426a76e0bc077eb5ca20a}:/model:ro
     ipc: host
@@ -158,7 +158,7 @@ services:
         source: ${SSRA_HF_CACHE_DIR:-/mnt/nas1/caches/huggingface_cache}
         target: /app/hf_cache
     ports:
-      - "18100:8100"
+      - "${SSRA_ORPHEUS_PORT:-18100}:8100"
     ipc: host
     restart: unless-stopped
     deploy:
@@ -216,7 +216,6 @@ services:
     image: qdrant/qdrant:v1.19.0@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc
     container_name: ssra-qdrant
     ports:
-      - "127.0.0.1:6333:6333"
       - "127.0.0.1:${SSRA_QDRANT_HOST_PORT:-26333}:6333"
     volumes:
       - ssra_qdrant_data:/qdrant/storage:rw
