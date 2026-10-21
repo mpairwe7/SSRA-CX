@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 from ssra_core import (
     Answer,
     AnswerSegment,
@@ -20,14 +19,14 @@ from ssra_runtime import SSRAConversationRuntime, create_runtime_app
 from ssra_runtime.gateway_server import create_agentgateway_app
 from ssra_runtime.graphs import build_minimal_complaint_ticket, get_guided_journey_steps
 from ssra_runtime.guardrails import validate_numeric_provenance
-from ssra_testing import make_conversation_event
+from ssra_testing import AsgiTestClient, make_conversation_event
 
 
 def test_runtime_fails_closed_without_explicit_reference_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("SSRA_RUNTIME_MODE", raising=False)
-    client = TestClient(create_runtime_app())
+    client = AsgiTestClient(create_runtime_app())
     response = client.get("/healthz")
     assert response.status_code == 503
     assert response.json()["code"] == "UPSTREAM_UNAVAILABLE"
@@ -40,7 +39,7 @@ def test_runtime_fails_closed_without_explicit_reference_mode(
 
 def test_t0_paye_calculator_and_agui_sse_stream() -> None:
     """Verify T0 PAYE calculator turn, AG-UI SSE streaming, Last-Event-ID resumption, and runtime middleware."""
-    client = TestClient(create_runtime_app())
+    client = AsgiTestClient(create_runtime_app())
     r = client.post(
         "/v1/turns",
         json={
@@ -350,7 +349,7 @@ def test_phase1_guided_journeys_and_minimal_data_complaint_intake() -> None:
 
 def test_agentgateway_stateless_mcp_routing_spend_cap_and_a2a_stub() -> None:
     """Verify agentgateway stateless MCP routing, spend caps, A2A stub, and zero-trust header guards."""
-    gw_client = TestClient(create_agentgateway_app(daily_usd_cap=10.0))
+    gw_client = AsgiTestClient(create_agentgateway_app(daily_usd_cap=10.0))
 
     # 1. tools/list cached by server name
     r_list = gw_client.post(
@@ -379,7 +378,7 @@ def test_agentgateway_stateless_mcp_routing_spend_cap_and_a2a_stub() -> None:
     assert r_spend.status_code == 429
 
     # 5. Confused-deputy & invalid header guards on agentgateway POST /mcp
-    gw_sec = TestClient(create_agentgateway_app(daily_usd_cap=50.0))
+    gw_sec = AsgiTestClient(create_agentgateway_app(daily_usd_cap=50.0))
     assert (
         gw_sec.post(
             "/mcp",
@@ -486,7 +485,7 @@ def test_subject_preference_memory_store_forbids_free_text_and_supports_erasure(
 
 def test_conversation_replay_forensic_reconstruction_endpoint() -> None:
     """Verify turn-by-turn forensic conversation replay reconstruction via `/v1/turns/{id}/replay`."""
-    client = TestClient(create_runtime_app())
+    client = AsgiTestClient(create_runtime_app())
     r_turn = client.post(
         "/v1/turns",
         json={
@@ -1181,7 +1180,7 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
         rt._evict_overflow_threads()  # pyright: ignore[reportPrivateUsage]
         assert len(rt._thread_subject_binding) <= 2  # pyright: ignore[reportPrivateUsage]
 
-    client = TestClient(create_runtime_app(rt))
+    client = AsgiTestClient(create_runtime_app(rt))
     stack_res = client.get("/v1/runtime/stack-status")
     assert stack_res.status_code == 200
     assert stack_res.json()["service"] == "ssra-agent-runtime"

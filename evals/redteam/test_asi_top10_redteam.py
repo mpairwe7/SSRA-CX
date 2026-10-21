@@ -19,7 +19,6 @@ import json
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 from ssra_api import create_api_app
 from ssra_core import (
     AuthLevel,
@@ -35,7 +34,7 @@ from ssra_runtime.guardrails import (
     verify_no_cross_subject_or_unmasked_pii,
 )
 from ssra_security import ConfirmationTokenManager
-from ssra_testing import make_conversation_event
+from ssra_testing import AsgiTestClient, make_conversation_event
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -130,7 +129,7 @@ def test_asi03_confused_deputy_and_sim_swap_account_takeover_blocked() -> None:
     from ssra_core import RiskTier, utc_now
     from ssra_security import TokenExchangeService
 
-    api_client = TestClient(create_api_app())
+    api_client = AsgiTestClient(create_api_app())
     r_sim = api_client.post(
         "/v1/identity-link/verify-otp",
         json={
@@ -216,7 +215,7 @@ def test_asi05_unallowlisted_urls_in_mcp_tool_output_redacted() -> None:
 
 
 def test_asi06_knowledge_base_poisoning_unapproved_draft_blocked_from_publish() -> None:
-    api_client = TestClient(create_api_app())
+    api_client = AsgiTestClient(create_api_app())
     r_create = api_client.post(
         "/v1/knowledge-admin/snapshots",
         json={"version": "2026.99.0-poison", "content_digest_input": "unreviewed draft"},
@@ -258,7 +257,7 @@ def test_asi08_cascading_failure_circuit_breaker_and_denial_of_wallet_cap() -> N
         == "DENY"
     )
 
-    gw = TestClient(create_agentgateway_app(daily_usd_cap=5.0))
+    gw = AsgiTestClient(create_agentgateway_app(daily_usd_cap=5.0))
     r_spend = gw.post("/v1/spend/record", json={"cost_usd": 6.0})
     assert r_spend.status_code == 429
 

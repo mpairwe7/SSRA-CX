@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from ssra_api import create_api_app
@@ -15,9 +14,10 @@ from ssra_core import (
 )
 from ssra_runtime import create_runtime_app
 from ssra_runtime.guardrails import validate_numeric_provenance
+from ssra_testing import AsgiTestClient
 
-_api_client = TestClient(create_api_app())
-_rt_client = TestClient(create_runtime_app())
+_api_client = AsgiTestClient(create_api_app())
+_rt_client = AsgiTestClient(create_runtime_app())
 
 
 @settings(max_examples=25)

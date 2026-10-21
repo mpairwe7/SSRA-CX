@@ -7,14 +7,14 @@ import statistics
 import time
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
 from ssra_runtime import create_runtime_app
+from ssra_testing import AsgiTestClient
 
 
 def run_benchmark(iterations: int = 25) -> dict[str, float]:
     latencies_ms: list[float] = []
     with patch.dict("os.environ", {"SSRA_RUNTIME_MODE": "reference"}):
-        client = TestClient(create_runtime_app())
+        client = AsgiTestClient(create_runtime_app())
         for _ in range(iterations):
             t0 = time.perf_counter()
             res = client.post(

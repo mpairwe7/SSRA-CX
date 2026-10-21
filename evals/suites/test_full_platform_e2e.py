@@ -6,7 +6,6 @@ import hashlib
 import hmac
 import json
 
-from fastapi.testclient import TestClient
 from ssra_api import create_api_app
 from ssra_channel_gateway import (
     CHANNEL_PORT_REGISTRY,
@@ -21,15 +20,16 @@ from ssra_security import (
     format_audit_event_as_cef,
     format_audit_event_as_ocsf,
 )
+from ssra_testing import AsgiTestClient
 
 
 def test_end_to_end_12_layer_omnichannel_lifecycle() -> None:
     """Verify end-to-end 12-layer omnichannel flow across channel-gateway, runtime, agentgateway, and API."""
     cgw_secret = "e2e-webhook-secret"
-    cgw_client = TestClient(create_channel_gateway_app(webhook_secret=cgw_secret))
-    api_client = TestClient(create_api_app())
-    rt_client = TestClient(create_runtime_app())
-    gw_client = TestClient(create_agentgateway_app(daily_usd_cap=150.0))
+    cgw_client = AsgiTestClient(create_channel_gateway_app(webhook_secret=cgw_secret))
+    api_client = AsgiTestClient(create_api_app())
+    rt_client = AsgiTestClient(create_runtime_app())
+    gw_client = AsgiTestClient(create_agentgateway_app(daily_usd_cap=150.0))
 
     # Layer 4: Channel Gateway verifies WhatsApp webhook HMAC & normalises to CloudEvents 1.0
     inbound_payload = {

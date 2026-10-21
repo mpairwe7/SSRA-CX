@@ -207,9 +207,16 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
             response.headers.setdefault("X-Accel-Buffering", "no")
             return response
 
-        if (request.method == "GET" and raw_path.startswith("/v1/")) or (
-            cache_key and 200 <= response.status_code < 300
-        ):
+        cacheable_get_response = (
+            request.method == "GET"
+            and raw_path.startswith("/v1/")
+            and 200 <= response.status_code < 300
+        )
+        cacheable_idempotency_key = cache_key if 200 <= response.status_code < 300 else None
+        # RFC 9457 error envelopes are deliberately not entity-cached.
+        # Authorization and provider-readiness state can change, and leaving
+        # denial streams untouched preserves correct fail-closed delivery.
+        if cacheable_get_response or cacheable_idempotency_key:
             body_chunks: list[bytes] = []
             async for chunk in response.body_iterator:  # type: ignore[attr-defined]
                 if isinstance(chunk, str):
@@ -218,7 +225,7 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
                     body_chunks.append(bytes(chunk))
             raw_body = b"".join(body_chunks)
 
-            if request.method == "GET":
+            if cacheable_get_response:
                 etag = f'"{hashlib.sha256(raw_body).hexdigest()[:32]}"'
                 if request.headers.get("If-None-Match") == etag:
                     return Response(
@@ -227,11 +234,11 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
                     )
                 response.headers["ETag"] = etag
 
-            if cache_key and 200 <= response.status_code < 300:
+            if cacheable_idempotency_key:
                 if len(idempotency_cache) >= MAX_IDEMPOTENCY_ENTRIES:
                     oldest_key = next(iter(idempotency_cache))
                     idempotency_cache.pop(oldest_key, None)
-                idempotency_cache[cache_key] = (
+                idempotency_cache[cacheable_idempotency_key] = (
                     req_body_sha256,
                     response.status_code,
                     raw_body,

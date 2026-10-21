@@ -7,10 +7,10 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
 from ssra_api import create_api_app
 from ssra_core import LocaleCode
 from ssra_runtime import create_runtime_app
+from ssra_testing import AsgiTestClient
 from ssra_voice import MAX_VOICE_WER_GATE, is_voice_language_approved
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,7 +46,7 @@ def verify_all_gates() -> dict[str, str]:
     # Gate 2: confirm reference runtime behavior and expected production/identity blocks.
     assert (ROOT / "docs" / "ai-governance" / "impact-assessment.md").exists()
     with patch.dict("os.environ", {"SSRA_RUNTIME_MODE": "production"}):
-        production_runtime_client = TestClient(create_runtime_app())
+        production_runtime_client = AsgiTestClient(create_runtime_app())
         production_turn = production_runtime_client.post(
             "/v1/turns",
             json={"message": "How do I get a TIN?", "thread_id": "thr_gate2_verify"},
@@ -55,7 +55,7 @@ def verify_all_gates() -> dict[str, str]:
         assert production_turn.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
     with patch.dict("os.environ", {"SSRA_RUNTIME_MODE": "reference"}):
-        rt_client = TestClient(create_runtime_app())
+        rt_client = AsgiTestClient(create_runtime_app())
         r_turn = rt_client.post(
             "/v1/turns",
             json={"message": "How do I get a TIN?", "thread_id": "thr_gate2_verify"},
@@ -66,7 +66,7 @@ def verify_all_gates() -> dict[str, str]:
         assert r_replay.status_code == 200
         assert len(r_replay.json()) == 1
 
-        api_client = TestClient(create_api_app())
+        api_client = AsgiTestClient(create_api_app())
         r_identity = api_client.post(
             "/v1/identity-link/verify-otp",
             json={"tin": "2003005678", "otp_code": "123456"},
@@ -76,7 +76,7 @@ def verify_all_gates() -> dict[str, str]:
 
     # Gate 3: the process-local snapshot fixture is not exposed through staff-only HTTP routes.
     with patch.dict("os.environ", {"SSRA_RUNTIME_MODE": "reference"}):
-        api_client = TestClient(create_api_app())
+        api_client = AsgiTestClient(create_api_app())
         r_snap = api_client.get("/v1/knowledge-admin/active-snapshot")
         assert r_snap.status_code == 403
         assert r_snap.json()["code"] == "NOT_AUTHORIZED"
@@ -100,7 +100,7 @@ def verify_all_gates() -> dict[str, str]:
     assert is_voice_language_approved(LocaleCode.PGA, MAX_VOICE_WER_GATE) is True
     assert is_voice_language_approved(LocaleCode.DIN, MAX_VOICE_WER_GATE + 0.05) is False
     with patch.dict("os.environ", {"SSRA_RUNTIME_MODE": "reference"}):
-        r_insights = TestClient(create_api_app()).get("/v1/analytics/insights")
+        r_insights = AsgiTestClient(create_api_app()).get("/v1/analytics/insights")
         assert r_insights.status_code == 503
         assert r_insights.json()["code"] == "UPSTREAM_UNAVAILABLE"
 

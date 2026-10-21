@@ -13,6 +13,7 @@ from ssra_mcp_official_channels import create_official_channels_mcp_server
 from ssra_mcp_payments_info import create_payments_info_mcp_server
 from ssra_mcp_tax_facts import create_tax_facts_mcp_server
 from ssra_mcp_tcc import create_tcc_mcp_server
+from ssra_testing import AsgiTestClient
 
 
 def test_knowledge_and_tax_facts_stateless_t0_calls() -> None:
@@ -213,10 +214,8 @@ def test_phase2_customs_cases_and_t3_step_up_controls() -> None:
 
 
 def test_mcp_2026_07_28_tasks_extension_and_deprecated_features_rejected() -> None:
-    from fastapi.testclient import TestClient
-
     kn = create_knowledge_mcp_server()
-    client = TestClient(kn.create_fastapi_app())
+    client = AsgiTestClient(kn.create_fastapi_app())
 
     # 1. Deprecated Roots/Sampling/Logging features are rejected per Section 8.1
     for deprecated_method in ("roots/list", "sampling/createMessage", "logging/setLevel"):
@@ -459,7 +458,6 @@ def test_remaining_mcp_catalog_tools_and_hybrid_retrieval_postprocessing() -> No
 
 def test_mcp_october_2026_qa_audit_hardening_all_phases() -> None:
     """Verify Phase 1-4 MCP October 2026 security, resilience, OTel, SSRF, and scope minimization controls."""
-    from fastapi.testclient import TestClient
     from ssra_core import RiskTier, ensure_w3c_traceparent, utc_now
     from ssra_mcp import (
         JSON_SCHEMA_2020_12,
@@ -829,7 +827,7 @@ def test_mcp_october_2026_qa_audit_hardening_all_phases() -> None:
         )
     cb_kn.record_success()
 
-    gw_http = TestClient(create_agentgateway_app())
+    gw_http = AsgiTestClient(create_agentgateway_app())
     r_list = gw_http.post(
         "/mcp",
         headers={"Mcp-Method": "tools/list", "Mcp-Name": "knowledge"},
@@ -891,7 +889,7 @@ def test_mcp_october_2026_qa_audit_hardening_all_phases() -> None:
     assert r_disc.json()["resultType"] == "complete"
     assert "2026-07-28" in r_disc.json()["supportedProtocolVersions"]
 
-    kn_http = TestClient(create_knowledge_mcp_server().create_fastapi_app())
+    kn_http = AsgiTestClient(create_knowledge_mcp_server().create_fastapi_app())
     r_kn_disc = kn_http.post(
         "/mcp",
         headers={

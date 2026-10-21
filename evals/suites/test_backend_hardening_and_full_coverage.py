@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
-from fastapi.testclient import TestClient
 from ssra_adapters import (
     MockBoSSAdapter,
     MockECustomsAdapter,
@@ -76,7 +75,7 @@ from ssra_security import (
     classify_siem_severity,
     validate_inter_model_handoff,
 )
-from ssra_testing import make_conversation_event
+from ssra_testing import AsgiTestClient, make_conversation_event
 from ssra_voice import (
     resolve_hf_voice_model_cache,
     route_voice_turn,
@@ -91,7 +90,7 @@ from ssra_workers import (
 
 
 def test_api_middleware_cve_2026_48710_host_header_and_idempotency_payload_binding() -> None:
-    client = TestClient(create_api_app())
+    client = AsgiTestClient(create_api_app())
 
     # 1. Healthz & security headers
     r_health = client.get("/healthz")
@@ -132,7 +131,7 @@ def test_api_middleware_cve_2026_48710_host_header_and_idempotency_payload_bindi
 
 
 def test_api_domain_and_endpoints_edge_cases() -> None:
-    client = TestClient(create_api_app())
+    client = AsgiTestClient(create_api_app())
 
     # Admin state and staff actions require a server-verified session.
     assert client.get("/v1/admin/kill-switches").status_code == 403
@@ -350,7 +349,7 @@ def test_mcp_server_base_and_all_11_servers_branches() -> None:
         srv.handle_call_tool(tool_name="bad_output_op", arguments={}, bearer_token=None)
 
     # Test StatelessMcpServer ASGI HTTP app routes (including RFC 9728 & DNS rebinding guards)
-    mcp_client = TestClient(srv.create_fastapi_app())
+    mcp_client = AsgiTestClient(srv.create_fastapi_app())
     assert mcp_client.get("/healthz").status_code == 200
     r_prm = mcp_client.get("/.well-known/oauth-protected-resource")
     assert r_prm.status_code == 200
@@ -873,7 +872,7 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     assert "Field Compliance Checklist" in fo_check.cited_guidance
 
     # 3. Gateway server routes (/healthz, /.well-known/oauth-protected-resource, /v1/spend/record, spend cap, validation errors)
-    gw_client = TestClient(create_agentgateway_app(daily_usd_cap=0.002))
+    gw_client = AsgiTestClient(create_agentgateway_app(daily_usd_cap=0.002))
     assert gw_client.get("/healthz").status_code == 200
     assert gw_client.get("/.well-known/oauth-protected-resource").status_code == 200
     r_spend = gw_client.post("/v1/spend/record", json={"cost_usd": 0.002})
@@ -884,7 +883,7 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
         headers={"Mcp-Method": "tools/list", "Mcp-Name": "knowledge"},
     )
     assert r_cap.status_code == 429
-    gw_client2 = TestClient(create_agentgateway_app(daily_usd_cap=100.0))
+    gw_client2 = AsgiTestClient(create_agentgateway_app(daily_usd_cap=100.0))
     assert gw_client2.post("/mcp", json={"method": "tools/list", "params": {}}).status_code == 400
     assert (
         gw_client2.post(
@@ -1007,7 +1006,7 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     assert compute_sms_segments("")["segments"] == 0
     assert compute_sms_segments("A" * 320)["segments"] == 3
     assert verify_webhook_hmac(b"{}", None, "sec") is False
-    cg_client = TestClient(create_channel_gateway_app(webhook_secret="sec"))
+    cg_client = AsgiTestClient(create_channel_gateway_app(webhook_secret="sec"))
     assert cg_client.get("/healthz").status_code == 200
     assert (
         cg_client.post(
@@ -1033,9 +1032,10 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     assert estimate_token_count("") == 0
     assert "terms" in load_termbase()
     assert mask_tin("12") == "••••"
-    assert TestClient(create_runtime_app()).get("/healthz").status_code == 200
+    assert AsgiTestClient(create_runtime_app()).get("/healthz").status_code == 200
     assert (
-        TestClient(create_api_app()).get("/v1/knowledge-admin/active-snapshot").status_code == 403
+        AsgiTestClient(create_api_app()).get("/v1/knowledge-admin/active-snapshot").status_code
+        == 403
     )
     rt.run_turn(make_conversation_event("Estimate withholding tax"))
     assert output_guard_node({"answer": None}) == {}
@@ -1648,7 +1648,7 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     )
 
     # No synthetic identity, scan, OCR, or legal-analysis result is available.
-    api_client = TestClient(create_api_app())
+    api_client = AsgiTestClient(create_api_app())
     r_identity = api_client.post(
         "/v1/identity-link/verify-otp",
         json={"tin": "2003005678", "otp_code": "123456"},
