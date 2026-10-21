@@ -30,7 +30,7 @@ We adopt Option 2 as a repository safety baseline:
    - Configure `minimumReleaseAge: 10080` (7 days in minutes), `trustPolicy: no-downgrade`, `blockExoticSubdeps: true`, and an empty `allowBuilds` review allow-list in `pnpm-workspace.yaml`.
    - Configure `exclude-newer = "1 week"` and an exact `uv` version in root `pyproject.toml`; preserve the rolling span in `uv.lock`.
    - Configure Dependabot for the `npm` (pnpm), `uv`, and `github-actions` ecosystems with `cooldown.default-days: 7`; version-update cooldowns do not defer security updates.
-   - Record a security-fix exception in [`docs/runbooks/dependency-security-exceptions.md`](../runbooks/dependency-security-exceptions.md) with an advisory, exact artifact checksum, bounded scope, and expiry. Do not add a broad cooldown exclusion.
+   - Record a security-fix exception in [`docs/runbooks/dependency-security-exceptions.md`](../runbooks/dependency-security-exceptions.md) with an advisory, exact artifact checksum, bounded scope, and expiry. A package-specific cutoff may admit only the documented package/version artifact before the cooldown when the manifest, lockfile, checksum, and regression verifier all enforce it; do not add a broad or rolling cooldown exclusion.
 2. **Exact Version & Cryptographic Hash Pinning:**
    - Commit hash-locked `pnpm-lock.yaml` and `uv.lock`; CI runs `pnpm install --frozen-lockfile` and `uv sync --locked`. Until a reviewed package-manager provisioner is introduced, Taskfile JavaScript gates require the bounded Node 24 Corepack-compatible engine and then invoke the exact `packageManager` pin through Corepack.
    - Pin every GitHub Action by full 40-character commit SHA, deny workflow token scopes by default, and declare only job-level scopes needed by each CI job.

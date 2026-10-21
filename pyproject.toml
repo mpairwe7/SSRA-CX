@@ -65,6 +65,9 @@ dev = [
 # reviewed security-fix exception recorded in docs/runbooks/dependency-security-exceptions.md.
 required-version = "==0.13.4"
 exclude-newer = "1 week"
+# DEP-EXC-002 admits only the reviewed certifi security patch before the
+# normal cooldown. The fixed cutoff is not a rolling package exemption.
+exclude-newer-package = { certifi = "2026-10-21T00:00:00Z" }
 
 [tool.uv.workspace]
 members = [
