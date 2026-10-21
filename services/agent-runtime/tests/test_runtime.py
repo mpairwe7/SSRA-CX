@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 from ssra_core import (
     Answer,
@@ -22,6 +23,21 @@ from ssra_runtime.guardrails import validate_numeric_provenance
 from ssra_testing import make_conversation_event
 
 
+def test_runtime_fails_closed_without_explicit_reference_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SSRA_RUNTIME_MODE", raising=False)
+    client = TestClient(create_runtime_app())
+    response = client.get("/healthz")
+    assert response.status_code == 503
+    assert response.json()["code"] == "UPSTREAM_UNAVAILABLE"
+
+    monkeypatch.setenv("SSRA_RUNTIME_MODE", "invalid")
+    invalid_mode_response = client.get("/v1/runtime/stack-status")
+    assert invalid_mode_response.status_code == 503
+    assert invalid_mode_response.json()["code"] == "UPSTREAM_UNAVAILABLE"
+
+
 def test_t0_paye_calculator_and_agui_sse_stream() -> None:
     """Verify T0 PAYE calculator turn, AG-UI SSE streaming, Last-Event-ID resumption, and runtime middleware."""
     client = TestClient(create_runtime_app())
@@ -34,6 +50,7 @@ def test_t0_paye_calculator_and_agui_sse_stream() -> None:
         },
     )
     assert r.status_code == 200
+    assert r.headers["X-SSRA-Runtime-Mode"] == "reference"
     data = r.json()
     assert data["tier"] == "T0"
     assert data["answer"]["is_estimate"] is True

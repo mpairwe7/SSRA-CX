@@ -57,6 +57,7 @@ def test_hash_chained_audit_ledger_detects_tampering() -> None:
         payload={"status": "delivered"},
     )
     assert e2.prev_hash == e1.hash
+    assert len(ledger.events) == 2
     assert ledger.verify_integrity() is True
 
     # Simulate tampering with event 1 (including replacing "a b" with "a\nb")

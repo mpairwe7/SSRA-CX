@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
+from ssra_core import McpErrorCode, SSRAError
+
 from ssra_api.appointments.domain import AppointmentSlot
 
 
 def list_slots_use_case(office_code: str = "JUBA_HQ") -> list[AppointmentSlot]:
-    return [
-        AppointmentSlot(
-            slot_id="slot_2026_10_20_0900",
-            office_code=office_code,
-            start_eat="2026-10-20T09:00:00+02:00",
-        ),
-        AppointmentSlot(
-            slot_id="slot_2026_10_20_1100",
-            office_code=office_code,
-            start_eat="2026-10-20T11:00:00+02:00",
-        ),
-    ]
+    """Return live office inventory only; no approved appointment provider is configured."""
+    del office_code
+    raise SSRAError(
+        McpErrorCode.UPSTREAM_UNAVAILABLE,
+        "Appointment availability is unavailable until SSRA approves and configures an office inventory provider (OQ-016).",
+        status_code=503,
+    )

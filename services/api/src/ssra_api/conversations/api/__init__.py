@@ -2,26 +2,27 @@
 
 from __future__ import annotations
 
-import json
-from collections.abc import AsyncIterator
+from typing import NoReturn
 
 from fastapi import APIRouter, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
-from ssra_core import IntentName, McpErrorCode, SSRAError
+from ssra_core import McpErrorCode, SSRAError
 
-from ssra_api.conversations.application import (
-    create_conversation_use_case,
-    generate_copilot_draft_use_case,
-    score_conversation_qa_use_case,
-    staff_handback_to_ai_use_case,
-    staff_takeover_use_case,
-)
+from ssra_api.conversations.application import create_conversation_use_case
 from ssra_api.conversations.infrastructure import InMemoryConversationRepository
-from ssra_api.repositories import PostgresRlsSessionContext
 
 router = APIRouter(prefix="/v1/conversations", tags=["conversations"])
 _repo = InMemoryConversationRepository()
+
+
+def _raise_staff_session_required() -> NoReturn:
+    """Fail closed until an approved server-side staff identity and role provider exists."""
+    raise SSRAError(
+        McpErrorCode.NOT_AUTHORIZED,
+        "Staff inbox data and actions are unavailable until an approved server-verified session and role policy are configured (OQ-014).",
+        status_code=403,
+    )
 
 
 class CreateConversationRequest(BaseModel):
@@ -154,116 +155,72 @@ async def create_conversation(
     return _to_response(entity)
 
 
-@router.get("/inbox", response_model=list[ConversationResponse])
+@router.get(
+    "/inbox",
+    response_model=list[ConversationResponse],
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def list_inbox(office_code: str = "JUBA_HQ") -> list[ConversationResponse]:
-    """List conversations in the staff inbox scoped by PostgreSQL RLS `office_code`."""
-    PostgresRlsSessionContext(
-        staff_id="stf_inbox", office_code=office_code, staff_role="agent"
-    ).to_set_local_sql()
-    return [_to_response(c) for c in _repo.list_by_office(office_code)]
+    """List staff inbox data only to a server-verified, authorized staff session."""
+    del office_code
+    _raise_staff_session_required()
 
 
-@router.get("/inbox/stream")
+@router.get(
+    "/inbox/stream", responses={403: {"description": "Verified staff session is required."}}
+)
 async def stream_inbox_events(office_code: str = "JUBA_HQ") -> StreamingResponse:
-    """Real-time SSE inbox feed for Phase 3 Staff Console (`apps/console` — Section 11)."""
-    items = [_to_response(c).model_dump(mode="json") for c in _repo.list_by_office(office_code)]
-
-    async def _gen() -> AsyncIterator[str]:
-        payload = json.dumps(
-            {
-                "type": "INBOX_SNAPSHOT",
-                "office_code": office_code,
-                "conversations": items,
-            }
-        )
-        yield f"event: inbox\ndata: {payload}\n\n"
-
-    return StreamingResponse(_gen(), media_type="text/event-stream")
+    """Stream staff inbox data only to a server-verified, authorized staff session."""
+    del office_code
+    _raise_staff_session_required()
 
 
-@router.post("/{conversation_id}/takeover", response_model=ConversationResponse)
+@router.post(
+    "/{conversation_id}/takeover",
+    response_model=ConversationResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def takeover_conversation(
     conversation_id: str, body: TakeoverRequest
 ) -> ConversationResponse:
-    """Assign a conversation to an SSRA staff officer for human takeover."""
-    entity = _repo.get(conversation_id)
-    if entity is None:
-        raise SSRAError(McpErrorCode.NOT_FOUND, "Conversation not found", status_code=404)
-    updated = staff_takeover_use_case(entity, staff_id=body.staff_id)
-    _repo.save(updated)
-    return _to_response(updated)
+    """Assign a conversation only after server-side staff authentication and authorization."""
+    del conversation_id, body
+    _raise_staff_session_required()
 
 
-@router.post("/{conversation_id}/handback", response_model=ConversationResponse)
+@router.post(
+    "/{conversation_id}/handback",
+    response_model=ConversationResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def handback_conversation(
     conversation_id: str,
     body: HandbackResolutionRequest | None = None,
 ) -> ConversationResponse:
-    """Hand a conversation back to the AI assistant, optionally attaching a verified officer resolution."""
-    from ssra_api.conversations.domain import OfficerResolutionArtifact
-
-    entity = _repo.get(conversation_id)
-    if entity is None:
-        raise SSRAError(McpErrorCode.NOT_FOUND, "Conversation not found", status_code=404)
-    if body is not None:
-        if entity.status != "STAFF_TAKEOVER" or body.officer_id != entity.assigned_staff_id:
-            raise SSRAError(
-                McpErrorCode.NOT_AUTHORIZED,
-                "Only the assigned officer on a STAFF_TAKEOVER conversation can submit a hand-back resolution",
-                status_code=403,
-            )
-        if body.approved_next_intent not in IntentName._value2member_map_:
-            raise SSRAError(
-                McpErrorCode.VALIDATION_FAILED,
-                f"Unsupported approved_next_intent '{body.approved_next_intent}'",
-                status_code=422,
-            )
-    resolution = (
-        OfficerResolutionArtifact(
-            officer_id=body.officer_id,
-            resolution_summary=body.resolution_summary,
-            approved_next_intent=body.approved_next_intent,
-            return_to_ai_step=body.return_to_ai_step,
-        )
-        if body is not None
-        else None
-    )
-    updated = staff_handback_to_ai_use_case(entity, officer_resolution=resolution)
-    _repo.save(updated)
-    return _to_response(updated)
+    """Hand a conversation back only after server-side staff authentication and authorization."""
+    del conversation_id, body
+    _raise_staff_session_required()
 
 
-@router.post("/{conversation_id}/copilot-draft", response_model=CopilotDraftResponse)
+@router.post(
+    "/{conversation_id}/copilot-draft",
+    response_model=CopilotDraftResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def generate_copilot_draft(
     conversation_id: str, body: CopilotDraftRequest
 ) -> CopilotDraftResponse:
-    """Generate a cited reply draft and next-best action for an SSRA officer."""
-    draft = generate_copilot_draft_use_case(
-        conversation_id=conversation_id,
-        taxpayer_question=body.taxpayer_question,
-    )
-    return CopilotDraftResponse(
-        conversation_id=draft.conversation_id,
-        summary=draft.summary,
-        cited_reply_draft=draft.cited_reply_draft,
-        citations=list(draft.citations),
-        next_best_action=draft.next_best_action,
-        snapshot_version=draft.snapshot_version,
-    )
+    """Generate staff reply drafts only for a server-verified, authorized session."""
+    del conversation_id, body
+    _raise_staff_session_required()
 
 
-@router.post("/{conversation_id}/qa-score", response_model=ConversationResponse)
+@router.post(
+    "/{conversation_id}/qa-score",
+    response_model=ConversationResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def score_conversation_qa(conversation_id: str, body: QaScoreRequest) -> ConversationResponse:
-    """Record a supervisor QA rubric score for a conversation."""
-    entity = _repo.get(conversation_id)
-    if entity is None:
-        raise SSRAError(McpErrorCode.NOT_FOUND, "Conversation not found", status_code=404)
-    updated = score_conversation_qa_use_case(
-        entity,
-        accuracy=body.accuracy,
-        citations_complete=body.citations_complete,
-        neutrality=body.neutrality,
-        language_quality=body.language_quality,
-    )
-    _repo.save(updated)
-    return _to_response(updated)
+    """Record staff QA scores only for a server-verified supervisor session."""
+    del conversation_id, body
+    _raise_staff_session_required()

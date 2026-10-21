@@ -15,45 +15,35 @@
 | `task up` | Start local hardened Docker Compose stack (`infra/compose/docker-compose.yml`) and run end-to-end AG-UI smoke test (`tools/smoke_test_stack.py`) |
 | `docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait` | Start local sovereign GPU + local HF cache (`Sunflower-Qwen3.5-9B`, `Sunflower-Qwen3.8-27B`, `SunflowerASR`) + Qdrant + Valkey + PostgreSQL 18 + `ssra-frontend` (`:3033`) + `ssra-console` (`:3034`) stack (`127.0.0.1:18000` API, `127.0.0.1:18001` Runtime) and run `uv run python tools/run_20000_complex_ngrok_benchmark.py` |
 | `task down` | Stop local Docker Compose stack cleanly (`--remove-orphans`) |
-| `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.prod.yml --profile prod up -d --wait` | Deploy production NCA Sovereign stack (including pre-built `keycloak` `--optimized` on port `8080`/`9000`, offline `vllm-sovereign` GPU container, and `postgres-wal-archiver`) |
+| `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.prod.yml --profile prod up -d --wait` | Validate/start the intended production/DR stack; API and runtime remain unready by design until approved providers and durable state are implemented |
 | `task gen` | Regenerate Pydantic v2 models, TypeScript types, Zod 4 schemas, OpenAPI 3.1 client, and CycloneDX 1.6 SBOM + ML-BOM |
 | `task lint` | Run Ruff check/format, `basedpyright` strict, `import-linter`, JSON Schema 2020-12 validator (33 MCP tools), `gitleaks`, Biome, and TypeScript `tsc` |
 | `task test` | Run Python (`pytest` + Hypothesis, `>= 98%` coverage gate) and TypeScript (`vitest`) unit and contract test suites |
-| `task eval` | Run the 600-item Phase 1 golden dataset (`300 en`, `150 ar`, `150 pga`) and OWASP Agentic `ASI01`–`ASI10` red-team suite |
+| `task eval` | Run the 600-item reference golden dataset (`300 en`, `150 ar`, `150 pga`), OWASP Agentic `ASI01`–`ASI10` red-team suite, ASGI/DR drills, and a readiness audit that reports blockers without advancing Phase Exit Gates |
+
+`SSRA_RUNTIME_MODE` defaults to `production`; API and agent-runtime requests fail closed until approved providers and durable stores are wired. Local Compose profiles explicitly select `reference` for synthetic development. See [Reference Mode and Readiness](./reference-mode-readiness.md). The production overlay selects `production` and is expected to remain unready until OQ-005 and OQ-013–OQ-017 have approved implementations.
 
 ---
 
 ## 2. Emergency Kill Switches (Model, Tool, Channel)
 
-> **Staff console access gate (2026-10-21):** `apps/console` currently serves a non-operational preview. Its scorecard, feature-flag, kill-switch, and runtime-status browser APIs deliberately return `403 AUTHENTICATED_STAFF_SESSION_REQUIRED` until OQ-014 is resolved and server-verified staff authorization is implemented. Do not use the preview to inspect taxpayer work or issue operational commands. Follow the SSRA-approved incident procedure and authenticated control-plane access method for live interventions.
+> **Staff console access gate (2026-10-21):** `apps/console` is a non-operational preview. Staff, admin, audit, kill-switch, feature-flag, and knowledge-release APIs return `403 NOT_AUTHORIZED` until OQ-014 is resolved and server-verified staff authorization is implemented. Do not use the preview or API to inspect taxpayer work or issue operational commands. Follow the SSRA-approved incident procedure and authenticated control-plane method for live interventions.
 
-1. **Model Kill Switch / Force Degradation Ladder (`GET /v1/admin/kill-switches`):**
-   - Setting `SSRA_FORCE_DEGRADATION_LEVEL=4` in `services/agent-runtime` bypasses LLM generation and serves **Retrieval-Only Cited Answer Cards + Deterministic Calculators** (Degradation Step 4).
-   - Setting `SSRA_FORCE_DEGRADATION_LEVEL=5` serves **Static Approved FAQs + Callback Intake** (Degradation Step 5).
-2. **Upstream T3 Feature Flags (`OQ-001`, `OQ-006`):**
-   - `SSRA_ENABLE_UPSTREAM_T3_PAYMENT_REF=0` (default) keeps `payments-info.generate_payment_reference` disabled until SSRA Finance & ICT sign off on `OQ-006`.
-   - `SSRA_ENABLE_UPSTREAM_T3_TCC=0` (default) keeps `tcc.request_tcc` disabled until SSRA Domestic Tax & ICT sign off on `OQ-001`.
-3. **Per-Channel Kill Switch:**
-   - Pause `whatsapp`, `sms`, `ussd`, or `voice` ingress in `services/channel-gateway` while keeping the public status banner active.
+1. **Model Kill Switch / Force Degradation Ladder:**
+   - No production HTTP or environment-variable kill switch is wired in this reference implementation. `SSRAConversationRuntime.set_kill_switches(...)` changes only that in-process runtime instance and is not a production control plane.
+   - During an incident, use the separately approved SSRA infrastructure procedure to isolate or stop affected services, and record the action in the authorized incident system. Do not rely on a local reference-mode control.
+2. **Upstream T3 Tools (`OQ-001`, `OQ-006`):** The documented environment-variable toggles are not wired as runtime controls. Do not use them to enable or disable tools; providers and controls remain subject to the relevant SSRA approvals.
+3. **Per-Channel Kill Switch:** No operational channel-control API is available in this reference build. Use the separately approved infrastructure incident procedure to isolate channel services.
 
 ---
 
-## 3. 6-Step Knowledge Release & One-Step Snapshot Rollback
+## 3. Reference Knowledge Release State Machine
 
-Only immutable snapshots with `status = 'PUBLISHED'` are served to taxpayers:
-1. Create draft: `POST /v1/knowledge-admin/snapshots`
-2. Submit for legal review: `POST /v1/knowledge-admin/snapshots/{version}/submit-review`
-3. Legal approval: `POST /v1/knowledge-admin/snapshots/{version}/approve`
-4. Publish (with automated eval regression check): `POST /v1/knowledge-admin/snapshots/{version}/publish`
-5. **Emergency 1-Step Rollback:**
-   ```bash
-   curl -X POST http://127.0.0.1:8000/v1/knowledge-admin/snapshots/rollback
-   ```
-   Atomically restores the previous `PUBLISHED` snapshot version and marks the faulty release `ROLLED_BACK`.
+The in-memory workflow engine supports unit tests for draft, legal review, approval, publication, and rollback state transitions. Its HTTP routes return `403 NOT_AUTHORIZED`; do not use them to publish or roll back content. OQ-014 and OQ-015 must be closed and the approved identity, maker-checker, durable audit, and snapshot storage integrations reviewed before any operational knowledge-release procedure is enabled.
 
 ---
 
 ## 4. Disaster Recovery (RPO ≤ 5 min, RTO ≤ 1 h) & Next.js 72-Hour Patching
 
-- **PostgreSQL 18 PITR via Docker Compose (`postgres-wal-archiver`):** The `postgres-wal-archiver` service in `infra/compose/docker-compose.prod.yml` continuously ships WAL segments to S3-compatible storage (`s3://ssra-nca-backups/postgres18-wal`); quarterly restore drills verify recovery within RTO ≤ 1 h and RPO ≤ 5 min.
+- **PostgreSQL 18 PITR via Docker Compose (`postgres-wal-archiver`):** The production overlay describes the intended WAL archive topology; verify the configured backup target and restore evidence through approved infrastructure controls.
 - **Scheduled Security Patching:** Subscribe to Next.js 16, FastAPI, Keycloak, and Linux kernel security advisories. Reviewed CVE patches bypass the 7-day dependency cooldown and must be deployed within 72 hours via `docker compose pull && docker compose up -d --wait`.

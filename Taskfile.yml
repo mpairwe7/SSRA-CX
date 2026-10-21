@@ -43,7 +43,7 @@ tasks:
       - pnpm run test
 
   eval:
-    desc: Run SSRA Assist evaluation harness, generate evals/reports/, benchmark ASGI SLOs, and verify Phase Exit Gates 0-4
+    desc: Run SSRA Assist evaluations, benchmark ASGI SLOs, and audit phase evidence/blockers without advancing gates
     cmds:
       - uv run pytest evals/suites evals/redteam -q
       - uv run python tools/run_eval_report.py

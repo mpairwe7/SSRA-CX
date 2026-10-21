@@ -479,28 +479,14 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
         name: "etax_500.png",
         sizeBytes: 204_800,
         docType: "portal_screenshot",
-        analysis: {
-          documentId: "doc_1",
-          filename: "etax_500.png",
-          kind: "image",
-          sizeBytes: 204_800,
-          docType: "portal_screenshot",
-          confidence: 0.95,
-          fields: { tins: ["••••1234"] },
-          taxReconciliation: { status: "discrepancy_detected", variance_ssp: 12000 },
-          screenshot_guidance: {
-            is_screenshot: true,
-            detected_portal: "SSRA National e-Tax Portal",
-            portal_url: "https://etax.nra.gov.ss/",
-            steps: ["Step 1: Wait 60 seconds and refresh"],
-          },
-        },
       },
       "en",
     );
-    expect(modalView.isScreenshot).toBe(true);
-    expect(modalView.normalizedSteps).toEqual(["Wait 60 seconds and refresh"]);
-    expect(modalView.quickPrompts.length).toBeGreaterThanOrEqual(3);
+    expect(modalView.analysisStatus).toBe("unavailable");
+    expect(modalView.isScreenshot).toBe(false);
+    expect(modalView.portalUrl).toBeNull();
+    expect(modalView.normalizedSteps).toEqual([]);
+    expect(modalView.quickPrompts).toEqual([]);
     expect(isCspSafeImagePreviewDataUrl("data:image/jpeg;base64,/9j/4AAQSkZJRg==")).toBe(true);
     expect(isCspSafeImagePreviewDataUrl("blob:https://assist.ssra.gov.ss/123")).toBe(false);
 

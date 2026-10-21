@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+from collections.abc import Awaitable, Callable
+
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
-from ssra_core import SSRAError, ensure_w3c_traceparent
+from ssra_core import McpErrorCode, SSRAError, ensure_w3c_traceparent
+from ssra_core.deployment import is_reference_mode
 
 from ssra_api.admin.api import router as admin_router
 from ssra_api.analytics_api.api import router as analytics_router
@@ -26,6 +29,33 @@ def create_api_app() -> FastAPI:
         description="Modular monolith API for SSRA Assist (South Sudan Revenue Authority).",
     )
     install_api_conventions_middleware(app)
+
+    @app.middleware("http")
+    async def reference_runtime_guard(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Keep process-local and synthetic API handlers unavailable outside explicit reference mode."""
+        if not is_reference_mode():
+            traceparent = ensure_w3c_traceparent(request.headers.get("traceparent"))
+            error = SSRAError(
+                code=McpErrorCode.UPSTREAM_UNAVAILABLE,
+                message=(
+                    "Core API is unavailable until approved providers and durable persistence "
+                    "are configured; set SSRA_RUNTIME_MODE=reference only for local fixtures."
+                ),
+                status_code=503,
+            )
+            return JSONResponse(
+                status_code=503,
+                content=error.to_problem_details(
+                    instance=str(request.scope.get("path", "/")), trace_id=traceparent
+                ).model_dump(mode="json"),
+                media_type="application/problem+json",
+                headers={"traceparent": traceparent, **SECURITY_HEADERS},
+            )
+        response = await call_next(request)
+        response.headers["X-SSRA-Runtime-Mode"] = "reference"
+        return response
 
     @app.exception_handler(SSRAError)
     async def ssra_error_handler(request: Request, exc: SSRAError) -> JSONResponse:

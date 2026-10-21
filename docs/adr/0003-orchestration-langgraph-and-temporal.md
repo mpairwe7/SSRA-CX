@@ -30,6 +30,8 @@ Using free-roaming multi-agent swarms violates Principle 1 (Determinism over cle
 
 We adopt Option 3 with strict separation of responsibilities:
 
+> **Implementation status:** The current runtime still uses LangGraph `InMemorySaver`; the selected PostgreSQL checkpointer and Temporal workflows are target architecture, not implemented persistence paths. The knowledge-release API also returns 403 until trusted staff authorization and durable state exist; its in-memory state machine is exercised directly in tests only. Production runtime requests and health checks return 503 until durable checkpointing and recovery are implemented and verified (OQ-014, OQ-015, ADR-019).
+
 1. **Conversational Control (`services/agent-runtime` — LangGraph `1.2.14` + `langgraph-checkpoint-postgres` `3.1.2`):**
    - Implement one explicit **Supervisor Graph** (`graphs/conversation.py`) executing the 11 ordered nodes defined in Section 6.1 (`ingress` → `deterministic_router` → `input_guard` → `understand` → `policy_gate` → specialist subgraph → `tool_exec` → `compose` → `output_guard` → `confirm` → `egress`).
    - Specialist subgraphs (`knowledge_qa`, `guided_journey`, `self_service`, `calculator`, `verify_official`, `complaint_intake`, `handoff`) are deterministic subgraphs invoked by the supervisor—never autonomous peer swarms.

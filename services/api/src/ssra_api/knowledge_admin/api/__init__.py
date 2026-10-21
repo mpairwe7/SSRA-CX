@@ -1,15 +1,12 @@
-"""API router for knowledge_admin bounded context (6-Step Knowledge Release Workflow)."""
+"""Staff-only knowledge-release route contracts; handlers remain gated pending trusted authorization."""
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
-
-from ssra_api.knowledge_admin.application import (
-    get_active_snapshot_use_case,
-    get_workflow_engine,
-)
-from ssra_api.knowledge_admin.domain import KnowledgeSnapshotEntity
+from ssra_core import McpErrorCode, SSRAError
 
 router = APIRouter(prefix="/v1/knowledge-admin", tags=["knowledge_admin"])
 
@@ -42,50 +39,76 @@ class PublishSnapshotRequest(BaseModel):
     eval_regression_passed: bool = True
 
 
-def _to_res(snap: KnowledgeSnapshotEntity) -> SnapshotResponse:
-    return SnapshotResponse(
-        version=snap.version,
-        status=snap.status,
-        approved_by=snap.approved_by,
-        checksum=snap.checksum,
+def _raise_staff_session_required() -> NoReturn:
+    """Block reference workflow state until trusted staff authorization and durable storage exist."""
+    raise SSRAError(
+        McpErrorCode.NOT_AUTHORIZED,
+        "Knowledge snapshot data and actions are unavailable until server-verified staff roles and durable state are configured (OQ-014, OQ-015).",
+        status_code=403,
     )
 
 
-@router.get("/active-snapshot", response_model=SnapshotResponse)
+@router.get(
+    "/active-snapshot",
+    response_model=SnapshotResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def get_active_snapshot() -> SnapshotResponse:
-    return _to_res(get_active_snapshot_use_case())
+    """Return snapshot state only to a server-verified, authorized knowledge operator."""
+    _raise_staff_session_required()
 
 
-@router.post("/snapshots", response_model=SnapshotResponse)
+@router.post(
+    "/snapshots",
+    response_model=SnapshotResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def create_draft_snapshot(body: CreateDraftSnapshotRequest) -> SnapshotResponse:
-    return _to_res(
-        get_workflow_engine().create_draft(
-            version=body.version, content_digest_input=body.content_digest_input
-        )
-    )
+    """Create drafts only after staff identity, role, and durable workflow state are verified."""
+    del body
+    _raise_staff_session_required()
 
 
-@router.post("/snapshots/{version}/submit-review", response_model=SnapshotResponse)
+@router.post(
+    "/snapshots/{version}/submit-review",
+    response_model=SnapshotResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def submit_for_review(version: str) -> SnapshotResponse:
-    return _to_res(get_workflow_engine().submit_for_legal_review(version))
+    """Submit drafts only through a verified knowledge-release workflow."""
+    del version
+    _raise_staff_session_required()
 
 
-@router.post("/snapshots/{version}/approve", response_model=SnapshotResponse)
+@router.post(
+    "/snapshots/{version}/approve",
+    response_model=SnapshotResponse,
+    responses={
+        403: {"description": "Verified staff session and maker-checker policy are required."}
+    },
+)
 async def approve_snapshot(version: str, body: ApproveSnapshotRequest) -> SnapshotResponse:
-    return _to_res(
-        get_workflow_engine().approve_snapshot(version, legal_approver=body.legal_approver)
-    )
+    """Never accept approver identity from request data as evidence of legal authorization."""
+    del version, body
+    _raise_staff_session_required()
 
 
-@router.post("/snapshots/{version}/publish", response_model=SnapshotResponse)
+@router.post(
+    "/snapshots/{version}/publish",
+    response_model=SnapshotResponse,
+    responses={403: {"description": "Verified staff session and release policy are required."}},
+)
 async def publish_snapshot(version: str, body: PublishSnapshotRequest) -> SnapshotResponse:
-    return _to_res(
-        get_workflow_engine().publish_snapshot(
-            version, eval_regression_passed=body.eval_regression_passed
-        )
-    )
+    """Never trust a caller-supplied regression flag to authorize snapshot publication."""
+    del version, body
+    _raise_staff_session_required()
 
 
-@router.post("/snapshots/rollback", response_model=SnapshotResponse)
+@router.post(
+    "/snapshots/rollback",
+    response_model=SnapshotResponse,
+    responses={403: {"description": "Verified staff session and release policy are required."}},
+)
 async def rollback_snapshot() -> SnapshotResponse:
-    return _to_res(get_workflow_engine().rollback_to_previous())
+    """Allow rollback only through an approved, authenticated operations workflow."""
+    _raise_staff_session_required()

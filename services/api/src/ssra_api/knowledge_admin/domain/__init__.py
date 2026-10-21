@@ -1,4 +1,4 @@
-"""Domain layer for knowledge_admin bounded context (6-step Knowledge Release workflow with Maker-Checker separation)."""
+"""Reference knowledge snapshot state model with maker-checker transition rules."""
 
 from __future__ import annotations
 

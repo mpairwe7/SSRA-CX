@@ -5,26 +5,29 @@ from __future__ import annotations
 
 import statistics
 import time
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from ssra_runtime import create_runtime_app
 
 
 def run_benchmark(iterations: int = 25) -> dict[str, float]:
-    client = TestClient(create_runtime_app())
     latencies_ms: list[float] = []
-    for _ in range(iterations):
-        t0 = time.perf_counter()
-        res = client.post(
-            "/v1/agui/stream",
-            json={
-                "message": "How much is PAYE on 250,000 SSP per month?",
-                "locale": "en",
-                "channel": "web",
-            },
-        )
-        assert res.status_code == 200
-        latencies_ms.append((time.perf_counter() - t0) * 1000.0)
+    with patch.dict("os.environ", {"SSRA_RUNTIME_MODE": "reference"}):
+        client = TestClient(create_runtime_app())
+        for _ in range(iterations):
+            t0 = time.perf_counter()
+            res = client.post(
+                "/v1/agui/stream",
+                json={
+                    "message": "How much is PAYE on 250,000 SSP per month?",
+                    "locale": "en",
+                    "channel": "web",
+                },
+            )
+            assert res.status_code == 200
+            assert res.headers.get("X-SSRA-Runtime-Mode") == "reference"
+            latencies_ms.append((time.perf_counter() - t0) * 1000.0)
 
     latencies_ms.sort()
     p50 = statistics.median(latencies_ms)

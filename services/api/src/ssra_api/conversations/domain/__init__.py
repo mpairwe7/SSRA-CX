@@ -27,13 +27,3 @@ class ConversationEntity:
     assigned_staff_id: str | None = None
     qa_score: float | None = None
     officer_resolution: OfficerResolutionArtifact | None = None
-
-
-@dataclass(frozen=True)
-class StaffCopilotDraft:
-    conversation_id: str
-    summary: str
-    cited_reply_draft: str
-    citations: tuple[str, ...]
-    next_best_action: str
-    snapshot_version: str = "2026.10.1"

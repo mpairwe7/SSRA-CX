@@ -2,21 +2,31 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Header
-from pydantic import BaseModel, ConfigDict, Field
+from typing import NoReturn
 
-from ssra_api.admin.application import (
-    default_kill_switch_state,
-    get_admin_audit_head_hash,
-    list_admin_feature_flags,
-    record_jit_admin_elevation,
-    update_admin_feature_flag,
-    update_kill_switch_state,
-    verify_admin_audit_chain,
-)
-from ssra_api.outbox import get_outbox_store
+from fastapi import APIRouter
+from pydantic import BaseModel, ConfigDict, Field
+from ssra_core import McpErrorCode, SSRAError
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
+
+
+def _raise_staff_session_required() -> NoReturn:
+    """Fail closed until an approved staff identity adapter validates a server-side session."""
+    raise SSRAError(
+        McpErrorCode.NOT_AUTHORIZED,
+        "Staff data and actions are unavailable until an approved server-verified session and role policy are configured (OQ-014).",
+        status_code=403,
+    )
+
+
+def _raise_operational_status_unavailable() -> NoReturn:
+    """Avoid presenting hard-coded reference values as live service telemetry."""
+    raise SSRAError(
+        McpErrorCode.UPSTREAM_UNAVAILABLE,
+        "Operational status is unavailable until trusted health signals, freshness controls, and provenance are configured (OQ-013, OQ-015).",
+        status_code=503,
+    )
 
 
 class KillSwitchResponse(BaseModel):
@@ -72,7 +82,7 @@ class PublicStatusResponse(BaseModel):
     active_knowledge_snapshot: str
     channels: dict[str, str]
     upstreams: dict[str, str]
-    official_portal: str = "https://etax.nra.gov.ss/"
+    official_portal: str
 
 
 class FeatureFlagRuleResponse(BaseModel):
@@ -94,123 +104,76 @@ class UpdateFeatureFlagRequest(BaseModel):
     rollout_pct: int = Field(ge=0, le=100, default=100)
 
 
-@router.get("/kill-switches", response_model=KillSwitchResponse)
+@router.get(
+    "/kill-switches",
+    response_model=KillSwitchResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def get_kill_switches() -> KillSwitchResponse:
-    """Return the current SecOps degradation level and disabled tools/channels."""
-    state = default_kill_switch_state()
-    return KillSwitchResponse(
-        degradation_level=state.degradation_level,
-        disabled_tools=list(state.disabled_tools),
-        disabled_channels=list(state.disabled_channels),
-    )
+    """Return kill-switch state only to a server-verified, authorized staff session."""
+    _raise_staff_session_required()
 
 
-@router.post("/kill-switches", response_model=KillSwitchResponse)
-async def set_kill_switches(
-    body: UpdateKillSwitchRequest,
-    x_ssra_staff_id: str = Header(default="secops_admin", alias="X-SSRA-Staff-Id"),
-) -> KillSwitchResponse:
-    """Update the active SecOps kill-switches and log the change to the WORM audit ledger."""
-    state = update_kill_switch_state(
-        degradation_level=body.degradation_level,
-        disabled_tools=body.disabled_tools,
-        disabled_channels=body.disabled_channels,
-        actor=x_ssra_staff_id,
-    )
-    return KillSwitchResponse(
-        degradation_level=state.degradation_level,
-        disabled_tools=list(state.disabled_tools),
-        disabled_channels=list(state.disabled_channels),
-    )
+@router.post(
+    "/kill-switches",
+    response_model=KillSwitchResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
+async def set_kill_switches(body: UpdateKillSwitchRequest) -> KillSwitchResponse:
+    """Update kill switches only after server-side staff authentication and authorization."""
+    del body
+    _raise_staff_session_required()
 
 
-@router.get("/audit-verify", response_model=AuditVerifyResponse)
+@router.get(
+    "/audit-verify",
+    response_model=AuditVerifyResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
 async def verify_audit() -> AuditVerifyResponse:
-    """Verify the admin WORM audit chain and return integrity status, event count, and head hash."""
-    ok, count = verify_admin_audit_chain()
-    return AuditVerifyResponse(
-        integrity_verified=ok,
-        events_count=count,
-        head_hash=get_admin_audit_head_hash(),
-    )
+    """Expose audit-chain records only to a server-verified auditor/staff session."""
+    _raise_staff_session_required()
 
 
-@router.get("/public-status", response_model=PublicStatusResponse)
+@router.get(
+    "/public-status",
+    response_model=PublicStatusResponse,
+    responses={503: {"description": "Trusted operational status telemetry is not configured."}},
+)
 async def get_public_status() -> PublicStatusResponse:
-    """Return the public degradation-aware system status and active knowledge snapshot version."""
-    state = default_kill_switch_state()
-    disabled_ch = set(state.disabled_channels)
-    return PublicStatusResponse(
-        overall_status="OPERATIONAL" if state.degradation_level <= 3 else "DEGRADED_SAFE_MODE",
-        degradation_level=state.degradation_level,
-        active_knowledge_snapshot=get_outbox_store().active_knowledge_snapshot,
-        channels={
-            ch: ("PAUSED" if ch in disabled_ch else "OPERATIONAL")
-            for ch in ("web", "whatsapp", "sms", "ussd", "voice")
-        },
-        upstreams={
-            "etax": "OPERATIONAL",
-            "ecustoms": "MOCK_ACTIVE_OQ002",
-            "boss_fx": "OPERATIONAL",
-        },
-    )
+    """Return live status only when trusted, fresh monitoring sources are connected."""
+    _raise_operational_status_unavailable()
 
 
-@router.post("/jit-elevation", response_model=JitElevationResponse)
+@router.post(
+    "/jit-elevation",
+    response_model=JitElevationResponse,
+    responses={
+        403: {"description": "Verified staff session and maker-checker policy are required."}
+    },
+)
 async def request_jit_elevation(body: JitElevationRequest) -> JitElevationResponse:
-    """Grant time-boxed JIT admin elevation after verifying trusted staff directory & maker-checker controls."""
-    record_jit_admin_elevation(
-        requester_staff_id=body.requester_staff_id,
-        approver_staff_id=body.approver_staff_id,
-        duration_minutes=body.duration_minutes,
-        reason=body.reason,
-        passkey_verified=body.passkey_verified,
-        device_posture_compliant=body.device_posture_compliant,
-    )
-    return JitElevationResponse(
-        requester_staff_id=body.requester_staff_id,
-        approver_staff_id=body.approver_staff_id,
-        granted=True,
-        duration_minutes=body.duration_minutes,
-        status="GRANTED_TIMEBOXED_JIT_ADMIN",
-    )
+    """Never infer passkey verification from request fields; require a trusted session adapter."""
+    del body
+    _raise_staff_session_required()
 
 
-@router.get("/feature-flags", response_model=list[FeatureFlagRuleResponse])
-async def get_feature_flags(
-    x_ssra_staff_id: str = Header(default="secops_admin", alias="X-SSRA-Staff-Id"),
-) -> list[FeatureFlagRuleResponse]:
-    """List all registered SSRA Assist cohort/percentage feature flags (requires verified admin/secops staff)."""
-    return [
-        FeatureFlagRuleResponse(
-            name=r.name,
-            description=r.description,
-            enabled=r.enabled,
-            rollout_pct=r.rollout_pct,
-            allowed_channels=list(r.allowed_channels),
-            allowed_locales=list(r.allowed_locales),
-        )
-        for r in list_admin_feature_flags(actor=x_ssra_staff_id)
-    ]
+@router.get(
+    "/feature-flags",
+    response_model=list[FeatureFlagRuleResponse],
+    responses={403: {"description": "Verified staff session is required."}},
+)
+async def get_feature_flags() -> list[FeatureFlagRuleResponse]:
+    """Read feature flags only after server-side staff authentication and authorization."""
+    _raise_staff_session_required()
 
 
-@router.post("/feature-flags", response_model=FeatureFlagRuleResponse)
-async def set_feature_flag(
-    body: UpdateFeatureFlagRequest,
-    x_ssra_staff_id: str = Header(default="secops_admin", alias="X-SSRA-Staff-Id"),
-) -> FeatureFlagRuleResponse:
-    """Update a cohort/percentage feature flag and append a WORM audit event attributed to the verified staff actor."""
-    rule = update_admin_feature_flag(
-        flag_name=body.flag_name,
-        enabled=body.enabled,
-        rollout_pct=body.rollout_pct,
-        actor=x_ssra_staff_id,
-    )
-    return FeatureFlagRuleResponse(
-        name=rule.name,
-        description=rule.description,
-        enabled=rule.enabled,
-        rollout_pct=rule.rollout_pct,
-        allowed_channels=list(rule.allowed_channels),
-        allowed_locales=list(rule.allowed_locales),
-    )
+@router.post(
+    "/feature-flags",
+    response_model=FeatureFlagRuleResponse,
+    responses={403: {"description": "Verified staff session is required."}},
+)
+async def set_feature_flag(body: UpdateFeatureFlagRequest) -> FeatureFlagRuleResponse:
+    """Mutate feature flags only after server-side staff authentication and authorization."""
+    del body
+    _raise_staff_session_required()

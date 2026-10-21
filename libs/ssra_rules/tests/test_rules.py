@@ -172,3 +172,25 @@ def test_overlapping_tax_fact_effective_date_ranges_rejected() -> None:
     with pytest.raises(SSRAError) as ov_exc:
         TaxFactsRegistry(facts=[f1, f2_overlapping], snapshot_version="2026.10.1")
     assert ov_exc.value.code == McpErrorCode.VALIDATION_FAILED
+
+
+def test_tax_fact_end_before_start_rejected() -> None:
+    from ssra_core import TaxFactContract
+
+    invalid = TaxFactContract(
+        key="paye.bracket.2.rate_percent",
+        value="10",
+        unit="PERCENT",
+        currency="NONE",
+        applies_to="Band 2",
+        effective_from=date(2025, 1, 1),
+        effective_to=date(2024, 12, 31),
+        legal_ref="Taxation Act 2009",
+        approved_by="SSRA Legal",
+        version="2026.10.1",
+    )
+
+    with pytest.raises(SSRAError) as exc_info:
+        TaxFactsRegistry(facts=[invalid], snapshot_version="2026.10.1")
+
+    assert exc_info.value.code == McpErrorCode.VALIDATION_FAILED

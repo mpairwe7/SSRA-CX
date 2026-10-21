@@ -1,21 +1,27 @@
-"""API router for analytics_api bounded context (Insights, User Feedback, Drift Monitors & Synthetic CX Scorecard)."""
+"""API router for reference feedback and fail-closed operational analytics endpoints."""
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, NoReturn
 
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
+from ssra_core import McpErrorCode, SSRAError
 
 from ssra_api.analytics_api.application import (
-    evaluate_online_drift_monitors_use_case,
-    get_agentic_cx_scorecard_use_case,
-    get_funnel_summary_use_case,
-    get_regional_language_insights_use_case,
     record_user_feedback_use_case,
 )
 
 router = APIRouter(prefix="/v1/analytics", tags=["analytics_api"])
+
+
+def _raise_analytics_source_unavailable() -> NoReturn:
+    """Prevent synthetic counters and caller-supplied values from appearing as operational analytics."""
+    raise SSRAError(
+        McpErrorCode.UPSTREAM_UNAVAILABLE,
+        "Operational analytics are unavailable until the approved warehouse, freshness controls, and provenance are configured (OQ-013).",
+        status_code=503,
+    )
 
 
 class FunnelSummaryResponse(BaseModel):
@@ -83,7 +89,7 @@ class DriftMonitorResponse(BaseModel):
 
 
 class AgenticCxScorecardResponse(BaseModel):
-    """Synthetic baseline response model for the October 2026 SSRA Agentic CX Scorecard (`OQ-013`)."""
+    """Planned scorecard payload; the endpoint returns 503 until governed data is configured (`OQ-013`)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -95,35 +101,28 @@ class AgenticCxScorecardResponse(BaseModel):
     officer_high_eq_hours_saved_30d: float
     vernacular_parity_gap_pct: float
     zero_unverified_numeric_claims: bool
-    is_synthetic_baseline: bool = True
-    source_note: str = "SYNTHETIC_PHASE4_BASELINE_OQ013"
+    is_synthetic_baseline: bool
+    source_note: str
 
 
-@router.get("/summary", response_model=FunnelSummaryResponse)
+@router.get(
+    "/summary",
+    response_model=FunnelSummaryResponse,
+    responses={503: {"description": "Approved analytics source is not configured."}},
+)
 async def get_summary() -> FunnelSummaryResponse:
-    """Return the quality-adjusted containment and safety funnel summary."""
-    s = get_funnel_summary_use_case()
-    return FunnelSummaryResponse(
-        quality_adjusted_containment_rate=s.quality_adjusted_containment_rate,
-        zero_fabricated_figures=s.zero_fabricated_figures,
-        zero_cross_taxpayer_leakage=s.zero_cross_taxpayer_leakage,
-    )
+    """Return operational funnel metrics only when their governed data source exists."""
+    _raise_analytics_source_unavailable()
 
 
-@router.get("/insights", response_model=list[RegionalLanguageInsightResponse])
+@router.get(
+    "/insights",
+    response_model=list[RegionalLanguageInsightResponse],
+    responses={503: {"description": "Approved analytics source is not configured."}},
+)
 async def get_insights() -> list[RegionalLanguageInsightResponse]:
-    """Return regional and language containment insights across SSRA offices."""
-    return [
-        RegionalLanguageInsightResponse(
-            locale=i.locale,
-            region=i.region,
-            top_intent=i.top_intent,
-            containment_rate=i.containment_rate,
-            top_abstention_reason=i.top_abstention_reason,
-            average_csat=i.average_csat,
-        )
-        for i in get_regional_language_insights_use_case()
-    ]
+    """Return regional metrics only when their governed data source exists."""
+    _raise_analytics_source_unavailable()
 
 
 @router.post("/feedback", response_model=SubmitFeedbackResponse)
@@ -144,40 +143,26 @@ async def submit_feedback(body: SubmitFeedbackRequest) -> SubmitFeedbackResponse
     )
 
 
-@router.get("/drift-monitors", response_model=DriftMonitorResponse)
+@router.get(
+    "/drift-monitors",
+    response_model=DriftMonitorResponse,
+    responses={503: {"description": "Approved analytics source is not configured."}},
+)
 async def get_drift_monitors(
     intent_kl: float = 0.03,
     abstention_rate: float = 0.08,
     guardrail_rate: float = 0.01,
 ) -> DriftMonitorResponse:
-    """Evaluate 24-hour online drift monitors for intent KL divergence and abstention spikes."""
-    snap = evaluate_online_drift_monitors_use_case(
-        intent_mix_kl_divergence=intent_kl,
-        abstention_rate_24h=abstention_rate,
-        guardrail_trigger_rate_24h=guardrail_rate,
-    )
-    return DriftMonitorResponse(
-        intent_mix_kl_divergence=snap.intent_mix_kl_divergence,
-        abstention_rate_24h=snap.abstention_rate_24h,
-        guardrail_trigger_rate_24h=snap.guardrail_trigger_rate_24h,
-        slo_burn_rate_alert=snap.slo_burn_rate_alert,
-        status=snap.status,
-    )
+    """Do not evaluate caller-provided values as SSRA's live drift telemetry."""
+    del intent_kl, abstention_rate, guardrail_rate
+    _raise_analytics_source_unavailable()
 
 
-@router.get("/cx-scorecard", response_model=AgenticCxScorecardResponse)
+@router.get(
+    "/cx-scorecard",
+    response_model=AgenticCxScorecardResponse,
+    responses={503: {"description": "Approved analytics source is not configured."}},
+)
 async def get_cx_scorecard() -> AgenticCxScorecardResponse:
-    """Return the synthetic baseline October 2026 SSRA Agentic CX & Human-AI Workforce Scorecard (`OQ-013`)."""
-    sc = get_agentic_cx_scorecard_use_case()
-    return AgenticCxScorecardResponse(
-        quality_adjusted_autonomous_resolution_rate=sc.quality_adjusted_autonomous_resolution_rate,
-        cross_session_goal_completion_rate=sc.cross_session_goal_completion_rate,
-        customer_effort_repetition_rate=sc.customer_effort_repetition_rate,
-        eq_deescalation_save_rate=sc.eq_deescalation_save_rate,
-        clean_handoff_rate=sc.clean_handoff_rate,
-        officer_high_eq_hours_saved_30d=sc.officer_high_eq_hours_saved_30d,
-        vernacular_parity_gap_pct=sc.vernacular_parity_gap_pct,
-        zero_unverified_numeric_claims=sc.zero_unverified_numeric_claims,
-        is_synthetic_baseline=sc.is_synthetic_baseline,
-        source_note=sc.source_note,
-    )
+    """Return a scorecard only when its warehouse provenance and freshness can be established."""
+    _raise_analytics_source_unavailable()

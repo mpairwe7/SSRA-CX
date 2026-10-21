@@ -124,7 +124,7 @@ def test_asi02_tool_misuse_zero_cross_subject_data_leakage() -> None:
 
 
 def test_asi03_confused_deputy_and_sim_swap_account_takeover_blocked() -> None:
-    """Verify ASI03 SIM-swap step-up block, ASCII OTP/TIN validation, and 300s T3 step-up max_age."""
+    """Verify fail-closed identity routes and 300s T3 step-up max_age enforcement."""
     from datetime import timedelta
 
     from ssra_core import RiskTier, utc_now
@@ -140,37 +140,37 @@ def test_asi03_confused_deputy_and_sim_swap_account_takeover_blocked() -> None:
             "sim_swap_recent": True,
         },
     )
-    assert r_sim.status_code == 403
-    assert r_sim.json()["code"] == "NOT_AUTHORIZED"
+    assert r_sim.status_code == 503
+    assert r_sim.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
-    # Invalid TIN or malformed OTP or invalid SHA-256 hex digest is rejected
+    # Identity and document input is not evaluated without approved providers.
     assert (
         api_client.post(
             "/v1/identity-link/verify-otp",
             json={"tin": "123", "otp_code": "123456"},
         ).status_code
-        == 400
+        == 503
     )
     assert (
         api_client.post(
             "/v1/identity-link/verify-otp",
             json={"tin": "2003005678", "otp_code": "bad"},
         ).status_code
-        == 401
+        == 503
     )
     assert (
         api_client.post(
             "/v1/identity-link/verify-otp",
             json={"tin": "2003005678", "otp_code": "١٢٣٤٥٦"},
         ).status_code
-        == 401
+        == 503
     )
     assert (
         api_client.post(
             "/v1/identity-link/document-precheck",
             json={"mime_type": "application/pdf", "size_bytes": 1024, "sha256_hex": "not_hex"},
         ).status_code
-        == 400
+        == 503
     )
 
     # T3 step-up token older than 300s max_age is rejected with STEP_UP_REQUIRED
@@ -217,16 +217,17 @@ def test_asi05_unallowlisted_urls_in_mcp_tool_output_redacted() -> None:
 
 def test_asi06_knowledge_base_poisoning_unapproved_draft_blocked_from_publish() -> None:
     api_client = TestClient(create_api_app())
-    api_client.post(
+    r_create = api_client.post(
         "/v1/knowledge-admin/snapshots",
         json={"version": "2026.99.0-poison", "content_digest_input": "unreviewed draft"},
     )
-    # Attempting to publish a DRAFT without Legal Review + Approval is rejected
+    # Draft creation and publication are both blocked until the trusted staff workflow exists.
+    assert r_create.status_code == 403
     r_pub = api_client.post(
         "/v1/knowledge-admin/snapshots/2026.99.0-poison/publish",
         json={"eval_regression_passed": True},
     )
-    assert r_pub.status_code == 400
+    assert r_pub.status_code == 403
 
 
 def test_asi07_a2a_boundary_stub_is_disabled_in_mvp() -> None:

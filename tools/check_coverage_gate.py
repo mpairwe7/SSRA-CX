@@ -123,6 +123,16 @@ def main() -> None:
     dom_pct = (dom_hit / max(1, dom_total)) * 100.0
     ov_pct = (ov_hit / max(1, ov_total)) * 100.0
 
+    if dom_pct < 98.0 or ov_pct < 98.0:
+        for f in domain_files:
+            missing = _executable_lines(f) - executed_by_mod.get(_module_key(f), set())
+            if missing:
+                print(f"Uncovered domain lines in {f.relative_to(ROOT)}: {sorted(missing)}")
+        for f in overall_files:
+            missing = _executable_lines(f) - executed_by_mod.get(_module_key(f), set())
+            if missing:
+                print(f"Uncovered Python lines in {f.relative_to(ROOT)}: {sorted(missing)}")
+
     assert dom_pct >= 98.0, f"Domain layer coverage {dom_pct:.1f}% < 98.0% gate"
     assert ov_pct >= 98.0, f"Overall Python coverage {ov_pct:.1f}% < 98.0% gate"
     print(

@@ -135,6 +135,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
+    environment:
+      SSRA_RUNTIME_MODE: reference
     ports:
       - "127.0.0.1:8000:8000"
     networks:
@@ -180,6 +182,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
+    environment:
+      SSRA_RUNTIME_MODE: reference
     expose:
       - "8001"
     # Principle 8: Attached only to internal network; zero direct host port exposure or outbound internet access
