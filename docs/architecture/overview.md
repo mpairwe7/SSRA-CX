@@ -1,8 +1,9 @@
 # SSRA Assist — Architecture Overview (C4 Levels 1–3)
 
 **Status:** Reference implementation architecture (phases 0–4 code present; production deployment and live integrations remain separately gated)
-**Reconciled:** 2026-10-21
+**Reconciled:** 2026-10-22
 **Source of Truth:** [`docs/00-master-prompt.md`](../00-master-prompt.md)
+**Assurance status:** R0 evidence and the open remediation register are recorded in [`docs/audit/`](../audit/). Gate R0 is pending SSRA technical-lead approval; this document does not authorize a production deployment or a remediation phase.
 
 ---
 

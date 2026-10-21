@@ -1,7 +1,8 @@
 # SSRA Assist — Delivery Progress Across Phases 0–4 (`docs/PROGRESS.md`)
 
-**Last Updated:** 2026-10-21  
-**Current Status:** Phases 0–4 contain reference implementations; production readiness remains blocked by provider, staff identity, analytics provenance, and durable-state questions. Local verification is separate from production approval.
+**Last Updated:** 2026-10-22
+
+**Current Status:** Phases 0–4 contain reference implementations; production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, and the R0 assurance gate. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
 ## 0. Frontend Trust & UX Audit (2026-10-21)
@@ -21,6 +22,14 @@
 - Added OQ-015 through OQ-017 for durable state/event delivery, appointment inventory, and document scanning/OCR/legal guidance. These gates remain open; no production phase was advanced.
 - Removed the unused identity-link application/domain fixtures and changed the attachment inspection view to show an unavailable state without synthetic OCR, portal guidance, TIN verification, or tax calculations. API and integrated checks now exercise 503 behavior rather than internal demo functions.
 - Local `task gen`, `task lint`, `task test`, and `task eval` passed. Python coverage measured 100.0% for domain code and 98.0% overall; rules mutation testing killed 4/4 mutants; all nine frontend package test tasks passed. The frontend WCAG 2.2 AA and bundle-budget gate, secret scan, supply-chain traceability, OpenAPI compatibility check, and all three Compose configurations passed. The 600-item reference evaluation passed; ASGI SSE latency measured p50 3.98 ms / p95 5.62 ms, and the DR restore drill passed. The readiness audit leaves Gates 2–4 blocked by OQ-005/OQ-015, OQ-014/OQ-015, and OQ-013. No Phase Exit Gate was advanced. Local Node 20 emitted the repository's declared Node >=24 engine warning; supported-runtime CI remains authoritative. CI and review results will be recorded before merge.
+
+## 0.2 Independent R0 Assurance Baseline (2026-10-22)
+
+- Added the controlled assurance prompt at [docs/01-assurance-prompt.md](./01-assurance-prompt.md) and the R0 evidence pack under [docs/audit/](./audit/).
+- Independently reproduced local lint, test, eval, and full-history secret-scan evidence at commit 7ca1f26e83b08decf64eacf02af059b537e69db7. No S0 compromise indicator was found.
+- Recorded three S1 blockers: process-local conversation state, direct GPU-profile egress around agentgateway, and no transactional durable API outbox. The report also records supply-chain, Compose, frontend/browser-flow, offline statutory-data, MCP-topology, telemetry, and reproducibility gaps.
+- Added OQ-018 for artifact/model trust and OQ-019 for offline statutory snapshot governance; both retain safe fail-closed fallbacks until SSRA approves the relevant operating decisions.
+- Gate R0 is pending SSRA technical-lead approval. No remediation phase has begun, and this audit does not advance an operational phase gate.
 
 ---
 

@@ -1,6 +1,6 @@
 # SSRA Assist — Open Questions Register (`docs/open-questions.md`)
 
-**Last Updated:** 2026-10-21
+**Last Updated:** 2026-10-22
 **Governance Rule:** Never invent South Sudan tax law, rates, deadlines, penalties, fees, exchange rates, endpoints, or data formats. Whenever an upstream capability, legal rule, or operational parameter is unconfirmed by SSRA, log it here as `OQ-###`, define a clean port interface, build a synthetic mock adapter, and enforce the safest runtime fallback (abstain and offer human handoff).
 
 ---
@@ -26,10 +26,30 @@
 | **OQ-015** | **Durable API and conversation state:** authoritative stores, RLS/session context, encryption/retention, checkpoint recovery, and transactional event delivery | Phase 0–3 | SSRA ICT, SecOps & Operations | 🔴 Open | Production mode returns 503 from the API and agent runtime. Use process-local repositories, `InMemorySaver`, and the event buffer only in explicit reference mode; never claim cross-replica continuity or durable delivery. |
 | **OQ-016** | **Appointment inventory and booking authority:** office calendars, slot reservation, cancellation, timezone, and conflict/idempotency rules | Phase 2 | SSRA Operations & ICT | 🔴 Open | `GET /v1/appointments/slots` returns 503 until an approved live inventory and booking provider is configured. Do not return fixed sample slots as availability. |
 | **OQ-017** | **Document scanning, OCR, and evidence guidance:** approved malware scanner, OCR provenance, retention, source citations, and legal review for any document-derived numeric guidance | Phase 2 | SSRA ICT, SecOps & Legal | 🔴 Open | Document precheck and analysis APIs return 503. Do not report a clean scan, OCR result, statutory rate, deadline, or portal instruction without the corresponding approved provider and source snapshot. |
+| **OQ-018** | **Artifact and model trust:** approved registry, signing identity, certificate or Sigstore trust roots, provenance policy, and verification point for images and model artifacts | R1 and R4 | SSRA ICT, SecOps & Procurement | 🔴 Open | Do not deploy or load a new image or model artifact from an unapproved registry. Keep the production runtime fail closed; use only existing local reference artifacts for development. |
+| **OQ-019** | **Offline statutory snapshot lifecycle:** publication authority, signed format, legal effective dates, expiry, emergency revocation, and user-facing unavailable state | R2 | SSRA Legal, Domestic Tax, Communications & SecOps | 🔴 Open | Do not ship new browser-side tax calculations or official-channel claims. When current cited evidence is unavailable, direct the user to reconnect or request human assistance. |
 
 ---
 
 ## Detailed Question Records
+
+### OQ-018 — Artifact and Model Trust
+- **Blocks:** R1 supply-chain enforcement and R4 production deployment
+- **Context:** R0 found partial image pinning, no verified per-image SBOM/signature workflow, no approved deployment verification point, and no evidence that model artifacts are signed before load. Selecting trust roots and registry ownership has security and operational reversal cost.
+- **Specific Questions for SSRA ICT, SecOps & Procurement:**
+  1. Which in-country registry or approved mirror owns container, model, and SBOM distribution for SSRA Assist?
+  2. Which identities may sign images, provenance, and models; which certificate or Sigstore roots, expiry rules, and revocation process must consumers trust?
+  3. Where must verification occur before an image pull, Compose start, or model load, and what is the approved response to an unsigned, re-tagged, expired, or revoked artifact?
+  4. Which security-fix exception process may temporarily override the dependency cooldown, and who approves, records, and expires it?
+
+### OQ-019 — Offline Statutory Snapshot Lifecycle
+- **Blocks:** R2 offline statutory experience
+- **Context:** The reference chat UI package contains statutory and official-channel values intended for low-connectivity use. R0 found no SSRA-approved publication, signing, expiry, or emergency revocation model for this browser-side data.
+- **Specific Questions for SSRA Legal, Domestic Tax, Communications & SecOps:**
+  1. Which team approves the exact tax facts, office details, and official-channel entries eligible for an offline snapshot, and what citation/effective-date fields must accompany each record?
+  2. What maximum offline validity period, renewal behavior, and emergency revocation mechanism apply when law, official channels, or public guidance change?
+  3. Which signature format and trust root may browsers verify without exposing a private key, and how should an invalid or expired snapshot communicate safe next steps in each supported language?
+  4. Which accessibility and low-bandwidth requirements apply to the unavailable and reconnect/handoff flow?
 
 ### OQ-014 — Staff Console Identity, Role Mapping & Session Authorization
 - **Blocks:** Phase 2 (Operational Staff Console)
