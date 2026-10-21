@@ -173,16 +173,77 @@ def main() -> None:
     assert (
         "sendBodyWithCompression" in web_srv_src
         and "sendBodyWithCompression" in con_srv_src
+        and "acceptsEncoding(" in web_srv_src
+        and "acceptsEncoding(" in con_srv_src
         and 'pathname === "/robots.txt"' in web_srv_src
         and 'pathname === "/robots.txt"' in con_srv_src
         and 'meta name="description"' in web_srv_src
         and 'meta name="description"' in ops_ui_src
         and 'id="mobile-ops-nav-btn"' in ops_ui_src
+        and "z-index: 25" in ops_ui_src
         and 'id="rail-mobile-backdrop"' in web_srv_src
+        and "syncMobileRailA11y" in web_srv_src
+        and 'btn.setAttribute("aria-checked", String(isSelected))' in web_srv_src
+        and 'btn.setAttribute("aria-checked", String(isSelected))' in ops_ui_src
         and '<h2 id="settings-pane-title"' in web_srv_src
     ), (
-        "Lighthouse / Mobile Responsiveness / WCAG 2.2 AA invariants missing (compression, robots.txt, meta description, or mobile drawer)"
+        "Lighthouse / Mobile Responsiveness / WCAG 2.2 AA invariants missing (compression, robots.txt, meta description, aria-checked, or mobile drawer)"
     )
+
+    # 7. Executable verification of Accept-Encoding q-value negotiation and mobile drawer open/close interactions
+    import http.client
+    import os
+    import shutil
+    import subprocess
+    import time
+
+    node_bin = shutil.which("node") or "node"
+    proc = subprocess.Popen(  # noqa: S603
+        [node_bin, str(ROOT / "apps" / "web" / "server.js")],
+        env={**os.environ, "PORT": "39123"},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        for _ in range(30):
+            try:
+                conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=0.2)
+                conn.request("GET", "/healthz")
+                if conn.getresponse().status == 200:
+                    conn.close()
+                    break
+                conn.close()
+            except Exception:
+                time.sleep(0.1)
+
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request("GET", "/en", headers={"Accept-Encoding": "br;q=0, gzip;q=1.0"})
+        resp_q0 = conn.getresponse()
+        assert resp_q0.getheader("Content-Encoding") == "gzip", (
+            f"Expected gzip when br;q=0, got {resp_q0.getheader('Content-Encoding')}"
+        )
+        resp_q0.read()
+        conn.close()
+
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request("GET", "/en", headers={"Accept-Encoding": "br;q=0, gzip;q=0"})
+        resp_none = conn.getresponse()
+        assert resp_none.getheader("Content-Encoding") is None, (
+            f"Expected no Content-Encoding when br;q=0, gzip;q=0, got {resp_none.getheader('Content-Encoding')}"
+        )
+        html_en = resp_none.read().decode("utf-8")
+        assert 'data-mobile-rail="closed"' in html_en and 'id="rail-mobile-backdrop"' in html_en
+        conn.close()
+
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request("GET", "/admin", headers={"Accept-Encoding": "identity"})
+        resp_ops = conn.getresponse()
+        html_ops = resp_ops.read().decode("utf-8")
+        assert 'id="mobile-ops-nav-btn"' in html_ops and 'id="ops-mobile-backdrop"' in html_ops
+        conn.close()
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
 
     print(
         f"Frontend budget & WCAG 2.2 AA check passed (FE-G1..FE-G8 verified): public gzip size={gzip_kb:.2f} KB (<= {TARGET_FIRST_LOAD_JS_GZIP_KB} KB target)."

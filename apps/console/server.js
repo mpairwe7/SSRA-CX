@@ -74,10 +74,36 @@ function buildConsoleHeaders(nonce) {
   };
 }
 
+function acceptsEncoding(acceptEncHeader, targetCoding) {
+  let explicitQ = null;
+  let wildcardQ = null;
+  for (const part of String(acceptEncHeader ?? "").split(",")) {
+    const [rawName, ...params] = part.trim().split(";");
+    const name = rawName.trim().toLowerCase();
+    if (!name) continue;
+    let q = 1;
+    for (const p of params) {
+      const [k, v] = p.split("=");
+      if (k && k.trim().toLowerCase() === "q" && v !== undefined) {
+        const parsed = Number.parseFloat(v.trim());
+        q = Number.isFinite(parsed) ? parsed : 0;
+      }
+    }
+    if (name === targetCoding) {
+      explicitQ = q;
+    } else if (name === "*") {
+      wildcardQ = q;
+    }
+  }
+  if (explicitQ !== null) return explicitQ > 0;
+  if (wildcardQ !== null) return wildcardQ > 0;
+  return false;
+}
+
 function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
   const acceptEnc = String(req.headers["accept-encoding"] ?? "");
   const buf = Buffer.from(bodyStr, "utf-8");
-  if (buf.length > 512 && /\bbr\b/.test(acceptEnc)) {
+  if (buf.length > 512 && acceptsEncoding(acceptEnc, "br")) {
     const compressed = zlib.brotliCompressSync(buf, {
       params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 },
     });
@@ -89,7 +115,7 @@ function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
     res.end(compressed);
     return;
   }
-  if (buf.length > 512 && /\bgzip\b/.test(acceptEnc)) {
+  if (buf.length > 512 && acceptsEncoding(acceptEnc, "gzip")) {
     const compressed = zlib.gzipSync(buf, { level: 6 });
     res.writeHead(statusCode, {
       ...headers,

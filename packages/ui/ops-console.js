@@ -598,11 +598,11 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     }
 
     .mobile-nav-btn { display: none; }
-    .ops-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 35; }
+    .ops-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 25; }
     @media (max-width: 820px) {
       .staff-shell { --rail-w: 0px !important; }
-      .staff-rail { transform: translateX(-100%); width: min(240px, 84vw) !important; transition: transform var(--ops-dur-base) var(--ops-ease); }
-      .staff-rail.is-drawer-open { transform: translateX(0); }
+      .staff-rail { transform: translateX(-100%); visibility: hidden; width: min(240px, 84vw) !important; transition: transform var(--ops-dur-base) var(--ops-ease), visibility var(--ops-dur-base) var(--ops-ease); }
+      .staff-rail.is-drawer-open { transform: translateX(0); visibility: visible; }
       .ops-mobile-backdrop.open { display: block; }
       .mobile-nav-btn { display: inline-flex; }
       .ops-page { padding: var(--ops-space-4) var(--ops-space-3) var(--ops-space-8); }
@@ -846,6 +846,20 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         if (initEl) initEl.textContent = rm.initials;
         if (nameEl) nameEl.textContent = rm.name;
         if (roleEl) roleEl.textContent = rm.label;
+        document.querySelectorAll("[data-set-role]").forEach((btn) => {
+          const isSelected = btn.getAttribute("data-set-role") === state.role;
+          btn.setAttribute("aria-checked", String(isSelected));
+          btn.classList.toggle("active", isSelected);
+          const checkSpan = btn.querySelector("span:last-child");
+          if (checkSpan && checkSpan !== btn.firstElementChild) {
+            setSafeHtml(checkSpan, isSelected ? ICONS.check : "");
+          }
+        });
+        document.querySelectorAll("[data-set-theme]").forEach((btn) => {
+          const isSelected = btn.getAttribute("data-set-theme") === state.theme;
+          btn.setAttribute("aria-checked", String(isSelected));
+          btn.classList.toggle("active", isSelected);
+        });
 
         // Render grouped navigation in rail
         const groups = ["Work", "Audit", "Configure", "Observe"];

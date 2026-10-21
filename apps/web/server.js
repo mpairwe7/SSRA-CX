@@ -127,10 +127,36 @@ function compactHtmlAssetBlocks(html) {
     });
 }
 
+function acceptsEncoding(acceptEncHeader, targetCoding) {
+  let explicitQ = null;
+  let wildcardQ = null;
+  for (const part of String(acceptEncHeader ?? "").split(",")) {
+    const [rawName, ...params] = part.trim().split(";");
+    const name = rawName.trim().toLowerCase();
+    if (!name) continue;
+    let q = 1;
+    for (const p of params) {
+      const [k, v] = p.split("=");
+      if (k && k.trim().toLowerCase() === "q" && v !== undefined) {
+        const parsed = Number.parseFloat(v.trim());
+        q = Number.isFinite(parsed) ? parsed : 0;
+      }
+    }
+    if (name === targetCoding) {
+      explicitQ = q;
+    } else if (name === "*") {
+      wildcardQ = q;
+    }
+  }
+  if (explicitQ !== null) return explicitQ > 0;
+  if (wildcardQ !== null) return wildcardQ > 0;
+  return false;
+}
+
 function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
   const acceptEnc = String(req.headers["accept-encoding"] ?? "");
   const buf = Buffer.from(bodyStr, "utf-8");
-  if (buf.length > 512 && /\bbr\b/.test(acceptEnc)) {
+  if (buf.length > 512 && acceptsEncoding(acceptEnc, "br")) {
     const compressed = zlib.brotliCompressSync(buf, {
       params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 },
     });
@@ -142,7 +168,7 @@ function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
     res.end(compressed);
     return;
   }
-  if (buf.length > 512 && /\bgzip\b/.test(acceptEnc)) {
+  if (buf.length > 512 && acceptsEncoding(acceptEnc, "gzip")) {
     const compressed = zlib.gzipSync(buf, { level: 6 });
     res.writeHead(statusCode, {
       ...headers,
@@ -280,9 +306,9 @@ function renderPwaShellHtml(locale, nonce) {
     .rail-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 45; }
     @media (max-width: 960px) {
       .app-shell { grid-template-columns: minmax(0, 1fr); }
-      .rail-wrap { position: fixed; inset: 0 auto 0 0; width: min(292px, 86vw); z-index: 50; transform: translateX(-100%); transition: transform 0.22s ease; }
+      .rail-wrap { position: fixed; inset: 0 auto 0 0; width: min(292px, 86vw); z-index: 50; transform: translateX(-100%); visibility: hidden; transition: transform 0.22s ease, visibility 0.22s ease; }
       :root[dir="rtl"] .rail-wrap { inset: 0 0 0 auto; transform: translateX(100%); }
-      .app-shell[data-mobile-rail="open"] .rail-wrap { transform: translateX(0); }
+      .app-shell[data-mobile-rail="open"] .rail-wrap { transform: translateX(0); visibility: visible; }
       .app-shell[data-mobile-rail="open"] .rail-mobile-backdrop { display: block; }
     }
     @media (max-width: 640px) {
@@ -946,6 +972,11 @@ function renderPwaShellHtml(locale, nonce) {
         if (cAnon) setSafeHtml(cAnon, state.identity === "ANONYMOUS" ? ICONS.check : "");
         if (cAmina) setSafeHtml(cAmina, state.identity === "sub_taxpayer_amina_01" ? ICONS.check : "");
         if (cDeng) setSafeHtml(cDeng, state.identity === "sub_taxpayer_deng_02" ? ICONS.check : "");
+        document.querySelectorAll("[data-select-identity]").forEach((btn) => {
+          const isSelected = btn.getAttribute("data-select-identity") === state.identity;
+          btn.setAttribute("aria-checked", String(isSelected));
+          btn.classList.toggle("active", isSelected);
+        });
         saveState();
         renderApp();
       }
@@ -1379,17 +1410,36 @@ function renderPwaShellHtml(locale, nonce) {
         renderApp();
       });
 
+      const railAsideEl = document.querySelector(".rail-wrap");
+      const syncMobileRailA11y = (moveFocus = false) => {
+        const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
+        const isMobOpen = shell?.getAttribute("data-mobile-rail") === "open";
+        if (railAsideEl) {
+          railAsideEl.toggleAttribute("inert", Boolean(isMobileViewport && !isMobOpen));
+        }
+        if (moveFocus && isMobileViewport) {
+          if (isMobOpen) {
+            document.getElementById("new-chat-btn")?.focus();
+          } else {
+            document.getElementById("header-rail-btn")?.focus();
+          }
+        }
+      };
       const toggleSidebar = () => {
         const cur = shell?.getAttribute("data-sidebar");
         shell?.setAttribute("data-sidebar", cur === "collapsed" ? "open" : "collapsed");
         const mob = shell?.getAttribute("data-mobile-rail");
         shell?.setAttribute("data-mobile-rail", mob === "open" ? "closed" : "open");
+        syncMobileRailA11y(true);
       };
       document.getElementById("rail-collapse-btn")?.addEventListener("click", toggleSidebar);
       document.getElementById("header-rail-btn")?.addEventListener("click", toggleSidebar);
       document.getElementById("rail-mobile-backdrop")?.addEventListener("click", () => {
         shell?.setAttribute("data-mobile-rail", "closed");
+        syncMobileRailA11y(true);
       });
+      window.addEventListener("resize", () => syncMobileRailA11y(false));
+      syncMobileRailA11y(false);
 
       document.getElementById("theme-toggle-btn")?.addEventListener("click", () => {
         const next = state.theme === "dark" ? "light" : state.theme === "light" ? "high-contrast" : "dark";
