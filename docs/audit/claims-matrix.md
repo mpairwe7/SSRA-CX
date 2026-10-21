@@ -21,7 +21,7 @@
 
 | ADR | Central decision | Status | Evidence | Finding |
 |---|---|---|---|---|
-| ADR-001 | Record decisions in versioned ADRs. | Proven | Nineteen ADRs are present and indexed. | — |
+| ADR-001 | Record decisions in versioned ADRs. | Proven | Twenty ADRs are present and indexed. | — |
 | ADR-002 | Modular-monolith context boundaries. | Proven | import-linter passed with two protected contracts. | — |
 | ADR-003 | LangGraph plus durable Temporal workflows. | Contradicted | LangGraph exists; in-memory checkpoint and absent Compose Temporal do not prove durable orchestration. | AUD-001 |
 | ADR-004 | Stateless MCP and agentgateway-only egress. | Contradicted | General profile declares gateway; GPU profile bypasses it. | AUD-002, AUD-010 |
@@ -30,13 +30,14 @@
 | ADR-007 | Sovereign open-weight routing. | Unverified | GPU model services are configured; artifact/model signature and live sovereign-host proof are absent. | AUD-007 |
 | ADR-008 | Risk tiers, subject binding, and OPA. | Proven in reference tests | Policy/runtime code and red-team tests pass; durable identity binding remains gated. | AUD-004 |
 | ADR-009 | Tax facts and numeric provenance. | Proven for runtime; Unverified for offline pack | Runtime output guard/evals pass; browser statutory literals are not generated and signed. | AUD-011 |
-| ADR-010 | Next.js 16 frontend stack. | Contradicted | Package manifests omit Next.js and Docker starts Node server.js, while config claims Next 16.3.8. | AUD-008 |
+| ADR-010 | Next.js 16 frontend stack. | Superseded | ADR-020 records the actual Node BFF runtime; ADR-010 is retained only as a historical design proposal. | AUD-008 |
 | ADR-011 | Low-bandwidth PWA and service worker. | Unverified | Source/unit tests exist; no rendered 2G/offline browser evidence. | AUD-009, AUD-011 |
 | ADR-012 | BFF auth, Keycloak, passkeys, server sessions. | Proven for public BFF; Unverified for staff session | Identity stripping is tested; staff access is intentionally disabled. | AUD-004, AUD-009 |
 | ADR-013 | Python/FastAPI runtime selection. | Proven in source | FastAPI services and pinned main service bases exist; supported environment consistency is incomplete. | AUD-013 |
 | ADR-014 | Future A2A boundary is disabled. | Proven | Gateway config has a2a enabled false. | — |
-| ADR-015 | SLSA L3, cooldowns, signed delivery. | Contradicted | Action SHAs and some pins exist, but Dockerfile tags, absent verifier evidence, and incomplete cooldown policy remain. | AUD-006, AUD-007 |
+| ADR-015 | Supply-chain source controls and deferred artifact trust. | Partially proven | R1-A adds rolling cooldowns, immutable workflow policy, full-history scan, and a bounded exception record. Dockerfile tag remediation and signed image/model verification remain OQ-018 work. | AUD-006, AUD-007 |
 | ADR-016 | Hardened Docker Compose operational standard. | Contradicted | General profile is hardened; GPU profile parity is absent. | AUD-005 |
 | ADR-017 | Four-tier memory and durable goal continuation. | Contradicted | Preference, replay, and graph state are process-local or not restart-proven. | AUD-001, AUD-004 |
 | ADR-018 | Preview-only staff console until trusted session. | Proven | Console behavior is guarded and documented as preview. | AUD-009 |
 | ADR-019 | Fail-closed reference runtime mode. | Proven, with coverage gap | Default/unknown modes fail closed; empty/mixed-case matrix is not automated. | AUD-009 |
+| ADR-020 | Node BFF runtime and deferred framework adoption. | Implemented in source | Both containers start their Node BFF entry points; stale Next configuration is removed and policy checks enforce the decision. | AUD-008 |

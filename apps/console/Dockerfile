@@ -8,7 +8,6 @@ LABEL org.opencontainers.image.title="ssra-console" \
 ARG INTERNAL_API_URL=http://ssra-api:8000
 
 ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME="0.0.0.0" \
     PORT=3001 \
     INTERNAL_API_URL=$INTERNAL_API_URL

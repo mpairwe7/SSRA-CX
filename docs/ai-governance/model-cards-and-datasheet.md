@@ -34,6 +34,7 @@
 - The staff console remains a non-operational preview until OQ-014 is approved. Do not interpret browser-rendered case examples, historical sample metrics, or local preview personas as real taxpayer records, current service state, or authenticated roles.
 - Public chat fallback text does not claim a KnowledgeSnapshot citation while offline. A response can claim source support only when the runtime supplies the approved citation metadata.
 - The runtime uses process-local `InMemorySaver` and therefore returns 503 outside explicit local/test reference mode. Chat completion, checkpoint continuity, identity verification, document guidance, appointments, staff inbox/actions, knowledge publication, service status, and operational analytics must not be represented as production capabilities until their providers, trusted authorization, provenance, and persistence are approved (OQ-005, OQ-013–OQ-017).
+- Model revisions recorded here identify reference artifacts only. OQ-018 remains open for the registry, signing identity, trust root, revocation process, and verification point required before a model can be treated as a production-approved artifact.
 
 ---
 

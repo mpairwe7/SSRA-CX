@@ -23,6 +23,10 @@
 
 `SSRA_RUNTIME_MODE` defaults to `production`; API and agent-runtime requests fail closed until approved providers and durable stores are wired. Local Compose profiles explicitly select `reference` for synthetic development. See [Reference Mode and Readiness](./reference-mode-readiness.md). The production overlay selects `production` and is expected to remain unready until OQ-005 and OQ-013–OQ-017 have approved implementations.
 
+The seven-day dependency cooldown and any narrowly bounded security-fix record are governed by [Dependency Security Exceptions](./dependency-security-exceptions.md). Dependabot applies the same holdback to version updates for pnpm, uv, and GitHub Actions; GitHub security updates are not delayed by that version-update control. The record does not replace the artifact and model trust decision required by OQ-018.
+
+Taskfile JavaScript gates first check the bounded Node 24 engine declared in `package.json`, then invoke `pnpm` through Corepack and the exact `packageManager` pin. Node 25 and later need a separately reviewed Corepack provisioner or package-manager activation design before they can run these gates. All Taskfile pytest paths direct pytest to the local `/tmp` temporary root so shared mounted temp directories cannot break its owner checks. CI provides the same supported Node and pnpm versions before it invokes Taskfile.
+
 ---
 
 ## 2. Emergency Kill Switches (Model, Tool, Channel)
@@ -43,7 +47,7 @@ The in-memory workflow engine supports unit tests for draft, legal review, appro
 
 ---
 
-## 4. Disaster Recovery (RPO ≤ 5 min, RTO ≤ 1 h) & Next.js 72-Hour Patching
+## 4. Disaster Recovery (RPO ≤ 5 min, RTO ≤ 1 h) & Runtime Patching
 
 - **PostgreSQL 18 PITR via Docker Compose (`postgres-wal-archiver`):** The production overlay describes the intended WAL archive topology; verify the configured backup target and restore evidence through approved infrastructure controls.
-- **Scheduled Security Patching:** Subscribe to Next.js 16, FastAPI, Keycloak, and Linux kernel security advisories. Reviewed CVE patches bypass the 7-day dependency cooldown and must be deployed within 72 hours via `docker compose pull && docker compose up -d --wait`.
+- **Scheduled Security Patching:** Subscribe to Node.js, FastAPI, Keycloak, and Linux kernel security advisories for the currently declared runtime. A future frontend framework requires its own reviewed runtime decision before it becomes a deployed dependency. A reviewed security fix that is younger than the cooldown must follow [Dependency Security Exceptions](./dependency-security-exceptions.md).

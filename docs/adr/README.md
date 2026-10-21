@@ -4,7 +4,7 @@ Every architectural decision with a real reversal cost is recorded here before i
 
 ---
 
-## ADR Catalog (ADR-001 to ADR-019)
+## ADR Catalog (ADR-001 to ADR-020)
 
 | ID | Title | One-Line Problem Statement | Status | Reversal Cost |
 |---|---|---|---|---|
@@ -17,8 +17,8 @@ Every architectural decision with a real reversal cost is recorded here before i
 | **[ADR-007](./0007-sovereign-model-hosting-and-tiered-routing.md)** | Sovereign Open-Weight Model Hosting & Tiered Routing | How do we run LLM inference in-country on NCA infrastructure with a deterministic degradation ladder and strictly gated external fallbacks? | Proposed (Drafted) | Medium |
 | **[ADR-008](./0008-risk-tiered-autonomy-subject-binding-and-opa.md)** | Risk-Tiered Autonomy (T0–T4), Subject Binding & OPA Policy Gate | How do we guarantee in code and policy that the assistant cannot leak cross-taxpayer data or execute unauthorized actions? | Proposed (Drafted) | High |
 | **[ADR-009](./0009-deterministic-tax-facts-registry-and-numeric-provenance.md)** | Deterministic Tax Facts Registry & Numeric Provenance Guard | How do we ensure 100% numeric accuracy on South Sudan tax rates, thresholds, deadlines, and calculations with zero hallucinated figures? | Proposed (Drafted) | High |
-| **[ADR-010](./0010-nextjs-16-typescript-7-turborepo-and-biome.md)** | Next.js 16.3.x, TypeScript 7, Turborepo & Biome Frontend Stack | How do we build and type-check two secure, low-bandwidth Next.js 16 applications sharing one RTL-ready design system? | Proposed (Drafted) | Medium |
-| **[ADR-011](./0011-low-bandwidth-taxpayer-pwa-and-service-worker.md)** | Low-Bandwidth Taxpayer PWA & Service Worker Strategy | How do we deliver an offline-capable, 2G-resilient PWA under Next.js 16 and Turbopack within a 150 KB gzip first-load budget? | Proposed (Drafted) | Low–Medium |
+| **[ADR-010](./0010-nextjs-16-typescript-7-turborepo-and-biome.md)** | Next.js 16.3.x, TypeScript 7, Turborepo & Biome Frontend Stack | Historical frontend proposal superseded as a current-runtime assertion by ADR-020. | Superseded by ADR-020 | Medium |
+| **[ADR-011](./0011-low-bandwidth-taxpayer-pwa-and-service-worker.md)** | Low-Bandwidth Taxpayer PWA & Service Worker Strategy | How can a future PWA remain offline-capable and 2G-resilient within a 150 KB gzip first-load budget? | Deferred | Low–Medium |
 | **[ADR-012](./0012-bff-authentication-keycloak-passkeys-and-sessions.md)** | BFF Authentication with Keycloak OIDC, Passkeys & Server Sessions | How do we authenticate taxpayers (OTP+TIN) and staff (WebAuthn passkeys) while keeping all OAuth tokens out of browser JavaScript? | Proposed (Drafted) | Medium |
 | **[ADR-013](./0013-python-314-315-fastapi-and-asgi-server.md)** | Python 3.14/3.15 Workspace, FastAPI 0.13x & ASGI Server Selection | How do we standardise the Python monorepo toolchain (`uv`, Ruff, basedpyright) and evaluate Uvicorn vs. Granian for container deployments? | Proposed (Drafted) | Low |
 | **[ADR-014](./0014-future-a2a-v1-interoperability-boundary.md)** | Future Agent-to-Agent (A2A v1.0) Interoperability Boundary | How do we reserve a governed boundary for future multi-agency collaboration with South Sudan's National eServices platform? | Proposed (Drafted) | Low |
@@ -27,3 +27,4 @@ Every architectural decision with a real reversal cost is recorded here before i
 | **[ADR-017](./0017-agentic-cx-eq-4tier-memory-and-goal-continuation.md)** | October 2026 SSRA Agentic CX Enhancements — Autonomous Goal Planner, Multimodal EQ, 4-Tier Cognitive Memory, `HandoffEnvelope` v2, and Temporal Goal Continuation | How do we evolve SSRA Assist with multi-step autonomous execution, real-time EQ tone/prosody adaptation, consent-gated 4-tier memory, `HandoffEnvelope` v2 officer hand-back, and Temporal post-interaction goal continuation? | Accepted | Low–Medium |
 | **[ADR-018](./0018-staff-console-preview-and-trusted-session-gate.md)** | Staff Console Preview & Trusted Session Gate | How do we prevent unverified browser personas, fabricated metrics, or spoofable staff headers from being treated as operational state? | Accepted | Medium |
 | **[ADR-019](./0019-fail-closed-reference-runtime-mode.md)** | Fail-Closed Reference Runtime Mode | How do we prevent process-local state, synthetic provider responses, and unverified analytics from appearing operational? | Accepted (repository safety baseline) | Medium |
+| **[ADR-020](./0020-node-bff-reference-runtime-and-deferred-nextjs-adoption.md)** | Node BFF Reference Runtime & Deferred Next.js Adoption | How do we align declared frontend dependencies, container entry points, and security maintenance with the runnable application? | Accepted (repository safety baseline) | Medium |

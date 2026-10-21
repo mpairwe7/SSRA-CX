@@ -1,16 +1,18 @@
 # ADR-011: Low-Bandwidth Taxpayer PWA and Service Worker Strategy
 
-- **Status:** Proposed
+- **Status:** Deferred pending a future frontend-runtime decision
 - **Date:** 2026-10-16
 - **Deciders:** Founding Principal Architect / Staff Engineer, SSRA Technical Lead
 - **Reversal Cost:** Low–Medium
 - **References:** [`docs/00-master-prompt.md`](../00-master-prompt.md) Sections 2, 9.2, 9.5
 
+> **Implementation status:** `apps/web` currently runs a Node BFF and does not declare Next.js. The Next.js and Turbopack assumptions in this document are deferred design inputs, not a statement about the served runtime. See ADR-020.
+
 ---
 
 ## 1. Problem Statement
 
-How do we deliver an installable, offline-capable, 2G-resilient Progressive Web App (`apps/web`) under Next.js 16 and Turbopack within a strict 150 KB gzip first-load JavaScript budget?
+How can a future installable, offline-capable, 2G-resilient Progressive Web App (`apps/web`) meet a strict 150 KB gzip first-load JavaScript budget?
 
 ## 2. Context
 
@@ -19,11 +21,11 @@ In South Sudan, intermittent mobile connectivity, expensive data bundles, and po
 ## 3. Options Considered
 
 1. **Third-Party Workbox/Serwist Webpack Plugin Wrapper:** Adds build-time coupling that can lag behind Next.js 16.3.x + Turbopack releases and injects extra runtime KB into the client bundle.
-2. **Hand-Written, Audited Service Worker (`public/sw.js` + `app/manifest.ts`) per Official Next.js 16 PWA Guide with Strict T0-Only Cache Policy (Selected):** Zero bundler coupling under Turbopack, zero third-party SW runtime bloat, and explicit security boundaries so personal (`T1`–`T3`) data is never written to browser Cache Storage or IndexedDB.
+2. **Hand-Written, Audited Service Worker (`public/sw.js` + `app/manifest.ts`) per Official Next.js 16 PWA Guide with Strict T0-Only Cache Policy (Future implementation option):** Zero bundler coupling under Turbopack, zero third-party SW runtime bloat, and explicit security boundaries so personal (`T1`–`T3`) data is never written to browser Cache Storage or IndexedDB.
 
 ## 4. Decision
 
-We adopt Option 2:
+Option 2 remains a future implementation option; it is not adopted in the current Node BFF runtime:
 
 1. **Hand-Written Service Worker (`apps/web/public/sw.js`) & Web App Manifest (`apps/web/src/app/manifest.ts`):**
    - Pre-caches the minimal offline app shell, localized static assets (`en`, `pga`, `ar`), and the published `T0` FAQ / Official-Channel Verification cards.

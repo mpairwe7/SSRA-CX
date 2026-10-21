@@ -1,10 +1,12 @@
 # ADR-010: Frontend Stack — Next.js 16.3.x, TypeScript 7, Turborepo, and Biome
 
-- **Status:** Proposed
+- **Status:** Superseded by ADR-020 as a current-runtime assertion
 - **Date:** 2026-10-16
 - **Deciders:** Founding Principal Architect / Staff Engineer, SSRA Technical Lead
 - **Reversal Cost:** Medium
 - **References:** [`docs/00-master-prompt.md`](../00-master-prompt.md) Sections 9.1–9.6, 15, 16, Appendix A
+
+> **Historical record:** The current runnable applications use their Node `server.js` BFF entry points and do not declare Next.js. ADR-020 supersedes this proposal for the active dependency, container, and patch posture. This document remains as a design input for a future reviewed adoption.
 
 ---
 

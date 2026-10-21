@@ -4,3 +4,12 @@ packages:
 
 # Section 12.4: Enforce a dependency cooldown of at least 7 days (10080 minutes)
 minimumReleaseAge: 10080
+
+# Supply-chain policy requires pnpm >= 10.26. These settings are explicit so
+# a future package-manager default cannot weaken repository policy.
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+
+# Dependency lifecycle scripts remain blocked until an individually reviewed
+# package is listed here with a true value.
+allowBuilds: {}
