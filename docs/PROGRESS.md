@@ -1,7 +1,8 @@
 # SSRA Assist — Delivery Progress Across Phases 0–4 (`docs/PROGRESS.md`)
 
-**Last Updated:** 2026-10-21  
-**Current Status:** Phases 0–4 contain reference implementations; production readiness remains blocked by provider, staff identity, analytics provenance, and durable-state questions. Local verification is separate from production approval.
+**Last Updated:** 2026-10-22
+
+**Current Status:** Phases 0–4 contain reference implementations; Gate R0 is approved and R1 remediation is authorized. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
 ## 0. Frontend Trust & UX Audit (2026-10-21)
@@ -22,6 +23,14 @@
 - Removed the unused identity-link application/domain fixtures and changed the attachment inspection view to show an unavailable state without synthetic OCR, portal guidance, TIN verification, or tax calculations. API and integrated checks now exercise 503 behavior rather than internal demo functions.
 - Local `task gen`, `task lint`, `task test`, and `task eval` passed. Python coverage measured 100.0% for domain code and 98.0% overall; rules mutation testing killed 4/4 mutants; all nine frontend package test tasks passed. The frontend WCAG 2.2 AA and bundle-budget gate, secret scan, supply-chain traceability, OpenAPI compatibility check, and all three Compose configurations passed. The 600-item reference evaluation passed; ASGI SSE latency measured p50 3.98 ms / p95 5.62 ms, and the DR restore drill passed. The readiness audit leaves Gates 2–4 blocked by OQ-005/OQ-015, OQ-014/OQ-015, and OQ-013. No Phase Exit Gate was advanced. Local Node 20 emitted the repository's declared Node >=24 engine warning; supported-runtime CI remains authoritative. CI and review results will be recorded before merge.
 
+## 0.2 Independent R0 Assurance Baseline (2026-10-22)
+
+- Added the controlled assurance prompt at [docs/01-assurance-prompt.md](./01-assurance-prompt.md) and the R0 evidence pack under [docs/audit/](./audit/).
+- Independently reproduced local lint, test, eval, and full-history secret-scan evidence at commit 7ca1f26e83b08decf64eacf02af059b537e69db7. No S0 compromise indicator was found.
+- Recorded three S1 blockers: process-local conversation state, direct GPU-profile egress around agentgateway, and no transactional durable API outbox. The report also records supply-chain, Compose, frontend/browser-flow, offline statutory-data, MCP-topology, telemetry, and reproducibility gaps.
+- Added OQ-018 for artifact/model trust and OQ-019 for offline statutory snapshot governance; both retain safe fail-closed fallbacks until SSRA approves the relevant operating decisions.
+- Gate R0 was approved in the active project session on 2026-10-22. R1 remediation is authorized; this approval does not advance any operational production gate.
+
 ---
 
 ## 1. GitHub Feature Tracking Issues (`mpairwe7/SSRA-CX`)
@@ -35,7 +44,7 @@
 | **[#5](https://github.com/mpairwe7/SSRA-CX/issues/5)** | `[Phase 0/1/2]` Stateless MCP 2026-07-28 Framework, `agentgateway` Single Egress & 11-Server / 33-Tool Catalog | Verified (`test_mcp_servers.py`, `validate_schemas.py`, RFC 9728 / RFC 8707 / `MCP01`–`MCP10` hardened) |
 | **[#6](https://github.com/mpairwe7/SSRA-CX/issues/6)** | `[Phase 1/2]` Agent Runtime: 11-Node LangGraph State Machine, OPA Policy Gate, Numeric Provenance Guard & Forensic Replay | Verified (`test_runtime.py`, `test_llm_router.py`) |
 | **[#7](https://github.com/mpairwe7/SSRA-CX/issues/7)** | `[Phase 1/2]` Core API Modular Monolith (8 Hexagonal Bounded Contexts), PostgreSQL 18 + `pgvector` DDL & planned outbox schema | Reference tests pass; durable outbox delivery and production API readiness remain open (`OQ-015`) |
-| **[#8](https://github.com/mpairwe7/SSRA-CX/issues/8)** | `[Phase 1/3]` Next.js 16.3.x Taxpayer PWA & Staff Console: `proxy.ts` Nonce CSP, AG-UI SSE, 7-Card Generative UI Registry, Light/Dark Semantic Tokens & ALTCHA PoW | Verified (9/9 Vitest packages, `<= 15 KB` gzip, Oct 2026 CVE & WCAG 2.2 AA/AAA hardened) |
+| **[#8](https://github.com/mpairwe7/SSRA-CX/issues/8)** | `[Phase 1/3]` Taxpayer web and staff-console reference UI (historical Next.js 16.3.x specification): `proxy.ts` Nonce CSP, AG-UI SSE, 7-Card Generative UI Registry, Light/Dark Semantic Tokens & ALTCHA PoW | Reference UI and unit checks passed. Served containers run `server.js`; no served Next.js dependency is verified, and runtime/dependency posture remains open as AUD-008. |
 | **[#9](https://github.com/mpairwe7/SSRA-CX/issues/9)** | `[Phase 3]` Staff Copilot Omnichannel Inbox, AI Takeover/Hand-Back, Cited Reply Drafts, QA Rubric & 6-Step Knowledge Release Workflow | Reference workflow tests only; staff APIs return 403 until OQ-014 and durable persistence remain blocked by OQ-015 |
 | **[#10](https://github.com/mpairwe7/SSRA-CX/issues/10)** | `[Phase 4 & Evals]` Omnichannel Reach (USSD 182-Char Menu, Voice/IVR ASR WER Gate, Field Officer, Consent Campaigns) & 600-Item Eval / `ASI01`–`ASI10` Red-Team Suite | Current local checks pass (`600` golden items, red-team suite, `100.0%` domain / `98.0%` overall coverage); operational readiness remains subject to Phase 4 approval |
 

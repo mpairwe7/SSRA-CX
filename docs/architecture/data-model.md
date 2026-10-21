@@ -1,9 +1,11 @@
 # SSRA Assist — Core Data Model & Contracts Specification (`docs/architecture/data-model.md`)
 
 **Status:** Logical data model reconciled with current persistence implementation
-**Reconciled:** 2026-10-21
+**Reconciled:** 2026-10-22
 **Database Baseline:** PostgreSQL 18.x + `pgvector` 0.8+  
 **References:** [`docs/00-master-prompt.md`](../00-master-prompt.md) Sections 7, 12.3, 17; [`ADR-006`](../adr/0006-postgresql-18-pgvector-hybrid-retrieval.md)
+
+**Assurance status:** R0 evidence confirms that the logical model is not proof of durable runtime state. The current implementation gaps and the approval-gated remediation sequence are recorded in [`docs/audit/findings.md`](../audit/findings.md) and [`docs/audit/phase-R0-report.md`](../audit/phase-R0-report.md).
 
 > **Implementation note:** This ERD is the logical model, not a substitute for migration DDL. The current physical schema is defined by `services/api/alembic/versions/0001_initial_core_entities.py` plus database helpers in `services/api/src/ssra_api/database.py`. Important implementation gaps are listed in Section 1.1; do not infer a production database deployment from the model.
 
