@@ -21,7 +21,7 @@ In South Sudan, intermittent mobile connectivity, expensive data bundles, and po
 ## 3. Options Considered
 
 1. **Third-Party Workbox/Serwist Webpack Plugin Wrapper:** Adds build-time coupling that can lag behind Next.js 16.3.x + Turbopack releases and injects extra runtime KB into the client bundle.
-2. **Hand-Written, Audited Service Worker (`public/sw.js` + `app/manifest.ts`) per Official Next.js 16 PWA Guide with Strict T0-Only Cache Policy (Selected):** Zero bundler coupling under Turbopack, zero third-party SW runtime bloat, and explicit security boundaries so personal (`T1`–`T3`) data is never written to browser Cache Storage or IndexedDB.
+2. **Hand-Written, Audited Service Worker (`public/sw.js` + `app/manifest.ts`) per Official Next.js 16 PWA Guide with Strict T0-Only Cache Policy (Future implementation option):** Zero bundler coupling under Turbopack, zero third-party SW runtime bloat, and explicit security boundaries so personal (`T1`–`T3`) data is never written to browser Cache Storage or IndexedDB.
 
 ## 4. Decision
 

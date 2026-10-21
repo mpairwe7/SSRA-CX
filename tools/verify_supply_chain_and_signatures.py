@@ -21,7 +21,6 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 _ACTION_SHA_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
-_PULL_REQUEST_TARGET_RE = re.compile(r"(?m)^\s*pull_request_target\s*:")
 _ZIZMOR_ACTION = "zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482"
 _GITLEAKS_ARCHIVE_SHA256 = "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
 _PNPM_VERSION = "10.33.0"
@@ -32,6 +31,7 @@ _PNPM_INTEGRITY = (
 _UV_VERSION = "0.13.4"
 _UV_ARCHIVE_SHA256 = "2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f"
 _DEPENDABOT_ECOSYSTEMS = ("npm", "uv", "github-actions")
+_NODE_ENGINE = ">=24.0.0 <25.0.0"
 
 
 def _load_workflow(workflow_path: Path) -> dict[object, object]:
@@ -39,6 +39,22 @@ def _load_workflow(workflow_path: Path) -> dict[object, object]:
     raw = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
     assert isinstance(raw, dict), f"Workflow {workflow_path.name} must be a YAML mapping"
     return raw
+
+
+def _workflow_triggers(workflow: dict[object, object]) -> object:
+    """Return a workflow's trigger declaration despite PyYAML's YAML 1.1 `on` coercion."""
+    if "on" in workflow:
+        return workflow["on"]
+    return workflow.get(True)
+
+
+def _uses_pull_request_target(triggers: object) -> bool:
+    """Identify the forbidden trigger in string, list, and mapping GitHub Actions forms."""
+    if isinstance(triggers, str):
+        return triggers == "pull_request_target"
+    if isinstance(triggers, list):
+        return any(trigger == "pull_request_target" for trigger in triggers)
+    return isinstance(triggers, dict) and "pull_request_target" in triggers
 
 
 def _workflow_steps(
@@ -60,14 +76,15 @@ def verify_workflow_integrity(workflows_dir: Path) -> None:
     This function accepts a directory so the regression suite can prove that a
     tag-pinned action or a missing permissions declaration is rejected.
     """
-    workflow_paths = sorted(workflows_dir.glob("*.yml"))
+    workflow_paths = sorted(
+        path for pattern in ("*.yml", "*.yaml") for path in workflows_dir.glob(pattern)
+    )
     assert workflow_paths, f"No GitHub Actions workflows found in {workflows_dir}"
     for workflow_path in workflow_paths:
-        workflow_text = workflow_path.read_text(encoding="utf-8")
-        assert not _PULL_REQUEST_TARGET_RE.search(workflow_text), (
+        workflow = _load_workflow(workflow_path)
+        assert not _uses_pull_request_target(_workflow_triggers(workflow)), (
             f"Workflow {workflow_path.name} must not use pull_request_target"
         )
-        workflow = _load_workflow(workflow_path)
         assert workflow.get("permissions") == {}, (
             f"Workflow {workflow_path.name} must set permissions: {{}} at workflow scope"
         )
@@ -175,6 +192,9 @@ def verify_ci_security_policy(repo_root: Path) -> None:
     assert zizmor_with.get("advanced-security") is False, (
         "workflow-security must fail directly instead of relying on optional Advanced Security"
     )
+    assert zizmor_with.get("online-audits") is True, (
+        "workflow-security must explicitly enable zizmor online audits"
+    )
     assert zizmor_with.get("version") == "1.30.1", (
         "workflow-security must pin the zizmor engine version"
     )
@@ -250,6 +270,10 @@ def main() -> None:
     root_package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
     assert root_package.get("packageManager") == f"pnpm@{_PNPM_VERSION}+{_PNPM_INTEGRITY}", (
         "package.json must pin the verified pnpm package-manager artifact"
+    )
+    engines = root_package.get("engines")
+    assert isinstance(engines, dict) and engines.get("node") == _NODE_ENGINE, (
+        f"package.json must bound Node.js to the Corepack-compatible {_NODE_ENGINE} range"
     )
     taskfile = (ROOT / "Taskfile.yml").read_text(encoding="utf-8")
     assert "node tools/verify_node_runtime.mjs" in taskfile, (

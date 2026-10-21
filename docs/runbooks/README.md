@@ -25,7 +25,7 @@
 
 The seven-day dependency cooldown and any narrowly bounded security-fix record are governed by [Dependency Security Exceptions](./dependency-security-exceptions.md). Dependabot applies the same holdback to version updates for pnpm, uv, and GitHub Actions; GitHub security updates are not delayed by that version-update control. The record does not replace the artifact and model trust decision required by OQ-018.
 
-Taskfile JavaScript gates first check the Node engine declared in `package.json`, then invoke `pnpm` through Corepack and the exact `packageManager` pin. All Taskfile pytest paths direct pytest to the local `/tmp` temporary root so shared mounted temp directories cannot break its owner checks. CI provides the same supported Node and pnpm versions before it invokes Taskfile.
+Taskfile JavaScript gates first check the bounded Node 24 engine declared in `package.json`, then invoke `pnpm` through Corepack and the exact `packageManager` pin. Node 25 and later need a separately reviewed Corepack provisioner or package-manager activation design before they can run these gates. All Taskfile pytest paths direct pytest to the local `/tmp` temporary root so shared mounted temp directories cannot break its owner checks. CI provides the same supported Node and pnpm versions before it invokes Taskfile.
 
 ---
 

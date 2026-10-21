@@ -32,7 +32,7 @@ We adopt Option 2 as a repository safety baseline:
    - Configure Dependabot for the `npm` (pnpm), `uv`, and `github-actions` ecosystems with `cooldown.default-days: 7`; version-update cooldowns do not defer security updates.
    - Record a security-fix exception in [`docs/runbooks/dependency-security-exceptions.md`](../runbooks/dependency-security-exceptions.md) with an advisory, exact artifact checksum, bounded scope, and expiry. Do not add a broad cooldown exclusion.
 2. **Exact Version & Cryptographic Hash Pinning:**
-   - Commit hash-locked `pnpm-lock.yaml` and `uv.lock`; CI runs `pnpm install --frozen-lockfile` and `uv sync --locked`. Taskfile JavaScript gates first verify the declared Node engine, then invoke the exact `packageManager` pin through Corepack.
+   - Commit hash-locked `pnpm-lock.yaml` and `uv.lock`; CI runs `pnpm install --frozen-lockfile` and `uv sync --locked`. Until a reviewed package-manager provisioner is introduced, Taskfile JavaScript gates require the bounded Node 24 Corepack-compatible engine and then invoke the exact `packageManager` pin through Corepack.
    - Pin every GitHub Action by full 40-character commit SHA, deny workflow token scopes by default, and declare only job-level scopes needed by each CI job.
    - Reject `pull_request_target`, require checkout without persisted credentials, run a full-reachable-history Gitleaks gate, and run the pinned zizmor workflow audit.
 3. **Artifact Provenance and SBOM:**

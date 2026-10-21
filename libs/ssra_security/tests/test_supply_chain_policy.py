@@ -22,12 +22,18 @@ def _workflow_verifier() -> Callable[[Path], None]:
     return cast(Callable[[Path], None], module.__dict__["verify_workflow_integrity"])
 
 
-def _write_workflow(tmp_path: Path, uses: str, *, include_permissions: bool = True) -> Path:
+def _write_workflow(
+    tmp_path: Path,
+    uses: str,
+    *,
+    include_permissions: bool = True,
+    filename: str = "fixture.yml",
+) -> Path:
     """Create the smallest representative workflow fixture for policy validation."""
     workflows_dir = tmp_path / ".github" / "workflows"
     workflows_dir.mkdir(parents=True)
     permissions = "permissions: {}\n" if include_permissions else ""
-    (workflows_dir / "fixture.yml").write_text(
+    (workflows_dir / filename).write_text(
         "\n".join(
             (
                 "name: fixture",
@@ -83,6 +89,39 @@ def test_workflow_policy_requires_default_permissions(tmp_path: Path) -> None:
     )
 
     with pytest.raises(AssertionError, match="permissions"):
+        _workflow_verifier()(workflows_dir)
+
+
+@pytest.mark.parametrize(
+    "trigger",
+    (
+        "on: pull_request_target",
+        "on: [pull_request, pull_request_target]",
+        "on:\n  pull_request_target: {}",
+    ),
+)
+def test_workflow_policy_rejects_all_pull_request_target_trigger_forms(
+    tmp_path: Path, trigger: str
+) -> None:
+    """The forbidden trigger must fail for each valid GitHub Actions YAML form."""
+    workflows_dir = _write_workflow(
+        tmp_path,
+        "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+    )
+    workflow_path = workflows_dir / "fixture.yml"
+    workflow_path.write_text(
+        f"{trigger}\n{workflow_path.read_text(encoding='utf-8')}", encoding="utf-8"
+    )
+
+    with pytest.raises(AssertionError, match="pull_request_target"):
+        _workflow_verifier()(workflows_dir)
+
+
+def test_workflow_policy_checks_yaml_extension(tmp_path: Path) -> None:
+    """A `.yaml` workflow must receive the same immutable-action validation as `.yml`."""
+    workflows_dir = _write_workflow(tmp_path, "actions/checkout@v4", filename="fixture.yaml")
+
+    with pytest.raises(AssertionError, match="Unpinned GitHub Action"):
         _workflow_verifier()(workflows_dir)
 
 
