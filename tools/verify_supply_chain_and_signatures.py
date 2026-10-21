@@ -131,9 +131,9 @@ def verify_ci_security_policy(repo_root: Path) -> None:
         "pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda",
         "verify",
     )
-    pnpm_with = pnpm_step.get("with", {})
-    assert isinstance(pnpm_with, dict) and pnpm_with.get("version") == _PNPM_VERSION, (
-        f"verify must pin pnpm {_PNPM_VERSION}"
+    assert pnpm_step.get("with") in (None, {}), (
+        "verify must derive pnpm from the integrity-pinned packageManager field instead of "
+        "declaring a second action version"
     )
     uv_step = _find_step_with_uses(
         verify_steps,
