@@ -1,6 +1,6 @@
 {
   "benchmark_version": "2026.10.21",
-  "git_revision": "dee4dd7",
+  "git_revision": "a22efbc",
   "target_ngrok_url": "https://<redacted-ngrok-tunnel>",
   "total_scenarios": 1000,
   "total_turns_executed": 1060,
@@ -17,17 +17,17 @@
   "right_to_erasure_subjects_verified": "2/2",
   "qdrant_episodic_points_indexed_at_peak": 40,
   "performance_metrics": {
-    "concurrency": 16,
-    "wall_clock_seconds": 38.33,
-    "throughput_scenarios_per_sec": 26.09,
-    "conversational_rate_turns_per_sec": 27.65,
-    "conversational_rate_turns_per_min": 1659.3,
-    "http_requests_per_sec": 27.63,
-    "latency_p50_ms": 519.74,
-    "latency_p90_ms": 797.39,
-    "latency_p95_ms": 1040.95,
-    "latency_p99_ms": 1352.1,
-    "latency_mean_ms": 561.03
+    "concurrency": 20,
+    "wall_clock_seconds": 21.77,
+    "throughput_scenarios_per_sec": 45.94,
+    "conversational_rate_turns_per_sec": 48.7,
+    "conversational_rate_turns_per_min": 2922.0,
+    "http_requests_per_sec": 48.65,
+    "latency_p50_ms": 332.2,
+    "latency_p90_ms": 387.83,
+    "latency_p95_ms": 668.67,
+    "latency_p99_ms": 865.65,
+    "latency_mean_ms": 366.07
   },
   "stack_status": {
     "service": "ssra-agent-runtime",
@@ -39,30 +39,31 @@
       "models--Sunbird--SunflowerASR-51-african-languages"
     ],
     "gpu_devices": [
-      "nvidia6"
+      "nvidia1"
     ],
     "qdrant_status": "healthy",
     "qdrant_episodic_points": 0,
-    "valkey_status": "healthy"
+    "valkey_status": "healthy",
+    "sovereign_readiness_errors": []
   },
   "by_language_group": {
     "en": {
       "total": 340,
       "passed": 340,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 565.26
+      "mean_latency_ms": 393.9
     },
     "ar": {
       "total": 330,
       "passed": 330,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 549.32
+      "mean_latency_ms": 346.71
     },
     "din": {
       "total": 330,
       "passed": 330,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 568.38
+      "mean_latency_ms": 356.75
     }
   },
   "by_modality": {
@@ -70,19 +71,19 @@
       "total": 400,
       "passed": 400,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 624.42
+      "mean_latency_ms": 419.88
     },
     "STT": {
       "total": 300,
       "passed": 300,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 492.44
+      "mean_latency_ms": 323.23
     },
     "TTS": {
       "total": 300,
       "passed": 300,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 545.1
+      "mean_latency_ms": 337.16
     }
   },
   "by_category": {
