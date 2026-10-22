@@ -37,12 +37,12 @@ The test harness must not use credentials, live taxpayer/staff data, real tax fi
 | Direct protected routes | Direct, percent-encoded, and encoded-separator `/v1` paths remain denied or rejected. |
 | Public mobile rail | 320 CSS-pixel reflow, minimum target size, reduced motion, inert-state synchronization, visible focus, and Escape focus return. |
 | Arabic and constrained network | `lang=ar` and RTL layout, explicit low-data mode, offline safe fallback, and preserved composer draft. |
-| Staff preview dashboard | Persistent preview state, client-side navigation focus return, and `403`/`no-store` API denial. |
+| Staff preview dashboard | Persistent preview state, command-palette visible focus, client-side navigation focus return, and `403`/`no-store` API denial. |
 | Staff mobile rail | Drawer focus enters the first navigation item and returns to its trigger after Escape. |
 
 ## Artifacts and triage
 
-- Playwright keeps screenshots and traces on failure under `test-results/playwright-artifacts/`; CI creates an HTML report under `playwright-report/`. Both paths are ignored by Git.
+- Playwright keeps screenshots and traces on failure under `test-results/playwright-artifacts/`; a failed CI job uploads those paths and the HTML report under `playwright-report/`. Both paths are ignored by Git.
 - A failed assertion should be repaired at the source, then rerun with the focused spec and the full suite. Do not weaken an assertion merely to make the suite pass.
 - If a prior interrupted run owns a loopback port, stop only the local test process that owns it, then rerun. Do not change test URLs to a shared environment.
 - Record five clean suite runs when collecting flake evidence. The R2-B report records the initial five-run evidence for this suite.

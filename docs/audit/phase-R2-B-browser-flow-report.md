@@ -13,11 +13,11 @@ Gate R1 approval permits non-production R2 reference remediation. This report re
 
 - Added exact, lockfile-integrity-pinned `@playwright/test@1.58.0` and a Playwright configuration with one worker, CI retries, retained failure traces/screenshots, Africa/Juba time zone, and reduced-motion emulation.
 - Added a loopback-only synthetic runtime that records only the BFF-forwarded fields and emits a fixed non-factual response. It contains no credentials, taxpayer/staff data, tax numbers, provider calls, or production endpoints.
-- Made rendered browser tests part of `task test`; CI installs Chromium from the lock-pinned Playwright package before running Taskfile gates.
+- Made rendered browser tests part of `task test`; CI installs Chromium from the lock-pinned Playwright package before running Taskfile gates and retains its ignored traces, screenshots, and HTML report when the job fails.
 - Verified the public BFF uses the canonical anonymous body, strips browser-supplied authorization/subject headers, and rejects direct, percent-encoded, and encoded-separator protected `/v1` route probes.
-- Verified a 320 CSS-pixel public rail has usable targets, no horizontal overflow, reduced motion, correct inert-state synchronization, visible composer focus, and Escape focus restoration. The implementation keeps the drawer visible while it opens and delays only the hidden state while it closes so focus can move into the drawer after the state update.
+- Verified a 320 CSS-pixel public rail has usable targets, no horizontal overflow, reduced motion, correct inert-state synchronization, visible composer focus, and Escape focus restoration. The implementation keeps the drawer visible while it opens and delays only the hidden state while it closes; deferred restoration yields when a user moves focus before the state update completes, so it cannot overwrite that interaction.
 - Verified Arabic language/direction, explicit low-data mode, offline safe abstention, and preservation of a typed draft.
-- Verified the staff dashboard remains preview-only, its protected API returns `403` with `no-store`, and desktop/mobile rail navigation returns focus predictably.
+- Verified the staff dashboard remains preview-only, its protected API returns `403` with `no-store`, desktop/mobile rail navigation returns focus predictably, and the command-palette input retains a visible focus indicator.
 
 ## Standards and design references
 
@@ -31,6 +31,7 @@ Gate R1 approval permits non-production R2 reference remediation. This report re
 |---|---|
 | Rendered browser suite | Passed: 5 tests against fresh loopback services |
 | Flake evidence | Passed: five clean full-suite runs, 25 test executions total, 2026-10-22 |
+| Review follow-up | Passed: failure-only CI artifact retention and explicit public/staff focus-indicator assertions |
 | BFF forged identity / protected path checks | Passed in rendered public-chat flow |
 | Public rail reflow, focus, RTL, low-data, offline checks | Passed in rendered public-chat flows |
 | Staff preview denial and desktop/mobile focus checks | Passed in rendered staff-console flows |

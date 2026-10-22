@@ -156,6 +156,12 @@ test("the mobile rail reflows, keeps usable targets, and restores keyboard focus
     await page.keyboard.press("Tab");
   }
   await expect(composer).toBeFocused();
+  await expect
+    .poll(
+      () => composer.evaluate((element) => getComputedStyle(element).boxShadow),
+      { timeout: 5_000 },
+    )
+    .toContain("3px");
   const focusStyle = await composer.evaluate((element) => {
     const style = getComputedStyle(element);
     const box = element.getBoundingClientRect();
@@ -163,13 +169,17 @@ test("the mobile rail reflows, keeps usable targets, and restores keyboard focus
       bottom: box.bottom,
       focusVisible: element.matches(":focus-visible"),
       outlineStyle: style.outlineStyle,
-      outlineWidth: Number.parseFloat(style.outlineWidth),
     };
   });
   expect(focusStyle.bottom).toBeLessThanOrEqual(720);
   expect(focusStyle.focusVisible).toBeTruthy();
   expect(focusStyle.outlineStyle).not.toBe("none");
-  expect(focusStyle.outlineWidth).toBeGreaterThanOrEqual(2);
+
+  await composer.focus();
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+  await expect(composer).toBeFocused();
 });
 
 test("Arabic direction, low-data mode, and offline fallback remain explicit", async ({ browser }) => {

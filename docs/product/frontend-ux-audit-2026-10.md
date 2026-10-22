@@ -65,7 +65,7 @@
 ### R2-B reference evidence (2026-10-22)
 
 - Added a merge-blocking Playwright suite that starts only local synthetic loopback services and exercises the rendered public BFF, conversation rail, and staff-preview dashboard.
-- Repaired the public and staff mobile drawer transitions so the drawer is focusable when it opens and keyboard focus returns predictably after Escape.
+- Repaired the public and staff mobile drawer transitions so the drawer is focusable when it opens and keyboard focus returns predictably after Escape without overwriting a later user focus move. The staff command palette also has a rendered visible-focus assertion.
 - Five clean browser-suite runs passed (25 rendered test executions). See [the R2-B report](../audit/phase-R2-B-browser-flow-report.md) and [the browser-flow runbook](../runbooks/browser-flow-assurance.md).
 - The suite does not use live taxpayer/staff data, tax values, credentials, or provider endpoints. It provides no production-readiness or phase-exit claim.
 

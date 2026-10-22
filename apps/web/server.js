@@ -523,7 +523,7 @@ function renderPwaShellHtml(locale, nonce) {
     .turn-content-text { white-space: pre-wrap; }
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: var(--text-3); }
     :focus-visible { outline: 3px solid var(--ssra-gold); outline-offset: 2px; }
-    .composer-textarea:focus-visible, .search-input:focus-visible { outline: 3px solid var(--ssra-gold); outline-offset: 2px; }
+    .composer-textarea:focus-visible, .search-input:focus-visible { outline: 3px solid var(--ssra-gold) !important; outline-offset: 2px; box-shadow: 0 0 0 3px var(--ssra-gold); }
     @media (prefers-reduced-motion: reduce) {
       .rail-wrap { transition: none !important; }
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -1412,9 +1412,12 @@ function renderPwaShellHtml(locale, nonce) {
       const railAsideEl = document.querySelector(".rail-wrap");
       const focusAfterRailStateSync = (target) => {
         if (!target || typeof target.focus !== "function") return;
+        const activeBeforeSync = document.activeElement;
         window.requestAnimationFrame(() => {
           window.requestAnimationFrame(() => {
-            if (target.isConnected && !target.closest("[inert]")) {
+            const focusWasMovedByAnotherInteraction =
+              document.activeElement !== activeBeforeSync && document.activeElement !== document.body;
+            if (!focusWasMovedByAnotherInteraction && target.isConnected && !target.closest("[inert]")) {
               target.focus({ preventScroll: true });
             }
           });

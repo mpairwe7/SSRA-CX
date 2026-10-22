@@ -70,6 +70,16 @@ jobs:
           pnpm exec task test
           pnpm exec task eval
 
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-failure-artifacts
+          path: |
+            playwright-report
+            test-results/playwright-artifacts
+          if-no-files-found: ignore
+
   secret-history:
     name: Full Git history secret scan
     runs-on: ubuntu-latest

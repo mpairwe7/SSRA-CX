@@ -240,7 +240,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       font-size: var(--ops-text-sm); font-weight: var(--ops-weight-semi); text-decoration: none;
     }
     .staff-skip:focus { top: var(--ops-space-2); }
-    :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    :is(a, button, input, select, textarea, [tabindex]):focus-visible {
       outline: var(--ops-focus-ring) solid var(--ops-focus);
       outline-offset: var(--ops-focus-gap);
     }
@@ -913,9 +913,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       const mobileNavBtn = document.getElementById("mobile-ops-nav-btn");
       const focusAfterStaffRailStateSync = (target) => {
         if (!target || typeof target.focus !== "function") return;
+        const activeBeforeSync = document.activeElement;
         window.requestAnimationFrame(() => {
           window.requestAnimationFrame(() => {
-            if (target.isConnected && !target.closest("[inert]")) {
+            const focusWasMovedByAnotherInteraction =
+              document.activeElement !== activeBeforeSync && document.activeElement !== document.body;
+            if (!focusWasMovedByAnotherInteraction && target.isConnected && !target.closest("[inert]")) {
               target.focus({ preventScroll: true });
             }
           });

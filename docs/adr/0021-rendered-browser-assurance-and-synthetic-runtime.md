@@ -29,7 +29,7 @@ These applications are Node HTTP servers that render browser shells. The rendere
 ## Consequences
 
 - A browser regression in the covered flows now blocks the repository test gate before merge.
-- The mobile drawer keeps visibility available while it opens, delays only its hidden state while it closes, and moves keyboard focus after the inert state is synchronized. This prevents focus from being lost to the document body during a natural drawer transition.
+- The mobile drawer keeps visibility available while it opens, delays only its hidden state while it closes, and moves keyboard focus after the inert state is synchronized. Deferred focus restoration yields to a focus change made before that synchronization completes, which prevents both loss to the document body and overwriting a subsequent keyboard interaction.
 - CI requires Chromium system dependencies, adding a bounded test-runtime dependency to the pipeline.
 - Automated accessibility scanning remains deliberately unadopted pending OQ-012. The commonly used `@axe-core/playwright` package is MPL-2.0, which is outside the current permissive-license policy until SSRA Procurement and Legal approve it. This does not remove the manual accessibility evidence requirement.
 
