@@ -37,7 +37,7 @@ tasks:
       - corepack pnpm run typecheck
 
   test:
-    desc: Run Python (pytest + Hypothesis), rules engine mutation testing, coverage gates (>=98% domain and overall), and TypeScript (Vitest) test suites
+    desc: Run Python (pytest + Hypothesis), rules engine mutation testing, coverage gates (>=98% domain and overall), TypeScript (Vitest), and rendered-browser (Playwright) test suites
     preconditions:
       - sh: node tools/verify_node_runtime.mjs
         msg: Activate a Node.js runtime that satisfies package.json engines.node before running task test.
@@ -47,6 +47,7 @@ tasks:
       - uv run python tools/verify_rules_mutations.py
       - PYTEST_DEBUG_TEMPROOT=/tmp uv run python tools/check_coverage_gate.py
       - corepack pnpm run test
+      - corepack pnpm exec playwright test
 
   eval:
     desc: Run SSRA Assist evaluations, benchmark ASGI SLOs, and audit phase evidence/blockers without advancing gates

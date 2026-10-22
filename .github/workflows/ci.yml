@@ -59,6 +59,9 @@ jobs:
           pnpm install --frozen-lockfile
           uv sync --locked
 
+      - name: Install lock-pinned Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Run Taskfile gen, lint, test, and eval gates (lockfile-pinned Task CLI)
         run: |
           pnpm exec task gen

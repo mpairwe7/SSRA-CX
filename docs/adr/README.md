@@ -4,7 +4,7 @@ Every architectural decision with a real reversal cost is recorded here before i
 
 ---
 
-## ADR Catalog (ADR-001 to ADR-020)
+## ADR Catalog (ADR-001 to ADR-021)
 
 | ID | Title | One-Line Problem Statement | Status | Reversal Cost |
 |---|---|---|---|---|
@@ -28,3 +28,4 @@ Every architectural decision with a real reversal cost is recorded here before i
 | **[ADR-018](./0018-staff-console-preview-and-trusted-session-gate.md)** | Staff Console Preview & Trusted Session Gate | How do we prevent unverified browser personas, fabricated metrics, or spoofable staff headers from being treated as operational state? | Accepted | Medium |
 | **[ADR-019](./0019-fail-closed-reference-runtime-mode.md)** | Fail-Closed Reference Runtime Mode | How do we prevent process-local state, synthetic provider responses, and unverified analytics from appearing operational? | Accepted (repository safety baseline) | Medium |
 | **[ADR-020](./0020-node-bff-reference-runtime-and-deferred-nextjs-adoption.md)** | Node BFF Reference Runtime & Deferred Next.js Adoption | How do we align declared frontend dependencies, container entry points, and security maintenance with the runnable application? | Accepted (repository safety baseline) | Medium |
+| **[ADR-021](./0021-rendered-browser-assurance-and-synthetic-runtime.md)** | Rendered Browser Assurance & Synthetic Runtime | How do we prove safety-critical public and staff-preview browser flows without using taxpayer data or treating reference behavior as production evidence? | Accepted (repository safety baseline) | Medium |

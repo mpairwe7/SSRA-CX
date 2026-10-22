@@ -290,9 +290,9 @@ function renderPwaShellHtml(locale, nonce) {
     .rail-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 45; }
     @media (max-width: 960px) {
       .app-shell { grid-template-columns: minmax(0, 1fr); }
-      .rail-wrap { position: fixed; inset: 0 auto 0 0; width: min(292px, 86vw); z-index: 50; transform: translateX(-100%); visibility: hidden; transition: transform 0.22s ease, visibility 0.22s ease; }
+      .rail-wrap { position: fixed; inset: 0 auto 0 0; width: min(292px, 86vw); z-index: 50; transform: translateX(-100%); visibility: hidden; transition: transform 0.22s ease, visibility 0s linear 0.22s; }
       :root[dir="rtl"] .rail-wrap { inset: 0 0 0 auto; transform: translateX(100%); }
-      .app-shell[data-mobile-rail="open"] .rail-wrap { transform: translateX(0); visibility: visible; }
+      .app-shell[data-mobile-rail="open"] .rail-wrap { transform: translateX(0); visibility: visible; transition: transform 0.22s ease, visibility 0s; }
       .app-shell[data-mobile-rail="open"] .rail-mobile-backdrop { display: block; }
     }
     @media (max-width: 640px) {
@@ -523,7 +523,9 @@ function renderPwaShellHtml(locale, nonce) {
     .turn-content-text { white-space: pre-wrap; }
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: var(--text-3); }
     :focus-visible { outline: 3px solid var(--ssra-gold); outline-offset: 2px; }
+    .composer-textarea:focus-visible, .search-input:focus-visible { outline: 3px solid var(--ssra-gold); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) {
+      .rail-wrap { transition: none !important; }
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
     }
     .jump-open-tag { font-size: 0.7rem; color: var(--text-3); }
@@ -1408,6 +1410,16 @@ function renderPwaShellHtml(locale, nonce) {
       });
 
       const railAsideEl = document.querySelector(".rail-wrap");
+      const focusAfterRailStateSync = (target) => {
+        if (!target || typeof target.focus !== "function") return;
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            if (target.isConnected && !target.closest("[inert]")) {
+              target.focus({ preventScroll: true });
+            }
+          });
+        });
+      };
       const syncMobileRailA11y = (moveFocus = false) => {
         const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
         if (!isMobileViewport) shell?.setAttribute("data-mobile-rail", "closed");
@@ -1426,9 +1438,9 @@ function renderPwaShellHtml(locale, nonce) {
           isMobileViewport ? "Close conversations sidebar" : "Collapse conversations sidebar",
         );
         if (moveFocus && isHidden) {
-          headerRailBtn?.focus();
+          focusAfterRailStateSync(headerRailBtn);
         } else if (moveFocus && !isHidden) {
-          document.getElementById("new-chat-btn")?.focus();
+          focusAfterRailStateSync(document.getElementById("new-chat-btn"));
         }
       };
       const toggleSidebar = () => {

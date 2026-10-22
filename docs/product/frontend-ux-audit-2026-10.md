@@ -24,7 +24,7 @@
 - Staff dashboards are intentionally not operational; there is no verified staff-session integration in the server-rendered console. OQ-014 blocks release of staff data and actions.
 - OQ-013 remains open for warehouse aggregation and metric provenance. Analytics summary, insight, drift, and scorecard endpoints now return 503, and the staff console continues to return 403 for operational data/actions.
 - `SSRA_RUNTIME_MODE` defaults to `production`; Core API and agent-runtime return 503 unless explicit local/test `reference` mode is selected. The production/DR Compose overlay remains unready until providers and durable state are approved and verified.
-- Current code review cannot confirm that all generated layouts pass screen-reader, zoom, keyboard, 320px reflow, Arabic RTL, or low-end Android user scenarios. Automated accessibility results previously recorded in `docs/PROGRESS.md` must not be treated as a substitute for this review or moderated testing.
+- R2-B rendered Chromium checks now cover selected 320px reflow, keyboard focus return, reduced motion, Arabic RTL, low-data/offline fallback, public BFF, and staff-preview paths. They do not confirm all generated layouts, screen-reader/assistive-technology use, zoom, low-end Android, real 2G, or moderated user scenarios. Automated results must not be treated as a substitute for this review or inclusive testing.
 - Language coverage beyond English, Juba Arabic, and Arabic needs qualified human review. Do not publish improvised translations for tax/legal concepts.
 - Forms and consequential flows need an end-to-end error pattern: server-side validation, preserved inputs, linked field errors, a focused error summary, and clear recovery instructions.
 
@@ -61,6 +61,13 @@
 - Optimize from measured journeys: progressive disclosure, concise answer structure, context-preserving retries, progressive loading, and low-data mode.
 - Exercise API timeouts, stale cache, reconnection, duplicate submit, interrupted stream, and unavailable handoff. Require truthful status, safe abstention for unverified tax facts, and an actionable recovery route.
 - Re-run performance and accessibility budgets on representative low-end hardware and slow networks; keep results tied to a build and test date.
+
+### R2-B reference evidence (2026-10-22)
+
+- Added a merge-blocking Playwright suite that starts only local synthetic loopback services and exercises the rendered public BFF, conversation rail, and staff-preview dashboard.
+- Repaired the public and staff mobile drawer transitions so the drawer is focusable when it opens and keyboard focus returns predictably after Escape.
+- Five clean browser-suite runs passed (25 rendered test executions). See [the R2-B report](../audit/phase-R2-B-browser-flow-report.md) and [the browser-flow runbook](../runbooks/browser-flow-assurance.md).
+- The suite does not use live taxpayer/staff data, tax values, credentials, or provider endpoints. It provides no production-readiness or phase-exit claim.
 
 ## Standards and research checked on 2026-10-21
 
