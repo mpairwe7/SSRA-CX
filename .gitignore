@@ -16,6 +16,8 @@ node_modules/
 .turbo/
 out/
 coverage/
+playwright-report/
+test-results/
 *.tsbuildinfo
 
 # Environment & Secrets (NEVER commit secrets or real taxpayer data)

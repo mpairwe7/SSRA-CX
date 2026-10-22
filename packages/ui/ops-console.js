@@ -240,6 +240,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       font-size: var(--ops-text-sm); font-weight: var(--ops-weight-semi); text-decoration: none;
     }
     .staff-skip:focus { top: var(--ops-space-2); }
+    :is(a, button, input, select, textarea, [tabindex]):focus-visible {
+      outline: var(--ops-focus-ring) solid var(--ops-focus);
+      outline-offset: var(--ops-focus-gap);
+    }
 
     /* ── Staff Shell & Collapsible Vertical Rail (staffGuard.css pattern) ── */
     .staff-shell {
@@ -601,8 +605,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     .ops-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 25; }
     @media (max-width: 820px) {
       .staff-shell { --rail-w: 0px !important; }
-      .staff-rail { transform: translateX(-100%); visibility: hidden; width: min(240px, 84vw) !important; transition: transform var(--ops-dur-base) var(--ops-ease), visibility var(--ops-dur-base) var(--ops-ease); }
-      .staff-rail.is-drawer-open { transform: translateX(0); visibility: visible; }
+      .staff-rail { transform: translateX(-100%); visibility: hidden; width: min(240px, 84vw) !important; transition: transform var(--ops-dur-base) var(--ops-ease), visibility 0s linear var(--ops-dur-base); }
+      .staff-rail.is-drawer-open { transform: translateX(0); visibility: visible; transition: transform var(--ops-dur-base) var(--ops-ease), visibility 0s; }
       .ops-mobile-backdrop.open { display: block; }
       .mobile-nav-btn { display: inline-flex; }
       .ops-page { padding: var(--ops-space-4) var(--ops-space-3) var(--ops-space-8); }
@@ -641,7 +645,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     .ops-preview-card p, .ops-preview-card li { line-height: 1.6; }
     .ops-preview-card ul { padding-inline-start: 1.25rem; }
     .ops-preview-chip { display: inline-block; padding: 4px 9px; border: 1px solid #F4C430; border-radius: 999px; color: #F4C430; font-weight: 700; }
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
+    @media (prefers-reduced-motion: reduce) {
+      .staff-rail { transition: none !important; }
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
   </style>
 </head>
 <body>
@@ -904,6 +911,19 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       // Rail pin toggle, mobile drawer & hover expand
       const mobileBackdrop = document.getElementById("ops-mobile-backdrop");
       const mobileNavBtn = document.getElementById("mobile-ops-nav-btn");
+      const focusAfterStaffRailStateSync = (target) => {
+        if (!target || typeof target.focus !== "function") return;
+        const activeBeforeSync = document.activeElement;
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            const focusWasMovedByAnotherInteraction =
+              document.activeElement !== activeBeforeSync && document.activeElement !== document.body;
+            if (!focusWasMovedByAnotherInteraction && target.isConnected && !target.closest("[inert]")) {
+              target.focus({ preventScroll: true });
+            }
+          });
+        });
+      };
       const syncStaffRailA11y = (moveFocus = false) => {
         const isMobile = window.matchMedia?.("(max-width: 820px)")?.matches ?? false;
         const isOpen = railEl?.classList.contains("is-drawer-open") ?? false;
@@ -911,8 +931,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         mobileNavBtn?.setAttribute("aria-expanded", String(isMobile && isOpen));
         mobileNavBtn?.setAttribute("aria-label", isMobile && isOpen ? "Close preview navigation" : "Open preview navigation");
         if (moveFocus) {
-          if (isMobile && isOpen) railGroupsEl?.querySelector("a")?.focus();
-          else mobileNavBtn?.focus();
+          if (isMobile && isOpen) focusAfterStaffRailStateSync(railGroupsEl?.querySelector("a"));
+          else focusAfterStaffRailStateSync(mobileNavBtn);
         }
       };
       const closeStaffRail = () => {

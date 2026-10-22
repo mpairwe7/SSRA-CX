@@ -18,7 +18,7 @@
 | `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.prod.yml --profile prod up -d --wait` | Validate/start the intended production/DR stack; API and runtime remain unready by design until approved providers and durable state are implemented |
 | `task gen` | Regenerate Pydantic v2 models, TypeScript types, Zod 4 schemas, OpenAPI 3.1 client, and CycloneDX 1.6 SBOM + ML-BOM |
 | `task lint` | Run Ruff check/format, `basedpyright` strict, `import-linter`, JSON Schema 2020-12 validator (33 MCP tools), `gitleaks`, Biome, and TypeScript `tsc` |
-| `task test` | Run Python (`pytest` + Hypothesis, `>= 98%` coverage gate) and TypeScript (`vitest`) unit and contract test suites |
+| `task test` | Run Python (`pytest` + Hypothesis, `>= 98%` coverage gate), TypeScript (`vitest`) unit/contract suites, and the lock-pinned Playwright rendered-browser suite. See [Rendered Browser Flow Assurance](./browser-flow-assurance.md). |
 | `task eval` | Run the 600-item reference golden dataset (`300 en`, `150 ar`, `150 pga`), OWASP Agentic `ASI01`–`ASI10` red-team suite, ASGI/DR drills, and a readiness audit that reports blockers without advancing Phase Exit Gates |
 
 `SSRA_RUNTIME_MODE` defaults to `production`; API and agent-runtime requests fail closed until approved providers and durable stores are wired. Local Compose profiles explicitly select `reference` for synthetic development. See [Reference Mode and Readiness](./reference-mode-readiness.md). The production overlay selects `production` and is expected to remain unready until OQ-005 and OQ-013–OQ-017 have approved implementations.
