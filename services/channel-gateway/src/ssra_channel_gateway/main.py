@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import math
 import re
 from collections.abc import Awaitable, Callable
 
@@ -18,6 +17,7 @@ from ssra_core import (
     LocaleCode,
     McpErrorCode,
     SSRAError,
+    compute_sms_segments,
     ensure_w3c_traceparent,
 )
 from ssra_testing import make_conversation_event
@@ -34,46 +34,9 @@ _CHANNEL_SECURITY_HEADERS: dict[str, str] = {
     "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
 }
 
-# 3GPP TS 23.038 / GSM 03.38 Basic (1 septet) and Extended (2 septets via 0x1B escape) character sets
-_GSM7_BASIC_CHARS: frozenset[str] = frozenset(
-    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ !\"#¤%&'()*+,-./0123456789:;<=>?"
-    "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
-)
-_GSM7_EXTENDED_CHARS: frozenset[str] = frozenset("^{}\\[~]|€\f")
 MAX_SEEN_MESSAGE_IDS = 4096
 MAX_TRACKED_SENDERS = 4096
 _UNSAFE_THREAD_CHAR_RE = re.compile(r"[^A-Za-z0-9_:-]+")
-
-
-def compute_sms_segments(text: str) -> dict[str, int | str]:
-    """Compute SMS encoding (3GPP TS 23.038 GSM-7 + Extended vs UCS-2) and segment count (Section 11)."""
-    is_gsm7 = all(ch in _GSM7_BASIC_CHARS or ch in _GSM7_EXTENDED_CHARS for ch in text)
-    if is_gsm7:
-        encoding = "GSM-7"
-        single_limit = 160
-        concat_limit = 153
-        unit_count = sum(2 if ch in _GSM7_EXTENDED_CHARS else 1 for ch in text)
-    else:
-        encoding = "UCS-2"
-        single_limit = 70
-        concat_limit = 67
-        unit_count = len(text)
-
-    char_length = len(text)
-    if unit_count == 0:
-        segments = 0
-    elif unit_count <= single_limit:
-        segments = 1
-    else:
-        segments = math.ceil(unit_count / concat_limit)
-
-    return {
-        "encoding": encoding,
-        "char_count": char_length,
-        "septet_or_code_unit_count": unit_count,
-        "segments": segments,
-        "per_segment_limit": single_limit,
-    }
 
 
 def verify_webhook_hmac(payload: bytes, signature_header: str | None, secret: str) -> bool:

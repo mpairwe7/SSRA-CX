@@ -6,8 +6,11 @@
  * 2. Call Language Chip (`"English · auto"` vs `"Juba Arabic · chosen"`, `role="menuitemradio"`).
  * 3. `CallOrb` exponential-follower (`computeCallOrbFrame`): playback (`output >= 0.06 && output >= input`)
  *    wins ties over mic input so speaker echo never flickers the orb to `"listening"`, easing in fast (`0.45`)
- *    and out slow (`0.12`), and freezing at `0` under `prefers-reduced-motion: reduce`.
+ *    and out slow (`0.12`). Under `prefers-reduced-motion: reduce` the level freezes at `0`, but the mode
+ *    still says who has the floor: reduced motion removes the animation, not the information.
  * 4. Pinned-to-bottom caption scroll tracking (`PIN_THRESHOLD_PX = 48`).
+ * 5. The live view says whether the caller is talking to the automated assistant or an officer, and
+ *    whether the call is being recorded (AUD-045).
  */
 
 import type { LocaleCode } from "@ssra/contracts";
@@ -26,6 +29,7 @@ export type CallSessionStatus =
 
 export type CallLanguageSource = "auto" | "override" | "explicit";
 export type OrbMode = "idle" | "listening" | "speaking";
+export type CallAgentKind = "automated_assistant" | "officer" | "none";
 
 export interface CallCaptionEntry {
   readonly id: string;
@@ -79,7 +83,7 @@ export function computeCallOrbFrame(params: {
   readonly inputLevel: number;
   readonly outputLevel: number;
 }): CallOrbFrameState {
-  if (!params.active || params.prefersReducedMotion) {
+  if (!params.active) {
     return { mode: "idle", smoothedLevel: 0, cssOrbLevel: "0" };
   }
   const input = Number.isFinite(params.inputLevel) ? Math.max(0, params.inputLevel) : 0;
@@ -88,6 +92,10 @@ export function computeCallOrbFrame(params: {
 
   const speaking = output >= 0.06 && output >= input;
   const listening = !speaking && input >= 0.06;
+  if (params.prefersReducedMotion) {
+    const still: OrbMode = speaking ? "speaking" : listening ? "listening" : "idle";
+    return { mode: still, smoothedLevel: 0, cssOrbLevel: "0" };
+  }
   const target = speaking ? output : listening ? input : 0;
 
   let smoothed = prev + (target - prev) * (target > prev ? 0.45 : 0.12);
@@ -121,11 +129,21 @@ export interface CallReceptionistScreenDescriptor {
   readonly dialogRole: "dialog";
   readonly ariaModal: true;
   readonly viewMode: "pre_call_consent" | "live_call";
-  readonly statusPillTone: "active" | "transferring" | "ended";
+  readonly statusPillTone: "not_started" | "active" | "transferring" | "ended";
   readonly formattedDuration: string;
   readonly languageChip: CallLanguageChipDescriptor;
   readonly canRequestOfficer: boolean;
   readonly canRequestCallback: boolean;
+  /** Who the caller is talking to right now, so an AI is never mistaken for a person. */
+  readonly speakingWith: CallAgentKind;
+  /** True only while the call engine reports that this call is being recorded. */
+  readonly recordingIndicator: boolean;
+}
+
+function callAgentKind(status: CallSessionStatus): CallAgentKind {
+  if (status === "ai" || status === "transferring") return "automated_assistant";
+  if (status === "officer" || status === "on_hold") return "officer";
+  return "none";
 }
 
 export function buildCallReceptionistScreen(params: {
@@ -134,6 +152,8 @@ export function buildCallReceptionistScreen(params: {
   readonly language: LocaleCode;
   readonly languageName: string;
   readonly languageSource: CallLanguageSource;
+  /** Whether the call engine is recording this call (only after the caller consented). */
+  readonly recording: boolean;
 }): CallReceptionistScreenDescriptor {
   const languageChip = buildCallLanguageChip(
     params.language,
@@ -145,11 +165,13 @@ export function buildCallReceptionistScreen(params: {
       dialogRole: "dialog",
       ariaModal: true,
       viewMode: "pre_call_consent",
-      statusPillTone: "ended",
+      statusPillTone: "not_started",
       formattedDuration: "00:00",
       languageChip,
       canRequestOfficer: false,
       canRequestCallback: false,
+      speakingWith: "none",
+      recordingIndicator: false,
     };
   }
   const statusPillTone =
@@ -171,5 +193,7 @@ export function buildCallReceptionistScreen(params: {
     languageChip,
     canRequestOfficer: params.status === "ai",
     canRequestCallback: params.status === "transferring" || params.status === "on_hold",
+    speakingWith: callAgentKind(params.status),
+    recordingIndicator: params.recording && params.status !== "ended",
   };
 }

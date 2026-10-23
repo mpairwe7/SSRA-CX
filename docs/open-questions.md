@@ -137,6 +137,7 @@
 - **Specific Questions for SSRA Communications & ICT:**
   1. What is SSRA's verified Meta WhatsApp Business Account (WABA) phone number and BSP/direct integration status?
   2. What are the registered SMS Sender IDs, USSD short codes, and toll-free IVR numbers across MNOs?
+  3. What SMS segment budget should each language have? As of 2026-10-24 (AUD-041), the voice SMS follow-up keeps a 160-character budget: one GSM-7 segment for English, but up to three UCS-2 segments for Arabic. The follow-up reports its real encoding and segment count.
 
 ### OQ-008 — Language Priorities, Termbase Ownership & Review Capacity
 - **Blocks:** Phase 1
@@ -152,7 +153,7 @@
 - **Context:** Constitution Article 22, NRA Act 2016 (as amended 2023), Taxation Act 2009, Cybercrimes Provisional Order 2021, and the planned 2026 Data Protection Bill govern privacy and secrecy.
 - **Specific Questions for SSRA Legal:**
   1. Confirm the statutory retention periods for conversation logs, voice recordings, case attachments, and `AuditEvent` WORM archives. Until then, `ssra_voice.VoiceRetentionPolicy` has no periods (keep nothing after the call) and refuses to store raw audio (AUD-039).
-  2. Confirm the exact statutory wording required for AI transparency disclosure and voice recording consent. Until then, the public web composer shows interim English wording (AUD-021): "SSRA Assist is an automated AI assistant and can make mistakes. Check answers against the cited sources. Don’t enter your TIN, phone number, or passwords in this public chat."
+  2. Confirm the exact statutory wording required for AI transparency disclosure and voice recording consent, including the purpose of recording. Until then, calls open with interim English wording (AUD-042): "You are speaking with SSRA Assist, an automated AI assistant. It can make mistakes. To ask for an SSRA officer at any time, press 0." followed, when recording is offered, by "SSRA would like to record this call. Press 1 to allow recording, or press 2 to continue without recording." The public web composer shows interim English wording (AUD-021): "SSRA Assist is an automated AI assistant and can make mistakes. Check answers against the cited sources. Don’t enter your TIN, phone number, or passwords in this public chat."
   3. Confirm the fiscal year dates (1 July to 30 June) and statutory filing/payment deadlines per tax type for the initial `TaxFact` seed registry.
 
 ### OQ-010 — Contact-Centre Operations, Queues, Hours & SLAs

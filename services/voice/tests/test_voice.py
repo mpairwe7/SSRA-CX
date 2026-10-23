@@ -721,3 +721,121 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     )
     assert len(resumed_chunks) == 2
     assert resumed_chunks[0]["sentence_index"] == 1
+
+
+def test_voice_caller_output_disclosure_barge_in_and_asr_guard() -> None:
+    """R2-K: what the caller hears and receives (AUD-041, AUD-042, AUD-044)."""
+    import re
+
+    from ssra_core import count_sms_segments
+    from ssra_voice import (
+        VoiceStreamSession,
+        WhisperSegmentSignals,
+        assess_whisper_segment,
+        build_call_opening_prompts,
+        build_voice_spoken_turn_and_sms_followup,
+        fixed_voice_prompts,
+        resolve_recording_consent,
+        verify_spoken_figure_fidelity,
+    )
+
+    # SMS follow-up: automated label, citation kept, whole sentences only, within 160 characters.
+    reply = (
+        "Your PAYE for this month is 25,000 SSP. File the return through the e-Tax portal by the "
+        "15th day of the following month. Pay only through a designated bank, never in cash."
+    )
+    followup = build_voice_spoken_turn_and_sms_followup(
+        reply_text=reply, citation_anchor="Taxation Act 2009 Sec 64", is_estimate=True
+    )
+    sms = followup["sms_continuation_text"]
+    assert sms.startswith("SSRA Assist (automated): Estimate only.")
+    assert "SSRA OFFICIAL" not in sms
+    assert sms.endswith("(Taxation Act 2009 Sec 64) Ref: https://etax.nra.gov.ss/")
+    assert len(sms) <= 160
+    assert followup["sms_segments"] == 1 and count_sms_segments(sms) == 1
+    assert followup["sms_shortened"] is True
+    for figure in re.findall(r"\d[\d,]*", sms.split("(Taxation")[0]):
+        assert figure in reply
+    arabic = build_voice_spoken_turn_and_sms_followup(
+        reply_text="ضريبة الدخل الشهرية هي ٢٥٬٠٠٠ جنيه. ادفع عبر البنك فقط.", is_estimate=False
+    )
+    assert "٢٥٬٠٠٠ جنيه." in arabic["sms_continuation_text"]
+    assert (arabic["sms_encoding"], arabic["sms_segments"]) == ("UCS-2", 2)
+
+    # Figure guard: spelled-out English numbers and Arabic-Indic digits are figures too.
+    contradictory = "Tax Compliance Certificates are valid for twelve (3) months only."
+    assert (
+        verify_spoken_figure_fidelity(contradictory, ["3"], strict_no_extra_numbers=True) is False
+    )
+    assert verify_spoken_figure_fidelity(
+        "Ten percent (10%) applies.", ["10"], strict_no_extra_numbers=True
+    )
+    assert verify_spoken_figure_fidelity("PAYE is twenty five thousand SSP.", ["25,000"])
+    assert verify_spoken_figure_fidelity("PAYE is twenty five thousand SSP.", ["30,000"]) is False
+    assert verify_spoken_figure_fidelity("Two thousand five hundred SSP.", ["2,500"])
+    assert verify_spoken_figure_fidelity("الرصيد ٤٥٠٬٠٠٠ جنيه", ["450,000"])
+    assert (
+        verify_spoken_figure_fidelity(
+            "الرصيد ٤٥٠٬٠٠٠ جنيه", ["45,000"], strict_no_extra_numbers=True
+        )
+        is False
+    )
+    assert verify_spoken_figure_fidelity("Use one of the forms.", [], strict_no_extra_numbers=True)
+    assert (
+        verify_spoken_figure_fidelity("Wait one month.", [], strict_no_extra_numbers=True) is False
+    )
+
+    # Every call opens with the AI disclosure; recording needs an explicit keypad 1.
+    opening = build_call_opening_prompts(LocaleCode.DIN, recording_offered=True)
+    assert [p.prompt_id for p in opening] == ["ai_disclosure", "recording_consent"]
+    assert opening[0].interruptible_by_speech is False
+    assert opening[0].spoken_locale == LocaleCode.EN  # no reviewed Dinka wording yet
+    assert opening[0].wording_approved is False
+    assert "automated" in opening[0].text and "press 0" in opening[0].text
+    assert [
+        p.prompt_id for p in build_call_opening_prompts(LocaleCode.EN, recording_offered=False)
+    ] == ["ai_disclosure"]
+    assert opening[0].text in fixed_voice_prompts()
+    assert resolve_recording_consent("1") is True
+    assert not any(resolve_recording_consent(d) for d in ("2", "9", "#", None))
+
+    # Barge-in stops playback and cancels generation together; noise and the disclosure are ignored.
+    session = VoiceStreamSession(session_id="vs_barge", locale=LocaleCode.EN)
+    assert session.trigger_barge_in(speech_ms=120) is None
+    assert session.trigger_barge_in(speech_ms=900, prompt_interruptible=False) is None
+    assert len(session.stream_tts_sentences("One. Two. Three.")) == 3
+    directive = session.trigger_barge_in(sentence_index=1, speech_ms=400)
+    assert directive is not None
+    assert (directive.stop_playback, directive.cancel_generation, directive.flush_queued_audio) == (
+        True,
+        True,
+        True,
+    )
+    assert len(session.stream_tts_sentences("One. Two. Three.")) == 1
+    barged = route_voice_turn(
+        session_id="v_barge",
+        locale=LocaleCode.EN,
+        recording_consent_granted=False,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
+        barge_in_detected=True,
+    )
+    assert (barged.action, barged.cancel_active_reply) == ("STREAM_ASR", True)
+
+    # Whisper text produced on silence or as a repetition loop never reaches the runtime.
+    silent = WhisperSegmentSignals(no_speech_prob=0.92, avg_logprob=-1.4, compression_ratio=1.1)
+    looping = WhisperSegmentSignals(no_speech_prob=0.05, avg_logprob=-0.3, compression_ratio=3.2)
+    clean = WhisperSegmentSignals(no_speech_prob=0.05, avg_logprob=-0.3, compression_ratio=1.4)
+    assert assess_whisper_segment(silent) == "no_speech"
+    assert assess_whisper_segment(looping) == "unreliable"
+    assert assess_whisper_segment(clean) == "accept"
+    assert assess_whisper_segment(WhisperSegmentSignals(float("nan"), -0.3, 1.4)) == "unreliable"
+    hallucinated = route_voice_turn(
+        session_id="v_silence",
+        locale=LocaleCode.EN,
+        recording_consent_granted=False,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
+        utterance_confidence=0.97,
+        whisper_signals=silent,
+    )
+    assert hallucinated.action == "DTMF_MENU"
+    assert hallucinated.asr_rejected_reason == "no speech detected"

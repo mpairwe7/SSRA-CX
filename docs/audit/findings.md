@@ -10,8 +10,8 @@
 |---|---:|---|
 | S0 | 0 | None |
 | S1 | 6 | AUD-001, AUD-002, AUD-003, AUD-014, AUD-034, AUD-035 |
-| S2 | 26 | AUD-004 through AUD-012, AUD-015, AUD-016, AUD-018, AUD-019, AUD-020, AUD-024, AUD-025, AUD-026, AUD-029, AUD-030, AUD-036 through AUD-039, AUD-041 through AUD-043 |
-| S3 | 11 | AUD-013, AUD-017, AUD-021, AUD-022, AUD-023, AUD-027, AUD-028, AUD-031, AUD-032, AUD-033, AUD-040 |
+| S2 | 28 | AUD-004 through AUD-012, AUD-015, AUD-016, AUD-018, AUD-019, AUD-020, AUD-024, AUD-025, AUD-026, AUD-029, AUD-030, AUD-036 through AUD-039, AUD-041 through AUD-044, AUD-046 |
+| S3 | 13 | AUD-013, AUD-017, AUD-021, AUD-022, AUD-023, AUD-027, AUD-028, AUD-031, AUD-032, AUD-033, AUD-040, AUD-045, AUD-047 |
 
 ### AUD-001 · S1 · Runtime durability · Conversation state is process-local
 
@@ -408,17 +408,21 @@ Scope: `services/voice` (`ssra_voice`), `packages/chat-ui/src/call-receptionist.
 ### AUD-041 · S2 · Caller output · Spoken and SMS output can cut or add figures
 
 - Location: `ssra_voice` `build_voice_spoken_turn_and_sms_followup` and `verify_spoken_figure_fidelity`; `services/channel-gateway` `VoiceIvrChannelAdapter.format_outbound`.
-- Evidence: The SMS follow-up is cut at 160 characters, which can split a figure, and the 70-character UCS-2 limit for Arabic is ignored. The text starts "SSRA OFFICIAL:" although it is an automated answer and the official-channel registry is OQ-011. The IVR adapter cuts at 1,000 characters mid-sentence. The strict spoken-figure guard ignores spelled-out numbers such as "five hundred".
-- Fix: Planned for R2-K.
-- Phase: R2-K · Owner: Voice and Channels · Status: Open.
+- Evidence: The voice SMS follow-up was cut at character 160 mid-word ("…The withh"), which dropped the citation and the portal reference, and could separate a figure from its unit ("Total due: 1,234,567" without "SSP"). It started "SSRA OFFICIAL:" although it is an automated answer and the official-channel registry is OQ-011. The SMS adapter cut at 160 characters, so "Total due: 1,234,567 SSP" was sent as "Total due: 1,2". The IVR adapter cut at 1,000 characters mid-sentence, spoke any number of sentences, ignored `is_estimate`, and labelled its output "ssml_or_text". The strict spoken-figure guard read only digits: "valid for twelve (3) months" passed when 3 was expected, and a correct Arabic-Indic figure (`٤٥٠٬٠٠٠`) failed. The GSM-7 table lacked `Æ æ ß É`, and UCS-2 counted characters rather than UTF-16 code units.
+- Fix: A shared `ssra_core.channel_text` module does sentence splitting (moved from `ssra_voice`, now also splitting at `؟`), GSM-7/UCS-2 segment counting (moved from the gateway and corrected), and `fit_text`. `fit_text` drops whole sentences from the end, falls back to whole words only when no sentence fits, never ends on a number, and marks shortened text with "...". The voice follow-up says "SSRA Assist (automated):", always keeps the citation and portal reference, keeps its 160-character budget, and reports its real encoding and segment count (a 160-character Arabic follow-up is three UCS-2 segments; the per-language budget is for OQ-007). The SMS adapter fits whole sentences in 160 characters. The IVR adapter speaks at most three whole sentences, adds "Estimate only." when the answer is an estimate, and declares `content_type: text/plain` so answer text is never treated as SSML. The figure guard maps any Unicode digits (and the Arabic separators) to ASCII and reads spelled-out English numbers ("twenty five thousand", "one month"; a lone "one" counts only before a quantity noun).
+- Verification: A probe against the R2-J code reproduced each defect above; after the fix, neither SMS path cuts a figure, the follow-up keeps its citation, the IVR text is framed and plain, and the guard rejects "twelve (3) months" and accepts `٤٥٠٬٠٠٠`. Unit tests cover segment counting, sentence fitting, spoken framing, both adapters, and the guard.
+- Residual: Number words in languages other than English are not read. The USSD, WhatsApp, web, and staff-console adapters still cut at their length limits; they are outside the call receptionist and were not changed.
+- Phase: R2-K · Owner: Voice and Channels · Status: Fixed in R2-K (residuals open).
 
 ### AUD-042 · S2 · Caller experience · No spoken AI disclosure, and barge-in is not implemented
 
 - Location: `ssra_voice` (no greeting function); `route_voice_turn` (`_ = barge_in_detected`); `VoiceStreamSession.trigger_barge_in`.
 - Evidence: No call-start disclosure exists that says the caller is speaking with an automated assistant and how to reach a person. The master prompt requires barge-in. `route_voice_turn` discards the barge-in signal, and the session records only a flag; it neither stops playback nor cancels generation.
 - Standard: Master prompt Voice/IVR specification; OQ-009 item 2 (disclosure wording); EU AI Act Article 50(1) as a comparative benchmark (spoken disclosure at the first interaction).
-- Fix: Planned for R2-K.
-- Phase: R2-K · Owner: Voice · Status: Open.
+- Fix: `build_call_opening_prompts` returns the AI disclosure first ("You are speaking with SSRA Assist, an automated AI assistant. It can make mistakes. To ask for an SSRA officer at any time, press 0."), which speech cannot interrupt, and then, if recording is offered, an opt-in request. `resolve_recording_consent` accepts only keypad 1; silence or any other key means no recording. The wording is interim English (`wording_approved=False`) and every language hears English until reviewed translations exist (`spoken_locale` records this). Both prompts are fixed prompts and may be cached. `VoiceStreamSession.trigger_barge_in` returns a `BargeInDirective` that always stops playback, cancels generation, and drops queued audio together. Speech shorter than the VAD minimum (250 ms) and speech over a non-interruptible prompt are ignored. `route_voice_turn` sets `cancel_active_reply` on every decision when the caller barged in.
+- Verification: Unit tests cover the prompt order, interruptibility, English fallback, consent digits, the ignored cough and disclosure cases, the directive, and the routing flag. The R2-J code had no disclosure, honoured a 120 ms noise as a barge-in, and returned no cancel flag.
+- Residual: The wording, its purpose statement for recording, and translations need SSRA approval (OQ-009 item 2, OQ-008). A media pipeline must act on the directive; none exists yet.
+- Phase: R2-K · Owner: Voice · Status: Fixed in R2-K (wording pending OQ-009).
 
 ### AUD-043 · S2 · Platform exposure · The GPU profile publishes the Core API and model servers on all interfaces
 
@@ -428,4 +432,39 @@ Scope: `services/voice` (`ssra_voice`), `packages/chat-ui/src/call-receptionist.
 - Impact: Anyone on the host's network can call the model and the Core API directly, without the BFF or gateway controls.
 - Fix: Proposed: bind these ports to `127.0.0.1`, pin or remove Orpheus, and route model access through the gateway. This is shared infrastructure, so a human must decide before the bindings change.
 - Phase: R3 · Owner: Platform · Status: Open; decision needed.
+
+### AUD-044 · S2 · Speech recognition robustness · Text an ASR model invents on silence could reach the runtime
+
+- Location: `ssra_voice` `route_voice_turn`.
+- Evidence: Routing used only a per-utterance confidence. Whisper-family models are known to produce fluent text on silence or noise and to loop on repeated phrases; Whisper reports per-segment `no_speech_prob`, `avg_logprob`, and `compression_ratio` for this, but nothing consumed them. A hallucinated request would have been answered as if the caller had asked it.
+- Standard: openai/whisper `transcribe()` defaults (silence when `no_speech_prob > 0.6` and `avg_logprob < -1.0`; unreliable when `compression_ratio > 2.4` or `avg_logprob < -1.0`); VAD gating is the primary mitigation in practitioner guidance.
+- Fix: `assess_whisper_segment` classifies a segment as `accept`, `no_speech`, or `unreliable` (non-finite signals count as unreliable). `route_voice_turn(…, whisper_signals=…)` never streams a rejected transcript to the runtime: the caller gets the keypad menu, and `asr_rejected_reason` says why.
+- Verification: Unit tests cover silence, a repetition loop, a clean segment, NaN signals, and a high-confidence turn whose signals indicate silence.
+- Residual: CTC models such as MMS/Omnilingual do not report these signals; they still rely on utterance confidence. VAD gating before ASR belongs in the media pipeline.
+- Phase: R2-K · Owner: Voice · Status: Fixed in R2-K.
+
+### AUD-045 · S3 · Call screen truthfulness · The call view model hid who had the floor under reduced motion
+
+- Location: `packages/chat-ui/src/call-receptionist.ts`.
+- Evidence: With `prefers-reduced-motion: reduce`, `computeCallOrbFrame` reported `idle` even while the assistant was speaking, so reduced motion removed information as well as animation. The consent stage used the `ended` tone before a call had started. The live view had no field saying whether the caller was talking to the automated assistant or an officer, or whether the call was being recorded. The module is not imported by any served page.
+- Standard: Master prompt invariant 10; WCAG 2.2 SC 1.3.1 (information conveyed by presentation stays available), applied to `prefers-reduced-motion`; AUD-021 (AI disclosure).
+- Fix: Reduced motion keeps the mode and freezes only the level. The consent stage uses a `not_started` tone. The screen descriptor adds `speakingWith` (`automated_assistant`, `officer`, or `none`) and `recordingIndicator`, which is true only when the caller supplies `recording: true` from the call engine.
+- Verification: Vitest covers the reduced-motion mode, the tones, the agent kinds, and the recording indicator; `tsc` and Biome pass.
+- Phase: R2-K · Owner: Web · Status: Fixed in R2-K.
+
+### AUD-046 · S2 · Knowledge content · The official CMS snapshot contradicts itself on TCC validity
+
+- Location: `knowledge/corpus/cms-official-snapshot.json` (`collections.taxComCerts[0].intro`, snapshot `2026.10.1`, source `https://cms.nra.gov.ss/graphql`), ingested by `tools/ingest_public_corpus.py`.
+- Evidence: "Tax Compliance Certificates are valid for twelve (3) months only." The word and the digit disagree, and either could be quoted to a taxpayer.
+- Standard: Master prompt invariant 2 (never invent tax facts); OQ-019 (snapshot publication authority).
+- Impact: Text channels can repeat the contradiction. On voice, the R2-K figure guard now blocks speaking it in strict mode.
+- Fix: None in code. An engineer must not choose between 12 and 3. SSRA's content owner should confirm the validity period and republish the snapshot; until then, a knowledge reviewer should decide whether to quarantine this passage.
+- Phase: Knowledge operations · Owner: SSRA Communications and Domestic Tax · Status: Open; SSRA decision needed.
+
+### AUD-047 · S3 · Packaging · `ssra-voice` does not declare its `ssra-security` dependency
+
+- Location: `services/voice/pyproject.toml`.
+- Evidence: `ssra_voice` imports `redact_pii` from `ssra_security`, but the package declares only `ssra-core` and `pydantic`. It works only because the monorepo environment installs every package.
+- Fix: Proposed: add `ssra-security` to the dependencies and refresh `uv.lock` in a dedicated change, so the lockfile diff can be reviewed on its own.
+- Phase: R3 · Owner: Platform · Status: Open.
 
