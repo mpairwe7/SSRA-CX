@@ -5,6 +5,11 @@
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
+## 0.10 [R2-D Accessible Public Chat Interaction](./audit/phase-R2-D-accessible-interaction-report.md) (2026-10-23)
+
+- Fixed the public-chat parts of AUD-018 and AUD-019. Replies are announced through a separate status region instead of a rewritten live transcript, and the composer status stays visible on phones. The account panel uses the APG disclosure pattern and Settings uses the tabs pattern. A modal stack makes the background inert and returns focus. In-page dialogs replace `prompt` and `confirm`, and every purge asks for confirmation. False shortcut hints were removed. Light-theme offline status reaches 6.35:1, the theme follows system and contrast preferences, `forced-colors` is supported, and speech output uses the interface language.
+- `tests/browser/public-chat-a11y.spec.ts` adds 8 rendered tests that fail on the R2-C code. The full suite passes (20 tests). Served `/en` is 25,805 bytes gzip. No dependency was added, and manual assistive-technology testing remains open.
+
 ## 0.9 [R2-C Truthful Public Answer Rendering](./audit/phase-R2-C-truthful-answer-report.md) (2026-10-23)
 
 - Re-audited the served public chat and staff preview dashboards against WCAG 2.2, the WAI-ARIA APG, GOV.UK Chat practice, and the master-prompt invariants. Every gap was reproduced in Chromium against a synthetic scenario runtime. AUD-014 to AUD-023 are recorded in [the findings register](./audit/findings.md#frontend-re-audit-findings-2026-10-23), and the R2-C to R2-F plan is in [the frontend audit](./product/frontend-ux-audit-2026-10.md#re-audit-2026-10-23).
