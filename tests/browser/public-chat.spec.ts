@@ -47,6 +47,18 @@ test("public chat renders a safe answer through the subject-stripping BFF", asyn
   await expect(
     page.locator("#ssra-chat-messages").getByText("Synthetic browser verification response."),
   ).toBeVisible();
+  await expect(page.locator("#rail-conv-list .rail-item-dot")).toHaveCount(1);
+
+  // Desktop Ctrl+B collapse & left-edge hover-peek (chatv2/shell.css pattern)
+  await page.mouse.move(640, 360);
+  await page.keyboard.press("Control+b");
+  await expect(page.locator("#ssra-app-shell")).toHaveAttribute("data-sidebar", "collapsed");
+  await page.locator("#rail-hotzone").dispatchEvent("mouseenter");
+  await expect(page.locator("#ssra-app-shell")).toHaveAttribute("data-rail-peek", "true");
+  await page.locator("#conversation-rail").dispatchEvent("mouseleave");
+  await expect(page.locator("#ssra-app-shell")).not.toHaveAttribute("data-rail-peek", "true");
+  await page.keyboard.press("Control+b");
+  await expect(page.locator("#ssra-app-shell")).toHaveAttribute("data-sidebar", "open");
 
   const [captured] = await getRuntimeRequests(request);
   expect(captured?.body).toMatchObject({

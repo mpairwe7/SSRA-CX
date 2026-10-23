@@ -148,22 +148,129 @@ function escapeHtml(value) {
     .replace(/\x60/g, "&#96;");
 }
 
-function destinationTitle(route) {
+function destinationMeta(route) {
   return (
-    DESTINATIONS.find((destination) => destination.href === route)?.label || "Operations overview"
+    DESTINATIONS.find((destination) => destination.href === route) || {
+      href: "/admin",
+      label: "Operations overview",
+      navLabel: "Overview",
+      group: "Work",
+    }
   );
 }
 
+function resolvePublicAssistantUrl(publicWebOrigin) {
+  const candidate = String(
+    publicWebOrigin ??
+      process.env.PUBLIC_WEB_URL ??
+      process.env.NEXT_PUBLIC_WEB_URL ??
+      "http://127.0.0.1:3000",
+  ).trim();
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return `${parsed.origin}/en`;
+    }
+  } catch {}
+  return "http://127.0.0.1:3000/en";
+}
+
 // Rendered on the server so the preview state is readable without JavaScript.
-function renderPreviewCard(title) {
-  return `<section class="ops-panel ops-preview-card" aria-labelledby="preview-title">
+function renderPreviewCard(title, group = "Work", publicAssistantUrl = "http://127.0.0.1:3000/en") {
+  return `<header class="ops-page-head">
+          <div>
+            <span id="preview-eyebrow" class="ops-eyebrow">${escapeHtml(group)} · Preview only</span>
+            <h1 id="preview-title">${escapeHtml(title)}</h1>
+            <p id="preview-desc" class="ops-page-desc">Read-only layout preview of the SSRA Assist operations console. Staff data and action routes fail closed until server-verified staff sessions are active.</p>
+          </div>
+          <div class="ops-page-actions">
+            <span class="ops-fresh"><span class="ops-fresh-dot is-stale" aria-hidden="true"></span>Session unverified · preview only</span>
+            <a class="ops-btn is-primary primary" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Open the public assistant ${ICONS.arrowUpRight}</a>
+          </div>
+        </header>
+
+        <section class="ops-panel ops-preview-card" aria-labelledby="preview-title">
           <span class="ops-preview-chip">Preview only</span>
-          <h1 id="preview-title">${escapeHtml(title)}</h1>
           <p>This screen is not connected to an authenticated staff session. It contains no live taxpayer records, casework, service telemetry, or operational controls.</p>
           <p>Staff access will be enabled after SSRA approves the identity provider and role mapping, and the service can verify those permissions on the server.</p>
           <ul><li>Use a staff identity provider with server-validated sessions.</li><li>Show live data only with its source, observation time, and freshness state.</li><li>Require server-side authorization and an audit record for every staff action.</li></ul>
-          <a class="ops-btn primary" href="/en" data-nav="/en">Open the public assistant ${ICONS.arrowUpRight}</a>
-        </section>`;
+        </section>
+
+        <section aria-label="Service quality summary preview">
+          <div class="ops-stat-grid ov-stats">
+            <div class="ops-stat">
+              <span class="ops-stat-label">AI answers found helpful</span>
+              <span class="ops-stat-row"><strong class="ops-stat-value">—</strong><span class="ops-delta">Unverified</span></span>
+              <span class="ops-stat-hint">Requires an authenticated staff session and live telemetry source</span>
+            </div>
+            <div class="ops-stat">
+              <span class="ops-stat-label">Voice &amp; call reviews</span>
+              <span class="ops-stat-row"><strong class="ops-stat-value">—</strong><span class="ops-delta">Unverified</span></span>
+              <span class="ops-stat-hint">Requires an authenticated staff session and live telemetry source</span>
+            </div>
+            <div class="ops-stat">
+              <span class="ops-stat-label">Officer chat satisfaction</span>
+              <span class="ops-stat-row"><strong class="ops-stat-value">—</strong><span class="ops-delta">Unverified</span></span>
+              <span class="ops-stat-hint">Requires an authenticated staff session and live telemetry source</span>
+            </div>
+            <div class="ops-stat">
+              <span class="ops-stat-label">Officer call satisfaction</span>
+              <span class="ops-stat-row"><strong class="ops-stat-value">—</strong><span class="ops-delta">Unverified</span></span>
+              <span class="ops-stat-hint">Requires an authenticated staff session and live telemetry source</span>
+            </div>
+          </div>
+        </section>
+
+        <div class="ov-cols">
+          <section class="ops-panel is-bare ov-review-panel" aria-labelledby="nr-h">
+            <div class="ops-panel-head">
+              <h2 id="nr-h">Needs review</h2>
+              <div class="ops-panel-end"><span class="ops-chip is-warn">Preview only</span></div>
+            </div>
+            <div class="ops-panel-body">
+              <p class="ops-panel-note">Escalated conversations, low-rated answers, and cases awaiting supervisor review appear here only when connected to an authenticated staff session.</p>
+              <div class="ops-empty">
+                <span class="ops-empty-mark" aria-hidden="true">${ICONS.inboxEmpty}</span>
+                <p class="ops-empty-title">No live review queue connected</p>
+                <p class="ops-empty-body">Sign-in and server-side role verification are required before casework or taxpayer transcripts can be loaded.</p>
+              </div>
+            </div>
+          </section>
+
+          <div class="ov-side">
+            <section class="ops-panel is-bare" aria-labelledby="a-h">
+              <div class="ops-panel-head">
+                <h2 id="a-h">Answer authority</h2>
+                <div class="ops-panel-end"><span class="ops-chip">Unverified</span></div>
+              </div>
+              <div class="ops-panel-body">
+                <p class="ops-panel-note">Statutory rate and deadline answers require an approved knowledge snapshot manifest with verified freshness.</p>
+                <dl class="ov-kv">
+                  <div><dt>Status</dt><dd><span class="ov-chip warn">Session required</span></dd></div>
+                  <div><dt>Snapshot version</dt><dd>—</dd></div>
+                  <div><dt>Observation time</dt><dd>—</dd></div>
+                  <div><dt>Verified sources</dt><dd>—</dd></div>
+                </dl>
+              </div>
+            </section>
+
+            <section class="ops-panel is-bare" aria-labelledby="s-h">
+              <div class="ops-panel-head">
+                <h2 id="s-h">Service levels</h2>
+                <div class="ops-panel-end"><span class="ops-chip">Unverified</span></div>
+              </div>
+              <div class="ops-panel-body">
+                <p class="ops-panel-note">Live queue depth and SLA response medians are hidden until authenticated telemetry provenance is configured.</p>
+                <dl class="ov-kv">
+                  <div><dt>Open escalations</dt><dd>—</dd></div>
+                  <div><dt>Past 24-hour SLA</dt><dd>—</dd></div>
+                  <div><dt>Median first response</dt><dd>—</dd></div>
+                  <div><dt>Median time to resolve</dt><dd>—</dd></div>
+                </dl>
+              </div>
+            </section>
+          </div>
+        </div>`;
 }
 
 export function isOpsDashboardPath(pathname) {
@@ -201,9 +308,11 @@ function compactOpsHtmlAssetBlocks(html) {
     });
 }
 
-export function renderOpsDashboardHtml(rawPathname, nonce) {
+export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
   const currentPath = normalizeOpsRoute(rawPathname);
-  const currentTitle = destinationTitle(currentPath);
+  const currentMeta = destinationMeta(currentPath);
+  const currentTitle = currentMeta.label;
+  const publicAssistantUrl = resolvePublicAssistantUrl(publicWebOrigin);
   const rawHtml = `<!DOCTYPE html>
 <html lang="en" data-theme="dark" data-rail-mode="always-open">
 <head>
@@ -212,9 +321,45 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
   <meta name="description" content="Non-operational preview of SSRA Assist staff navigation. No live taxpayer data, service telemetry, or staff actions." />
   <title>SSRA Operations Console Preview — ${escapeHtml(currentTitle)}</title>
   <style nonce="${nonce}">
+    @font-face {
+      font-family: "IBM Plex Sans";
+      src: url("/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "IBM Plex Sans";
+      src: url("/fonts/IBMPlexSans-Medium.woff2") format("woff2");
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "IBM Plex Sans";
+      src: url("/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "IBM Plex Mono";
+      src: url("/fonts/IBMPlexMono-Light.woff2") format("woff2");
+      font-weight: 300;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "IBM Plex Mono";
+      src: url("/fonts/IBMPlexMono-Regular.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
     :root {
       color-scheme: dark;
-      --ops-font-sans: "IBM Plex Sans", "Segoe UI", "Aptos", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --ops-font-sans: "IBM Plex Sans", "Segoe UI", "Aptos", "Avenir Next", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       --ops-font-mono: "IBM Plex Mono", "Cascadia Code", "SFMono-Regular", "Fira Code", monospace;
       --ops-text-2xs: 11px;
       --ops-text-xs: 12px;
@@ -229,9 +374,13 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       --ops-lh-normal: 1.55;
       --ops-weight-light: 300;
       --ops-weight-normal: 400;
+      --ops-weight-reg: var(--ops-weight-normal);
       --ops-weight-medium: 500;
       --ops-weight-semi: 600;
       --ops-weight-bold: 700;
+      --ops-tracking-caps: 0.04em;
+      --ops-tracking-meta: 0.06em;
+      --ops-tracking-tight: -0.01em;
       --ops-space-1: 4px;
       --ops-space-2: 8px;
       --ops-space-3: 12px;
@@ -241,6 +390,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       --ops-space-8: 32px;
       --ops-space-10: 40px;
       --ops-space-12: 48px;
+      --ops-space-16: 64px;
       --ops-gutter: var(--ops-space-5);
       --ops-band: var(--ops-space-8);
       --ops-radius-xs: 6px;
@@ -248,11 +398,13 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       --ops-radius-md: 12px;
       --ops-radius-lg: 16px;
       --ops-radius-pill: 999px;
-      --ops-nav-h: 52px;
-      --ops-max-w: 1380px;
-      --ops-dur-fast: 140ms;
-      --ops-dur-base: 200ms;
-      --ops-ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --ops-nav-h: 56px;
+      --ops-max-w: 1440px;
+      --ops-max-w-read: 1180px;
+      --ops-dur-fast: 110ms;
+      --ops-dur-base: 180ms;
+      --ops-dur-slow: 320ms;
+      --ops-ease: cubic-bezier(0.2, 0, 0.15, 1);
 
       --bg-0: #091310;
       --bg-1: #0E1C17;
@@ -260,6 +412,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       --surface-1: rgba(236, 245, 238, 0.038);
       --surface-2: rgba(236, 245, 238, 0.068);
       --surface-3: rgba(236, 245, 238, 0.105);
+      --surface-4: rgba(236, 245, 238, 0.145);
       --surface-ink: #0B1713;
       --border-0: rgba(220, 235, 224, 0.075);
       --border-1: rgba(220, 235, 224, 0.13);
@@ -284,11 +437,16 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       --ops-hairline: var(--border-0);
       --ops-line: var(--border-1);
       --ops-line-strong: var(--border-2);
-      --ops-glass-bg: linear-gradient(180deg, rgba(18, 36, 29, 0.86) 0%, rgba(10, 21, 17, 0.90) 100%);
-      --ops-glass-line: rgba(220, 235, 224, 0.13);
-      --ops-glass-blur: blur(20px) saturate(145%);
-      --ops-glass-spec: inset 0 1px 0 rgba(255, 255, 255, 0.09);
-      --ops-glass-cast: 0 12px 32px rgba(0, 0, 0, 0.44);
+      --ops-scroll-thumb: var(--border-2);
+      --ops-scroll-thumb-hover: var(--text-3);
+      --ops-glass-bg: linear-gradient(150deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.04) 46%, rgba(255, 255, 255, 0.015) 100%);
+      --ops-glass-line: rgba(220, 235, 224, 0.16);
+      --ops-glass-blur: blur(22px) saturate(165%);
+      --ops-glass-spec: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+      --ops-glass-cast: 0 16px 40px rgba(0, 0, 0, 0.34);
+      --ops-glass-solid: var(--ops-panel);
+      --ops-elev-1: 0 4px 12px rgba(0, 0, 0, 0.35);
+      --ops-elev-2: 0 12px 32px rgba(0, 0, 0, 0.45);
       --ops-elev-3: 0 24px 60px rgba(0, 0, 0, 0.56);
 
       --ops-good-ink: #34D399;
@@ -298,6 +456,15 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       --ops-focus: #F4C430;
       --ops-focus-ring: 2px;
       --ops-focus-gap: 2px;
+
+      --ops-series-1: #3987e5;
+      --ops-series-2: #d95926;
+      --ops-series-3: #199e70;
+      --ops-series-4: #c98500;
+      --ops-series-5: #d55181;
+      --ops-series-6: #008300;
+      --ops-series-7: #9085e9;
+      --ops-series-8: #e66767;
     }
 
     :root[data-theme="light"] {
@@ -308,6 +475,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       --surface-1: rgba(12, 28, 20, 0.032);
       --surface-2: rgba(12, 28, 20, 0.058);
       --surface-3: rgba(12, 28, 20, 0.092);
+      --surface-4: rgba(12, 28, 20, 0.13);
       --surface-ink: #FFFFFF;
       --border-0: rgba(12, 28, 20, 0.08);
       --border-1: rgba(12, 28, 20, 0.14);
@@ -317,15 +485,24 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       --text-2: #4A5E53;
       --text-3: #4E6358;
       --accent: #704B00;
-      --ops-glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(245, 247, 241, 0.96) 100%);
-      --ops-glass-line: rgba(12, 28, 20, 0.13);
-      --ops-glass-spec: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-      --ops-glass-cast: 0 8px 24px rgba(12, 28, 20, 0.07);
+      --ops-glass-bg: linear-gradient(150deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.68) 100%);
+      --ops-glass-line: rgba(12, 28, 20, 0.12);
+      --ops-glass-blur: blur(22px) saturate(135%);
+      --ops-glass-spec: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+      --ops-glass-cast: 0 12px 32px rgba(12, 28, 20, 0.08);
       --ops-good-ink: #066926;
       --ops-warn-ink: #853A06;
       --ops-bad-ink: #B91C1C;
       --ops-info-ink: #0F47AF;
       --ops-focus: #078930;
+      --ops-series-1: #2a78d6;
+      --ops-series-2: #eb6834;
+      --ops-series-3: #1baf7a;
+      --ops-series-4: #eda100;
+      --ops-series-5: #e87ba4;
+      --ops-series-6: #008300;
+      --ops-series-7: #4a3aa7;
+      --ops-series-8: #e34948;
     }
 
     :root[data-theme="high-contrast"] {
@@ -390,10 +567,59 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       outline-offset: var(--ops-focus-gap);
     }
 
+    /* ── Metadata & Figure Voices (ops.css pattern) ── */
+    .ops-meta,
+    .ops-eyebrow,
+    .ops-stat-label,
+    .ops-fresh,
+    .staff-rail-group-label,
+    .ops-chip,
+    .ov-chip {
+      font-family: var(--ops-font-mono);
+      font-weight: var(--ops-weight-light);
+      letter-spacing: var(--ops-tracking-meta);
+      font-variant-numeric: tabular-nums;
+    }
+    .ops-figure,
+    .ops-kbd {
+      font-family: var(--ops-font-mono);
+      font-weight: var(--ops-weight-light);
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Hover-Only Neutral Scrollbars (ops.css pattern) ── */
+    .staff-shell ::-webkit-scrollbar { width: 10px; height: 10px; }
+    .staff-shell ::-webkit-scrollbar-track,
+    .staff-shell ::-webkit-scrollbar-corner { background: transparent; }
+    .staff-shell ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+    .staff-shell ::-webkit-scrollbar-thumb {
+      background-color: transparent;
+      background-clip: padding-box;
+      border: 3px solid transparent;
+      border-radius: var(--ops-radius-pill);
+      transition: background-color var(--ops-dur-fast) var(--ops-ease);
+    }
+    .staff-shell *:hover::-webkit-scrollbar-thumb,
+    .staff-shell *:focus-within::-webkit-scrollbar-thumb {
+      background-color: var(--ops-scroll-thumb);
+    }
+    .staff-shell *:hover::-webkit-scrollbar-thumb:hover {
+      background-color: var(--ops-scroll-thumb-hover);
+    }
+    .staff-shell * {
+      scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+    }
+    .staff-shell *:hover,
+    .staff-shell *:focus-within {
+      scrollbar-color: var(--ops-scroll-thumb) transparent;
+    }
+
     /* ── Staff Shell & Collapsible Vertical Rail (staffGuard.css pattern) ── */
     .staff-shell {
-      --rail-w-collapsed: 56px;
-      --rail-w-expanded: 224px;
+      --rail-w-collapsed: 52px;
+      --rail-w-expanded: 208px;
       --rail-w: var(--rail-w-collapsed);
       min-height: 100dvh;
     }
@@ -783,11 +1009,47 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     .ops-degrade-label { font-size: 12px; font-weight: 600; color: var(--text-0); }
     .ops-release-steps { margin: 0; padding-inline-start: 18px; display: grid; gap: 8px; font-size: 13px; }
     .ops-panel-mt { margin-top: 24px; }
-    .ops-preview-card { max-width: 760px; margin: 28px auto; padding: 24px; }
-    .ops-preview-card h1 { margin: 8px 0; }
-    .ops-preview-card p, .ops-preview-card li { line-height: 1.6; }
-    .ops-preview-card ul { padding-inline-start: 1.25rem; }
-    .ops-preview-chip { display: inline-block; padding: 4px 9px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-weight: 700; }
+    .ov-stats { --ops-stat-cols: 4; margin-bottom: var(--ops-band); }
+    .ops-fresh {
+      display: inline-flex; align-items: center; gap: var(--ops-space-2);
+      font-size: var(--ops-text-2xs); color: var(--text-3);
+      font-variant-numeric: tabular-nums;
+    }
+    .ops-fresh-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ops-good-ink); flex: none;
+    }
+    .ops-fresh-dot.is-stale { background: var(--text-3); }
+    .ops-panel-end { margin-inline-start: auto; display: flex; align-items: center; gap: var(--ops-space-2); }
+    .ops-panel-note {
+      margin: 0 0 var(--ops-space-3); font-size: var(--ops-text-xs);
+      line-height: var(--ops-lh-normal); color: var(--text-2);
+    }
+    .ops-empty {
+      display: flex; flex-direction: column; align-items: center;
+      gap: var(--ops-space-2); padding: var(--ops-space-6) var(--ops-space-4);
+      text-align: center; border: 1px dashed var(--ops-line); border-radius: var(--ops-radius-md);
+      background: var(--ops-row);
+    }
+    .ops-empty-mark {
+      display: grid; place-items: center; width: 40px; height: 40px;
+      border-radius: var(--ops-radius-md); background: var(--ops-row-active); color: var(--text-3);
+    }
+    .ops-empty-title {
+      margin: 0; font-size: var(--ops-text-base); font-weight: var(--ops-weight-semi); color: var(--text-1);
+    }
+    .ops-empty-body {
+      margin: 0; max-width: 44ch; font-size: var(--ops-text-sm);
+      line-height: var(--ops-lh-normal); color: var(--text-3);
+    }
+    .ov-chip { padding: 0; font-size: var(--ops-text-2xs); color: var(--text-3); }
+    .ov-chip.good { color: var(--ops-good-ink); }
+    .ov-chip.warn { color: var(--ops-warn-ink); }
+    .ops-chip.is-warn { color: var(--ops-warn-ink); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.1); }
+    .ops-preview-card { margin: 0 0 var(--ops-band); padding: var(--ops-space-5); }
+    .ops-preview-card p, .ops-preview-card li { line-height: 1.6; font-size: var(--ops-text-sm); }
+    .ops-preview-card ul { padding-inline-start: 1.25rem; margin: var(--ops-space-2) 0 0; }
+    .ops-preview-chip { display: inline-block; padding: 4px 9px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-weight: 700; margin-bottom: var(--ops-space-2); }
     @media (prefers-reduced-motion: reduce) {
       .staff-rail { transition: none !important; }
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -838,7 +1100,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.contrast} High contrast</span></button>
           </div>
           <hr class="staff-acct-hr" role="separator" />
-          <a href="/en" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.messageSquare} Return to the public assistant</span><span>${ICONS.arrowUpRight}</span></a>
+          <a href="${escapeHtml(publicAssistantUrl)}" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.messageSquare} Return to the public assistant</span><span>${ICONS.arrowUpRight}</span></a>
         </div>
         <button type="button" id="staff-acct-trigger" class="staff-acct-trigger" aria-label="Preview persona menu; not signed in" aria-expanded="false" aria-haspopup="menu">
           <span class="staff-acct-avatar"><span id="acct-initials">P</span></span>
@@ -861,12 +1123,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           <span>No live calls, taxpayer records, or service telemetry are shown.</span>
         </div>
         <div class="call-bar-right">
-          <a href="/en" class="ops-btn primary">${ICONS.messageSquare} Taxpayer MainChat</a>
+          <a href="${escapeHtml(publicAssistantUrl)}" class="ops-btn primary">${ICONS.messageSquare} Taxpayer MainChat</a>
         </div>
       </div>
 
       <main id="staff-main" class="ops-page" data-route="${escapeHtml(currentPath)}" tabindex="-1">
-        ${renderPreviewCard(currentTitle)}
+        ${renderPreviewCard(currentTitle, currentMeta.group, publicAssistantUrl)}
       </main>
     </div>
   </div>
@@ -888,6 +1150,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     (() => {
       const ICONS = ${JSON.stringify(ICONS)};
       const DESTINATIONS = ${JSON.stringify(DESTINATIONS)};
+      const PUBLIC_ASSISTANT_URL = ${JSON.stringify(publicAssistantUrl)};
 
       const ROLE_META = {
         ssra_admin: { initials: "P", name: "Preview persona", label: "Not signed in · preview only" },
@@ -998,15 +1261,18 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         if (!mainEl) return;
         const route = DESTINATIONS.find((destination) => destination.href === state.route);
         const title = route?.label || "Operations overview";
+        const group = route?.group || "Work";
         document.title = "SSRA Operations Console Preview — " + title;
         const titleEl = document.getElementById("preview-title");
         if (titleEl) titleEl.textContent = title;
+        const eyebrowEl = document.getElementById("preview-eyebrow");
+        if (eyebrowEl) eyebrowEl.textContent = group + " · Preview only";
       }
 
       function navigateTo(href) {
         if (!href) return;
-        if (href === "/en" || href.startsWith("/en")) {
-          window.location.assign(href);
+        if (href === PUBLIC_ASSISTANT_URL || href === "/en" || href.startsWith("/en") || /^https?:\\/\\//i.test(href)) {
+          window.location.assign(href === "/en" || href.startsWith("/en") ? PUBLIC_ASSISTANT_URL : href);
           return;
         }
         state.route = href;
@@ -1195,7 +1461,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             hint: d.group,
             run: () => navigateTo(d.href),
           })),
-          { label: "Open Taxpayer MainChat (/en)", hint: "Surface", run: () => window.location.assign("/en") },
+          { label: "Open Taxpayer MainChat (/en)", hint: "Surface", run: () => window.location.assign(PUBLIC_ASSISTANT_URL) },
           { label: "Preview persona: Administrator", hint: "Preview", run: () => setPreviewPersona("ssra_admin") },
           { label: "Preview persona: Tax Agent", hint: "Preview", run: () => setPreviewPersona("ssra_staff") },
           { label: "Preview persona: Auditor", hint: "Preview", run: () => setPreviewPersona("ssra_auditor") },

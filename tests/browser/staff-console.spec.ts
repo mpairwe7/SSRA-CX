@@ -39,6 +39,8 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
 
   await page.getByRole("link", { name: "Analytics" }).click();
   await expect(main.getByRole("heading", { name: "Analytics & CX Scorecard" })).toBeVisible();
+  await expect(page.locator("#preview-eyebrow")).toContainText("Observe · Preview only");
+  await expect(main.locator(".ops-stat-grid.ov-stats .ops-stat")).toHaveCount(4);
   await expect(main).toBeFocused();
 
   const deniedScorecard = await request.get(`${consoleBaseUrl}/api/scorecard`);
