@@ -1,7 +1,9 @@
 {
   "benchmark_version": "2026.10.21-20k",
-  "git_revision": "884b622",
-  "target_ngrok_url": "https://<redacted-ngrok-tunnel>",
+  "run_date": "2026-10-23",
+  "transport": "direct, no tunnel",
+  "git_revision": "unknown",
+  "target_ngrok_url": "http://127.0.0.1:18001",
   "total_scenarios": 20000,
   "total_turns_executed": 20120,
   "total_ngrok_http_requests": 500,
@@ -19,16 +21,16 @@
   "performance_metrics": {
     "concurrency": 16,
     "batch_size": 100,
-    "wall_clock_seconds": 75.78,
-    "throughput_scenarios_per_sec": 263.92,
-    "conversational_rate_turns_per_sec": 265.51,
-    "conversational_rate_turns_per_min": 15930.4,
-    "amortized_turn_latency_p50_ms": 56.35,
-    "amortized_turn_latency_p90_ms": 68.02,
-    "amortized_turn_latency_p95_ms": 71.82,
-    "amortized_turn_latency_p99_ms": 93.22,
-    "single_turn_ngrok_rtt_p50_ms": 651.84,
-    "single_turn_ngrok_rtt_p95_ms": 1327.98
+    "wall_clock_seconds": 87.12,
+    "throughput_scenarios_per_sec": 229.57,
+    "conversational_rate_turns_per_sec": 230.95,
+    "conversational_rate_turns_per_min": 13856.9,
+    "amortized_turn_latency_p50_ms": 69.3,
+    "amortized_turn_latency_p90_ms": 75.99,
+    "amortized_turn_latency_p95_ms": 85.8,
+    "amortized_turn_latency_p99_ms": 87.31,
+    "single_turn_ngrok_rtt_p50_ms": 100.9,
+    "single_turn_ngrok_rtt_p95_ms": 1259.19
   },
   "stack_status": {
     "service": "ssra-agent-runtime",
@@ -40,30 +42,31 @@
       "models--Sunbird--SunflowerASR-51-african-languages"
     ],
     "gpu_devices": [
-      "nvidia6"
+      "nvidia1"
     ],
     "qdrant_status": "healthy",
     "qdrant_episodic_points": 0,
-    "valkey_status": "healthy"
+    "valkey_status": "healthy",
+    "sovereign_readiness_errors": []
   },
   "by_language_group": {
     "en": {
       "total": 6800,
       "passed": 6800,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 67.45
+      "mean_latency_ms": 73.75
     },
     "ar": {
       "total": 6600,
       "passed": 6600,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 60.01
+      "mean_latency_ms": 64.65
     },
     "din": {
       "total": 6600,
       "passed": 6600,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 41.21
+      "mean_latency_ms": 65.76
     }
   },
   "by_modality": {
@@ -71,19 +74,19 @@
       "total": 8000,
       "passed": 8000,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 67.28
+      "mean_latency_ms": 68.57
     },
     "STT": {
       "total": 6000,
       "passed": 6000,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 49.59
+      "mean_latency_ms": 66.06
     },
     "TTS": {
       "total": 6000,
       "passed": 6000,
       "accuracy_pct": 100.0,
-      "mean_latency_ms": 48.49
+      "mean_latency_ms": 69.55
     }
   },
   "by_category": {

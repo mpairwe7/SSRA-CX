@@ -77,7 +77,8 @@ tasks:
     desc: Bring up the local SSRA Assist stack via Docker Compose and run end-to-end health & AG-UI smoke verification
     cmds:
       - docker compose -f infra/compose/docker-compose.yml up -d --build
-      - uv run python tools/smoke_test_stack.py
+      # In-process synthetic regression suite; reference mode is for tests only (invariant 11).
+      - SSRA_RUNTIME_MODE=reference uv run python tools/smoke_test_stack.py
 
   down:
     desc: Stop the local SSRA Assist Docker Compose stack

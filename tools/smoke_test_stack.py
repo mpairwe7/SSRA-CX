@@ -47,9 +47,11 @@ def run_regression_assertions(
         assert stack_json["qdrant_status"] == "healthy"
         assert stack_json["valkey_status"] == "healthy"
 
+    # Public status fails closed until trusted health telemetry exists (OQ-013, OQ-015); see
+    # services/api/tests/test_route_matrix.py for the governed status of every route.
     r_pub = api_client.get("/v1/admin/public-status")
-    assert r_pub.status_code == 200
-    assert r_pub.json()["active_knowledge_snapshot"] == "2026.10.1"
+    assert r_pub.status_code == 503, r_pub.text
+    assert r_pub.json()["code"] == "UPSTREAM_UNAVAILABLE"
 
     # 2. AG-UI SSE Streaming smoke check
     stream_res = rt_client.post(
@@ -289,50 +291,42 @@ def run_regression_assertions(
     assert r_homoglyph.json()["policy_decision"] == "DENY"
     assert "PROMPT_INJECTION_IGNORE_RULES" in r_homoglyph.json()["safety_flags"]
 
-    # 8. Core API Conversation Takeover, Officer Resolution Hand-Back, Feature Flags & 2026 CX Scorecard
+    # 8. Staff takeover/hand-back and feature flags reject client-asserted staff identity, and the
+    # CX scorecard is unavailable without provenance (ADR-018, OQ-013, OQ-014).
     r_conv = api_client.post(
         "/v1/conversations",
         json={"channel": "voice", "locale": "pga", "office_code": "JUBA_HQ"},
     )
     assert r_conv.status_code == 200
     conv_id = r_conv.json()["id"]
-    assert (
-        api_client.post(
-            f"/v1/conversations/{conv_id}/takeover",
-            json={"staff_id": "stf_01"},
-        ).status_code
-        == 200
-    )
-    r_hb = api_client.post(
-        f"/v1/conversations/{conv_id}/handback",
-        json={
-            "officer_id": "stf_01",
-            "resolution_summary": "Verified customs receipt for TIN 100-200-1234",
-            "approved_next_intent": "guided_filing_and_payment",
-            "return_to_ai_step": 2,
-        },
-    )
-    assert r_hb.status_code == 200
-    assert "100-200-1234" not in r_hb.json()["officer_resolution"]["resolution_summary"]
-    assert "••••1234" in r_hb.json()["officer_resolution"]["resolution_summary"]
-
-    r_flags = api_client.get(
-        "/v1/admin/feature-flags",
-        headers={"X-SSRA-Staff-Id": "secops_admin"},
-    )
-    assert r_flags.status_code == 200
-    assert len(r_flags.json()) >= 10
+    forged_staff = {"X-SSRA-Staff-Id": "secops_admin"}
+    staff_requests: list[tuple[str, str, dict[str, Any] | None]] = [
+        ("POST", f"/v1/conversations/{conv_id}/takeover", {"staff_id": "stf_01"}),
+        (
+            "POST",
+            f"/v1/conversations/{conv_id}/handback",
+            {
+                "officer_id": "stf_01",
+                "resolution_summary": "Synthetic resolution",
+                "approved_next_intent": "guided_filing_and_payment",
+                "return_to_ai_step": 2,
+            },
+        ),
+        ("GET", "/v1/admin/feature-flags", None),
+    ]
+    for method, path, body in staff_requests:
+        res = api_client.request(method, path, json=body, headers=forged_staff)
+        assert res.status_code == 403, f"{method} {path} returned {res.status_code}"
 
     r_scorecard = api_client.get("/v1/analytics/cx-scorecard")
-    assert r_scorecard.status_code == 200
-    assert r_scorecard.json()["zero_unverified_numeric_claims"] is True
+    assert r_scorecard.status_code == 503, r_scorecard.text
 
     return {
         "long_horizon_turns_verified": 4,
         "memory_tiers_and_erasure_verified": True,
         "eq_escalation_and_handoff_v2_verified": True,
         "multilingual_locales_verified": ["en", "pga", "din"],
-        "feature_flags_count": len(r_flags.json()),
+        "staff_routes_fail_closed": True,
         "security_blocks_verified": [
             "SEC-G1_ANONYMOUS_SUBJECT_SMUGGLE",
             "SEC-G2_CONFIRMATION_TOKEN_REPLAY",

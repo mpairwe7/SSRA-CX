@@ -23,8 +23,10 @@ import json
 import statistics
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from ssra_core import LocaleCode
@@ -859,10 +861,15 @@ async def run_benchmark_async(
     target_label = (
         f"{_parts.scheme}://<redacted-ngrok-tunnel>" if "ngrok" in _parts.netloc else ngrok_url
     )
+    # Record what was actually measured: the run date in Africa/Juba and whether a tunnel was used.
+    transport = "ngrok tunnel" if "ngrok" in _parts.netloc else "direct, no tunnel"
+    run_date = datetime.now(ZoneInfo("Africa/Juba")).date().isoformat()
     git_rev = _resolve_git_revision()
     transport_errs = sum(1 for r in results if "transport_error" in r)
     summary: dict[str, Any] = {
         "benchmark_version": "2026.10.21",
+        "run_date": run_date,
+        "transport": transport,
         "git_revision": git_rev,
         "target_ngrok_url": target_label,
         "total_scenarios": len(results),
@@ -912,11 +919,11 @@ async def run_benchmark_async(
     md_lines = [
         "# SSRA Assist — 1,000-Scenario Complex Multimodal (`TTT`, `STT`, `TTS`) Live Ngrok Stress & Load Report",
         "",
-        "- **Date:** 2026-10-21",
-        f"- **Live Ngrok Endpoint:** `{target_label}`",
+        f"- **Date:** {run_date}",
+        f"- **Target Endpoint:** `{target_label}` ({transport})",
         f"- **Total Complex Scenarios Formulated & Executed:** `{summary['total_scenarios']}` (`340 en`, `330 ar/pga`, `330 din`)",
         f"- **Total Conversational Turns Executed:** `{summary['total_turns_executed']}`",
-        f"- **Total Live HTTP Requests Over Ngrok:** `{summary['total_http_requests_over_ngrok']}`",
+        f"- **Total Live HTTP Requests:** `{summary['total_http_requests_over_ngrok']}`",
         f"- **Overall Scenario Pass / Accuracy Rate:** **`{summary['overall_accuracy_pct']}%`** (`{summary['scenarios_passed']}/{summary['total_scenarios']}`)",
         f"- **Intent & Objective Identification Accuracy:** **`{summary['intent_identification_accuracy_pct']}%`**",
         f"- **Issue Resolution & Autonomous Goal Completion Rate:** **`{summary['objective_and_issue_resolution_rate_pct']}%`**",
@@ -933,7 +940,7 @@ async def run_benchmark_async(
         f"| Total Wall-Clock Duration | `{summary['performance_metrics']['wall_clock_seconds']} s` |",
         f"| Scenario Throughput | `{summary['performance_metrics']['throughput_scenarios_per_sec']} scenarios/sec` |",
         f"| Conversational Rate (Turns / sec) | `{summary['performance_metrics']['conversational_rate_turns_per_sec']} turns/sec` (`{summary['performance_metrics']['conversational_rate_turns_per_min']} turns/min`) |",
-        f"| HTTP Request Rate Over Ngrok | `{summary['performance_metrics']['http_requests_per_sec']} req/sec` |",
+        f"| Live HTTP Request Rate | `{summary['performance_metrics']['http_requests_per_sec']} req/sec` |",
         f"| Latency `p50` (Median) | `{summary['performance_metrics']['latency_p50_ms']} ms` |",
         f"| Latency `p90` | `{summary['performance_metrics']['latency_p90_ms']} ms` |",
         f"| Latency `p95` | `{summary['performance_metrics']['latency_p95_ms']} ms` |",

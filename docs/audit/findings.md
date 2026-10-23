@@ -320,8 +320,9 @@ Evidence comes from Lighthouse 12.8.2 (Apache-2.0, run from a verified local cac
 
 - Location: `tools/smoke_test_stack.py` (public status and section 8).
 - Evidence: Against the live stack on 2026-10-23, the suite failed at its first assertion. It expects `200` from `/v1/admin/public-status`, which correctly returns RFC 9457 `503`. It also sends client-supplied staff IDs to takeover, hand-back, and feature-flag routes, which correctly return `403`, as `services/api/tests/test_route_matrix.py` requires. With those expectations corrected, the rest of the suite passed. The 1,000-scenario benchmark generator also hard-codes the report date and labels direct runtime calls "over Ngrok".
-- Fix: Planned for the next tooling pull request: align the smoke expectations with the route matrix, and make the benchmark report record its real date and target.
-- Phase: R2 · Owner: QA · Status: Open.
+- Fix: `tools/smoke_test_stack.py` now expects the governed `503` and `403` statuses, including for a forged `X-SSRA-Staff-Id`. `task up` runs the in-process suite with `SSRA_RUNTIME_MODE=reference` for that test step only; before this, production-default `503` responses failed the suite at `/healthz`. Both benchmark generators record the run date in Africa/Juba and the transport (tunnel or direct) instead of a hard-coded date and an "over Ngrok" label. `tools/live_frontend_regression.mjs` and [the live regression runbook](../runbooks/live-regression.md) make the live run repeatable.
+- Verification: In reference mode, the previous suite fails in-process and the corrected suite passes. Against the live stack, the corrected expectations passed on 2026-10-23 ([record](./live-regression-2026-10-23.md)).
+- Phase: R2 · Owner: QA · Status: Fixed.
 
 ### AUD-032 · S3 · Adaptability · A saved locale overrides the locale in the URL
 
