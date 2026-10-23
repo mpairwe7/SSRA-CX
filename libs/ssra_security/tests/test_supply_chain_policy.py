@@ -295,7 +295,7 @@ def test_ci_policy_rejects_missing_trufflehog_verification_in_secret_history(
 
 
 def test_python_sast_rejects_eval_and_unbounded_httpx_client(tmp_path: Path) -> None:
-    """Python AST SAST must block dangerous execution sinks and timeout-free httpx clients."""
+    """Python AST SAST must block dangerous sinks (including import aliases), SQL +, and unbounded httpx."""
     mod = _sec_pipeline_module()
     sast_fn = cast(Callable[[Path], list[dict[str, str]]], mod["run_python_ast_and_agentic_sast"])
 
@@ -307,7 +307,25 @@ def test_python_sast_rejects_eval_and_unbounded_httpx_client(tmp_path: Path) -> 
     with pytest.raises(AssertionError, match="SAST-PY-01"):
         sast_fn(tmp_path)
 
+    bad_file.write_text(
+        "from pickle import loads as decode_blob\nx = decode_blob(b'123')\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(AssertionError, match="SAST-PY-01"):
+        sast_fn(tmp_path)
+
+    bad_file.write_text(
+        'def q(session, uid):\n    return session.execute("SELECT * FROM t WHERE id = " + uid)\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(AssertionError, match="SAST-PY-02"):
+        sast_fn(tmp_path)
+
     bad_file.write_text("import httpx\nclient = httpx.Client()\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match="SAST-PY-03"):
+        sast_fn(tmp_path)
+
+    bad_file.write_text('import httpx\nres = httpx.get("https://example.com")\n', encoding="utf-8")
     with pytest.raises(AssertionError, match="SAST-PY-03"):
         sast_fn(tmp_path)
 
@@ -337,16 +355,35 @@ def test_frontend_sast_rejects_raw_innerhtml_assignment(tmp_path: Path) -> None:
 
 
 def test_scanner_runner_rejects_unverified_path_binary(tmp_path: Path) -> None:
-    """Scanner command runner must reject binaries outside the SHA-256 verified cache root."""
+    """Scanner command runner must reject binaries outside the SHA-256 verified cache root or with wrong digest."""
     mod = _sec_pipeline_module()
     run_cmd = cast(Callable[..., None], mod["_run_verified_scanner_cmd"])
+    cache_root_fn = cast(Callable[[], Path], mod["_get_owner_safe_scanner_cache_root"])
 
     with pytest.raises(AssertionError, match="ssra-verified-scanners"):
-        run_cmd(["/usr/bin/gitleaks", "detect"], cwd=tmp_path)
+        run_cmd(
+            ["/usr/bin/gitleaks", "detect"],
+            cwd=tmp_path,
+            expected_binary_sha256="0" * 64,
+        )
+
+    cache_root = cache_root_fn()
+    fake_bin = cache_root / "tampered-scanner"
+    fake_bin.write_bytes(b"#!/bin/sh\nexit 0\n")
+    fake_bin.chmod(0o700)
+    try:
+        with pytest.raises(AssertionError, match="TOCTOU binary SHA-256 mismatch"):
+            run_cmd(
+                [str(fake_bin)],
+                cwd=tmp_path,
+                expected_binary_sha256="f" * 64,
+            )
+    finally:
+        fake_bin.unlink(missing_ok=True)
 
 
 def test_cicd_pipeline_model_and_live_asgi_dast_suite_pass() -> None:
-    """Repository CI/CD model parity, Python/Frontend SAST, Live ASGI DAST, and SARIF builder must pass."""
+    """Repository CI/CD model parity, Python/Frontend SAST, Live ASGI/BFF DAST, and SARIF builder must pass."""
     mod = _sec_pipeline_module()
     verify_model = cast(Callable[[Path], list[dict[str, str]]], mod["verify_cicd_pipeline_model"])
     py_sast = cast(Callable[[Path], list[dict[str, str]]], mod["run_python_ast_and_agentic_sast"])
@@ -362,6 +399,12 @@ def test_cicd_pipeline_model_and_live_asgi_dast_suite_pass() -> None:
         *fe_sast(REPOSITORY_ROOT),
         *live_dast(),
     ]
-    assert len(summaries) == 4
+    assert len(summaries) == 6
     sarif = build_sarif(summaries)
     assert sarif["version"] == "2.1.0"
+    runs = sarif["runs"]
+    assert isinstance(runs, list) and len(runs) == 1
+    run_obj = runs[0]
+    assert isinstance(run_obj, dict)
+    assert isinstance(run_obj.get("invocations"), list) and len(run_obj["invocations"]) == 1
+    assert isinstance(run_obj.get("artifacts"), list) and len(run_obj["artifacts"]) == 6

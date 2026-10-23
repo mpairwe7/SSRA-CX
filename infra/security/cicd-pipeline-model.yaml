@@ -18,14 +18,17 @@ scanner_pins:
     version: "8.21.2"
     archive_url: "https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz"
     sha256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
+    binary_sha256: "50b742abd7daad8bbddb6301f3017efb680632d9a5b3b4d8f137b3aac250e359"
   trufflehog:
     version: "3.88.15"
     archive_url: "https://github.com/trufflesecurity/trufflehog/releases/download/v3.88.15/trufflehog_3.88.15_linux_amd64.tar.gz"
     sha256: "ed6d5c585f1e589c192c450369afb029050f76fe16e86a0cf58ee0658a67f86d"
+    binary_sha256: "84ee6f0d69d6c14a1cd6e05db1ddaf4a1dc509ce8d18719da084bd56fa04e09c"
   trivy:
     version: "0.69.3"
     archive_url: "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-64bit.tar.gz"
     sha256: "1816b632dfe529869c740c0913e36bd1629cb7688bd5634f4a858c1d57c88b75"
+    binary_sha256: "8266084a71d2e6a2333bc2c69b91c93c26dee9ef39ac2587ace2df54cc9b746b"
     compromised_denylist_versions:
       - "0.69.4"
     compromised_denylist_sha256:
