@@ -108,14 +108,18 @@ def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> Non
     r_tin_sms = render_ussd_screen(session_id="ussd_01", ussd_input="1*9", locale="en")
     assert r_tin_sms.send_sms_followup is True
     assert r_tin_sms.response_type == "END"
-    assert "TIN Registration" in r_tin_sms.screen_text
-    assert "https://etax.nra.gov.ss/" in r_tin_sms.screen_text
+    assert (
+        r_tin_sms.screen_text
+        == "END Official TIN Registration link (https://etax.nra.gov.ss/) queued for SMS delivery."
+    )
 
     r_cust_pga = render_ussd_screen(session_id="ussd_01", ussd_input="5*9", locale="pga")
     assert r_cust_pga.send_sms_followup is True
     assert r_cust_pga.response_type == "END"
-    assert "Jamarik" in r_cust_pga.screen_text
-    assert "https://customs.eservices.gov.ss/" in r_cust_pga.screen_text
+    assert (
+        r_cust_pga.screen_text
+        == "END Rabit Jamarik ($500) (https://customs.eservices.gov.ss/) jahiz li irsal bil SMS li raqamak."
+    )
 
     r_timeout_pga = render_ussd_screen(
         session_id="ussd_01", ussd_input="1", elapsed_seconds=150, locale="pga"
