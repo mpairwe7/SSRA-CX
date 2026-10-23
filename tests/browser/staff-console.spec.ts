@@ -15,7 +15,7 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
 
   const commandTrigger = page.getByRole("button", { name: "Search console destinations" });
   await commandTrigger.click();
-  const commandInput = page.getByRole("textbox", { name: "Search preview navigation" });
+  const commandInput = page.getByRole("combobox", { name: "Search preview navigation" });
   await expect(commandInput).toBeFocused();
   await expect
     .poll(

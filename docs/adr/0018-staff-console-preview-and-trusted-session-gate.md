@@ -33,3 +33,8 @@ Before operational screens return, a server-side integration must validate the c
 ## Reversal cost
 
 Medium. Re-enable live console functionality only after an approved identity and role model, server-side authorization, audit trail, provenance-bearing APIs, and end-to-end security review are delivered together.
+
+## Update (2026-10-23)
+
+R2-F renders the preview card, heading, and page title on the server for every route, so the non-operational state is visible without JavaScript. Destination descriptions that implied live capabilities were removed. The preview status uses the warning colour, not the success colour. See [AUD-023](../audit/findings.md#aud-023--s3--dashboard-truthfulness--preview-navigation-describes-unavailable-capabilities-as-current) and the [R2-F report](../audit/phase-R2-F-staff-console-report.md). The preview gate itself is unchanged.
+

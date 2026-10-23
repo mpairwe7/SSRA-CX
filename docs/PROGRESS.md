@@ -5,6 +5,11 @@
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
+## 0.12 [R2-F Staff Console Preview Accessibility and Truthfulness](./audit/phase-R2-F-staff-console-report.md) (2026-10-23)
+
+- Fixed the staff-console parts of AUD-018 and AUD-019, and AUD-023. The command palette follows the APG combobox pattern, and the account menu follows the menu-button keyboard model. The light-theme preview chip reaches 7.79:1, and the preview status uses the warning colour. Unused capability descriptions were removed, and the preview card renders on the server. Four new rendered tests fail on the R2-E code. The suite passes (30 tests).
+- AUD-014 to AUD-023 are now fixed in the reference web shell and staff preview. AUD-024 (runtime and registry contract drift) and the manual, device, and translation evidence remain open. Gate R2 has not been evaluated.
+
 ## 0.11 [R2-E Language Honesty, AI Disclosure, and Low Bandwidth](./audit/phase-R2-E-inclusion-low-bandwidth-report.md) (2026-10-23)
 
 - Fixed AUD-020 to AUD-022. Only the reviewed `en`, `pga`, and `ar` interface strings ship. Phase 4 locales show English with `lang="en"` and a notice, and the interface no longer advertises Dinka. A persistent AI, accuracy, and identifier disclosure appears under the composer, with interim wording under OQ-009. Device history can be turned off. Low-data mode removes blur, backgrounds, and motion. There is a no-script path, `/healthz` no longer exposes internal URLs, and Brotli quality 5 replaces quality 4, whose output was larger than gzip.
