@@ -1,10 +1,10 @@
 # SSRA Assist — 1,000-Scenario Complex Multimodal (`TTT`, `STT`, `TTS`) Live Ngrok Stress & Load Report
 
-- **Date:** 2026-10-21
-- **Live Ngrok Endpoint:** `https://<redacted-ngrok-tunnel>`
+- **Date:** 2026-10-23
+- **Target Endpoint:** `http://127.0.0.1:18001` (direct, no tunnel)
 - **Total Complex Scenarios Formulated & Executed:** `1000` (`340 en`, `330 ar/pga`, `330 din`)
 - **Total Conversational Turns Executed:** `1060`
-- **Total Live HTTP Requests Over Ngrok:** `1059`
+- **Total Live HTTP Requests:** `1059`
 - **Overall Scenario Pass / Accuracy Rate:** **`100.0%`** (`1000/1000`)
 - **Intent & Objective Identification Accuracy:** **`100.0%`**
 - **Issue Resolution & Autonomous Goal Completion Rate:** **`100.0%`**
@@ -18,31 +18,31 @@
 | Metric | Value |
 |---|---|
 | Concurrency (Persistent TLS Keep-Alive Workers) | `20` |
-| Total Wall-Clock Duration | `21.15 s` |
-| Scenario Throughput | `47.29 scenarios/sec` |
-| Conversational Rate (Turns / sec) | `50.13 turns/sec` (`3007.7 turns/min`) |
-| HTTP Request Rate Over Ngrok | `50.08 req/sec` |
-| Latency `p50` (Median) | `326.94 ms` |
-| Latency `p90` | `385.77 ms` |
-| Latency `p95` | `663.26 ms` |
-| Latency `p99` | `867.1 ms` |
-| Latency Mean | `358.3 ms` |
+| Total Wall-Clock Duration | `6.3 s` |
+| Scenario Throughput | `158.62 scenarios/sec` |
+| Conversational Rate (Turns / sec) | `168.14 turns/sec` (`10088.4 turns/min`) |
+| Live HTTP Request Rate | `167.98 req/sec` |
+| Latency `p50` (Median) | `97.54 ms` |
+| Latency `p90` | `183.22 ms` |
+| Latency `p95` | `231.55 ms` |
+| Latency `p99` | `670.83 ms` |
+| Latency Mean | `117.41 ms` |
 
 ## 2. Accuracy & Latency by Language Family (`en`, `ar`/`pga`, `din`)
 
 | Language Family | Scenarios | Passed | Accuracy | Mean Latency (`ms`) |
 |---|---|---|---|---|
-| `en` | `340` | `340` | **`100.0%`** | `380.35 ms` |
-| `ar` | `330` | `330` | **`100.0%`** | `343.07 ms` |
-| `din` | `330` | `330` | **`100.0%`** | `350.8 ms` |
+| `en` | `340` | `340` | **`100.0%`** | `125.84 ms` |
+| `ar` | `330` | `330` | **`100.0%`** | `120.79 ms` |
+| `din` | `330` | `330` | **`100.0%`** | `105.33 ms` |
 
 ## 3. Accuracy & Latency by Modality (`TTT`, `STT`, `TTS`)
 
 | Modality | Scenarios | Passed | Accuracy | Mean Latency (`ms`) |
 |---|---|---|---|---|
-| `TTT` | `400` | `400` | **`100.0%`** | `409.72 ms` |
-| `STT` | `300` | `300` | **`100.0%`** | `316.14 ms` |
-| `TTS` | `300` | `300` | **`100.0%`** | `331.9 ms` |
+| `TTT` | `400` | `400` | **`100.0%`** | `144.74 ms` |
+| `STT` | `300` | `300` | **`100.0%`** | `75.02 ms` |
+| `TTS` | `300` | `300` | **`100.0%`** | `123.35 ms` |
 
 ## 4. Accuracy by Functional, Long-Horizon, EQ & Security Category
 

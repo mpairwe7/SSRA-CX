@@ -8,6 +8,7 @@
 ## 0.15 [Live Regression Tooling](./runbooks/live-regression.md) (2026-10-24)
 
 - Recorded [the 2026-10-23 live regression](./audit/live-regression-2026-10-23.md) of `f9c8861` on the GPU profile. Public BFF and staff preview: 55 of 55 checks through the public tunnel. Core API and runtime suite: passed. 1,000-scenario benchmark: 1,000 of 1,000, p50 113.6 ms, p95 270.7 ms.
+- Final live run after the second merge round (`bc178c2`): frontend 55 of 55 through the public tunnel, stack suite passed, 1,000 of 1,000 and 20,000 of 20,000 benchmark scenarios, and Lighthouse 99–100 for performance and accessibility through the tunnel. The tunnel's noindex header and interstitial account for the SEO and best-practice drop; loopback scores are 100. The 20,000-run single-turn RTT p95 of 1,259 ms is recorded for the runtime owner.
 - Fixed AUD-031. The smoke suite now expects the governed fail-closed `503` and `403` statuses instead of `200`. `task up` sets reference mode for its in-process test step. The benchmark generators record their real date and transport. Added `tools/live_frontend_regression.mjs` and the live regression runbook.
 
 ## 0.14 [R2-H Long-Conversation Performance and Trusted Types](./audit/phase-R2-H-performance-trusted-types-report.md) (2026-10-24)

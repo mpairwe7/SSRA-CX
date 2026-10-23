@@ -862,7 +862,7 @@ async def run_benchmark_async(
         f"{_parts.scheme}://<redacted-ngrok-tunnel>" if "ngrok" in _parts.netloc else ngrok_url
     )
     # Record what was actually measured: the run date in Africa/Juba and whether a tunnel was used.
-    transport = "ngrok tunnel" if "ngrok" in _parts.netloc else "direct (no tunnel)"
+    transport = "ngrok tunnel" if "ngrok" in _parts.netloc else "direct, no tunnel"
     run_date = datetime.now(ZoneInfo("Africa/Juba")).date().isoformat()
     git_rev = _resolve_git_revision()
     transport_errs = sum(1 for r in results if "transport_error" in r)

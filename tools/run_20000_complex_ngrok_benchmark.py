@@ -971,7 +971,7 @@ async def run_benchmark_20k_async(
         f"{_parts.scheme}://<redacted-ngrok-tunnel>" if "ngrok" in _parts.netloc else ngrok_url
     )
     # Record what was actually measured: the run date in Africa/Juba and whether a tunnel was used.
-    transport = "ngrok tunnel" if "ngrok" in _parts.netloc else "direct (no tunnel)"
+    transport = "ngrok tunnel" if "ngrok" in _parts.netloc else "direct, no tunnel"
     run_date = datetime.now(ZoneInfo("Africa/Juba")).date().isoformat()
     summary: dict[str, Any] = {
         "benchmark_version": "2026.10.21-20k",
