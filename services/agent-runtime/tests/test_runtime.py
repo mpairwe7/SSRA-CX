@@ -1422,6 +1422,18 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert tsa_turn.artifacts[0].tool == "verify_payment_account"
     assert tsa_turn.artifacts[0].structured_content["status"] == "OFFICIAL_VERIFIED"
 
+    lookalike_scam_turn = rt.run_turn(
+        make_conversation_event(
+            "Is https://etax.nra.gov.ss.evil.example/pay an official SSRA payment portal?"
+        )
+    )
+    assert lookalike_scam_turn.artifacts[0].tool == "verify_payment_account"
+    assert lookalike_scam_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
+
+    dec_paye_turn = rt.run_turn(make_conversation_event("Calculate PAYE estimate on 60000.00 SSP"))
+    assert dec_paye_turn.artifacts[0].tool == "calculate_paye_estimate"
+    assert dec_paye_turn.artifacts[0].structured_content["gross_monthly_ssp"] == "60000"
+
     # 4. Conversational T0 Customs Duty Estimation (`estimate_duties`) & Tariff Lookup (`lookup_tariff`)
     cust_est_turn = rt.run_turn(
         make_conversation_event("Estimate customs duty for HS 8703.23 with CIF 10,000 USD")
@@ -1432,7 +1444,7 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert cust_est_turn.answer.is_estimate is True
 
     cust_tariff_turn = rt.run_turn(
-        make_conversation_event("What is the customs tariff rate for HS 2203.00?")
+        make_conversation_event("What is the customs tariff rate for HS 2203.00 as of 2026?")
     )
     assert cust_tariff_turn.answer.abstained is False
     assert cust_tariff_turn.artifacts[0].tool == "lookup_tariff"

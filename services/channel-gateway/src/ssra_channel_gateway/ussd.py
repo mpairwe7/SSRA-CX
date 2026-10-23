@@ -4,8 +4,8 @@ Invariants:
 1. Deterministic menu state machine with ZERO LLM calls in the synchronous path (<2s SLO).
 2. Every USSD screen is strictly <= 182 characters (`USSD_MAX_CHARS = 182`).
 3. Respects operator session timeout (`USSD_SESSION_TTL_SECONDS = 120`).
-4. Includes '9. Send details by SMS' option (including multi-step topic-specific `1*9`..`5*9` SMS delivery)
-   and full Juba Arabic (`pga`) submenu localization.
+4. Includes '9. Send details by SMS' option (keeping topic screens open as `CON` so users can
+   press `9` in-session or dial `1*9`..`5*9` directly) and full Juba Arabic (`pga`) localization.
 """
 
 from __future__ import annotations
@@ -99,66 +99,71 @@ def render_ussd_screen(
 
     if choice == "1":
         txt = (
-            "END Tasjil TIN online fi https://etax.nra.gov.ss/ "
-            "(Muwatinin, Sharikat Wizarat al-Adl wa NGOs). Adrub *9 li SMS."
+            "CON Tasjil TIN online fi https://etax.nra.gov.ss/ "
+            "(Muwatinin, Sharikat Wizarat al-Adl wa NGOs). Adrub 9 li SMS aw 0."
             if is_pga
-            else "END Register for a TIN online at https://etax.nra.gov.ss/ "
-            "(Citizens, MoJ-validated Businesses & NGOs). Dial *9 for SMS."
+            else "CON Register for a TIN online at https://etax.nra.gov.ss/ "
+            "(Citizens, MoJ-validated Businesses & NGOs). Press 9 for SMS or 0."
         )
         return UssdScreenResponse(
-            session_id=session_id, response_type="END", screen_text=txt[:USSD_MAX_CHARS]
+            session_id=session_id, response_type="CON", screen_text=txt[:USSD_MAX_CHARS]
         )
     if choice == "2":
         txt = (
-            "END Qarar March 2026: Adfa kul dariba عبر https://etax.nra.gov.ss/ "
-            "fi bunuk TSA bas. Mamnu dafa kaash li ayyi muhassil."
+            "CON Qarar March 2026: Adfa kul dariba fi https://etax.nra.gov.ss/ "
+            "bi bunuk TSA bas. Mamnu kaash. Adrub 9 li SMS aw 0."
             if is_pga
-            else "END March 2026 Directive: Pay all taxes via https://etax.nra.gov.ss/ "
-            "into designated banks only. Never pay cash to collectors."
+            else "CON March 2026 Directive: Pay all taxes via https://etax.nra.gov.ss/ "
+            "into designated banks only. Press 9 for SMS or 0."
         )
         return UssdScreenResponse(
-            session_id=session_id, response_type="END", screen_text=txt[:USSD_MAX_CHARS]
+            session_id=session_id, response_type="CON", screen_text=txt[:USSD_MAX_CHARS]
         )
     if choice == "3":
         txt = (
-            "END Iqrar wa dafa PAYE al-shahri fi https://etax.nra.gov.ss/ "
-            "lazim gabil yom 15 min al-shahar al-jayi (Juba)."
+            "CON Iqrar wa dafa PAYE al-shahri fi https://etax.nra.gov.ss/ "
+            "lazim gabil yom 15 (Juba). Adrub 9 li SMS aw 0."
             if is_pga
-            else "END Monthly PAYE returns & bank payments via https://etax.nra.gov.ss/ "
-            "are due by Day 15 of the following month (Africa/Juba)."
+            else "CON Monthly PAYE returns & bank payments via https://etax.nra.gov.ss/ "
+            "are due by Day 15 (Africa/Juba). Press 9 for SMS or 0."
         )
         return UssdScreenResponse(
-            session_id=session_id, response_type="END", screen_text=txt[:USSD_MAX_CHARS]
+            session_id=session_id, response_type="CON", screen_text=txt[:USSD_MAX_CHARS]
         )
     if choice == "4":
         txt = (
-            "END Mawgi SSRA al-rasmi: https://etax.nra.gov.ss/. "
-            "SSRA ma bi as'al OTP aw dafa kaash fi hisab shakhsi."
+            "CON Mawgi SSRA al-rasmi: https://etax.nra.gov.ss/. "
+            "SSRA ma bi as'al OTP aw kaash. Adrub 9 li SMS aw 0."
             if is_pga
-            else "END Official SSRA portal: https://etax.nra.gov.ss/. "
-            "SSRA never asks for your OTP or cash payment to personal accounts."
+            else "CON Official SSRA portal: https://etax.nra.gov.ss/. "
+            "SSRA never asks for OTP or cash. Press 9 for SMS or 0."
         )
         return UssdScreenResponse(
-            session_id=session_id, response_type="END", screen_text=txt[:USSD_MAX_CHARS]
+            session_id=session_id, response_type="CON", screen_text=txt[:USSD_MAX_CHARS]
         )
     if choice == "5":
         txt = (
-            "END Jamarik SSRA: Afa shakhsi lihad 500 USD. Iqrarat fi "
-            "https://customs.eservices.gov.ss/ wa dafa bil bank fi e-Tax."
+            "CON Jamarik SSRA: Afa shakhsi lihad 500 USD. Iqrarat fi "
+            "https://customs.eservices.gov.ss/. Adrub 9 li SMS aw 0."
             if is_pga
-            else "END SSRA Customs: Non-commercial baggage exempt up to 500 USD. "
-            "File at https://customs.eservices.gov.ss/ & pay via e-Tax bank."
+            else "CON SSRA Customs: Non-commercial baggage exempt up to 500 USD "
+            "at https://customs.eservices.gov.ss/. Press 9 for SMS or 0."
         )
         return UssdScreenResponse(
-            session_id=session_id, response_type="END", screen_text=txt[:USSD_MAX_CHARS]
+            session_id=session_id, response_type="CON", screen_text=txt[:USSD_MAX_CHARS]
         )
     if choice == "9":
+        portal_url = (
+            "https://customs.eservices.gov.ss/"
+            if parent_topic == "5"
+            else "https://etax.nra.gov.ss/"
+        )
         if is_pga:
             topic_label_pga = _TOPIC_NAMES_PGA.get(parent_topic, "SSRA e-Tax")
-            txt = f"END Rabit {topic_label_pga} (https://etax.nra.gov.ss/) jahiz li irsal bil SMS li raqamak."
+            txt = f"END Rabit {topic_label_pga} ({portal_url}) jahiz li irsal bil SMS li raqamak."
         else:
             topic_label_en = _TOPIC_NAMES_EN.get(parent_topic, "SSRA e-Tax")
-            txt = f"END Official {topic_label_en} link & instructions queued for SMS delivery to your number."
+            txt = f"END Official {topic_label_en} link ({portal_url}) queued for SMS delivery."
         return UssdScreenResponse(
             session_id=session_id,
             response_type="END",

@@ -221,7 +221,7 @@ def get_guided_journey_steps(
                 step_number=1,
                 total_steps=2,
                 title="1. Arsil Iqrar ta Dariba fi e-Tax",
-                instruction="Arsil iqrarak fi https://etax.nra.gov.ss/ gabil يوم 15 بتوقيت جوبا.",
+                instruction="Arsil iqrarak fi https://etax.nra.gov.ss/ gabil al-mawid al-qanuni bi tawqit Juba.",
                 section_anchor="Sec-1-Cash-Free-Collection",
             ),
             GuidedJourneyStep(

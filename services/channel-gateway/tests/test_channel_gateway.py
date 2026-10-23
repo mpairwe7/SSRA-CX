@@ -101,14 +101,21 @@ def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> Non
             screen = render_ussd_screen(session_id="ussd_01", ussd_input=opt, locale=u_loc)
             assert len(screen.screen_text) <= USSD_MAX_CHARS
 
-    # Multi-step topic-specific SMS follow-up (e.g. 1*9 -> TIN Registration, 5*9 -> Customs)
+    # Topic screens 1..5 stay open as CON for in-session *9 follow-up; 1*9 / 5*9 terminate with SMS delivery
+    for topic_opt in ("1", "2", "3", "4", "5"):
+        assert render_ussd_screen(session_id="ussd_01", ussd_input=topic_opt).response_type == "CON"
+
     r_tin_sms = render_ussd_screen(session_id="ussd_01", ussd_input="1*9", locale="en")
     assert r_tin_sms.send_sms_followup is True
+    assert r_tin_sms.response_type == "END"
     assert "TIN Registration" in r_tin_sms.screen_text
+    assert "https://etax.nra.gov.ss/" in r_tin_sms.screen_text
 
     r_cust_pga = render_ussd_screen(session_id="ussd_01", ussd_input="5*9", locale="pga")
     assert r_cust_pga.send_sms_followup is True
+    assert r_cust_pga.response_type == "END"
     assert "Jamarik" in r_cust_pga.screen_text
+    assert "https://customs.eservices.gov.ss/" in r_cust_pga.screen_text
 
     r_timeout_pga = render_ussd_screen(
         session_id="ussd_01", ussd_input="1", elapsed_seconds=150, locale="pga"

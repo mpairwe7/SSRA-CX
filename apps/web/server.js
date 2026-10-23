@@ -966,9 +966,10 @@ function renderPwaShellHtml(locale, nonce) {
           inner += '<div class="gen-summary-md"><strong>' + escapeHtml(props.status) + ":</strong> " + escapeHtml(props.guidance) + "</div>";
         }
         if (props.estimated_tax_ssp !== undefined || props.net_pay_ssp !== undefined || props.net_monthly_ssp !== undefined || props.withholding_tax_ssp !== undefined || props.estimated_duty_ssp !== undefined) {
+          const isDuty = !props.estimated_tax_ssp && !props.withholding_tax_ssp && props.estimated_duty_ssp !== undefined;
           const estTax = props.estimated_tax_ssp || props.withholding_tax_ssp || props.estimated_duty_ssp || "";
           const netVal = props.net_pay_ssp || props.net_monthly_ssp || props.net_payable_ssp || "";
-          inner += '<div class="gen-summary-lg"><strong>Estimated Tax:</strong> ' + escapeHtml(estTax) + " SSP" + (netVal ? " · <strong>Net Amount:</strong> " + escapeHtml(netVal) + " SSP" : "") + "</div>";
+          inner += '<div class="gen-summary-lg"><strong>' + (isDuty ? "Estimated Customs Duty:" : "Estimated Tax:") + "</strong> " + escapeHtml(estTax) + " SSP" + (netVal ? " · <strong>Net Amount:</strong> " + escapeHtml(netVal) + " SSP" : "") + "</div>";
         }
         if (props.queue || props.reason || props.case_id) {
           inner += '<div class="gen-summary-md"><strong>SSRA Officer AssistanceQueue:</strong> ' + escapeHtml(props.queue || "Domestic Taxes Desk") + (props.case_id ? " · <strong>Case ID:</strong> <code>" + escapeHtml(props.case_id) + "</code>" : "") + " · <strong>Duty Hours:</strong> Mon–Fri 08:00–17:00 CAT (Africa/Juba)</div>";

@@ -31,10 +31,14 @@ _INTENT_TIERS = _load_intent_tiers()
 _ARABIC_DIGIT_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹٬", "01234567890123456789,")
 _MONEY_RE = re.compile(r"\b(\d{1,3}(?:,\d{3})+|\d{4,10})(?:\.\d+)?\b")
 _HS_CODE_RE = re.compile(r"\b(\d{4}\.\d{2})\b")
+_HS_CUE_RE = re.compile(
+    r"\b(?:hs|hs\s+code|tariff|customs|duty|duties)\b",
+    re.IGNORECASE,
+)
 _EMAIL_RE = re.compile(r"\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b")
 _PHONE_211_RE = re.compile(r"(\+211[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3}|\+211\d{9})")
 _DOMAIN_CANDIDATE_RE = re.compile(
-    r"\b((?:https?://)?(?:[a-z0-9-]+\.)+(?:gov\.ss|ss|com|org|net)(?:/[^\s?)]*)?)",
+    r"\b((?:https?://)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s?)]*)?)",
     re.IGNORECASE,
 )
 
@@ -108,8 +112,6 @@ def _detect_withholding_category(lower: str) -> str:
 def _extract_official_channel_candidate(text: str, lower: str) -> tuple[str, str]:
     """Extract the candidate identifier and verification mode ('sender' vs 'payment_account')."""
     is_sender_query = "verify sender" in lower or "sender id" in lower or "sms from" in lower
-    if "etax.nra.gov.ss" in lower:
-        return "https://etax.nra.gov.ss/", "sender" if is_sender_query else "payment_account"
     email_match = _EMAIL_RE.search(text)
     if email_match:
         return email_match.group(1), "sender"
@@ -119,6 +121,11 @@ def _extract_official_channel_candidate(text: str, lower: str) -> tuple[str, str
     domain_match = _DOMAIN_CANDIDATE_RE.search(text)
     if domain_match:
         raw_dom = domain_match.group(1).rstrip(".,;:)]")
+        host_only = (
+            raw_dom.lower().removeprefix("https://").removeprefix("http://").split("/", 1)[0]
+        )
+        if host_only == "etax.nra.gov.ss":
+            return "https://etax.nra.gov.ss/", "sender" if is_sender_query else "payment_account"
         return raw_dom, "sender" if is_sender_query else "payment_account"
     if "tsa-etax-bank" in lower:
         return "TSA-ETAX-BANK", "payment_account"
@@ -133,16 +140,19 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
     lower = normalized_digits_text.lower()
     slots: dict[str, str | int | float | bool] = {}
 
-    hs_match = _HS_CODE_RE.search(normalized_digits_text)
+    has_hs_cue = _HS_CUE_RE.search(lower) is not None
+    hs_match = _HS_CODE_RE.search(normalized_digits_text) if has_hs_cue else None
     if hs_match:
         slots["hs_code"] = hs_match.group(1)
 
-    # Strip HS code before money extraction so '8703.23' is not mistaken for a salary amount
-    money_scan_text = _HS_CODE_RE.sub(" ", normalized_digits_text)
+    # Strip HS code before money extraction only when an HS/customs cue is present
+    money_scan_text = (
+        _HS_CODE_RE.sub(" ", normalized_digits_text) if has_hs_cue else normalized_digits_text
+    )
     amount_match = _MONEY_RE.search(money_scan_text)
     if amount_match:
         slots["amount_ssp"] = amount_match.group(1).replace(",", "")
-        if "hs_code" in slots or "cif" in lower or "usd" in lower:
+        if "cif" in lower or "usd" in lower:
             slots["cif_value_usd"] = slots["amount_ssp"]
 
     # 1. T4 Human-only intents: waivers, penalty remission, refunds, tax disputes, legal rulings
