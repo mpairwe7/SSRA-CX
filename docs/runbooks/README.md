@@ -12,8 +12,9 @@
 
 | Command | Action |
 |---|---|
-| `task up` | Start local hardened Docker Compose stack (`infra/compose/docker-compose.yml`) and run end-to-end AG-UI smoke test (`tools/smoke_test_stack.py`) |
+| `task up` | Start the local hardened Docker Compose stack (`infra/compose/docker-compose.yml`), then run the in-process synthetic regression suite (`tools/smoke_test_stack.py`) with `SSRA_RUNTIME_MODE=reference` for that test step only. To test a running stack, see [Live Regression on the GPU Profile](./live-regression.md). |
 | `docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait` | Start local sovereign GPU + local HF cache (`Sunflower-Qwen3.5-9B`, `Sunflower-Qwen3.8-27B`, `SunflowerASR`) + Qdrant + Valkey + PostgreSQL 18 + `ssra-frontend` (`:3033`) + `ssra-console` (`:3034`) stack (`127.0.0.1:18000` API, `127.0.0.1:18001` Runtime) and run `uv run python tools/run_20000_complex_ngrok_benchmark.py` |
+| Live regression | Run the three-layer live regression (public BFF and staff preview, Core API and runtime, 1,000-scenario benchmark) against a running GPU profile. See [Live Regression on the GPU Profile](./live-regression.md). |
 | `task down` | Stop local Docker Compose stack cleanly (`--remove-orphans`) |
 | `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.prod.yml --profile prod up -d --wait` | Validate/start the intended production/DR stack; API and runtime remain unready by design until approved providers and durable state are implemented |
 | `task gen` | Regenerate Pydantic v2 models, TypeScript types, Zod 4 schemas, OpenAPI 3.1 client, CycloneDX 1.6 SBOM + ML-BOM, SLSA v1.0 provenance, and deterministic OASIS SARIF v2.1.0 security telemetry |

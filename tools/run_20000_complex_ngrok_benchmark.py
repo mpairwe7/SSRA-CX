@@ -24,9 +24,11 @@ import re
 import statistics
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo
 
 import httpx
 from ssra_core import LocaleCode
@@ -968,8 +970,13 @@ async def run_benchmark_20k_async(
     target_label = (
         f"{_parts.scheme}://<redacted-ngrok-tunnel>" if "ngrok" in _parts.netloc else ngrok_url
     )
+    # Record what was actually measured: the run date in Africa/Juba and whether a tunnel was used.
+    transport = "ngrok tunnel" if "ngrok" in _parts.netloc else "direct (no tunnel)"
+    run_date = datetime.now(ZoneInfo("Africa/Juba")).date().isoformat()
     summary: dict[str, Any] = {
         "benchmark_version": "2026.10.21-20k",
+        "run_date": run_date,
+        "transport": transport,
         "git_revision": _resolve_git_revision(),
         "target_ngrok_url": target_label,
         "total_scenarios": len(results),
@@ -1024,9 +1031,9 @@ async def run_benchmark_20k_async(
     md_lines = [
         "# SSRA Assist — 20,000-Scenario Complex Multimodal (`TTT`, `STT`, `TTS`) Live Ngrok Stress, Fuzzy, Volume & Load Report",
         "",
-        "- **Date:** 2026-10-21",
+        f"- **Date:** {run_date}",
         f"- **Git Revision:** `{summary['git_revision']}`",
-        f"- **Live Ngrok Endpoint:** `{target_label}`",
+        f"- **Target Endpoint:** `{target_label}` ({transport})",
         f"- **Total Complex Scenarios Formulated & Executed:** `{summary['total_scenarios']}` (`6,800 en`, `6,600 ar/pga`, `6,600 din`)",
         f"- **Total Conversational Turns Executed:** `{summary['total_turns_executed']}`",
         f"- **Overall Scenario Pass / Accuracy Rate:** **`{summary['overall_accuracy_pct']}%`** (`{summary['scenarios_passed']}/{summary['total_scenarios']}`)",
@@ -1049,7 +1056,7 @@ async def run_benchmark_20k_async(
         f"| Amortized Turn Latency `p90` | `{summary['performance_metrics']['amortized_turn_latency_p90_ms']} ms` |",
         f"| Amortized Turn Latency `p95` | `{summary['performance_metrics']['amortized_turn_latency_p95_ms']} ms` |",
         f"| Amortized Turn Latency `p99` | `{summary['performance_metrics']['amortized_turn_latency_p99_ms']} ms` |",
-        f"| Single-Turn Ngrok HTTPS RTT `p50` / `p95` | `{summary['performance_metrics']['single_turn_ngrok_rtt_p50_ms']} ms` / `{summary['performance_metrics']['single_turn_ngrok_rtt_p95_ms']} ms` |",
+        f"| Single-Turn Live HTTP RTT `p50` / `p95` | `{summary['performance_metrics']['single_turn_ngrok_rtt_p50_ms']} ms` / `{summary['performance_metrics']['single_turn_ngrok_rtt_p95_ms']} ms` |",
         "",
         "## 2. Accuracy & Latency by Language Family (`en`, `ar`/`pga`, `din`)",
         "",

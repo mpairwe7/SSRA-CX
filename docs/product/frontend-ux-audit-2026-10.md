@@ -122,7 +122,7 @@ Lighthouse 12.8.2 scored 100 for Performance, Accessibility, Best Practices, and
 | [AUD-028](../audit/findings.md#aud-028--s3--adaptability--no-on-screen-keyboard-or-browser-theme-adaptation) | No `interactive-widget` or `theme-color` | R2-G (fixed) |
 | [AUD-029](../audit/findings.md#aud-029--s2--interaction-performance--long-conversations-exceed-the-inp-threshold) | 80-turn conversations reach 272–344 ms interactions under CPU slowdown | R2-H (fixed) |
 | [AUD-030](../audit/findings.md#aud-030--s2--dom-xss-hardening--trusted-types-are-created-but-not-enforced) | Trusted Types created but not enforced | R2-H (fixed) |
-| [AUD-031](../audit/findings.md#aud-031--s3--regression-tooling--live-smoke-suite-asserts-behaviour-the-fail-closed-policy-forbids) | Live smoke suite expects statuses that the fail-closed policy forbids | Tooling PR |
+| [AUD-031](../audit/findings.md#aud-031--s3--regression-tooling--live-smoke-suite-asserts-behaviour-the-fail-closed-policy-forbids) | Live smoke suite expects statuses that the fail-closed policy forbids | Tooling PR (fixed) |
 | [AUD-032](../audit/findings.md#aud-032--s3--adaptability--a-saved-locale-overrides-the-locale-in-the-url) | A saved locale overrides `/ar` and other locale URLs | Open |
 | [AUD-033](../audit/findings.md#aud-033--s3--answer-relevance--an-out-of-scope-question-received-unrelated-grounded-guidance) | An out-of-scope question received unrelated cited guidance | Open (runtime) |
 
