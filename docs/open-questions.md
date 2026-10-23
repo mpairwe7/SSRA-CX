@@ -117,7 +117,7 @@
 
 ### OQ-005 — Taxpayer & Staff Identity Proofing
 - **Blocks:** Phase 2
-- **Context:** `T1`–`T3` tools require verified identity (phone OTP bound to TIN, plus step-up OTP for `T3`). Staff require SSO + WebAuthn passkeys. The identity HTTP endpoint returns 503; test-only helpers cannot establish a production identity.
+- **Context:** `T1`–`T3` tools require verified identity (phone OTP bound to TIN, plus step-up OTP for `T3`). Staff require SSO + WebAuthn passkeys. The identity HTTP endpoint returns 503; test-only helpers cannot establish a production identity. Voice keypad step-up (`ssra_voice.verify_voice_dtmf_step_up`) needs an `OtpVerifier` from the approved provider and otherwise transfers the caller to an officer ([ADR-024](./adr/0024-voice-identity-step-up-and-carryover-fail-closed.md)).
 - **Specific Questions for SSRA SecOps & ICT:**
   1. Which mobile network operators (Zain South Sudan, MTN South Sudan, Digitel) or aggregators provide OTP delivery and SIM-swap recency signals?
   2. Does SSRA operate an existing Active Directory / Entra ID / LDAP or Keycloak IdP for staff federation?

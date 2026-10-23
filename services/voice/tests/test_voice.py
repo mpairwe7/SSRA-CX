@@ -87,11 +87,43 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     )
     assert t4_attempt.action == "WARM_TRANSFER_TO_OFFICER"
 
-    dtmf_ok = verify_voice_dtmf_step_up(
+    no_verifier = verify_voice_dtmf_step_up(
         dtmf_tin_digits="1002001234",
         dtmf_otp_digits="123456",
         input_modality="dtmf_rfc4733",
         requested_tier="T3",
+    )
+    assert no_verifier.authorized is False
+    assert no_verifier.action == "WARM_TRANSFER_TO_OFFICER"
+    assert no_verifier.tin_masked is None
+
+    def _synthetic_verifier(tin: str, otp: str) -> bool:
+        return tin == "1002001234" and otp == "654321"
+
+    wrong_code = verify_voice_dtmf_step_up(
+        dtmf_tin_digits="1002001234",
+        dtmf_otp_digits="123456",
+        requested_tier="T3",
+        otp_verifier=_synthetic_verifier,
+    )
+    assert wrong_code.authorized is False
+    assert wrong_code.action == "OTP_REJECTED"
+    exhausted = verify_voice_dtmf_step_up(
+        dtmf_tin_digits="1002001234",
+        dtmf_otp_digits="654321",
+        requested_tier="T3",
+        otp_verifier=_synthetic_verifier,
+        attempts_used=3,
+    )
+    assert exhausted.authorized is False
+    assert exhausted.action == "WARM_TRANSFER_TO_OFFICER"
+
+    dtmf_ok = verify_voice_dtmf_step_up(
+        dtmf_tin_digits="1002001234",
+        dtmf_otp_digits="654321",
+        input_modality="dtmf_rfc4733",
+        requested_tier="T3",
+        otp_verifier=_synthetic_verifier,
     )
     assert dtmf_ok.authorized is True
     assert dtmf_ok.action == "BOUND_T3"
@@ -238,6 +270,26 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     lobby.apply_event("call.on_hold", {"call_id": "c1", "on": True})
     ended = lobby.apply_event("call.ended", {"call_id": "c1"})
     assert ended.status == "ended"
+    revived = lobby.apply_event("call.risk", {"call_id": "c1", "level": "watch"})
+    assert revived.status == "ended"
+    assert "c1" not in lobby.calls
+
+    claim_lobby = CallLobbyManager()
+    claim_lobby.apply_event("call.started", {"call_id": "c2"})
+    with pytest.raises(ValueError, match="not waiting"):
+        claim_lobby.apply_event("call.claimed", {"call_id": "c2", "officer_id": "stf_1"})
+    waiting = claim_lobby.apply_event(
+        "call.transfer_requested", {"call_id": "c2", "reason": "user"}
+    )
+    assert waiting.waiting_since is None
+    claim_lobby.apply_event("call.claimed", {"call_id": "c2", "officer_id": "stf_1"})
+    with pytest.raises(ValueError, match="already claimed"):
+        claim_lobby.apply_event("call.claimed", {"call_id": "c2", "officer_id": "stf_2"})
+    assert claim_lobby.calls["c2"].claimed_by == "stf_1"
+    with pytest.raises(ValueError, match="Unsupported call lobby event"):
+        claim_lobby.apply_event("call.teleported", {"call_id": "c2"})
+    with pytest.raises(ValueError, match="Unsupported call priority"):
+        claim_lobby.apply_event("call.priority_raised", {"call_id": "c2", "priority": "vip"})
 
     from ssra_voice import resolve_mt_and_tts_turn_plan, validate_call_wrap_up
 
@@ -385,21 +437,59 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     )
     assert calm_entry.risk_level == "none"
 
+    from dataclasses import replace
+
+    carry_key = "synthetic-test-carryover-key-0123456789"
+    with pytest.raises(SSRAError):
+        build_call_to_web_carryover(
+            call_id="call_01",
+            conversation_id="conv_01",
+            owner_user_id="usr_01",
+            caller_user_id="usr_01",
+            signing_salt="too-short",
+        )
     c2w = build_call_to_web_carryover(
         call_id="call_01",
         conversation_id="conv_01",
         owner_user_id="usr_01",
         caller_user_id="usr_01",
+        signing_salt=carry_key,
+        now=1_000_000.0,
     )
     assert c2w is not None and c2w.local_models_only is True
-    assert verify_call_to_web_carryover(c2w, caller_user_id="usr_01") is True
-    assert verify_call_to_web_carryover(c2w, caller_user_id="usr_02") is False
-    from dataclasses import replace
-
+    assert (
+        verify_call_to_web_carryover(
+            c2w, caller_user_id="usr_01", signing_salt=carry_key, now=1_000_100.0
+        )
+        is True
+    )
+    assert (
+        verify_call_to_web_carryover(
+            c2w, caller_user_id="usr_02", signing_salt=carry_key, now=1_000_100.0
+        )
+        is False
+    )
+    assert (
+        verify_call_to_web_carryover(
+            c2w, caller_user_id="usr_01", signing_salt=carry_key, now=1_000_901.0
+        )
+        is False
+    )
+    assert (
+        verify_call_to_web_carryover(
+            replace(c2w, issued_at=c2w.issued_at + 100),
+            caller_user_id="usr_01",
+            signing_salt=carry_key,
+            now=1_000_100.0,
+        )
+        is False
+    )
     assert (
         verify_call_to_web_carryover(
             replace(c2w, pending_action="tampered_action"),
             caller_user_id="usr_01",
+            signing_salt=carry_key,
+            now=1_000_100.0,
         )
         is False
     )
@@ -407,6 +497,8 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         verify_call_to_web_carryover(
             replace(c2w, local_models_only=False),
             caller_user_id="usr_01",
+            signing_salt=carry_key,
+            now=1_000_100.0,
         )
         is False
     )
@@ -416,6 +508,7 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
             conversation_id="conv_01",
             owner_user_id="usr_01",
             caller_user_id="usr_02",
+            signing_salt=carry_key,
         )
         is None
     )
