@@ -9,9 +9,9 @@
 | Severity | Count | IDs |
 |---|---:|---|
 | S0 | 0 | None |
-| S1 | 4 | AUD-001, AUD-002, AUD-003, AUD-014 |
-| S2 | 19 | AUD-004 through AUD-012, AUD-015, AUD-016, AUD-018, AUD-019, AUD-020, AUD-024, AUD-025, AUD-026, AUD-029, AUD-030 |
-| S3 | 10 | AUD-013, AUD-017, AUD-021, AUD-022, AUD-023, AUD-027, AUD-028, AUD-031, AUD-032, AUD-033 |
+| S1 | 6 | AUD-001, AUD-002, AUD-003, AUD-014, AUD-034, AUD-035 |
+| S2 | 26 | AUD-004 through AUD-012, AUD-015, AUD-016, AUD-018, AUD-019, AUD-020, AUD-024, AUD-025, AUD-026, AUD-029, AUD-030, AUD-036 through AUD-039, AUD-041 through AUD-043 |
+| S3 | 11 | AUD-013, AUD-017, AUD-021, AUD-022, AUD-023, AUD-027, AUD-028, AUD-031, AUD-032, AUD-033, AUD-040 |
 
 ### AUD-001 · S1 · Runtime durability · Conversation state is process-local
 
@@ -339,4 +339,89 @@ Evidence comes from Lighthouse 12.8.2 (Apache-2.0, run from a verified local cac
 - Impact: A cited but irrelevant answer can look authoritative.
 - Fix: Runtime owner to review relevance thresholds and out-of-scope detection; add an evaluation case.
 - Phase: R2 · Owner: Agent runtime · Status: Open.
+
+## Call receptionist audit (2026-10-24)
+
+Scope: `services/voice` (`ssra_voice`), `packages/chat-ui/src/call-receptionist.ts`, the `VoiceIvrChannelAdapter` in `services/channel-gateway`, the web voice-input dialog, the staff "Calls" preview, and the voice services in the GPU Compose profile, at commit `70a6d1a`. **No live telephony path exists.** No SIP trunk, voice WebSocket, or voice service is deployed; `python -m ssra_voice` prints a status object and exits; and the voice functions below are called only by unit tests, evaluation suites, and the benchmark tools. Findings marked latent are not exploitable today, but they would become live as soon as an IVR is connected. See [the call receptionist audit](../product/call-receptionist-audit-2026-10.md).
+
+### AUD-034 · S1 (latent) · Identity binding · Voice DTMF step-up authorized any well-formed TIN and OTP
+
+- Location: `services/voice/src/ssra_voice/__init__.py` `verify_voice_dtmf_step_up`.
+- Evidence: Any 9–12 digit TIN with any 6 digits returned `authorized=True` and `BOUND_T1` or `BOUND_T3`. The OTP was never checked against an issued code, attempts were unlimited, and the existing unit test asserted this as correct. No caller outside tests exists today.
+- Standard: Master prompt invariant 8 (OTP and identity verification outside the model, strict subject binding); OWASP ASVS v5.0.0 V6 (authentication); OQ-005 (identity proofing).
+- Impact: Once connected to an IVR, any caller could bind any taxpayer's identity, and at T3.
+- Fix: The function now requires an injected `otp_verifier` port, backed by the approved identity provider. Without one it returns `WARM_TRANSFER_TO_OFFICER`. A rejected code returns `OTP_REJECTED`. Each rejection is recorded in an injected `StepUpAttemptStore` against the call's `call_id`, so the limit cannot be reset by the caller; the third rejection sends the call to an officer. A verifier or store that raises also sends the call to an officer and binds nothing. The masked TIN is returned only on success.
+- Verification: The tightened unit test fails on `70a6d1a` (`authorized` was `True` with no verifier) and passes after the fix. It covers no verifier, three rejections counted by the store, a correct code after the limit, a raising verifier, a raising store, a missing `call_id`, and the verified path. CodeRabbit review of #97 prompted the store and the exception handling.
+- Phase: R2-I · Owner: Voice and Security · Status: Fixed in R2-I.
+
+### AUD-035 · S1 (latent) · Token integrity · Call-to-web carryover tokens were signed with a public constant and never expired
+
+- Location: `ssra_voice` `_compute_carryover_hmac`, `build_call_to_web_carryover`, and `verify_call_to_web_carryover`.
+- Evidence: Without `SSRA_VOICE_CARRYOVER_HMAC_KEY`, tokens were signed with `"ssra-voice-carryover-sovereign-default-2026-10"`, a value committed to this public repository. Tokens carried no issue time, so a valid token stayed valid forever.
+- Standard: Master prompt invariant 11 (missing configuration fails closed); OWASP ASVS v5.0.0 V11 (cryptography) and V7 (session tokens).
+- Impact: Anyone could mint a carryover token that resumes a goal for any caller identifier.
+- Fix: A key of at least 32 bytes is required, otherwise the call fails closed with `503`. `issued_at` is bound into the HMAC, and tokens older than 15 minutes, or more than 60 seconds in the future, are rejected. The key is documented in ADR-024 rather than `.env.example`, because workspace policy forbids committing `.env*` files.
+- Verification: Unit tests cover a short key, wrong owner, expiry, a tampered issue time, a tampered action, and a tampered model flag.
+- Phase: R2-I · Owner: Voice and Security · Status: Fixed in R2-I.
+
+### AUD-036 · S2 · Call desk integrity · Two officers could claim the same call, and ended calls could reappear
+
+- Location: `ssra_voice` `CallLobbyManager.apply_event`.
+- Evidence: A second `call.claimed` silently replaced the first officer. A claim was accepted in any state. A late `call.risk` event after `call.ended` recreated the call. Unknown event types and arbitrary priority strings were accepted. A missing `waiting_since` became `1.0`, a 1970 timestamp, so wait times were invented.
+- Standard: Master prompt invariant 10 (truthful interface state).
+- Fix: Only a call waiting for an officer can be claimed, and the first claim wins. Ended calls leave a tombstone (the most recent 4,096), and only `call.started` can add a call, so a late event for an ended call is ignored or, once its tombstone has been evicted, rejected. Each event is validated before the stored entry changes, so an invalid priority can no longer leave a call half-entered in the waiting queue. Non-finite wait times become `None`. Unknown events and priorities are rejected, and a missing wait start stays `None`.
+- Verification: Unit tests cover claim-before-transfer, double claim, revival after end, unknown events, and unknown priorities. The evaluation suite still passes.
+- Phase: R2-I · Owner: Voice · Status: Fixed in R2-I.
+
+### AUD-037 · S2 · Launch gate and evidence · The voice WER gate trusts a per-call number, and benchmarks report speech that was never processed
+
+- Location: `ssra_voice` `is_voice_language_approved` and `route_voice_turn`; `tools/run_1000_complex_ngrok_benchmark.py` and `tools/run_20000_complex_ngrok_benchmark.py`.
+- Evidence: `is_voice_language_approved` discards `locale`, and `route_voice_turn` accepts `measured_wer` from its caller on every turn. No governed record of measured WER per language and test set exists. The benchmarks' "STT" scenarios pass a fixed `asr_wer` of 0.05 or 0.08 with text messages, so no audio, ASR model, or TTS model is involved. Dinka is therefore "approved" with a WER that has never been measured. The master prompt requires a language to launch on voice only after its WER on SSRA test sets meets the gate.
+- Fix: Planned for R2-J. A governed per-language WER record (language, WER, test set, date) with no approved languages until evidence exists, and benchmark reports that label speech scenarios as simulated.
+- Phase: R2-J · Owner: Voice and QA · Status: Open.
+
+### AUD-038 · S2 · Staff truthfulness · Officer briefs and transfer summaries misstate what happened
+
+- Location: `ssra_voice` `generate_officer_call_brief` and `route_voice_turn` warm-transfer summary.
+- Evidence: The brief is produced by keyword rules but labelled `model="ssra-sovereign/sunflower-qwen3.5-9b"`. It adds an open item, "confirm next filing/payment step", that no turn supports. It lists the first three assistant turns rather than the latest. It labels any caller who says "how" as confused. The transfer summary always says "caller pressed 0, WER exceeded, or low-confidence turns", whatever the actual reason.
+- Fix: Planned for R2-J: name the real producer, state only supported claims, use the latest turns, and give the actual transfer reasons.
+- Phase: R2-J · Owner: Voice · Status: Open.
+
+### AUD-039 · S2 · Legal data · Voice retention periods are invented
+
+- Location: `ssra_voice` `VoiceRetentionPolicy` (raw audio 24 h, transcripts 90 days, analytics 365 days).
+- Evidence: OQ-009 item 1 (statutory retention for voice recordings and transcripts) is open, but the values are hard-coded defaults.
+- Fix: Planned for R2-J: no retention value without an approved source; mark the policy pending OQ-009.
+- Phase: R2-J · Owner: Voice and SSRA Legal · Status: Open.
+
+### AUD-040 · S3 · Privacy · The TTS phrase cache keeps audio of any text
+
+- Location: `ssra_voice` `TtsPhraseCache`.
+- Evidence: Every successfully synthesized phrase is cached in a shared in-memory LRU, including personal answers, which then outlive the call.
+- Fix: Planned for R2-J: cache only allow-listed fixed prompts, such as menus and fillers.
+- Phase: R2-J · Owner: Voice · Status: Open.
+
+### AUD-041 · S2 · Caller output · Spoken and SMS output can cut or add figures
+
+- Location: `ssra_voice` `build_voice_spoken_turn_and_sms_followup` and `verify_spoken_figure_fidelity`; `services/channel-gateway` `VoiceIvrChannelAdapter.format_outbound`.
+- Evidence: The SMS follow-up is cut at 160 characters, which can split a figure, and the 70-character UCS-2 limit for Arabic is ignored. The text starts "SSRA OFFICIAL:" although it is an automated answer and the official-channel registry is OQ-011. The IVR adapter cuts at 1,000 characters mid-sentence. The strict spoken-figure guard ignores spelled-out numbers such as "five hundred".
+- Fix: Planned for R2-K.
+- Phase: R2-K · Owner: Voice and Channels · Status: Open.
+
+### AUD-042 · S2 · Caller experience · No spoken AI disclosure, and barge-in is not implemented
+
+- Location: `ssra_voice` (no greeting function); `route_voice_turn` (`_ = barge_in_detected`); `VoiceStreamSession.trigger_barge_in`.
+- Evidence: No call-start disclosure exists that says the caller is speaking with an automated assistant and how to reach a person. The master prompt requires barge-in. `route_voice_turn` discards the barge-in signal, and the session records only a flag; it neither stops playback nor cancels generation.
+- Standard: Master prompt Voice/IVR specification; OQ-009 item 2 (disclosure wording); EU AI Act Article 50(1) as a comparative benchmark (spoken disclosure at the first interaction).
+- Fix: Planned for R2-K.
+- Phase: R2-K · Owner: Voice · Status: Open.
+
+### AUD-043 · S2 · Platform exposure · The GPU profile publishes the Core API and model servers on all interfaces
+
+- Location: `infra/compose/docker-compose.gpu.yml` with the local `.env` (live on 2026-10-24).
+- Evidence: Live bindings were `0.0.0.0:18083` for the Core API, which bypasses the BFF; `0.0.0.0:28011` for the Sunflower vLLM, which is unauthenticated and bypasses `agentgateway`; and `0.0.0.0:28100` for Orpheus TTS. The Orpheus image is `app-orpheus-tts:latest`, built locally on 2026-10-15 with no repository digest, and no SSRA code calls it. The frontend on `0.0.0.0:3032` is the intended public surface.
+- Standard: Master prompt invariant 7; AUD-002, AUD-005, and AUD-007; AGENTS.md digest pinning.
+- Impact: Anyone on the host's network can call the model and the Core API directly, without the BFF or gateway controls.
+- Fix: Proposed: bind these ports to `127.0.0.1`, pin or remove Orpheus, and route model access through the gateway. This is shared infrastructure, so a human must decide before the bindings change.
+- Phase: R3 · Owner: Platform · Status: Open; decision needed.
 

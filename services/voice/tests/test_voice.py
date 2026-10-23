@@ -6,6 +6,20 @@ from ssra_core import LocaleCode
 from ssra_voice import ASR_MODEL_BY_LOCALE, is_voice_language_approved, route_voice_turn
 
 
+class _SyntheticAttemptStore:
+    """Test double for the durable per-call attempt store (OQ-015)."""
+
+    def __init__(self) -> None:
+        self.failures: dict[str, int] = {}
+
+    def failed_attempts(self, call_id: str) -> int:
+        return self.failures.get(call_id, 0)
+
+    def record_failed_attempt(self, call_id: str) -> int:
+        self.failures[call_id] = self.failures.get(call_id, 0) + 1
+        return self.failures[call_id]
+
+
 def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     """Verify ASR/TTS model selection, WER gate, DTMF step-up, hybrid speech router, and spoken figure fidelity."""
     assert "whisper" in ASR_MODEL_BY_LOCALE[LocaleCode.EN]
@@ -72,10 +86,13 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     assert d_strike2.action == "WARM_TRANSFER_TO_OFFICER"
 
     # Voice DTMF step-up blocks spoken OTP and SIM-swap, and masks TIN on keypad entry
+    store = _SyntheticAttemptStore()
     spoken_attempt = verify_voice_dtmf_step_up(
         dtmf_tin_digits="1002001234",
         dtmf_otp_digits="123456",
         input_modality="spoken_asr",
+        call_id="call_dtmf",
+        attempt_store=store,
     )
     assert spoken_attempt.authorized is False
     assert spoken_attempt.action == "REJECTED_SPOKEN_OTP"
@@ -84,14 +101,81 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         dtmf_tin_digits="1002001234",
         dtmf_otp_digits="123456",
         requested_tier="T4",
+        call_id="call_dtmf",
+        attempt_store=store,
     )
     assert t4_attempt.action == "WARM_TRANSFER_TO_OFFICER"
 
-    dtmf_ok = verify_voice_dtmf_step_up(
+    no_verifier = verify_voice_dtmf_step_up(
         dtmf_tin_digits="1002001234",
         dtmf_otp_digits="123456",
         input_modality="dtmf_rfc4733",
         requested_tier="T3",
+        call_id="call_dtmf",
+        attempt_store=store,
+    )
+    assert no_verifier.authorized is False
+    assert no_verifier.action == "WARM_TRANSFER_TO_OFFICER"
+    assert no_verifier.tin_masked is None
+
+    def _synthetic_verifier(tin: str, otp: str) -> bool:
+        return tin == "1002001234" and otp == "654321"
+
+    # The store counts every rejected code, so the caller cannot reset the three-attempt limit.
+    actions = [
+        verify_voice_dtmf_step_up(
+            dtmf_tin_digits="1002001234",
+            dtmf_otp_digits="123456",
+            requested_tier="T3",
+            otp_verifier=_synthetic_verifier,
+            call_id="call_dtmf",
+            attempt_store=store,
+        ).action
+        for _ in range(3)
+    ]
+    assert actions == ["OTP_REJECTED", "OTP_REJECTED", "WARM_TRANSFER_TO_OFFICER"]
+    assert store.failures["call_dtmf"] == 3
+    exhausted = verify_voice_dtmf_step_up(
+        dtmf_tin_digits="1002001234",
+        dtmf_otp_digits="654321",
+        requested_tier="T3",
+        otp_verifier=_synthetic_verifier,
+        call_id="call_dtmf",
+        attempt_store=store,
+    )
+    assert exhausted.authorized is False
+    assert exhausted.action == "WARM_TRANSFER_TO_OFFICER"
+
+    def _failing_verifier(tin: str, otp: str) -> bool:
+        raise TimeoutError("identity provider timed out")
+
+    class _BrokenStore(_SyntheticAttemptStore):
+        def failed_attempts(self, call_id: str) -> int:
+            raise OSError("attempt store unavailable")
+
+    for verifier, attempt_store in (
+        (_failing_verifier, _SyntheticAttemptStore()),
+        (_synthetic_verifier, _BrokenStore()),
+    ):
+        unavailable = verify_voice_dtmf_step_up(
+            dtmf_tin_digits="1002001234",
+            dtmf_otp_digits="654321",
+            requested_tier="T3",
+            otp_verifier=verifier,
+            call_id="call_unavailable",
+            attempt_store=attempt_store,
+        )
+        assert (unavailable.authorized, unavailable.action) == (False, "WARM_TRANSFER_TO_OFFICER")
+        assert unavailable.tin_masked is None
+
+    dtmf_ok = verify_voice_dtmf_step_up(
+        dtmf_tin_digits="1002001234",
+        dtmf_otp_digits="654321",
+        input_modality="dtmf_rfc4733",
+        requested_tier="T3",
+        otp_verifier=_synthetic_verifier,
+        call_id="call_dtmf_ok",
+        attempt_store=store,
     )
     assert dtmf_ok.authorized is True
     assert dtmf_ok.action == "BOUND_T3"
@@ -102,7 +186,17 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     from ssra_core import SSRAError
 
     with pytest.raises(SSRAError):
-        verify_voice_dtmf_step_up(dtmf_tin_digits="123", dtmf_otp_digits="12")
+        verify_voice_dtmf_step_up(
+            dtmf_tin_digits="123", dtmf_otp_digits="12", call_id="call_dtmf", attempt_store=store
+        )
+    with pytest.raises(SSRAError):
+        verify_voice_dtmf_step_up(
+            dtmf_tin_digits="1002001234",
+            dtmf_otp_digits="654321",
+            otp_verifier=_synthetic_verifier,
+            call_id=" ",
+            attempt_store=store,
+        )
 
     followup = build_voice_spoken_turn_and_sms_followup(
         reply_text="Your PAYE is 25,000 SSP per month. File by the 15th. Pay via bank only. Extra fourth sentence omitted.",
@@ -238,6 +332,46 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     lobby.apply_event("call.on_hold", {"call_id": "c1", "on": True})
     ended = lobby.apply_event("call.ended", {"call_id": "c1"})
     assert ended.status == "ended"
+    revived = lobby.apply_event("call.risk", {"call_id": "c1", "level": "watch"})
+    assert revived.status == "ended"
+    assert "c1" not in lobby.calls
+
+    claim_lobby = CallLobbyManager()
+    claim_lobby.apply_event("call.started", {"call_id": "c2"})
+    with pytest.raises(ValueError, match="not waiting"):
+        claim_lobby.apply_event("call.claimed", {"call_id": "c2", "officer_id": "stf_1"})
+    waiting = claim_lobby.apply_event(
+        "call.transfer_requested", {"call_id": "c2", "reason": "user"}
+    )
+    assert waiting.waiting_since is None
+    claim_lobby.apply_event("call.claimed", {"call_id": "c2", "officer_id": "stf_1"})
+    with pytest.raises(ValueError, match="already claimed"):
+        claim_lobby.apply_event("call.claimed", {"call_id": "c2", "officer_id": "stf_2"})
+    assert claim_lobby.calls["c2"].claimed_by == "stf_1"
+    with pytest.raises(ValueError, match="Unsupported call lobby event"):
+        claim_lobby.apply_event("call.teleported", {"call_id": "c2"})
+    with pytest.raises(ValueError, match="Unsupported call priority"):
+        claim_lobby.apply_event("call.priority_raised", {"call_id": "c2", "priority": "vip"})
+
+    # A rejected event changes nothing, so a call never half-enters the waiting queue.
+    partial = CallLobbyManager()
+    partial.apply_event("call.started", {"call_id": "c3", "topic": "paye"})
+    with pytest.raises(ValueError, match="Unsupported call priority"):
+        partial.apply_event(
+            "call.transfer_requested", {"call_id": "c3", "priority": "vip", "topic": "vat"}
+        )
+    assert (partial.calls["c3"].status, partial.calls["c3"].topic) == ("ai", "general")
+    with pytest.raises(ValueError, match="not waiting"):
+        partial.apply_event("call.claimed", {"call_id": "c3", "officer_id": "stf_1"})
+    nan_wait = partial.apply_event(
+        "call.transfer_requested", {"call_id": "c3", "waiting_since": float("nan")}
+    )
+    assert nan_wait.waiting_since is None
+    # Only call.started adds a call, so an unknown or evicted call cannot reappear in the queue.
+    with pytest.raises(ValueError, match="not in the lobby"):
+        partial.apply_event("call.transfer_requested", {"call_id": "c_unknown"})
+    assert partial.apply_event("call.ended", {"call_id": "c_never_seen"}).status == "ended"
+    assert "c_never_seen" not in partial.calls
 
     from ssra_voice import resolve_mt_and_tts_turn_plan, validate_call_wrap_up
 
@@ -385,21 +519,59 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     )
     assert calm_entry.risk_level == "none"
 
+    from dataclasses import replace
+
+    carry_key = "synthetic-test-carryover-key-0123456789"
+    with pytest.raises(SSRAError):
+        build_call_to_web_carryover(
+            call_id="call_01",
+            conversation_id="conv_01",
+            owner_user_id="usr_01",
+            caller_user_id="usr_01",
+            signing_salt="too-short",
+        )
     c2w = build_call_to_web_carryover(
         call_id="call_01",
         conversation_id="conv_01",
         owner_user_id="usr_01",
         caller_user_id="usr_01",
+        signing_salt=carry_key,
+        now=1_000_000.0,
     )
     assert c2w is not None and c2w.local_models_only is True
-    assert verify_call_to_web_carryover(c2w, caller_user_id="usr_01") is True
-    assert verify_call_to_web_carryover(c2w, caller_user_id="usr_02") is False
-    from dataclasses import replace
-
+    assert (
+        verify_call_to_web_carryover(
+            c2w, caller_user_id="usr_01", signing_salt=carry_key, now=1_000_100.0
+        )
+        is True
+    )
+    assert (
+        verify_call_to_web_carryover(
+            c2w, caller_user_id="usr_02", signing_salt=carry_key, now=1_000_100.0
+        )
+        is False
+    )
+    assert (
+        verify_call_to_web_carryover(
+            c2w, caller_user_id="usr_01", signing_salt=carry_key, now=1_000_901.0
+        )
+        is False
+    )
+    assert (
+        verify_call_to_web_carryover(
+            replace(c2w, issued_at=c2w.issued_at + 100),
+            caller_user_id="usr_01",
+            signing_salt=carry_key,
+            now=1_000_100.0,
+        )
+        is False
+    )
     assert (
         verify_call_to_web_carryover(
             replace(c2w, pending_action="tampered_action"),
             caller_user_id="usr_01",
+            signing_salt=carry_key,
+            now=1_000_100.0,
         )
         is False
     )
@@ -407,6 +579,8 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         verify_call_to_web_carryover(
             replace(c2w, local_models_only=False),
             caller_user_id="usr_01",
+            signing_salt=carry_key,
+            now=1_000_100.0,
         )
         is False
     )
@@ -416,6 +590,7 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
             conversation_id="conv_01",
             owner_user_id="usr_01",
             caller_user_id="usr_02",
+            signing_salt=carry_key,
         )
         is None
     )

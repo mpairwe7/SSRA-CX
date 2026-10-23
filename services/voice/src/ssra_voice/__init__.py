@@ -5,11 +5,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
+import time
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from ssra_core import LocaleCode, McpErrorCode, SSRAError
 from ssra_security import redact_pii
@@ -435,39 +438,94 @@ class LobbyCallEntry:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+LOBBY_EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        "call.started",
+        "call.transfer_requested",
+        "call.priority_raised",
+        "call.claimed",
+        "call.officer_disconnected",
+        "call.transfer_timed_out",
+        "call.risk",
+        "call.bridged",
+        "call.on_hold",
+        "call.ended",
+        "call.wrapped_up",
+    }
+)
+LOBBY_PRIORITIES: frozenset[str] = frozenset({"normal", "high", "urgent"})
+MAX_ENDED_CALL_TOMBSTONES: int = 4096
+
+
+def _optional_timestamp(value: Any) -> float | None:
+    """Return a provided wait-start timestamp, or None when the event supplied no usable one."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    timestamp = float(value)
+    return timestamp if math.isfinite(timestamp) else None
+
+
 class CallLobbyManager:
-    """Server/Console Call Lobby State Machine (`useCallConsoleStore.ts` pattern)."""
+    """Server/Console Call Lobby State Machine (`useCallConsoleStore.ts` pattern).
+
+    The first officer to claim a waiting call owns it, ended calls cannot be revived by late
+    events, and unknown event types are rejected. Only ``call.started`` can add a call, so a late
+    event for an ended call whose tombstone has been evicted is rejected rather than reviving it.
+    Each event is validated before the stored entry is changed.
+    """
 
     def __init__(self) -> None:
         self.calls: dict[str, LobbyCallEntry] = {}
+        self._ended: OrderedDict[str, None] = OrderedDict()
 
     def apply_event(self, event_type: str, data: dict[str, Any]) -> LobbyCallEntry:
+        if event_type not in LOBBY_EVENT_TYPES:
+            raise ValueError(f"Unsupported call lobby event '{event_type}'")
         call_id = str(data.get("call_id", "")).strip()
         if not call_id:
             raise ValueError("call_id is required")
-        entry = self.calls.get(call_id) or LobbyCallEntry(call_id=call_id)
+        if call_id in self._ended:
+            return LobbyCallEntry(call_id=call_id, status="ended")
+        entry = self.calls.get(call_id)
+        if entry is None:
+            if event_type in {"call.ended", "call.wrapped_up"}:
+                self._remember_ended(call_id)
+                return LobbyCallEntry(call_id=call_id, status="ended")
+            if event_type != "call.started":
+                raise ValueError(
+                    f"Call {call_id} is not in the lobby; only call.started can add it"
+                )
+            entry = LobbyCallEntry(call_id=call_id)
         if event_type == "call.started":
             entry.status = "ai"
         elif event_type == "call.transfer_requested":
+            priority = _lobby_priority(data.get("priority", "normal"))
             entry.status = "transferring"
             entry.topic = str(data.get("topic", entry.topic))
-            entry.priority = str(data.get("priority", "normal"))
+            entry.priority = priority
             entry.reason = str(data.get("reason", ""))
-            entry.waiting_since = float(data.get("waiting_since", 1.0))
+            entry.waiting_since = _optional_timestamp(data.get("waiting_since"))
             entry.claimed_by = ""
             entry.claimed_name = ""
             entry.dismissed = False
         elif event_type == "call.priority_raised":
             # Raise priority and re-alert without clearing claimed_by or waiting_since
-            entry.priority = str(data.get("priority", "urgent"))
+            entry.priority = _lobby_priority(data.get("priority", "urgent"))
             entry.reason = str(data.get("reason", entry.reason))
             entry.dismissed = False
         elif event_type == "call.claimed":
-            entry.claimed_by = str(data.get("officer_id", ""))
+            officer_id = str(data.get("officer_id", "")).strip()
+            if not officer_id:
+                raise ValueError("officer_id is required to claim a call")
+            if entry.status != "transferring":
+                raise ValueError(f"Call {call_id} is not waiting for an officer")
+            if entry.claimed_by and entry.claimed_by != officer_id:
+                raise ValueError(f"Call {call_id} is already claimed by another officer")
+            entry.claimed_by = officer_id
             entry.claimed_name = str(data.get("officer_name", ""))
         elif event_type == "call.officer_disconnected":
             entry.status = "transferring"
-            entry.waiting_since = float(data.get("waiting_since", 1.0))
+            entry.waiting_since = _optional_timestamp(data.get("waiting_since"))
             entry.reason = "officer_disconnected"
             entry.claimed_by = ""
             entry.claimed_name = ""
@@ -491,9 +549,23 @@ class CallLobbyManager:
         elif event_type in {"call.ended", "call.wrapped_up"}:
             entry.status = "ended"
             self.calls.pop(call_id, None)
+            self._remember_ended(call_id)
             return entry
         self.calls[call_id] = entry
         return entry
+
+    def _remember_ended(self, call_id: str) -> None:
+        self._ended[call_id] = None
+        if len(self._ended) > MAX_ENDED_CALL_TOMBSTONES:
+            self._ended.popitem(last=False)
+
+
+def _lobby_priority(value: Any) -> str:
+    """Accept only the lobby's known priority levels."""
+    priority = str(value).strip().lower()
+    if priority not in LOBBY_PRIORITIES:
+        raise ValueError(f"Unsupported call priority '{value}'")
+    return priority
 
 
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{3,64}$")
@@ -925,10 +997,28 @@ def validate_call_wrap_up(
 @dataclass(frozen=True)
 class VoiceDtmfStepUpResult:
     authorized: bool
-    action: Literal["BOUND_T1", "BOUND_T3", "REJECTED_SPOKEN_OTP", "WARM_TRANSFER_TO_OFFICER"]
+    action: Literal[
+        "BOUND_T1", "BOUND_T3", "REJECTED_SPOKEN_OTP", "OTP_REJECTED", "WARM_TRANSFER_TO_OFFICER"
+    ]
     tin_masked: str | None
     recording_paused_for_dtmf: bool
     reason: str | None = None
+
+
+# Checks a keypad OTP for a TIN against the approved identity provider (OQ-005). It must compare
+# in constant time and enforce the provider's own expiry and single use.
+OtpVerifier = Callable[[str, str], bool]
+MAX_DTMF_STEP_UP_ATTEMPTS: int = 3
+
+
+class StepUpAttemptStore(Protocol):
+    """Per-call count of rejected keypad codes, kept for the life of the call in durable state (OQ-015)."""
+
+    def failed_attempts(self, call_id: str) -> int: ...
+
+    def record_failed_attempt(self, call_id: str) -> int:
+        """Add one rejected code for the call and return the new total."""
+        ...
 
 
 def verify_voice_dtmf_step_up(
@@ -938,8 +1028,18 @@ def verify_voice_dtmf_step_up(
     input_modality: Literal["dtmf_rfc4733", "spoken_asr"] = "dtmf_rfc4733",
     requested_tier: Literal["T1", "T2", "T3", "T4"] = "T1",
     sim_swap_recent: bool = False,
+    otp_verifier: OtpVerifier | None = None,
+    call_id: str,
+    attempt_store: StepUpAttemptStore,
 ) -> VoiceDtmfStepUpResult:
-    """Enforce RFC 4733 DTMF-only TIN/OTP entry with recording pause and SIM-swap / T4 guards."""
+    """Enforce RFC 4733 DTMF-only TIN/OTP entry with recording pause and SIM-swap / T4 guards.
+
+    Well-formed digits are not proof of identity. The OTP must be confirmed by an approved
+    ``otp_verifier``; without one the call goes to an officer instead of binding a subject. Each
+    rejected code is recorded in ``attempt_store`` against ``call_id``, so the three-attempt limit
+    cannot be reset by the caller. If the verifier or the store fails, nothing is bound and the call
+    goes to an officer.
+    """
     if requested_tier == "T4" or sim_swap_recent:
         return VoiceDtmfStepUpResult(
             authorized=False,
@@ -964,11 +1064,55 @@ def verify_voice_dtmf_step_up(
             "DTMF step-up requires 9..12 ASCII TIN digits and 6 ASCII OTP digits",
             status_code=400,
         )
-    return VoiceDtmfStepUpResult(
-        authorized=True,
-        action="BOUND_T3" if requested_tier == "T3" else "BOUND_T1",
-        tin_masked=f"••••{clean_tin[-4:]}",
+    if not call_id.strip():
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "DTMF step-up requires the call_id that keypad attempts are counted against",
+            status_code=400,
+        )
+    too_many_attempts = VoiceDtmfStepUpResult(
+        authorized=False,
+        action="WARM_TRANSFER_TO_OFFICER",
+        tin_masked=None,
         recording_paused_for_dtmf=True,
+        reason="Too many keypad verification attempts on this call",
+    )
+    if otp_verifier is None:
+        return VoiceDtmfStepUpResult(
+            authorized=False,
+            action="WARM_TRANSFER_TO_OFFICER",
+            tin_masked=None,
+            recording_paused_for_dtmf=True,
+            reason="No approved OTP verifier is configured (OQ-005); identity cannot be confirmed on this call",
+        )
+    try:
+        if attempt_store.failed_attempts(call_id) >= MAX_DTMF_STEP_UP_ATTEMPTS:
+            return too_many_attempts
+        if otp_verifier(clean_tin, clean_otp):
+            return VoiceDtmfStepUpResult(
+                authorized=True,
+                action="BOUND_T3" if requested_tier == "T3" else "BOUND_T1",
+                tin_masked=f"••••{clean_tin[-4:]}",
+                recording_paused_for_dtmf=True,
+            )
+        failures = attempt_store.record_failed_attempt(call_id)
+    except Exception:
+        # A provider or attempt-store failure must never bind a subject, and the caller still needs help.
+        return VoiceDtmfStepUpResult(
+            authorized=False,
+            action="WARM_TRANSFER_TO_OFFICER",
+            tin_masked=None,
+            recording_paused_for_dtmf=True,
+            reason="Identity verification is unavailable on this call",
+        )
+    if failures >= MAX_DTMF_STEP_UP_ATTEMPTS:
+        return too_many_attempts
+    return VoiceDtmfStepUpResult(
+        authorized=False,
+        action="OTP_REJECTED",
+        tin_masked=None,
+        recording_paused_for_dtmf=True,
+        reason="The keypad code was not accepted",
     )
 
 
@@ -1247,10 +1391,26 @@ class CallToWebCarryover:
     resume_step_index: int
     pending_action: str
     local_models_only: bool = True
+    issued_at: int = 0
     carryover_hmac: str = ""
 
 
-_DEFAULT_CARRYOVER_DOMAIN_SALT = "ssra-voice-carryover-sovereign-default-2026-10"
+CARRYOVER_TTL_SECONDS: int = 900
+CARRYOVER_CLOCK_SKEW_SECONDS: int = 60
+MIN_CARRYOVER_KEY_BYTES: int = 32
+
+
+def _carryover_signing_key(signing_salt: str | None) -> bytes:
+    """Return the configured carryover key, failing closed when none of adequate length is set."""
+    key = signing_salt or os.environ.get("SSRA_VOICE_CARRYOVER_HMAC_KEY") or ""
+    key_bytes = key.encode("utf-8")
+    if len(key_bytes) < MIN_CARRYOVER_KEY_BYTES:
+        raise SSRAError(
+            McpErrorCode.UPSTREAM_UNAVAILABLE,
+            "Call carryover signing key is not configured (SSRA_VOICE_CARRYOVER_HMAC_KEY, at least 32 bytes)",
+            status_code=503,
+        )
+    return key_bytes
 
 
 def _compute_carryover_hmac(
@@ -1262,14 +1422,10 @@ def _compute_carryover_hmac(
     resume_step_index: int,
     pending_action: str,
     local_models_only: bool,
+    issued_at: int,
     signing_salt: str | None = None,
 ) -> str:
-    """Compute an HMAC-SHA256 signature binding all CallToWebCarryover fields to the owner."""
-    key_str = (
-        signing_salt
-        or os.environ.get("SSRA_VOICE_CARRYOVER_HMAC_KEY")
-        or _DEFAULT_CARRYOVER_DOMAIN_SALT
-    )
+    """Compute an HMAC-SHA256 signature binding all CallToWebCarryover fields and issue time to the owner."""
     msg = json.dumps(
         [
             call_id,
@@ -1279,10 +1435,13 @@ def _compute_carryover_hmac(
             resume_step_index,
             pending_action,
             local_models_only,
+            issued_at,
         ],
         separators=(",", ":"),
     )
-    return hmac.new(key_str.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.new(
+        _carryover_signing_key(signing_salt), msg.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
 
 
 def build_call_to_web_carryover(
@@ -1295,6 +1454,7 @@ def build_call_to_web_carryover(
     resume_step_index: int = 2,
     pending_action: str = "upload_supporting_receipt",
     signing_salt: str | None = None,
+    now: float | None = None,
 ) -> CallToWebCarryover | None:
     """Build a session-bound, HMAC-signed Voice-to-Web carryover token when caller and owner identities match."""
     is_valid = (
@@ -1308,6 +1468,7 @@ def build_call_to_web_carryover(
         return None
     step_idx = max(1, resume_step_index)
     bounded_action = pending_action[:120]
+    issued_at = int(time.time() if now is None else now)
     sig = _compute_carryover_hmac(
         call_id=call_id,
         conversation_id=conversation_id,
@@ -1316,6 +1477,7 @@ def build_call_to_web_carryover(
         resume_step_index=step_idx,
         pending_action=bounded_action,
         local_models_only=True,
+        issued_at=issued_at,
         signing_salt=signing_salt,
     )
     return CallToWebCarryover(
@@ -1325,6 +1487,7 @@ def build_call_to_web_carryover(
         resume_step_index=step_idx,
         pending_action=bounded_action,
         local_models_only=True,
+        issued_at=issued_at,
         carryover_hmac=sig,
     )
 
@@ -1334,8 +1497,13 @@ def verify_call_to_web_carryover(
     *,
     caller_user_id: str,
     signing_salt: str | None = None,
+    now: float | None = None,
 ) -> bool:
-    """Verify the HMAC signature (`hmac.compare_digest`) and caller ownership of a `CallToWebCarryover` token (`SEC-G5`)."""
+    """Verify the HMAC signature (`hmac.compare_digest`), caller ownership, and freshness of a carryover token (`SEC-G5`)."""
+    current = time.time() if now is None else now
+    age = current - carryover.issued_at
+    if age > CARRYOVER_TTL_SECONDS or age < -CARRYOVER_CLOCK_SKEW_SECONDS:
+        return False
     expected = _compute_carryover_hmac(
         call_id=carryover.call_id,
         conversation_id=carryover.conversation_id,
@@ -1344,6 +1512,7 @@ def verify_call_to_web_carryover(
         resume_step_index=carryover.resume_step_index,
         pending_action=carryover.pending_action[:120],
         local_models_only=carryover.local_models_only,
+        issued_at=carryover.issued_at,
         signing_salt=signing_salt,
     )
     return hmac.compare_digest(carryover.carryover_hmac, expected)
@@ -1351,9 +1520,12 @@ def verify_call_to_web_carryover(
 
 __all__ = [
     "ASR_MODEL_BY_LOCALE",
+    "CARRYOVER_TTL_SECONDS",
+    "LOBBY_EVENT_TYPES",
     "MAX_CARRYOVER_CONTEXT_CHARS",
     "MAX_COMPRESSED_AUDIO_BYTES",
     "MAX_DECODED_PCM_BYTES",
+    "MAX_DTMF_STEP_UP_ATTEMPTS",
     "MAX_VOICE_WER_GATE",
     "TTS_DEFAULT_VOICE",
     "TTS_MODEL_BY_LOCALE",
@@ -1368,7 +1540,9 @@ __all__ = [
     "HybridVoiceRouteDecision",
     "LobbyCallEntry",
     "OfficerCallBrief",
+    "OtpVerifier",
     "SpokenNumberVerbalization",
+    "StepUpAttemptStore",
     "TtsCachedAudio",
     "TtsPhraseCache",
     "VADConfig",

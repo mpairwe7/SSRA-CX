@@ -5,6 +5,11 @@
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
+## 0.17 [R2-I Voice Identity Step-Up, Carryover Tokens, and Call Lobby Integrity](./audit/phase-R2-I-voice-identity-report.md) (2026-10-24)
+
+- Audited the call receptionist ([audit](./product/call-receptionist-audit-2026-10.md)). No live telephony path exists: `ssra_voice` is a library used by tests, evaluation suites, and benchmarks, and the benchmarks' speech scenarios process no audio. Recorded AUD-034 to AUD-043.
+- Fixed AUD-034. Voice DTMF step-up authorized any well-formed TIN and OTP; it now requires an approved OTP verifier, allows three attempts, and otherwise goes to an officer. Fixed AUD-035. Carryover tokens fell back to a public constant key and never expired; they now require a configured key of at least 32 bytes and expire after 15 minutes. Fixed AUD-036. The call lobby now enforces first-claim-wins, keeps tombstones for ended calls, and rejects unknown events, priorities, and invented wait times. See [ADR-024](./adr/0024-voice-identity-step-up-and-carryover-fail-closed.md).
+- AUD-043 records the Core API, Sunflower vLLM, and Orpheus TTS published on all interfaces in the live GPU profile, and the undigested Orpheus image. Changing these shared bindings needs a human decision.
 ## 0.16 Dependency Security Patch: zod 4.6.7 (2026-10-24)
 
 - Upgraded `zod` from 4.6.5 to 4.6.7 in the seven workspace manifests and `pnpm-lock.yaml` for [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) (high: validating an oversized constrained collection can exhaust memory; fixed in 4.6.6 by upstream commit `a0ebf970`, which checks array, set, and map size bounds before parsing elements). `pnpm audit --audit-level=high` had started failing on every pull request. This supersedes the Dependabot bump (#76).
