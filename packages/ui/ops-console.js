@@ -856,7 +856,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       <!-- Preview status: operational data is hidden until an authenticated staff session is configured. -->
       <div class="call-console-bar" id="call-console-bar" role="note" aria-label="Staff console preview status">
         <div class="call-bar-left">
-          <button type="button" id="mobile-ops-nav-btn" class="ops-btn mobile-nav-btn" aria-label="Open preview navigation" aria-expanded="false" aria-controls="staff-rail">${ICONS.panelLeft} Menu</button>
+          <button type="button" id="mobile-ops-nav-btn" class="ops-btn mobile-nav-btn" aria-expanded="false" aria-controls="staff-rail">${ICONS.panelLeft} Menu</button>
           <span class="presence-pill">Preview only · no authenticated staff session</span>
           <span>No live calls, taxpayer records, or service telemetry are shown.</span>
         </div>
@@ -1053,7 +1053,6 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         const isOpen = railEl?.classList.contains("is-drawer-open") ?? false;
         railEl?.toggleAttribute("inert", isMobile && !isOpen);
         mobileNavBtn?.setAttribute("aria-expanded", String(isMobile && isOpen));
-        mobileNavBtn?.setAttribute("aria-label", isMobile && isOpen ? "Close preview navigation" : "Open preview navigation");
         if (moveFocus) {
           if (isMobile && isOpen) focusAfterStaffRailStateSync(railGroupsEl?.querySelector("a"));
           else focusAfterStaffRailStateSync(mobileNavBtn);

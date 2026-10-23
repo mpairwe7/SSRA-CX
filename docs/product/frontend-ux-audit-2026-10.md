@@ -110,6 +110,24 @@ Still open after these phases: moderated research with taxpayers and staff, assi
 - [MDN: `HTMLDialogElement.closedBy`](https://developer.mozilla.org/docs/Web/API/HTMLDialogElement/closedBy) is not Baseline, and Safari does not support it. R2-D uses `showModal()` and handles backdrop dismissal explicitly.
 - [Chrome: `prefers-reduced-transparency`](https://developer.chrome.com/blog/css-prefers-reduced-transparency) is supported from Chromium 118 but not in Safari. R2-E therefore also ties the same reduction to the explicit low-data setting.
 
+## Accessibility, adaptability, responsiveness, and performance audit (2026-10-24)
+
+Lighthouse 12.8.2 scored 100 for Performance, Accessibility, Best Practices, and SEO on the public and staff pages, so the earlier 100-score claim reproduces for the initial load. The default audit does not exercise saved history, phone layouts in use, larger text, long conversations, or DOM-XSS enforcement. A rendered lab audit found these gaps:
+
+| ID | Gap | Phase |
+|---|---|---|
+| [AUD-025](../audit/findings.md#aud-025--s2--truthful-state--saved-conversations-never-appeared-after-a-reload) | Saved conversations never appeared after a reload | R2-G (fixed) |
+| [AUD-026](../audit/findings.md#aud-026--s2--mobile-reflow--phone-layout-rules-were-overridden-by-the-base-stylesheet) | Phone rules were overridden by the base stylesheet: a 173 px header, a 40 px landscape transcript, and an unreachable language selector at 320 px and with 200 % text | R2-G (fixed) |
+| [AUD-027](../audit/findings.md#aud-027--s3--accessibility--staff-mobile-menu-button-failed-label-in-name) | Staff "Menu" button failed Label in Name | R2-G (fixed) |
+| [AUD-028](../audit/findings.md#aud-028--s3--adaptability--no-on-screen-keyboard-or-browser-theme-adaptation) | No `interactive-widget` or `theme-color` | R2-G (fixed) |
+| [AUD-029](../audit/findings.md#aud-029--s2--interaction-performance--long-conversations-exceed-the-inp-threshold) | 80-turn conversations reach 272–344 ms interactions under CPU slowdown | R2-H |
+| [AUD-030](../audit/findings.md#aud-030--s2--dom-xss-hardening--trusted-types-are-created-but-not-enforced) | Trusted Types created but not enforced | R2-H |
+| [AUD-031](../audit/findings.md#aud-031--s3--regression-tooling--live-smoke-suite-asserts-behaviour-the-fail-closed-policy-forbids) | Live smoke suite expects statuses that the fail-closed policy forbids | Tooling PR |
+| [AUD-032](../audit/findings.md#aud-032--s3--adaptability--a-saved-locale-overrides-the-locale-in-the-url) | A saved locale overrides `/ar` and other locale URLs | Open |
+| [AUD-033](../audit/findings.md#aud-033--s3--answer-relevance--an-out-of-scope-question-received-unrelated-grounded-guidance) | An out-of-scope question received unrelated cited guidance | Open (runtime) |
+
+Loading is not the bottleneck: on emulated 2G with 4× CPU the page is one 25 KB request with an LCP of 1.15 s. Measurements and research are in [the R2-G report](../audit/phase-R2-G-adaptive-layout-report.md).
+
 ## Standards and research checked on 2026-10-21
 
 - [W3C Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) — normative accessibility baseline. Relevant criteria include reflow at 320 CSS pixels, keyboard focus visibility/not obscured, target size, and consistent help. The project’s 44px control target is a design target that exceeds the WCAG 2.2 AA minimum for most controls; it does not by itself prove conformance.

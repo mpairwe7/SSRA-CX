@@ -181,7 +181,9 @@ function renderPwaShellHtml(locale, nonce) {
 <html lang="${uiLocale}" dir="${dir}" data-theme="dark">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#091310" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#F6F7F2" media="(prefers-color-scheme: light)" />
   <meta name="description" content="Official South Sudan Revenue Authority (SSRA / NRA) grounded AI tax assistant for TIN registration, PAYE, Withholding Tax, TCC, and customs guidance." />
   <title>SSRA Assist — South Sudan Revenue Authority Official AI Assistant</title>
   <link rel="manifest" href="/manifest.webmanifest" />
@@ -306,13 +308,6 @@ function renderPwaShellHtml(locale, nonce) {
       :root[dir="rtl"] .rail-wrap { inset: 0 0 0 auto; transform: translateX(100%); }
       .app-shell[data-mobile-rail="open"] .rail-wrap { transform: translateX(0); visibility: visible; transition: transform 0.22s ease, visibility 0s; }
       .app-shell[data-mobile-rail="open"] .rail-mobile-backdrop { display: block; }
-    }
-    @media (max-width: 640px) {
-      .chat-header { padding: 0.55rem 0.75rem; gap: 0.45rem; }
-      .status-badge { display: none; }
-      .landing { padding: 1rem 0.85rem 1.5rem; gap: 0.9rem; justify-content: flex-start; }
-      .landing-prompts { grid-template-columns: minmax(0, 1fr); }
-      .composer-keys { display: none; }
     }
 
     /* ── chatv2 Sidebar (ConversationRail + AccountRail from FinalYearProject) ── */
@@ -542,9 +537,37 @@ function renderPwaShellHtml(locale, nonce) {
     .settings-pane-body { font-size: 0.86rem; color: var(--text-2); line-height: 1.55; }
     .settings-actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
     .turn-content-text { white-space: pre-wrap; }
+    .bubble, .landing-chip-text, .citation-pill, .gen-ui-card p, .gen-kv dd, .locale-notice, .composer-disclosure { overflow-wrap: anywhere; }
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: var(--text-3); }
     :focus-visible { outline: 3px solid var(--ssra-gold); outline-offset: 2px; }
     .composer-textarea:focus-visible, .search-input:focus-visible { outline: 3px solid var(--ssra-gold) !important; outline-offset: 2px; box-shadow: 0 0 0 3px var(--ssra-gold); }
+    /* Responsive overrides come after the base rules so they take effect. */
+    @media (max-width: 640px) {
+      .chat-header {
+        display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 0.35rem 0.4rem;
+        grid-template-areas: "rail title voice theme" "status status status locale"; padding: 0.4rem 0.6rem;
+      }
+      .header-left, .header-right { display: contents; }
+      #header-rail-btn { grid-area: rail; }
+      #active-conv-title { grid-area: title; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #open-call-btn { grid-area: voice; }
+      #theme-toggle-btn { grid-area: theme; }
+      #net-status-badge { grid-area: status; justify-self: start; min-width: 0; }
+      #locale-select { grid-area: locale; max-width: 9.5rem; }
+      .chat-header .btn-label { display: none; }
+      .landing { padding: 1rem 0.85rem 1.5rem; gap: 0.9rem; justify-content: flex-start; }
+      .landing-prompts { grid-template-columns: minmax(0, 1fr); }
+      .composer-keys { display: none; }
+      .composer-dock { padding: 0.45rem 0.6rem max(0.55rem, env(safe-area-inset-bottom)); }
+    }
+    /* Short screens (landscape phones): scroll the whole column so the conversation keeps its space. */
+    @media (max-height: 500px) {
+      .app-main-col { overflow-y: auto; }
+      .app-content, .chat-area, .message-list, .landing { flex: none; overflow: visible; }
+      .landing { justify-content: flex-start; }
+      .composer-keys { display: none; }
+      .composer-dock { padding-block: 0.35rem max(0.45rem, env(safe-area-inset-bottom)); }
+    }
     /* Low-data mode and reduced transparency drop blur, decorative backgrounds, shadows and motion. */
     :root[data-low-data="true"] body::before { background: var(--bg-0); }
     :root[data-low-data="true"] *, :root[data-low-data="true"] *::before, :root[data-low-data="true"] *::after {
@@ -627,7 +650,7 @@ function renderPwaShellHtml(locale, nonce) {
           <span id="net-status-badge" class="status-badge" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="net-status-text">Official sources cited per answer</span></span>
         </div>
         <div class="header-right">
-          <button type="button" id="open-call-btn" class="icon-btn call-btn" aria-label="Open voice input options">${ICONS.mic} Voice input</button>
+          <button type="button" id="open-call-btn" class="icon-btn call-btn" aria-label="Open voice input options">${ICONS.mic}<span class="btn-label">Voice input</span></button>
           <select id="locale-select" class="icon-btn" aria-label="Language">
             <optgroup label="Available">
               <option value="en" ${locale === "en" ? "selected" : ""}>English (en)</option>
@@ -642,7 +665,7 @@ function renderPwaShellHtml(locale, nonce) {
               <option value="shk" ${locale === "shk" ? "selected" : ""}>Dhøg Cøllø Shilluk (shk)</option>
             </optgroup>
           </select>
-          <button type="button" id="theme-toggle-btn" class="icon-btn">${ICONS.moon} Dark</button>
+          <button type="button" id="theme-toggle-btn" class="icon-btn">${ICONS.moon}<span class="btn-label">Dark</span></button>
         </div>
       </header>
 
@@ -954,13 +977,15 @@ function renderPwaShellHtml(locale, nonce) {
       }
       applyLocaleStrings(state.locale);
 
+      const THEME_COLORS = { dark: "#091310", light: "#F6F7F2", "high-contrast": "#000000" };
       function applyTheme(t) {
         state.theme = t;
         document.documentElement.setAttribute("data-theme", t);
         const btn = document.getElementById("theme-toggle-btn");
         if (btn) {
           const label = t === "dark" ? "Dark" : t === "light" ? "Light" : "High contrast";
-          setSafeHtml(btn, (t === "dark" ? ICONS.moon : t === "light" ? ICONS.sun : ICONS.contrast) + " " + label);
+          setSafeHtml(btn, (t === "dark" ? ICONS.moon : t === "light" ? ICONS.sun : ICONS.contrast) + '<span class="btn-label">' + label + "</span>");
+          document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => meta.setAttribute("content", THEME_COLORS[t]));
           btn.setAttribute("aria-label", "Colour theme: " + label + ". Change theme");
         }
         saveState();
@@ -1247,10 +1272,8 @@ function renderPwaShellHtml(locale, nonce) {
           if (msgList) {
             setSafeHtml(msgList, activeConv.turns.map(renderTurnHtml).join(""));
             const lastTurn = msgList.lastElementChild;
-            msgList.scrollTop =
-              lastTurn && lastTurn.offsetHeight > msgList.clientHeight
-                ? lastTurn.offsetTop - msgList.offsetTop - 8
-                : msgList.scrollHeight;
+            const visibleHeight = Math.min(msgList.clientHeight, window.innerHeight);
+            lastTurn?.scrollIntoView({ block: lastTurn.offsetHeight > visibleHeight ? "start" : "end" });
           }
         }
       }
@@ -2071,6 +2094,8 @@ function renderPwaShellHtml(locale, nonce) {
         });
       });
 
+      // Show saved conversations (or the empty state) as soon as the page loads.
+      renderApp();
     })();
   </script>
 </body>
