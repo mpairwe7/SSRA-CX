@@ -497,6 +497,13 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
       }),
     ).toBe(true);
     expect(
+      isLikelyAssistantEcho({
+        transcript: "no",
+        lastAssistantText: "Please let us know your question.",
+        elapsedSinceTtsEndMs: 100,
+      }),
+    ).toBe(false);
+    expect(
       evaluateVoiceTurnContinuation({
         transcript: "file the return via the e-Tax portal",
         lastAssistantText: "Please file the return via the e-Tax portal by the 15th.",

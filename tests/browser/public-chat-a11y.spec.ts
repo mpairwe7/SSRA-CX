@@ -222,8 +222,10 @@ test("continuous voice conversation auto-advances across turns and filters speak
       value: {
         getStartCalls: () => startCalls.slice(),
         emitTranscript: (text: string) => {
-          currentRec?.onresult?.({ results: [[{ transcript: text }]] });
-          currentRec?.onend?.();
+          const rec = currentRec;
+          rec?.onresult?.({ results: [[{ transcript: text }]] });
+          rec?.onend?.();
+          if (currentRec === rec) currentRec = null;
         },
       },
     });
@@ -266,6 +268,16 @@ test("continuous voice conversation auto-advances across turns and filters speak
   });
   await expect(page.locator("#call-voice-status")).toContainText("Ignored speaker echo");
   await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(1);
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => (window as unknown as { __voiceTest: { getStartCalls: () => string[] } }).__voiceTest.getStartCalls().length,
+        ),
+      { timeout: 5_000 },
+    )
+    .toBeGreaterThanOrEqual(3);
 
   // Turn 2: a genuine follow-up question succeeds without re-clicking the microphone button.
   await page.evaluate(() => {

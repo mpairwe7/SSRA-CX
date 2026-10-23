@@ -1505,6 +1505,8 @@ def is_likely_tts_echo(
         return False
     caller_joined = " ".join(caller_tokens)
     assistant_joined = " ".join(assistant_tokens)
+    caller_padded = f" {caller_joined} "
+    assistant_padded = f" {assistant_joined} "
     assistant_set = set(assistant_tokens)
     overlap = sum(1 for tok in caller_tokens if tok in assistant_set) / len(caller_tokens)
 
@@ -1514,11 +1516,11 @@ def is_likely_tts_echo(
         and elapsed_since_tts_end_ms <= POST_TTS_ECHO_COOLDOWN_MS
     )
     if in_echo_tail:
-        if caller_joined in assistant_joined:
+        if caller_padded in assistant_padded:
             return True
         if len(caller_tokens) >= 2 and overlap >= 0.75:
             return True
-    if len(caller_tokens) >= 4 and (caller_joined in assistant_joined or overlap >= 0.85):
+    if len(caller_tokens) >= 4 and (caller_padded in assistant_padded or overlap >= 0.85):
         return True
     return False
 
@@ -1561,6 +1563,7 @@ class VoiceCallSession:
         self.phase: Literal[
             "opening_disclosure", "recording_consent", "active_ai", "transferred", "ended"
         ] = "opening_disclosure"
+        self.disclosure_playing: bool = False
         self.recording_consent_granted: bool = False
         self.turn_index: int = 0
         self.consecutive_low_confidence_turns: int = 0
@@ -1572,11 +1575,19 @@ class VoiceCallSession:
         """Play the opening AI disclosure and, if offered, request opt-in recording consent."""
         prompts = build_call_opening_prompts(self.locale, recording_offered=self.recording_offered)
         self.last_assistant_spoken_text = " ".join(p.text for p in prompts)
-        self.phase = "recording_consent" if self.recording_offered else "active_ai"
+        self.disclosure_playing = True
+        self.phase = "opening_disclosure"
         return prompts
+
+    def mark_disclosure_finished(self) -> None:
+        """Mark the non-interruptible AI disclosure as finished and advance to consent or active AI."""
+        self.disclosure_playing = False
+        if self.phase == "opening_disclosure":
+            self.phase = "recording_consent" if self.recording_offered else "active_ai"
 
     def submit_recording_consent(self, dtmf_digit: str | None) -> VoiceTurnOutcome:
         """Record keypad 1 consent (or continue unrecorded on 2/None); keypad 0 transfers to an officer."""
+        self.disclosure_playing = False
         if dtmf_digit == "0":
             decision = route_voice_turn(
                 session_id=self.session_id,
@@ -1643,9 +1654,21 @@ class VoiceCallSession:
         whisper_signals: WhisperSegmentSignals | None = None,
     ) -> VoiceTurnOutcome:
         """Process one caller turn while preserving multi-turn continuity, echo suppression, and recovery."""
+        if dtmf_digit == "0":
+            self.disclosure_playing = False
+        if self.disclosure_playing and dtmf_digit is None:
+            return VoiceTurnOutcome(
+                session_id=self.session_id,
+                phase=self.phase,
+                turn_index=self.turn_index,
+                decision=None,
+                consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                heard_assistant_context=self.last_assistant_spoken_text,
+            )
         if self.phase in ("opening_disclosure", "recording_consent") and dtmf_digit in ("1", "2"):
             return self.submit_recording_consent(dtmf_digit)
         if self.phase in ("opening_disclosure", "recording_consent"):
+            self.disclosure_playing = False
             self.phase = "active_ai"
 
         if dtmf_digit is None and transcript.strip():

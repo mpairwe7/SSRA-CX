@@ -248,6 +248,8 @@ export function isLikelyAssistantEcho(params: {
 
   const callerJoined = callerTokens.join(" ");
   const assistantJoined = assistantTokens.join(" ");
+  const callerPadded = ` ${callerJoined} `;
+  const assistantPadded = ` ${assistantJoined} `;
   const assistantSet = new Set(assistantTokens);
   let matched = 0;
   for (const tok of callerTokens) {
@@ -260,10 +262,10 @@ export function isLikelyAssistantEcho(params: {
     typeof elapsed === "number" && Number.isFinite(elapsed) && elapsed <= POST_TTS_ECHO_COOLDOWN_MS;
 
   if (inEchoTail) {
-    if (assistantJoined.includes(callerJoined)) return true;
+    if (assistantPadded.includes(callerPadded)) return true;
     if (callerTokens.length >= 2 && overlap >= 0.75) return true;
   }
-  if (callerTokens.length >= 4 && (assistantJoined.includes(callerJoined) || overlap >= 0.85)) {
+  if (callerTokens.length >= 4 && (assistantPadded.includes(callerPadded) || overlap >= 0.85)) {
     return true;
   }
   return false;

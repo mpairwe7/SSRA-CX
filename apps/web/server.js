@@ -1490,6 +1490,7 @@ function renderPwaShellHtml(locale, nonce) {
       const MAX_VOICE_EMPTY_RETRIES = 3;
       const VOICE_BACKCHANNELS = new Set(["mm", "mmm", "mm hm", "mmhm", "uh huh", "okay", "ok", "i see", "right", "got it", "نعم", "تمام", "ايوه", "أيوة"]);
       let activeSpeechRec = null;
+      let activeUtterance = null;
       let voiceContinuousActive = false;
       let voiceConsecutiveEmptyRetries = 0;
       let lastSpokenAssistantText = "";
@@ -1528,14 +1529,16 @@ function renderPwaShellHtml(locale, nonce) {
         if (!callerTokens.length || !assistantTokens.length) return false;
         const callerJoined = callerTokens.join(" ");
         const assistantJoined = assistantTokens.join(" ");
+        const callerPadded = " " + callerJoined + " ";
+        const assistantPadded = " " + assistantJoined + " ";
         const assistantSet = new Set(assistantTokens);
         const matched = callerTokens.filter((t) => assistantSet.has(t)).length;
         const overlap = matched / callerTokens.length;
         const inTail = typeof elapsedMs === "number" && Number.isFinite(elapsedMs) && elapsedMs <= POST_TTS_ECHO_COOLDOWN_MS;
-        if (inTail && (assistantJoined.includes(callerJoined) || (callerTokens.length >= 2 && overlap >= 0.75))) {
+        if (inTail && (assistantPadded.includes(callerPadded) || (callerTokens.length >= 2 && overlap >= 0.75))) {
           return true;
         }
-        return callerTokens.length >= 4 && (assistantJoined.includes(callerJoined) || overlap >= 0.85);
+        return callerTokens.length >= 4 && (assistantPadded.includes(callerPadded) || overlap >= 0.85);
       }
 
       function stopActiveSpeechRecognition() {
@@ -1560,6 +1563,7 @@ function renderPwaShellHtml(locale, nonce) {
           window.clearInterval(ttsKeepAliveTimer);
           ttsKeepAliveTimer = null;
         }
+        activeUtterance = null;
         assistantCurrentlySpeaking = false;
         if ("speechSynthesis" in window) {
           window.speechSynthesis.cancel();
@@ -1645,6 +1649,10 @@ function renderPwaShellHtml(locale, nonce) {
           saveState();
           renderApp();
           announceReply(offlineReply);
+          if (voiceContinuousActive && !assistantCurrentlySpeaking && !activeSpeechRec) {
+            setVoiceStatus("Listening for your next question…");
+            scheduleNextVoiceTurnListen();
+          }
           return;
         }
 
@@ -1741,6 +1749,10 @@ function renderPwaShellHtml(locale, nonce) {
         saveState();
         renderApp();
         announceReply(reply);
+        if (voiceContinuousActive && !assistantCurrentlySpeaking && !activeSpeechRec) {
+          setVoiceStatus("Listening for your next question…");
+          scheduleNextVoiceTurnListen();
+        }
       }
 
       submitBtn?.addEventListener("click", (e) => {
@@ -2414,6 +2426,7 @@ function renderPwaShellHtml(locale, nonce) {
         stopActiveSpeechRecognition();
         stopAssistantSpeechPlayback();
         const u = speechUtterance(replyText);
+        activeUtterance = u;
         lastSpokenAssistantText = cleanTextForSpeech(replyText);
         assistantCurrentlySpeaking = true;
         if (voiceContinuousActive) {
@@ -2421,6 +2434,7 @@ function renderPwaShellHtml(locale, nonce) {
         }
         // Keep Chromium speechSynthesis awake across long answers (>15s).
         u.onstart = () => {
+          if (activeUtterance !== u) return;
           if (ttsKeepAliveTimer) window.clearInterval(ttsKeepAliveTimer);
           ttsKeepAliveTimer = window.setInterval(() => {
             if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
@@ -2430,6 +2444,8 @@ function renderPwaShellHtml(locale, nonce) {
           }, 10000);
         };
         const onSpeechDone = () => {
+          if (activeUtterance !== u) return;
+          activeUtterance = null;
           if (ttsKeepAliveTimer) {
             window.clearInterval(ttsKeepAliveTimer);
             ttsKeepAliveTimer = null;
@@ -2476,6 +2492,7 @@ function renderPwaShellHtml(locale, nonce) {
         rec.continuous = false;
         rec.interimResults = false;
         let receivedTranscript = false;
+        let hadError = false;
         setVoiceStatus(
           voiceContinuousActive
             ? "Listening… speak your question for hands-free conversation."
@@ -2504,11 +2521,20 @@ function renderPwaShellHtml(locale, nonce) {
             setVoiceStatus("Voice text added. Check it before you send.");
           }
         };
-        rec.onerror = () => {
-          activeSpeechRec = null;
-          if (voiceContinuousActive && voiceConsecutiveEmptyRetries < MAX_VOICE_EMPTY_RETRIES) {
+        rec.onerror = (ev) => {
+          hadError = true;
+          if (activeSpeechRec === rec) activeSpeechRec = null;
+          const errCode = String(ev?.error || "");
+          const isFatal = errCode === "not-allowed" || errCode === "service-not-allowed" || errCode === "audio-capture";
+          if (!isFatal && voiceContinuousActive) {
             voiceConsecutiveEmptyRetries += 1;
-            scheduleNextVoiceTurnListen();
+            if (voiceConsecutiveEmptyRetries <= MAX_VOICE_EMPTY_RETRIES) {
+              scheduleNextVoiceTurnListen();
+              return;
+            }
+            voiceContinuousActive = false;
+            syncVoiceModalButtons();
+            setVoiceStatus("Voice conversation paused after silence. Tap Start voice conversation to continue.");
             return;
           }
           voiceContinuousActive = false;
@@ -2519,7 +2545,7 @@ function renderPwaShellHtml(locale, nonce) {
           if (activeSpeechRec === rec) {
             activeSpeechRec = null;
           }
-          if (!receivedTranscript && voiceContinuousActive && !assistantCurrentlySpeaking && !activeTurnAbortController) {
+          if (!hadError && !receivedTranscript && voiceContinuousActive && !assistantCurrentlySpeaking && !activeTurnAbortController) {
             voiceConsecutiveEmptyRetries += 1;
             if (voiceConsecutiveEmptyRetries <= MAX_VOICE_EMPTY_RETRIES) {
               scheduleNextVoiceTurnListen();
@@ -2554,6 +2580,7 @@ function renderPwaShellHtml(locale, nonce) {
       callListenBtn?.addEventListener("click", () => {
         if (voiceContinuousActive) {
           voiceContinuousActive = false;
+          if (activeTurnAbortController) activeTurnAbortController.abort();
           stopActiveSpeechRecognition();
           stopAssistantSpeechPlayback();
           syncVoiceModalButtons();
@@ -2580,6 +2607,7 @@ function renderPwaShellHtml(locale, nonce) {
       });
       document.getElementById("close-call-btn")?.addEventListener("click", () => {
         voiceContinuousActive = false;
+        if (activeTurnAbortController) activeTurnAbortController.abort();
         stopActiveSpeechRecognition();
         stopAssistantSpeechPlayback();
         syncVoiceModalButtons();
@@ -2588,6 +2616,7 @@ function renderPwaShellHtml(locale, nonce) {
       callBackdrop?.addEventListener("click", (e) => {
         if (e.target === callBackdrop) {
           voiceContinuousActive = false;
+          if (activeTurnAbortController) activeTurnAbortController.abort();
           stopActiveSpeechRecognition();
           stopAssistantSpeechPlayback();
           syncVoiceModalButtons();

@@ -878,6 +878,14 @@ def test_voice_multiturn_call_session_echo_guard_and_recovery() -> None:
     assert is_likely_tts_echo("", assistant_line) is False
     assert (
         is_likely_tts_echo(
+            "no",
+            "Please let us know your question.",
+            elapsed_since_tts_end_ms=100,
+        )
+        is False
+    )
+    assert (
+        is_likely_tts_echo(
             "PAYE return due fifteenth",
             assistant_line,
             elapsed_since_tts_end_ms=200,
@@ -900,7 +908,30 @@ def test_voice_multiturn_call_session_echo_guard_and_recovery() -> None:
         wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
     )
     call_zero.start_call()
-    zero_out = call_zero.submit_recording_consent("0")
+    assert call_zero.phase == "opening_disclosure"
+    assert call_zero.disclosure_playing is True
+    # Spoken input while the non-interruptible AI disclosure plays is ignored without advancing phase.
+    blocked_during_disclosure = call_zero.process_caller_turn(
+        transcript="What is the PAYE rate?",
+        assistant_speaking=True,
+    )
+    assert blocked_during_disclosure.decision is None
+    assert call_zero.phase == "opening_disclosure"
+    # Keypad 0 still transfers even during disclosure.
+    zero_from_turn = call_zero.process_caller_turn(dtmf_digit="0")
+    assert zero_from_turn.phase == "transferred"
+    assert (
+        zero_from_turn.decision is not None
+        and zero_from_turn.decision.action == "WARM_TRANSFER_TO_OFFICER"
+    )
+
+    call_zero_consent = VoiceCallSession(
+        session_id="call_zero_consent",
+        locale=LocaleCode.EN,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
+    )
+    call_zero_consent.start_call()
+    zero_out = call_zero_consent.submit_recording_consent("0")
     assert zero_out.phase == "transferred"
     assert zero_out.decision is not None and zero_out.decision.action == "WARM_TRANSFER_TO_OFFICER"
 
@@ -910,6 +941,8 @@ def test_voice_multiturn_call_session_echo_guard_and_recovery() -> None:
         wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
     )
     call_direct.start_call()
+    call_direct.mark_disclosure_finished()
+    assert call_direct.phase == "recording_consent"
     assert call_direct.process_caller_turn(dtmf_digit="1").phase == "active_ai"
     assert call_direct.recording_consent_granted is True
     assert (
@@ -923,6 +956,7 @@ def test_voice_multiturn_call_session_echo_guard_and_recovery() -> None:
         wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
     )
     call_unspoken_consent.start_call()
+    call_unspoken_consent.mark_disclosure_finished()
     direct_turn = call_unspoken_consent.process_caller_turn(
         transcript="What is the business profit tax rate?",
         elapsed_since_tts_end_ms=800,
@@ -937,6 +971,8 @@ def test_voice_multiturn_call_session_echo_guard_and_recovery() -> None:
     )
     prompts = call.start_call()
     assert len(prompts) == 2
+    assert call.phase == "opening_disclosure"
+    call.mark_disclosure_finished()
     assert call.phase == "recording_consent"
 
     # Declining recording (keypad 2) keeps the AI conversation active without recording.
