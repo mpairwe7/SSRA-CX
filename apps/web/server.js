@@ -844,8 +844,12 @@ function renderPwaShellHtml(locale, nonce) {
       // FE-G1: Zero-PII Shared-Device Storage Hygiene — never persist non-T0 or TIN-bearing turns to localStorage
       function scrubPiiForStorage(text) {
         return String(text || "")
-          .replace(/\\+?211\\d{9}\\b/g, "[REDACTED_PHONE]")
-          .replace(/\\b\\d{9,12}\\b/g, "[REDACTED_TIN]");
+          .replace(/[\\u0660-\\u0669\\u06f0-\\u06f9]/g, (c) => String(c.charCodeAt(0) & 15))
+          .replace(/\\+?211[\\s-]?9\\d(?:[\\s-]?\\d){7}\\b|\\b09[12578](?:[\\s-]?\\d){7}\\b/g, "[REDACTED_PHONE]")
+          .replace(/\\b(?:\\d{9,12}|\\d{3}[\\s-]\\d{3}[\\s-]?\\d{4})\\b/g, "[REDACTED_TIN]")
+          .replace(/\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b/g, (m) =>
+            m.toLowerCase() === "support@nra.gov.ss" ? m : "[REDACTED_EMAIL]",
+          );
       }
       function saveState() {
         try {
@@ -921,7 +925,14 @@ function renderPwaShellHtml(locale, nonce) {
       function computeOfflineResilienceAnswer(text) {
         const q = String(text || "").toLowerCase();
         const isCalcOrRate =
-          q.includes("paye") || q.includes("salary") || q.includes("wht") || q.includes("withholding");
+          q.includes("paye") ||
+          q.includes("salary") ||
+          q.includes("wht") ||
+          q.includes("withholding") ||
+          q.includes("customs") ||
+          q.includes("duty") ||
+          q.includes("tariff") ||
+          q.includes("cif");
         return {
           content: isCalcOrRate
             ? "The connection was lost before SSRA Assist confirmed a response. I can’t tell whether your request completed. Check with SSRA staff before repeating a consequential request. I can’t calculate or confirm tax figures while offline. You can also visit the official SSRA / NRA e-Tax portal: https://etax.nra.gov.ss/."
@@ -2012,7 +2023,13 @@ const server = http.createServer(async (req, res) => {
 
   if (method === "POST" && pathname === "/api/chat/stream") {
     const ac = new AbortController();
+    let inactivityTimer = setTimeout(() => ac.abort(), 15_000);
+    const resetInactivityTimeout = () => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => ac.abort(), 15_000);
+    };
     res.on("close", () => {
+      clearTimeout(inactivityTimer);
       if (!res.writableEnded) {
         ac.abort();
       }
@@ -2025,6 +2042,7 @@ const server = http.createServer(async (req, res) => {
         body: safeBody,
         signal: ac.signal,
       });
+      resetInactivityTimeout();
       res.writeHead(upstream.status, {
         "Content-Type": upstream.headers.get("content-type") ?? "text/event-stream",
         "X-Accel-Buffering": "no",
@@ -2032,6 +2050,7 @@ const server = http.createServer(async (req, res) => {
       });
       if (upstream.body) {
         for await (const chunk of upstream.body) {
+          resetInactivityTimeout();
           if (res.destroyed) {
             break;
           }
@@ -2052,6 +2071,8 @@ const server = http.createServer(async (req, res) => {
       } else {
         res.end();
       }
+    } finally {
+      clearTimeout(inactivityTimer);
     }
     return;
   }

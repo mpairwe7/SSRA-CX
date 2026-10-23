@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Literal, Protocol
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict
 from ssra_core import McpErrorCode, SSRAError
@@ -296,23 +297,11 @@ class MockOfficialChannelsAdapter:
         }
 
     def verify_identifier(self, candidate: str) -> OfficialChannelEntry:
-        normalised = (
-            candidate.strip()
-            .lower()
-            .removeprefix("https://")
-            .removeprefix("http://")
-            .removeprefix("mailto:")
-            .rstrip("/")
-        )
-        compact_phone = normalised.replace(" ", "").replace("-", "")
-        entry = self._official_identifiers.get(normalised) or self._official_identifiers.get(
-            compact_phone
-        )
-        if entry is not None:
-            return entry
-        return OfficialChannelEntry(
+        raw = candidate.strip()
+        lower_raw = raw.lower()
+        scam_entry = OfficialChannelEntry(
             channel_type="DOMAIN",
-            identifier=candidate.strip(),
+            identifier=raw,
             status="UNVERIFIED_OR_SCAM",
             guidance=(
                 "WARNING — NOT IN OFFICIAL SSRA REGISTRY: Do not pay money or share your TIN/OTP. "
@@ -321,6 +310,45 @@ class MockOfficialChannelsAdapter:
             ),
             verified_at=self._verified_time,
         )
+        # 1. Block Unicode homoglyphs (IDN homograph attacks), Punycode xn--, and cleartext HTTP downgrades
+        if not raw.isascii() or "xn--" in lower_raw or lower_raw.startswith("http://"):
+            return scam_entry
+
+        cleaned = lower_raw.removeprefix("mailto:").strip()
+        if cleaned in ("support@nra.gov.ss", "ssra", "tsa-etax-bank"):
+            return self._official_identifiers[cleaned]
+
+        compact_phone = cleaned.replace(" ", "").replace("-", "")
+        if compact_phone.startswith("+211") and compact_phone in self._official_identifiers:
+            return self._official_identifiers[compact_phone]
+
+        # 2. Reject any remaining '@' (RFC 3986 userinfo spoofing e.g. https://etax.nra.gov.ss@evil.example/ or unknown emails)
+        if "@" in cleaned:
+            return scam_entry
+
+        # 3. Parse URL/domain with urlsplit to verify exact official hostname while allowing official deep links
+        url_target = cleaned if cleaned.startswith("https://") else f"https://{cleaned}"
+        try:
+            parsed = urlsplit(url_target)
+            port = parsed.port
+        except ValueError:
+            return scam_entry
+
+        host = (parsed.hostname or "").rstrip(".")
+        if (
+            parsed.scheme != "https"
+            or parsed.username is not None
+            or parsed.password is not None
+            or port not in (None, 443)
+            or ".." in parsed.path
+            or "//" in parsed.path
+        ):
+            return scam_entry
+
+        entry = self._official_identifiers.get(host)
+        if entry is not None and entry.channel_type in ("DOMAIN", "PAYMENT_PORTAL"):
+            return entry
+        return scam_entry
 
 
 class BoSSOfficialFxRate(BaseModel):

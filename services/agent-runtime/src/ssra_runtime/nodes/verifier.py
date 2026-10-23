@@ -93,6 +93,18 @@ def verify_plan_outcomes(
                     "Pending tax returns must be filed electronically on https://etax.nra.gov.ss/."
                 )
 
+        if art.tool == "get_declaration_status":
+            d_status = str(sc.get("status", "")).upper()
+            duty_ssp = _parse_decimal_safe(sc.get("assessed_duty_ssp", "0"))
+            if ("PENDING_PAYMENT" in d_status or "AWAITING" in d_status) and duty_ssp > Decimal(
+                "0"
+            ):
+                blockers.append("CUSTOMS_DUTY_PENDING_SETTLEMENT")
+                notes.append(
+                    "Customs declaration release requires settling assessed duties via "
+                    "https://etax.nra.gov.ss/ into designated commercial banks."
+                )
+
     return OutcomeVerificationResult(
         verified=provenance_ok and not failed_steps,
         planned_step_count=planned_count,
