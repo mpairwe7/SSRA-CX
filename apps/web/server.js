@@ -887,11 +887,14 @@ function renderPwaShellHtml(locale, nonce) {
     <div class="eyebrow-pill">${ICONS.mic} Browser voice input</div>
       <h2 id="call-modal-title" class="call-modal-title">Speak or choose a sample question</h2>
       <p id="call-transcript-live" class="call-transcript-live">Voice typing depends on your browser and is currently available only in English and Arabic. Your browser may process audio outside SSRA. Do not speak or type a TIN, balance, or other private account details in this public chat.</p>
+      <p id="call-voice-status" class="call-transcript-live" role="status" aria-live="polite">Ready. Tap Start voice conversation for hands-free back-and-forth, or choose a sample question.</p>
       <div class="call-prompts-row">
         <button type="button" class="icon-btn call-sample-btn" data-voice-q="Where can I find general e-Tax filing guidance?">${ICONS.messageSquare} "General e-Tax guidance"</button>
         <button type="button" class="icon-btn call-sample-btn" data-voice-q="Where can I find general customs guidance?">${ICONS.messageSquare} "General customs guidance"</button>
       </div>
       <div class="call-actions-row">
+        <button type="button" id="call-listen-btn" class="icon-btn">${ICONS.mic} Start voice conversation</button>
+        <button type="button" id="call-interrupt-btn" class="icon-btn">${ICONS.stop} Interrupt &amp; speak</button>
         <button type="button" id="close-call-btn" class="icon-btn danger-outline-btn">${ICONS.close} Close</button>
       </div>
     </div>
@@ -1483,6 +1486,18 @@ function renderPwaShellHtml(locale, nonce) {
       const TURN_TIMEOUT_MS = 30000;
 
       const SPEECH_LANGS = { en: "en", ar: "ar" };
+      const POST_TTS_ECHO_COOLDOWN_MS = 450;
+      const MAX_VOICE_EMPTY_RETRIES = 3;
+      const VOICE_BACKCHANNELS = new Set(["mm", "mmm", "mm hm", "mmhm", "uh huh", "okay", "ok", "i see", "right", "got it", "نعم", "تمام", "ايوه", "أيوة"]);
+      let activeSpeechRec = null;
+      let voiceContinuousActive = false;
+      let voiceConsecutiveEmptyRetries = 0;
+      let lastSpokenAssistantText = "";
+      let lastTtsEndedAtMs = 0;
+      let ttsKeepAliveTimer = null;
+      let postTtsResumeTimer = null;
+      let assistantCurrentlySpeaking = false;
+
       function speechUtterance(text) {
         const utterance = new SpeechSynthesisUtterance(cleanTextForSpeech(text));
         if (SPEECH_LANGS[state.locale]) utterance.lang = SPEECH_LANGS[state.locale];
@@ -1495,6 +1510,60 @@ function renderPwaShellHtml(locale, nonce) {
           .replace(/[*_\\x60#~>-]+/g, " ")
           .replace(/\\s+/g, " ")
           .trim();
+      }
+
+      function normalizeSpeechTokens(text) {
+        const matches = String(text || "").toLowerCase().match(/[\\p{L}\\p{N}]+/gu);
+        return matches ? matches.filter(Boolean) : [];
+      }
+
+      function isBackchannelUtterance(text) {
+        const tokens = normalizeSpeechTokens(text);
+        return tokens.length > 0 && tokens.length <= 2 && VOICE_BACKCHANNELS.has(tokens.join(" "));
+      }
+
+      function isLikelyAssistantEcho(transcript, lastAssistantText, elapsedMs) {
+        const callerTokens = normalizeSpeechTokens(transcript);
+        const assistantTokens = normalizeSpeechTokens(lastAssistantText);
+        if (!callerTokens.length || !assistantTokens.length) return false;
+        const callerJoined = callerTokens.join(" ");
+        const assistantJoined = assistantTokens.join(" ");
+        const assistantSet = new Set(assistantTokens);
+        const matched = callerTokens.filter((t) => assistantSet.has(t)).length;
+        const overlap = matched / callerTokens.length;
+        const inTail = typeof elapsedMs === "number" && Number.isFinite(elapsedMs) && elapsedMs <= POST_TTS_ECHO_COOLDOWN_MS;
+        if (inTail && (assistantJoined.includes(callerJoined) || (callerTokens.length >= 2 && overlap >= 0.75))) {
+          return true;
+        }
+        return callerTokens.length >= 4 && (assistantJoined.includes(callerJoined) || overlap >= 0.85);
+      }
+
+      function stopActiveSpeechRecognition() {
+        if (postTtsResumeTimer) {
+          window.clearTimeout(postTtsResumeTimer);
+          postTtsResumeTimer = null;
+        }
+        if (activeSpeechRec) {
+          const rec = activeSpeechRec;
+          activeSpeechRec = null;
+          rec.onresult = null;
+          rec.onerror = null;
+          rec.onend = null;
+          try {
+            rec.stop();
+          } catch {}
+        }
+      }
+
+      function stopAssistantSpeechPlayback() {
+        if (ttsKeepAliveTimer) {
+          window.clearInterval(ttsKeepAliveTimer);
+          ttsKeepAliveTimer = null;
+        }
+        assistantCurrentlySpeaking = false;
+        if ("speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+        }
       }
 
       function newThreadId() {
@@ -1546,10 +1615,11 @@ function renderPwaShellHtml(locale, nonce) {
         return true;
       }
 
-      async function sendTurn(text) {
+      async function sendTurn(text, opts) {
         if (activeTurnAbortController) return;
         const trimmed = String(text || "").trim();
         if (!trimmed) return;
+        const fromVoiceLoop = Boolean(opts && opts.fromVoiceLoop);
 
         let conv = state.conversations.find((c) => c.id === state.activeId);
         if (!conv) {
@@ -1641,9 +1711,8 @@ function renderPwaShellHtml(locale, nonce) {
                 thread_id: typeof data.thread_id === "string" ? data.thread_id : conv.id,
               },
             };
-            if (state.autoNarrate && "speechSynthesis" in window) {
-              window.speechSynthesis.cancel();
-              window.speechSynthesis.speak(speechUtterance(replyText));
+            if ((state.autoNarrate || fromVoiceLoop || voiceContinuousActive) && "speechSynthesis" in window) {
+              speakAssistantReply(replyText);
             }
           }
         } catch (err) {
@@ -2308,49 +2377,228 @@ function renderPwaShellHtml(locale, nonce) {
       });
 
       const callBackdrop = document.getElementById("call-modal-backdrop");
+      const callVoiceStatusEl = document.getElementById("call-voice-status");
+      const callListenBtn = document.getElementById("call-listen-btn");
+      const callInterruptBtn = document.getElementById("call-interrupt-btn");
 
-      // Voice Dictation (Web Speech API)
-      document.getElementById("voice-dictate-btn")?.addEventListener("click", () => {
+      function setVoiceStatus(message) {
+        if (callVoiceStatusEl) callVoiceStatusEl.textContent = message;
+        if (hintEl) hintEl.textContent = message;
+      }
+
+      function syncVoiceModalButtons() {
+        if (!callListenBtn) return;
+        if (voiceContinuousActive) {
+          callListenBtn.setAttribute("aria-pressed", "true");
+          setSafeHtml(callListenBtn, ICONS.stop + " Stop voice conversation");
+        } else {
+          callListenBtn.setAttribute("aria-pressed", "false");
+          setSafeHtml(callListenBtn, ICONS.mic + " Start voice conversation");
+        }
+      }
+
+      function scheduleNextVoiceTurnListen() {
+        if (!voiceContinuousActive) return;
+        if (postTtsResumeTimer) window.clearTimeout(postTtsResumeTimer);
+        postTtsResumeTimer = window.setTimeout(() => {
+          postTtsResumeTimer = null;
+          if (voiceContinuousActive && !assistantCurrentlySpeaking && !activeTurnAbortController) {
+            startVoiceRecognition({ continuousLoop: true });
+          }
+        }, POST_TTS_ECHO_COOLDOWN_MS);
+      }
+
+      function speakAssistantReply(replyText) {
+        if (!("speechSynthesis" in window)) return;
+        // Pause SpeechRecognition before TTS begins so the mic never records the assistant's own voice.
+        stopActiveSpeechRecognition();
+        stopAssistantSpeechPlayback();
+        const u = speechUtterance(replyText);
+        lastSpokenAssistantText = cleanTextForSpeech(replyText);
+        assistantCurrentlySpeaking = true;
+        if (voiceContinuousActive) {
+          setVoiceStatus("Speaking answer… tap Interrupt & speak at any time to ask a follow-up.");
+        }
+        // Keep Chromium speechSynthesis awake across long answers (>15s).
+        u.onstart = () => {
+          if (ttsKeepAliveTimer) window.clearInterval(ttsKeepAliveTimer);
+          ttsKeepAliveTimer = window.setInterval(() => {
+            if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+              window.speechSynthesis.pause();
+              window.speechSynthesis.resume();
+            }
+          }, 10000);
+        };
+        const onSpeechDone = () => {
+          if (ttsKeepAliveTimer) {
+            window.clearInterval(ttsKeepAliveTimer);
+            ttsKeepAliveTimer = null;
+          }
+          assistantCurrentlySpeaking = false;
+          lastTtsEndedAtMs = Date.now();
+          if (voiceContinuousActive) {
+            setVoiceStatus("Answer finished. Listening for your next question…");
+            scheduleNextVoiceTurnListen();
+          }
+        };
+        u.onend = onSpeechDone;
+        u.onerror = onSpeechDone;
+        window.speechSynthesis.speak(u);
+      }
+
+      function startVoiceRecognition(options) {
+        const continuousLoop = Boolean(options && options.continuousLoop);
         const speechLocale = state.locale === "ar" ? "ar-SS" : state.locale === "en" ? "en-US" : null;
         if (!speechLocale) {
-          if (hintEl) hintEl.textContent = "Voice typing is unavailable for this selected language. Type your question instead.";
+          voiceContinuousActive = false;
+          syncVoiceModalButtons();
+          setVoiceStatus("Voice typing is unavailable for this selected language. Type your question instead.");
           return;
         }
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) {
-          if (hintEl) hintEl.textContent = "Voice typing is unavailable in this browser. Type your question instead.";
-          openModal(callBackdrop, document.getElementById("close-call-btn"));
+          voiceContinuousActive = false;
+          syncVoiceModalButtons();
+          setVoiceStatus("Voice typing is unavailable in this browser. Type your question instead.");
+          if (!callBackdrop?.classList.contains("open")) {
+            openModal(callBackdrop, document.getElementById("close-call-btn"));
+          }
           return;
         }
+        stopActiveSpeechRecognition();
+        stopAssistantSpeechPlayback();
+        voiceContinuousActive = continuousLoop || Boolean(state.autoNarrate);
+        syncVoiceModalButtons();
+
         const rec = new SR();
+        activeSpeechRec = rec;
         rec.lang = speechLocale;
-        if (hintEl) hintEl.textContent = "Listening… speak your question.";
+        rec.continuous = false;
+        rec.interimResults = false;
+        let receivedTranscript = false;
+        setVoiceStatus(
+          voiceContinuousActive
+            ? "Listening… speak your question for hands-free conversation."
+            : "Listening… speak your question.",
+        );
         rec.onresult = (ev) => {
-          const transcript = ev.results?.[0]?.[0]?.transcript || "";
-          if (transcript && input) {
-            input.value = (input.value ? input.value + " " : "") + transcript;
+          const transcript = String(ev.results?.[0]?.[0]?.transcript || "").trim();
+          if (!transcript) return;
+          const elapsedSinceTts = assistantCurrentlySpeaking ? 0 : Date.now() - lastTtsEndedAtMs;
+          if (isLikelyAssistantEcho(transcript, lastSpokenAssistantText, elapsedSinceTts)) {
+            setVoiceStatus("Ignored speaker echo. Listening for your question…");
+            return;
           }
-          if (hintEl) hintEl.textContent = transcript ? "Voice text added. Check it before you send." : "";
+          if (assistantCurrentlySpeaking && isBackchannelUtterance(transcript)) {
+            return;
+          }
+          receivedTranscript = true;
+          voiceConsecutiveEmptyRetries = 0;
+          if (voiceContinuousActive) {
+            setVoiceStatus('Heard: "' + transcript + '" — preparing answer…');
+            sendTurn(transcript, { fromVoiceLoop: true });
+          } else {
+            if (input) {
+              input.value = (input.value ? input.value + " " : "") + transcript;
+            }
+            setVoiceStatus("Voice text added. Check it before you send.");
+          }
         };
         rec.onerror = () => {
-          if (hintEl) hintEl.textContent = "Voice typing stopped. Type your question instead.";
+          activeSpeechRec = null;
+          if (voiceContinuousActive && voiceConsecutiveEmptyRetries < MAX_VOICE_EMPTY_RETRIES) {
+            voiceConsecutiveEmptyRetries += 1;
+            scheduleNextVoiceTurnListen();
+            return;
+          }
+          voiceContinuousActive = false;
+          syncVoiceModalButtons();
+          setVoiceStatus("Voice typing stopped. Type your question instead.");
         };
-        rec.start();
+        rec.onend = () => {
+          if (activeSpeechRec === rec) {
+            activeSpeechRec = null;
+          }
+          if (!receivedTranscript && voiceContinuousActive && !assistantCurrentlySpeaking && !activeTurnAbortController) {
+            voiceConsecutiveEmptyRetries += 1;
+            if (voiceConsecutiveEmptyRetries <= MAX_VOICE_EMPTY_RETRIES) {
+              scheduleNextVoiceTurnListen();
+            } else {
+              voiceContinuousActive = false;
+              syncVoiceModalButtons();
+              setVoiceStatus("Voice conversation paused after silence. Tap Start voice conversation to continue.");
+            }
+          }
+        };
+        try {
+          rec.start();
+        } catch {
+          activeSpeechRec = null;
+          voiceContinuousActive = false;
+          syncVoiceModalButtons();
+          setVoiceStatus("Voice typing stopped. Type your question instead.");
+        }
+      }
+
+      // Voice Dictation (Web Speech API)
+      document.getElementById("voice-dictate-btn")?.addEventListener("click", () => {
+        if (assistantCurrentlySpeaking || activeTurnAbortController) {
+          stopAssistantSpeechPlayback();
+          if (activeTurnAbortController) activeTurnAbortController.abort();
+          startVoiceRecognition({ continuousLoop: true });
+          return;
+        }
+        startVoiceRecognition({ continuousLoop: Boolean(state.autoNarrate) });
+      });
+
+      callListenBtn?.addEventListener("click", () => {
+        if (voiceContinuousActive) {
+          voiceContinuousActive = false;
+          stopActiveSpeechRecognition();
+          stopAssistantSpeechPlayback();
+          syncVoiceModalButtons();
+          setVoiceStatus("Voice conversation stopped. Tap Start voice conversation when ready.");
+          return;
+        }
+        voiceConsecutiveEmptyRetries = 0;
+        startVoiceRecognition({ continuousLoop: true });
+      });
+
+      callInterruptBtn?.addEventListener("click", () => {
+        stopAssistantSpeechPlayback();
+        if (activeTurnAbortController) {
+          activeTurnAbortController.abort();
+        }
+        voiceConsecutiveEmptyRetries = 0;
+        startVoiceRecognition({ continuousLoop: true });
       });
 
       // Voice input options dialog
       document.getElementById("open-call-btn")?.addEventListener("click", (e) => {
+        syncVoiceModalButtons();
         openModal(callBackdrop, document.getElementById("close-call-btn"), e.currentTarget);
       });
-      document.getElementById("close-call-btn")?.addEventListener("click", closeAllModals);
+      document.getElementById("close-call-btn")?.addEventListener("click", () => {
+        voiceContinuousActive = false;
+        stopActiveSpeechRecognition();
+        stopAssistantSpeechPlayback();
+        syncVoiceModalButtons();
+        closeAllModals();
+      });
       callBackdrop?.addEventListener("click", (e) => {
-        if (e.target === callBackdrop) closeAllModals();
+        if (e.target === callBackdrop) {
+          voiceContinuousActive = false;
+          stopActiveSpeechRecognition();
+          stopAssistantSpeechPlayback();
+          syncVoiceModalButtons();
+          closeAllModals();
+        }
       });
       document.querySelectorAll(".call-sample-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
           const q = btn.getAttribute("data-voice-q");
           closeAllModals();
-          sendTurn(q);
+          sendTurn(q, { fromVoiceLoop: voiceContinuousActive });
         });
       });
 

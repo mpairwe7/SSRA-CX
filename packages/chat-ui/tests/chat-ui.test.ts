@@ -16,16 +16,21 @@ import {
   escapeHtmlStrict,
   evaluateCaptionScrollPin,
   evaluateSemanticEndpointing,
+  evaluateVoiceTurnContinuation,
   formatDocType,
   GENERATIVE_UI_STORYBOOK_FIXTURES,
   groupConversationsByRecency,
+  isBackchannelText,
   isCspSafeImagePreviewDataUrl,
+  isLikelyAssistantEcho,
   isVocalAcousticProfile,
   joinDictated,
   levelDbfs,
+  MAX_CONSECUTIVE_SPEECH_RETRIES,
   nextRevealIndex,
   OFFLINE_SSRA_OFFICE_DIRECTORY,
   OfflineOutboxQueue,
+  POST_TTS_ECHO_COOLDOWN_MS,
   parseAguiSseStream,
   renderGenerativeUICard,
   resolveAdaptiveVoiceNetworkProfile,
@@ -477,6 +482,64 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     // Reduced motion stops the animation but still reports who has the floor.
     expect(orbReduced.mode).toBe("speaking");
     expect(orbReduced.smoothedLevel).toBe(0);
+
+    // Multi-turn voice continuation, 450ms post-TTS echo guard, backchannel immunity & retry bound
+    expect(POST_TTS_ECHO_COOLDOWN_MS).toBe(450);
+    expect(MAX_CONSECUTIVE_SPEECH_RETRIES).toBe(3);
+    expect(isBackchannelText("uh-huh")).toBe(true);
+    expect(isBackchannelText("نعم")).toBe(true);
+    expect(isBackchannelText("What is PAYE?")).toBe(false);
+    expect(
+      isLikelyAssistantEcho({
+        transcript: "file the return via the e-Tax portal",
+        lastAssistantText: "Please file the return via the e-Tax portal by the 15th.",
+        elapsedSinceTtsEndMs: 200,
+      }),
+    ).toBe(true);
+    expect(
+      evaluateVoiceTurnContinuation({
+        transcript: "file the return via the e-Tax portal",
+        lastAssistantText: "Please file the return via the e-Tax portal by the 15th.",
+        assistantSpeaking: false,
+        elapsedSinceTtsEndMs: 200,
+        consecutiveEmptyRetries: 0,
+        continuousEnabled: true,
+      }).action,
+    ).toBe("ignore_echo");
+    expect(
+      evaluateVoiceTurnContinuation({
+        transcript: "mm-hm",
+        lastAssistantText: "Please file the return via the e-Tax portal by the 15th.",
+        assistantSpeaking: true,
+        elapsedSinceTtsEndMs: 0,
+        consecutiveEmptyRetries: 0,
+        continuousEnabled: true,
+      }).action,
+    ).toBe("ignore_backchannel");
+    expect(
+      evaluateVoiceTurnContinuation({
+        transcript: "How do I apply for a Tax Compliance Certificate?",
+        lastAssistantText: "Please file the return via the e-Tax portal by the 15th.",
+        assistantSpeaking: false,
+        elapsedSinceTtsEndMs: 600,
+        consecutiveEmptyRetries: 2,
+        continuousEnabled: true,
+      }),
+    ).toEqual({
+      action: "submit_turn",
+      nextRetryCount: 0,
+      resumeDelayMs: 450,
+    });
+    expect(
+      evaluateVoiceTurnContinuation({
+        transcript: "",
+        lastAssistantText: "",
+        assistantSpeaking: false,
+        elapsedSinceTtsEndMs: 900,
+        consecutiveEmptyRetries: 3,
+        continuousEnabled: true,
+      }).action,
+    ).toBe("pause_after_retries");
 
     expect(
       evaluateCaptionScrollPin({ scrollHeight: 1000, scrollTop: 680, clientHeight: 300 })

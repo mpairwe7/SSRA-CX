@@ -4,7 +4,7 @@ Every architectural decision with a real reversal cost is recorded here before i
 
 ---
 
-## ADR Catalog (ADR-001 to ADR-026)
+## ADR Catalog (ADR-001 to ADR-027)
 
 | ID | Title | One-Line Problem Statement | Status | Reversal Cost |
 |---|---|---|---|---|
@@ -34,3 +34,4 @@ Every architectural decision with a real reversal cost is recorded here before i
 | **[ADR-024](./0024-voice-identity-step-up-and-carryover-fail-closed.md)** | Voice Identity Step-Up & Carryover Tokens Fail Closed | How do we stop a phone call from binding a taxpayer without verified identity, or resuming a goal with a forged token? | Accepted (repository safety baseline) | High |
 | **[ADR-025](./0025-voice-launch-evidence-and-truthful-call-records.md)** | Voice Launch Evidence & Truthful Call Records | How do we stop a language going live on voice without measured WER, and keep officer briefs and voice records truthful? | Accepted (repository safety baseline) | Medium |
 | **[ADR-026](./0026-voice-caller-output-disclosure-and-figure-safe-text.md)** | Voice Caller Output, Disclosure & Figure-Safe Channel Text | How do we make sure callers know they are talking to an AI, consent to recording, can interrupt, and never receive a split figure by voice or SMS? | Accepted (repository safety baseline) | Medium |
+| **[ADR-027](./0027-voice-multiturn-continuity-echo-guard-and-barge-in.md)** | Multi-Turn Voice Continuity, Post-TTS Acoustic Echo Guard & Backchannel Immunity | How do we sustain multi-turn voice conversations without speaker-echo self-triggering, false backchannel interrupts, or one-shot recognition stalls? | Accepted (repository safety baseline) | Medium |

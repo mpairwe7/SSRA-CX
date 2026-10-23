@@ -197,3 +197,135 @@ export function buildCallReceptionistScreen(params: {
     recordingIndicator: params.recording && params.status !== "ended",
   };
 }
+
+/** Post-TTS room/speaker echo cooldown before re-arming SpeechRecognition (MARIA OS / Speko 2026). */
+export const POST_TTS_ECHO_COOLDOWN_MS = 450;
+/** Maximum consecutive no-speech / silent recognition retries before pausing hands-free mode. */
+export const MAX_CONSECUTIVE_SPEECH_RETRIES = 3;
+
+const BACKCHANNEL_SET: ReadonlySet<string> = new Set([
+  "mm",
+  "mmm",
+  "mm hm",
+  "mmhm",
+  "uh huh",
+  "okay",
+  "ok",
+  "i see",
+  "right",
+  "got it",
+  "نعم",
+  "تمام",
+  "ايوه",
+  "أيوة",
+]);
+
+function normalizeSpeechTokens(text: string): string[] {
+  const matches = String(text ?? "")
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu);
+  return matches ? matches.filter((t) => t.length > 0) : [];
+}
+
+/** True when a short listener acknowledgement should not barge-in or cancel active TTS. */
+export function isBackchannelText(text: string): boolean {
+  const tokens = normalizeSpeechTokens(text);
+  if (tokens.length === 0 || tokens.length > 2) return false;
+  return BACKCHANNEL_SET.has(tokens.join(" "));
+}
+
+/**
+ * Detect when a browser SpeechRecognition transcript is acoustic echo of the assistant's own TTS.
+ */
+export function isLikelyAssistantEcho(params: {
+  readonly transcript: string;
+  readonly lastAssistantText: string;
+  readonly elapsedSinceTtsEndMs?: number | null | undefined;
+}): boolean {
+  const callerTokens = normalizeSpeechTokens(params.transcript);
+  const assistantTokens = normalizeSpeechTokens(params.lastAssistantText);
+  if (callerTokens.length === 0 || assistantTokens.length === 0) return false;
+
+  const callerJoined = callerTokens.join(" ");
+  const assistantJoined = assistantTokens.join(" ");
+  const assistantSet = new Set(assistantTokens);
+  let matched = 0;
+  for (const tok of callerTokens) {
+    if (assistantSet.has(tok)) matched += 1;
+  }
+  const overlap = matched / callerTokens.length;
+
+  const elapsed = params.elapsedSinceTtsEndMs;
+  const inEchoTail =
+    typeof elapsed === "number" && Number.isFinite(elapsed) && elapsed <= POST_TTS_ECHO_COOLDOWN_MS;
+
+  if (inEchoTail) {
+    if (assistantJoined.includes(callerJoined)) return true;
+    if (callerTokens.length >= 2 && overlap >= 0.75) return true;
+  }
+  if (callerTokens.length >= 4 && (assistantJoined.includes(callerJoined) || overlap >= 0.85)) {
+    return true;
+  }
+  return false;
+}
+
+export interface VoiceTurnContinuationDecision {
+  readonly action:
+    | "submit_turn"
+    | "ignore_echo"
+    | "ignore_backchannel"
+    | "retry_listen"
+    | "pause_after_retries";
+  readonly nextRetryCount: number;
+  readonly resumeDelayMs: number;
+}
+
+/**
+ * Decide how a continuous browser voice session should handle a recognition result or silence end.
+ */
+export function evaluateVoiceTurnContinuation(params: {
+  readonly transcript: string;
+  readonly lastAssistantText: string;
+  readonly assistantSpeaking: boolean;
+  readonly elapsedSinceTtsEndMs?: number | null | undefined;
+  readonly consecutiveEmptyRetries: number;
+  readonly continuousEnabled: boolean;
+}): VoiceTurnContinuationDecision {
+  const trimmed = String(params.transcript ?? "").trim();
+  if (!trimmed) {
+    const nextRetry = Math.max(0, params.consecutiveEmptyRetries) + 1;
+    if (!params.continuousEnabled || nextRetry > MAX_CONSECUTIVE_SPEECH_RETRIES) {
+      return { action: "pause_after_retries", nextRetryCount: nextRetry, resumeDelayMs: 0 };
+    }
+    return {
+      action: "retry_listen",
+      nextRetryCount: nextRetry,
+      resumeDelayMs: POST_TTS_ECHO_COOLDOWN_MS,
+    };
+  }
+  if (
+    isLikelyAssistantEcho({
+      transcript: trimmed,
+      lastAssistantText: params.lastAssistantText,
+      elapsedSinceTtsEndMs: params.assistantSpeaking ? 0 : params.elapsedSinceTtsEndMs,
+    })
+  ) {
+    return {
+      action: "ignore_echo",
+      nextRetryCount: params.consecutiveEmptyRetries,
+      resumeDelayMs: POST_TTS_ECHO_COOLDOWN_MS,
+    };
+  }
+  if (params.assistantSpeaking && isBackchannelText(trimmed)) {
+    return {
+      action: "ignore_backchannel",
+      nextRetryCount: params.consecutiveEmptyRetries,
+      resumeDelayMs: 0,
+    };
+  }
+  return {
+    action: "submit_turn",
+    nextRetryCount: 0,
+    resumeDelayMs: POST_TTS_ECHO_COOLDOWN_MS,
+  };
+}

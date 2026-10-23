@@ -839,3 +839,172 @@ def test_voice_caller_output_disclosure_barge_in_and_asr_guard() -> None:
     )
     assert hallucinated.action == "DTMF_MENU"
     assert hallucinated.asr_rejected_reason == "no speech detected"
+
+
+def test_voice_multiturn_call_session_echo_guard_and_recovery() -> None:
+    """ADR-027: multi-turn call continuity, post-TTS echo guard, backchannel immunity, and recovery."""
+    from ssra_voice import (
+        POST_TTS_ECHO_COOLDOWN_MS,
+        VoiceCallSession,
+        is_backchannel_utterance,
+        is_likely_tts_echo,
+    )
+
+    assert POST_TTS_ECHO_COOLDOWN_MS == 450
+    assert is_backchannel_utterance("mm-hm") is True
+    assert is_backchannel_utterance("Okay") is True
+    assert is_backchannel_utterance("نعم") is True
+    assert is_backchannel_utterance("wait stop talking") is False
+
+    assistant_line = (
+        "Your PAYE return is due by the fifteenth day of the following month via the e-Tax portal."
+    )
+    assert (
+        is_likely_tts_echo(
+            "following month via the e-Tax portal",
+            assistant_line,
+            elapsed_since_tts_end_ms=180,
+        )
+        is True
+    )
+    assert (
+        is_likely_tts_echo(
+            "What is the PAYE filing deadline?",
+            assistant_line,
+            elapsed_since_tts_end_ms=180,
+        )
+        is False
+    )
+    assert is_likely_tts_echo("", assistant_line) is False
+    assert (
+        is_likely_tts_echo(
+            "PAYE return due fifteenth",
+            assistant_line,
+            elapsed_since_tts_end_ms=200,
+        )
+        is True
+    )
+    assert (
+        is_likely_tts_echo(
+            "Your PAYE return is due by the fifteenth",
+            assistant_line,
+            elapsed_since_tts_end_ms=900,
+        )
+        is True
+    )
+
+    # Keypad 0 during recording consent transfers immediately; keypad 1 via process_caller_turn grants consent.
+    call_zero = VoiceCallSession(
+        session_id="call_zero",
+        locale=LocaleCode.EN,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
+    )
+    call_zero.start_call()
+    zero_out = call_zero.submit_recording_consent("0")
+    assert zero_out.phase == "transferred"
+    assert zero_out.decision is not None and zero_out.decision.action == "WARM_TRANSFER_TO_OFFICER"
+
+    call_direct = VoiceCallSession(
+        session_id="call_direct",
+        locale=LocaleCode.EN,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
+    )
+    call_direct.start_call()
+    assert call_direct.process_caller_turn(dtmf_digit="1").phase == "active_ai"
+    assert call_direct.recording_consent_granted is True
+    assert (
+        call_direct.record_assistant_reply("Full spoken reply with no interruption.")
+        == "Full spoken reply with no interruption."
+    )
+
+    call_unspoken_consent = VoiceCallSession(
+        session_id="call_unspoken_consent",
+        locale=LocaleCode.EN,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
+    )
+    call_unspoken_consent.start_call()
+    direct_turn = call_unspoken_consent.process_caller_turn(
+        transcript="What is the business profit tax rate?",
+        elapsed_since_tts_end_ms=800,
+        utterance_confidence=0.95,
+    )
+    assert direct_turn.phase == "active_ai"
+
+    call = VoiceCallSession(
+        session_id="call_multi_01",
+        locale=LocaleCode.EN,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
+    )
+    prompts = call.start_call()
+    assert len(prompts) == 2
+    assert call.phase == "recording_consent"
+
+    # Declining recording (keypad 2) keeps the AI conversation active without recording.
+    consent_out = call.submit_recording_consent("2")
+    assert consent_out.phase == "active_ai"
+    assert call.recording_consent_granted is False
+
+    # Turn 1: clear question succeeds with STREAM_ASR.
+    t1 = call.process_caller_turn(
+        transcript="When is the monthly PAYE return due?",
+        elapsed_since_tts_end_ms=800,
+        utterance_confidence=0.94,
+    )
+    assert t1.decision is not None and t1.decision.action == "STREAM_ASR"
+    assert t1.turn_index == 1
+
+    # Assistant speaks reply, interrupted at sentence 1: only spoken sentence is retained as heard context.
+    heard = call.record_assistant_reply(
+        "Your PAYE return is due by the 15th day of the following month. Pay through an approved bank.",
+        interrupted_at_sentence=1,
+    )
+    assert heard == "Your PAYE return is due by the 15th day of the following month."
+    assert call.last_interrupted_unspoken_text == "Pay through an approved bank."
+
+    # Acoustic echo right after TTS ends (within 450 ms) is ignored without consuming a turn.
+    echo_out = call.process_caller_turn(
+        transcript="due by the 15th day of the following month",
+        elapsed_since_tts_end_ms=220,
+        utterance_confidence=0.91,
+    )
+    assert echo_out.ignored_as_echo is True
+    assert echo_out.decision is None
+    assert call.turn_index == 1
+
+    # Listener backchannel ("uh-huh") while assistant speaks is ignored without cancelling reply.
+    bc_out = call.process_caller_turn(
+        transcript="uh-huh",
+        assistant_speaking=True,
+        utterance_confidence=0.92,
+    )
+    assert bc_out.ignored_as_backchannel is True
+    assert bc_out.decision is None
+
+    # Turn 2: single low-confidence turn asks for spoken clarification.
+    t2_low = call.process_caller_turn(
+        transcript="how about withholding",
+        elapsed_since_tts_end_ms=900,
+        utterance_confidence=0.66,
+    )
+    assert t2_low.decision is not None and t2_low.decision.action == "CLARIFY_INTENT_SPOKEN"
+    assert t2_low.consecutive_low_confidence_turns == 1
+
+    # Turn 3: caller repeats clearly -> consecutive_low_confidence_turns resets to 0 and conversation continues!
+    t3_recovered = call.process_caller_turn(
+        transcript="What is the withholding tax rate on a contract invoice?",
+        elapsed_since_tts_end_ms=900,
+        utterance_confidence=0.95,
+    )
+    assert t3_recovered.decision is not None and t3_recovered.decision.action == "STREAM_ASR"
+    assert t3_recovered.consecutive_low_confidence_turns == 0
+    assert call.phase == "active_ai"
+
+    # Two consecutive low-confidence turns escalate to an officer.
+    call.process_caller_turn(
+        transcript="mumble one", elapsed_since_tts_end_ms=700, utterance_confidence=0.62
+    )
+    t5_esc = call.process_caller_turn(
+        transcript="mumble two", elapsed_since_tts_end_ms=700, utterance_confidence=0.61
+    )
+    assert t5_esc.decision is not None and t5_esc.decision.action == "WARM_TRANSFER_TO_OFFICER"
+    assert call.phase == "transferred"
