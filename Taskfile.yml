@@ -11,15 +11,16 @@ tasks:
       - task --list
 
   gen:
-    desc: Generate Pydantic v2, TypeScript, Zod 4 schemas, OpenAPI client, ingested corpus snapshot manifest, CycloneDX SBOM, and SLSA v1.0 provenance
+    desc: Generate Pydantic v2, TypeScript, Zod 4 schemas, OpenAPI client, ingested corpus snapshot manifest, CycloneDX SBOM, SLSA v1.0 provenance, and SARIF v2.1.0 security telemetry
     cmds:
       - uv run python tools/codegen/generate_contracts.py
       - uv run python tools/codegen/export_openapi.py
       - uv run python tools/ingest_public_corpus.py
       - uv run python tools/generate_sbom.py
+      - uv run python tools/run_sast_dast_sec_pipeline.py --emit-sarif
 
   lint:
-    desc: Run Ruff, basedpyright (strict), import-linter, JSON Schema validation, gitleaks, Biome, and TypeScript tsc
+    desc: Run Ruff, basedpyright (strict), import-linter, JSON Schema validation, SAST/DAST/CI-model verification, gitleaks, Biome, and TypeScript tsc
     preconditions:
       - sh: node tools/verify_node_runtime.mjs
         msg: Activate a Node.js runtime that satisfies package.json engines.node before running task lint.
@@ -32,9 +33,22 @@ tasks:
       - uv run python tools/check_openapi_diff.py
       - uv run python tools/verify_frontend_budgets_and_a11y.py
       - uv run python tools/verify_supply_chain_and_signatures.py
+      - uv run python tools/run_sast_dast_sec_pipeline.py
       - gitleaks detect --no-git
       - corepack pnpm run lint
       - corepack pnpm run typecheck
+
+  sec:
+    desc: Run full DevSecOps SAST, Live In-Process ASGI DAST, Gitleaks, TruffleHog v3, Trivy SCA/IaC/Dockerfile/SBOM, and Frontend security pipeline
+    preconditions:
+      - sh: node tools/verify_node_runtime.mjs
+        msg: Activate a Node.js runtime that satisfies package.json engines.node before running task sec.
+    cmds:
+      - uv run ruff check .
+      - uv run python tools/verify_supply_chain_and_signatures.py
+      - uv run python tools/verify_frontend_budgets_and_a11y.py
+      - uv run python tools/run_sast_dast_sec_pipeline.py --full-sec
+      - corepack pnpm audit --audit-level=high
 
   test:
     desc: Run Python (pytest + Hypothesis), rules engine mutation testing, coverage gates (>=98% domain and overall), TypeScript (Vitest), and rendered-browser (Playwright) test suites

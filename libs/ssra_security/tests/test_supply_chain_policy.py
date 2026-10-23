@@ -245,3 +245,106 @@ def test_uv_policy_rejects_an_additional_certifi_wheel(tmp_path: Path) -> None:
 
     with pytest.raises(AssertionError, match="reviewed artifact set"):
         _uv_cooldown_policy_verifier()(tmp_path)
+
+
+def _sec_pipeline_module() -> dict[str, object]:
+    """Load `tools/run_sast_dast_sec_pipeline.py` for direct regression testing."""
+    sec_path = REPOSITORY_ROOT / "tools" / "run_sast_dast_sec_pipeline.py"
+    spec = importlib.util.spec_from_file_location("sec_pipeline_runner", sec_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.__dict__
+
+
+def test_ci_policy_rejects_compromised_trivy_v0694_in_workflow(tmp_path: Path) -> None:
+    """CI policy must block the March 2026 compromised Trivy v0.69.4 release."""
+    source = (REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    fixture = source.replace("v0.69.3", "v0.69.4")
+    workflows_dir = tmp_path / ".github" / "workflows"
+    workflows_dir.mkdir(parents=True)
+    (workflows_dir / "ci.yml").write_text(fixture, encoding="utf-8")
+    (tmp_path / ".github" / "CODEOWNERS").write_text(
+        "/.github/workflows/** @ssra-org/secops\n/.github/dependabot.yml @ssra-org/secops\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match=r"Trivy v0\.69\.3"):
+        _ci_security_policy_verifier()(tmp_path)
+
+
+def test_ci_policy_rejects_missing_trufflehog_verification_in_secret_history(
+    tmp_path: Path,
+) -> None:
+    """secret-history must retain SHA-256 verified TruffleHog v3 with --no-update."""
+    source = (REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    fixture = source.replace(
+        "trufflehog git file://. --results=verified --fail --no-update",
+        "trufflehog git file://. --results=verified --fail",
+    )
+    workflows_dir = tmp_path / ".github" / "workflows"
+    workflows_dir.mkdir(parents=True)
+    (workflows_dir / "ci.yml").write_text(fixture, encoding="utf-8")
+    (tmp_path / ".github" / "CODEOWNERS").write_text(
+        "/.github/workflows/** @ssra-org/secops\n/.github/dependabot.yml @ssra-org/secops\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match="TruffleHog v3"):
+        _ci_security_policy_verifier()(tmp_path)
+
+
+def test_python_sast_rejects_eval_and_unbounded_httpx_client(tmp_path: Path) -> None:
+    """Python AST SAST must block dangerous execution sinks and timeout-free httpx clients."""
+    mod = _sec_pipeline_module()
+    sast_fn = cast(Callable[[Path], list[dict[str, str]]], mod["run_python_ast_and_agentic_sast"])
+
+    libs_dir = tmp_path / "libs" / "sample"
+    libs_dir.mkdir(parents=True)
+    bad_file = libs_dir / "bad.py"
+    bad_file.write_text("x = eval('1 + 1')\n", encoding="utf-8")
+
+    with pytest.raises(AssertionError, match="SAST-PY-01"):
+        sast_fn(tmp_path)
+
+    bad_file.write_text("import httpx\nclient = httpx.Client()\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match="SAST-PY-03"):
+        sast_fn(tmp_path)
+
+
+def test_frontend_sast_rejects_raw_innerhtml_assignment(tmp_path: Path) -> None:
+    """Frontend SAST must reject raw innerHTML DOM-XSS sinks in TypeScript modules."""
+    mod = _sec_pipeline_module()
+    fe_sast_fn = cast(Callable[[Path], list[dict[str, str]]], mod["run_frontend_and_bff_sast"])
+
+    web_src = tmp_path / "apps" / "web" / "src"
+    web_src.mkdir(parents=True)
+    (web_src / "xss.ts").write_text(
+        "export function render(el: HTMLElement, html: string) { el.innerHTML = html; }\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match="SAST-FE-01"):
+        fe_sast_fn(tmp_path)
+
+
+def test_cicd_pipeline_model_and_live_asgi_dast_suite_pass() -> None:
+    """Repository CI/CD model parity, Python/Frontend SAST, Live ASGI DAST, and SARIF builder must pass."""
+    mod = _sec_pipeline_module()
+    verify_model = cast(Callable[[Path], list[dict[str, str]]], mod["verify_cicd_pipeline_model"])
+    py_sast = cast(Callable[[Path], list[dict[str, str]]], mod["run_python_ast_and_agentic_sast"])
+    fe_sast = cast(Callable[[Path], list[dict[str, str]]], mod["run_frontend_and_bff_sast"])
+    live_dast = cast(Callable[[], list[dict[str, str]]], mod["run_live_in_process_dast"])
+    build_sarif = cast(
+        Callable[[list[dict[str, str]]], dict[str, object]], mod["build_sarif_report"]
+    )
+
+    summaries = [
+        *verify_model(REPOSITORY_ROOT),
+        *py_sast(REPOSITORY_ROOT),
+        *fe_sast(REPOSITORY_ROOT),
+        *live_dast(),
+    ]
+    assert len(summaries) == 4
+    sarif = build_sarif(summaries)
+    assert sarif["version"] == "2.1.0"

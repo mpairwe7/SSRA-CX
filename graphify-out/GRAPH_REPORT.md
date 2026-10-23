@@ -46,7 +46,7 @@ flowchart LR
 
 | Domain | Path | Key Exports / Responsibilities |
 |---|---|---|
-| **Master Spec & ADRs** | `docs/00-master-prompt.md`, `docs/adr/` | Single source of truth + `ADR-001` through `ADR-018` |
+| **Master Spec & ADRs** | `docs/00-master-prompt.md`, `docs/adr/` | Single source of truth + `ADR-001` through `ADR-022` |
 | **Contracts & Codegen** | `packages/contracts/`, `tools/codegen/` | `ConversationEvent`, `Intent`, `Answer`, `TaxFact`, `AffectiveSnapshot`, `EnglishRouterEnvelope`, `HandoffEnvelope`, OpenAPI 3.1 snapshot |
 | **Core & Clock** | `libs/ssra_core/` | `new_uuid7()`, `compute_monthly_filing_deadline()`, `Africa/Juba` (`UTC+02:00`), `FeatureFlagEngine` (`flags.py`), OTel GenAI & Agentic CX spans |
 | **Security & Crypto** | `libs/ssra_security/` | `TokenExchangeService` (RFC 8693), `ConfirmationTokenManager`, `redact_pii`, `OpenBaoTransitEncryptor`, `HashChainedAuditLedger` |

@@ -1,5 +1,6 @@
-# Portable DevSecOps CI Pipeline (Section 12.4 & 15, ADR-015)
-# Supply-chain rule: Every GitHub Action is pinned by immutable 40-char commit SHA.
+# Portable DevSecOps CI/CD Modelling Pipeline (Section 12.4 & 15, ADR-015, ADR-022)
+# Supply-chain rule: Every GitHub Action is pinned by immutable 40-char commit SHA,
+# and every external security scanner binary is SHA-256 checksum verified before execution.
 
 name: ssra-cx-ci
 
@@ -81,7 +82,7 @@ jobs:
           if-no-files-found: ignore
 
   secret-history:
-    name: Full Git history secret scan
+    name: Full Git history secret scan (Gitleaks + TruffleHog v3)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -93,17 +94,23 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Install Gitleaks (SHA-256 verified)
+      - name: Install Gitleaks v8.21.2 & TruffleHog v3.88.15 (SHA-256 verified)
         run: |
           curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 -o /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
           printf '%s  %s\n' "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba" "/tmp/gitleaks.tar.gz" | sha256sum --check
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 -o /tmp/trufflehog.tar.gz https://github.com/trufflesecurity/trufflehog/releases/download/v3.88.15/trufflehog_3.88.15_linux_amd64.tar.gz
+          printf '%s  %s\n' "ed6d5c585f1e589c192c450369afb029050f76fe16e86a0cf58ee0658a67f86d" "/tmp/trufflehog.tar.gz" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/bin"
           tar -xzf /tmp/gitleaks.tar.gz -C "$RUNNER_TEMP/bin" gitleaks
+          tar -xzf /tmp/trufflehog.tar.gz -C "$RUNNER_TEMP/bin" trufflehog
           printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-          rm -f /tmp/gitleaks.tar.gz
+          rm -f /tmp/gitleaks.tar.gz /tmp/trufflehog.tar.gz
 
-      - name: Scan full reachable Git history
-        run: gitleaks detect --redact --log-opts="--all"
+      - name: Scan full reachable Git history with Gitleaks and TruffleHog v3
+        run: |
+          gitleaks detect --redact --log-opts="--all"
+          trufflehog git file://. --results=verified --fail --no-update
+          trufflehog git file://. --results=verified,unknown --exclude-detectors=JDBC --exclude-paths=.trufflehog-exclude-paths.txt --fail --no-update
 
   workflow-security:
     name: GitHub Actions workflow security
@@ -124,3 +131,99 @@ jobs:
           advanced-security: false
           online-audits: true
           version: "1.30.1"
+
+  trivy-security:
+    name: Trivy SCA, Container Dockerfile, OpenTofu IaC & CycloneDX SBOM Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install Trivy v0.69.3 (SHA-256 verified pre-compromise release)
+        run: |
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 -o /tmp/trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-64bit.tar.gz
+          printf '%s  %s\n' "1816b632dfe529869c740c0913e36bd1629cb7688bd5634f4a858c1d57c88b75" "/tmp/trivy.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf /tmp/trivy.tar.gz -C "$RUNNER_TEMP/bin" trivy
+          printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          rm -f /tmp/trivy.tar.gz
+
+      - name: Run Trivy filesystem (vuln, misconfig, secret) and CycloneDX 1.6 SBOM scans
+        run: |
+          trivy fs --scanners vuln,misconfig,secret --include-dev-deps --skip-dirs .venv,node_modules --severity HIGH,CRITICAL --skip-version-check --exit-code 1 .
+          trivy sbom --severity HIGH,CRITICAL --skip-version-check --exit-code 1 infra/observability/cyclonedx-sbom.json
+
+  sast-dast:
+    name: Polyglot AST/Agentic SAST, Live ASGI DAST & SARIF v2.1.0 Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Setup uv (reviewed security fix)
+        uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca # v6.0.1
+        with:
+          version: "0.13.4"
+          checksum: "2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f"
+          enable-cache: false
+
+      - name: Sync locked Python workspace
+        run: uv sync --locked
+
+      - name: Run Ruff Bandit SAST, strict basedpyright, import-linter, and Live In-Process ASGI DAST
+        run: |
+          uv run ruff check .
+          uv run basedpyright
+          uv run lint-imports
+          uv run python tools/run_sast_dast_sec_pipeline.py --ci-sast-dast
+
+  frontend-security:
+    name: Frontend CSP/Trusted-Types SAST, Low-Bandwidth Budget & Browser Assurance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js 24 LTS
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+
+      - name: Setup pnpm from packageManager pin
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - name: Setup uv (reviewed security fix)
+        uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca # v6.0.1
+        with:
+          version: "0.13.4"
+          checksum: "2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f"
+          enable-cache: false
+
+      - name: Install frozen workspace dependencies and Playwright Chromium
+        run: |
+          pnpm install --frozen-lockfile
+          uv sync --locked
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Run Frontend SCA audit, Biome lint, TypeScript typecheck, WCAG/Gzip budget, and Playwright browser assurance
+        run: |
+          corepack pnpm audit --audit-level=high
+          corepack pnpm run lint
+          corepack pnpm run typecheck
+          uv run python tools/verify_frontend_budgets_and_a11y.py
+          corepack pnpm exec playwright test

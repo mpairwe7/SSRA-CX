@@ -46,10 +46,11 @@ This file is the authoritative engineering and safety rulebook for all coding ag
 - **Commands:** Use `Taskfile.yml` as the single entry point:
   - `task up` — start local stack with mock upstreams (`infra/compose/docker-compose.yml` & `tools/smoke_test_stack.py`)
   - `docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait` — start sovereign GPU + local HF cache + Qdrant + Valkey + PostgreSQL 18 stack (`tools/run_1000_complex_ngrok_benchmark.py` for 1,000-scenario live Ngrok stress/load verification)
-  - `task lint` — run Biome, TypeScript `tsc`, Ruff, `basedpyright` (strict), and `import-linter`
-  - `task test` — run Vitest, pytest, Hypothesis property tests, and contract tests
+  - `task lint` — run Biome, TypeScript `tsc`, Ruff, `basedpyright` (strict), `import-linter`, supply-chain verifier, and SAST/DAST/CI-model verifier
+  - `task sec` — run full DevSecOps SAST, Live In-Process ASGI DAST, Gitleaks, TruffleHog v3, Trivy (`fs` + `sbom`), Frontend SAST, and `pnpm audit`
+  - `task test` — run Vitest, pytest, Hypothesis property tests, contract tests, and Playwright rendered-browser assurance
   - `task eval` — run deterministic and golden evaluation slices
-  - `task gen` — regenerate Pydantic v2, TypeScript, Zod, and OpenAPI client types from `packages/contracts` and `services/api`
+  - `task gen` — regenerate Pydantic v2, TypeScript, Zod, OpenAPI client types, CycloneDX 1.6 SBOM/ML-BOM, SLSA v1.0 provenance, and OASIS SARIF v2.1.0 security telemetry from `packages/contracts` and `services/api`
 - **Definition of Done (every task):**
   1. Code, tests (unit, contract, property where relevant), and docs updated; strict types; lint clean.
   2. Threat-model delta noted; no secrets committed; dependency changes pinned and justified.

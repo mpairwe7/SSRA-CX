@@ -1,0 +1,164 @@
+# SSRA Assist (`ssra-cx`) — Declarative CI/CD DevSecOps Pipeline & Threat Model Specification
+# Aligned with:
+# - NIST SP 800-218 v1.1 (SSDF) & v1.2 Draft (PO.3, PW.4, PW.7, PW.8, RV.1) + NIST SP 800-218A (GenAI Profile)
+# - OWASP Top 10 CI/CD Security Risks (CICD-SEC-01 through CICD-SEC-10)
+# - OWASP ASVS 5.0.0 (Level 2 for apps/web & public APIs; Level 3 for apps/console, agentgateway & MCP servers)
+# - OWASP Top 10 for Agentic Applications 2026 (ASI01-ASI10) & OWASP MCP Top 10 (MCP01-MCP10)
+# - SLSA v1.2 Build L3 / Source Track & CycloneDX v1.6 (ECMA-424) SBOM + ML-BOM
+# - OASIS SARIF v2.1.0 Static & Dynamic Analysis Reporting
+
+schema_version: "2026.10.1"
+model_id: "ssra-cx-devsecops-cicd-model-v1"
+default_workflow_permissions: {}
+forbid_pull_request_target: true
+require_persist_credentials_false: true
+
+scanner_pins:
+  gitleaks:
+    version: "8.21.2"
+    archive_url: "https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz"
+    sha256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
+  trufflehog:
+    version: "3.88.15"
+    archive_url: "https://github.com/trufflesecurity/trufflehog/releases/download/v3.88.15/trufflehog_3.88.15_linux_amd64.tar.gz"
+    sha256: "ed6d5c585f1e589c192c450369afb029050f76fe16e86a0cf58ee0658a67f86d"
+  trivy:
+    version: "0.69.3"
+    archive_url: "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-64bit.tar.gz"
+    sha256: "1816b632dfe529869c740c0913e36bd1629cb7688bd5634f4a858c1d57c88b75"
+    compromised_denylist_versions:
+      - "0.69.4"
+    compromised_denylist_sha256:
+      - "822dd269ec10459572dfaaefe163dae693c344249a0161953f0d5cdd110bd2a0"
+  zizmor:
+    version: "1.30.1"
+    action_ref: "zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482"
+  uv:
+    version: "0.13.4"
+    action_ref: "astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca"
+    sha256: "2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f"
+  pnpm:
+    version: "10.33.0"
+    action_ref: "pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda"
+    integrity: "sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
+
+stages:
+  workflow-security:
+    title: "GitHub Actions Workflow Security & Pipeline Model Integrity"
+    ssdf_practices: ["PO.3", "PW.4", "PW.7"]
+    owasp_cicd_risks: ["CICD-SEC-01", "CICD-SEC-02", "CICD-SEC-04", "CICD-SEC-08"]
+    permissions:
+      actions: "read"
+      contents: "read"
+    timeout_minutes: 10
+    blocking: true
+    verifiers:
+      - "zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482"
+
+  secret-history:
+    title: "Dual-Engine Full-History & Working-Tree Secret Scan (Gitleaks + TruffleHog v3)"
+    ssdf_practices: ["PS.1", "PW.7", "RV.1"]
+    owasp_cicd_risks: ["CICD-SEC-06"]
+    permissions:
+      contents: "read"
+    timeout_minutes: 10
+    blocking: true
+    verifiers:
+      - "gitleaks detect --redact --log-opts=\"--all\""
+      - "trufflehog git file://. --results=verified --fail --no-update"
+      - "trufflehog git file://. --results=verified,unknown --exclude-detectors=JDBC --exclude-paths=.trufflehog-exclude-paths.txt --fail --no-update"
+
+  trivy-security:
+    title: "Hardened Trivy SCA, Container Dockerfile, OpenTofu IaC & CycloneDX 1.6 SBOM Scan"
+    ssdf_practices: ["PW.4", "PS.3", "RV.1"]
+    owasp_cicd_risks: ["CICD-SEC-03", "CICD-SEC-07", "CICD-SEC-09"]
+    permissions:
+      contents: "read"
+    timeout_minutes: 10
+    blocking: true
+    verifiers:
+      - "trivy fs --scanners vuln,misconfig,secret --include-dev-deps --skip-dirs .venv,node_modules --severity HIGH,CRITICAL --skip-version-check --exit-code 1 ."
+      - "trivy sbom --severity HIGH,CRITICAL --skip-version-check --exit-code 1 infra/observability/cyclonedx-sbom.json"
+
+  sast-dast:
+    title: "Polyglot AST/Agentic SAST, Live In-Process ASGI DAST & SARIF v2.1.0 Gate"
+    ssdf_practices: ["PW.7", "PW.8", "RV.1"]
+    owasp_cicd_risks: ["CICD-SEC-04", "CICD-SEC-05", "CICD-SEC-10"]
+    permissions:
+      contents: "read"
+    timeout_minutes: 10
+    blocking: true
+    verifiers:
+      - "uv run ruff check ."
+      - "uv run basedpyright"
+      - "uv run lint-imports"
+      - "uv run python tools/run_sast_dast_sec_pipeline.py --ci-sast-dast"
+
+  frontend-security:
+    title: "Frontend CSP/Trusted-Types SAST, Gzip Budget, WCAG 2.2 AA & Rendered Browser Assurance"
+    ssdf_practices: ["PW.7", "PW.8"]
+    owasp_cicd_risks: ["CICD-SEC-03", "CICD-SEC-04"]
+    permissions:
+      contents: "read"
+    timeout_minutes: 15
+    blocking: true
+    verifiers:
+      - "corepack pnpm audit --audit-level=high"
+      - "corepack pnpm run lint"
+      - "corepack pnpm run typecheck"
+      - "uv run python tools/verify_frontend_budgets_and_a11y.py"
+      - "corepack pnpm exec playwright test"
+
+  verify:
+    title: "Canonical Contract Codegen, Lint, Mutation/Coverage Test & 600-Item Eval/Red-Team Gate"
+    ssdf_practices: ["PO.3", "PW.4", "PW.7", "PW.8", "RV.1"]
+    owasp_cicd_risks: ["CICD-SEC-01", "CICD-SEC-03", "CICD-SEC-04", "CICD-SEC-09", "CICD-SEC-10"]
+    permissions:
+      contents: "read"
+    timeout_minutes: 15
+    blocking: true
+    verifiers:
+      - "pnpm exec task gen"
+      - "git diff --exit-code"
+      - "pnpm exec task lint"
+      - "pnpm exec task test"
+      - "pnpm exec task eval"
+
+cicd_sec_controls:
+  CICD-SEC-01:
+    risk: "Insufficient Flow Control Mechanisms"
+    control: "CODEOWNERS enforces @ssra-org/secops review on /.github/workflows/**, /.github/dependabot.yml, and /infra/security/**; task gen + git diff --exit-code rejects unreviewed codegen drift."
+  CICD-SEC-02:
+    risk: "Inadequate Identity and Access Management"
+    control: "Workflow-scope permissions: {} default-deny; job-scoped read-only tokens; actions/checkout persist-credentials: false."
+  CICD-SEC-03:
+    risk: "Dependency Chain Abuse"
+    control: "7-day rolling cooldowns (pnpm minimumReleaseAge: 10080, uv exclude-newer = 1 week, Dependabot default-days: 7), trustPolicy: no-downgrade, blockExoticSubdeps: true, allowBuilds: {}, frozen lockfiles."
+  CICD-SEC-04:
+    risk: "Poisoned Pipeline Execution (PPE)"
+    control: "Complete ban on pull_request_target in all YAML trigger forms; zizmor v1.30.1 static/online workflow analysis."
+  CICD-SEC-05:
+    risk: "Insufficient PBAC (Pipeline-Based Access Control)"
+    control: "Isolated read-only scanner jobs with zero write scopes, zero long-lived registry credentials, and bounded job timeouts."
+  CICD-SEC-06:
+    risk: "Insufficient Credential Hygiene"
+    control: "Dual-engine full-history secret scanning (Gitleaks v8.21.2 + TruffleHog v3.88.15) with --redact and --no-update."
+  CICD-SEC-07:
+    risk: "Insecure System Configuration"
+    control: "Trivy IaC/Dockerfile misconfiguration scanning, CIS Docker Benchmark v1.7 USER 10001:10001 non-root containers, Seccomp profile, and internal-only Docker networks."
+  CICD-SEC-08:
+    risk: "Ungoverned Usage of 3rd Party Services"
+    control: "All GitHub Actions pinned by 40-char commit SHA; external CLI scanners (Gitleaks, TruffleHog, Trivy) downloaded from HTTPS release archives and verified via sha256sum --check before execution."
+  CICD-SEC-09:
+    risk: "Improper Artifact Integrity Validation"
+    control: "Bidirectional SCHEMA_BUNDLE_SHA256 contract parity, CycloneDX 1.6 SBOM + ML-BOM, SLSA v1.0 provenance, and @sha256: image digest pinning."
+  CICD-SEC-10:
+    risk: "Insufficient Logging and Visibility"
+    control: "OASIS SARIF v2.1.0 unified security telemetry (evals/reports/latest-sec-pipeline-sarif.json) and reproducible evaluation/assurance reports."
+
+optimization_and_robustness:
+  parallel_fanout_jobs: 6
+  in_process_asgi_dast: true
+  sha256_verified_binary_tarballs: true
+  offline_capable_local_verification: true
+  sarif_version: "2.1.0"

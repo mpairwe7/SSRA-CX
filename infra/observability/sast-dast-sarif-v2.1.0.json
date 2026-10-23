@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "properties": {
+        "allGatesPassed": true,
+        "gateSummaries": [
+          {
+            "category": "CICD_MODEL",
+            "message": "Verified 6-stage CI/CD DAG model parity, SHA-256 scanner pins, Trivy 0.69.4 compromise denylist, and OWASP CICD-SEC-01..10 controls.",
+            "ruleId": "CICD-MODEL-01",
+            "status": "PASS"
+          },
+          {
+            "category": "SAST_PYTHON_AND_AGENTIC",
+            "message": "Scanned 212 Python modules, 33 MCP tool schemas (T1-T3 zero-TIN), and 5 OpenTofu HCL modules with 0 findings.",
+            "ruleId": "SAST-PY-01..05",
+            "status": "PASS"
+          },
+          {
+            "category": "SAST_FRONTEND_AND_BFF",
+            "message": "Scanned 39 TypeScript modules plus Node BFF & Service Worker for DOM-XSS, Trusted Types, CSP Level 3, and fail-closed BFF boundaries.",
+            "ruleId": "SAST-FE-01..04",
+            "status": "PASS"
+          },
+          {
+            "category": "DAST_ASGI_AND_MCP",
+            "message": "Executed 8 live in-process ASGI & MCP DAST probe suites (Host injection, ASVS headers, DoS caps, prod fail-closed, staff 403, ASI02/03 subject smuggling, MCP transport fuzzing, and ASI01 prompt injection).",
+            "ruleId": "DAST-01..08",
+            "status": "PASS"
+          }
+        ],
+        "modelId": "ssra-cx-devsecops-cicd-model-v1",
+        "standards": [
+          "NIST-SP-800-218-v1.1-and-v1.2-draft",
+          "NIST-SP-800-218A",
+          "OWASP-CICD-SEC-01..10",
+          "OWASP-ASVS-5.0.0-L2-L3",
+          "OWASP-ASI-2026-01..10",
+          "OWASP-MCP-01..10",
+          "SLSA-v1.2-Build-L3",
+          "CycloneDX-v1.6-ECMA-424"
+        ]
+      },
+      "results": [],
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/mpairwe7/SSRA-CX",
+          "name": "ssra-cx-devsecops-modelling-pipeline",
+          "rules": [
+            {
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "id": "CICD-MODEL-01",
+              "name": "CICD_MODEL",
+              "shortDescription": {
+                "text": "Verified 6-stage CI/CD DAG model parity, SHA-256 scanner pins, Trivy 0.69.4 compromise denylist, and OWASP CICD-SEC-01..10 controls."
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "id": "SAST-PY-01..05",
+              "name": "SAST_PYTHON_AND_AGENTIC",
+              "shortDescription": {
+                "text": "Scanned 212 Python modules, 33 MCP tool schemas (T1-T3 zero-TIN), and 5 OpenTofu HCL modules with 0 findings."
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "id": "SAST-FE-01..04",
+              "name": "SAST_FRONTEND_AND_BFF",
+              "shortDescription": {
+                "text": "Scanned 39 TypeScript modules plus Node BFF & Service Worker for DOM-XSS, Trusted Types, CSP Level 3, and fail-closed BFF boundaries."
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "id": "DAST-01..08",
+              "name": "DAST_ASGI_AND_MCP",
+              "shortDescription": {
+                "text": "Executed 8 live in-process ASGI & MCP DAST probe suites (Host injection, ASVS headers, DoS caps, prod fail-closed, staff 403, ASI02/03 subject smuggling, MCP transport fuzzing, and ASI01 prompt injection)."
+              }
+            }
+          ],
+          "semanticVersion": "2026.10.1"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}
