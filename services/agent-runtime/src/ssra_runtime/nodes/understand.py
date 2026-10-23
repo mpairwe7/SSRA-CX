@@ -112,6 +112,8 @@ def _detect_withholding_category(lower: str) -> str:
 def _extract_official_channel_candidate(text: str, lower: str) -> tuple[str, str]:
     """Extract the candidate identifier and verification mode ('sender' vs 'payment_account')."""
     is_sender_query = "verify sender" in lower or "sender id" in lower or "sms from" in lower
+    if "[redacted_email]" in lower or "+211•••••••" in text:
+        return "unverified-sender-contact", "sender"
     email_match = _EMAIL_RE.search(text)
     if email_match:
         return email_match.group(1), "sender"
@@ -121,11 +123,6 @@ def _extract_official_channel_candidate(text: str, lower: str) -> tuple[str, str
     domain_match = _DOMAIN_CANDIDATE_RE.search(text)
     if domain_match:
         raw_dom = domain_match.group(1).rstrip(".,;:)]")
-        host_only = (
-            raw_dom.lower().removeprefix("https://").removeprefix("http://").split("/", 1)[0]
-        )
-        if host_only == "etax.nra.gov.ss":
-            return "https://etax.nra.gov.ss/", "sender" if is_sender_query else "payment_account"
         return raw_dom, "sender" if is_sender_query else "payment_account"
     if "tsa-etax-bank" in lower:
         return "TSA-ETAX-BANK", "payment_account"

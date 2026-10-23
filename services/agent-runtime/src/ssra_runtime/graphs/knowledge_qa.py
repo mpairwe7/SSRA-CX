@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ssra_core import AuthLevel, IntentName, LocaleCode, McpErrorCode, SSRAError
+from ssra_core import AuthLevel, IntentName, LocaleCode, SSRAError
 
 from ssra_runtime.schemas import ToolArtifact
 from ssra_runtime.state import ConversationGraphState
@@ -154,10 +154,8 @@ def execute_knowledge_qa_subgraph(
             )
             artifacts.append(tariff_art)
             return {"artifacts": artifacts, "budget": budget}
-        except SSRAError as exc:
-            if exc.code == McpErrorCode.NOT_FOUND:
-                return {"artifacts": artifacts, "budget": budget}
-            raise
+        except SSRAError:
+            return {"artifacts": artifacts, "budget": budget}
 
     # Default: search published knowledge corpus
     query = state.get("redacted_user_text") or state.get("raw_user_text", "SSRA eTax")

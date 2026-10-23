@@ -304,13 +304,9 @@ class FeatureFlagEngine:
             suffix=".tmp",
         )
         tmp_path = Path(tmp_name)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                handle.write(serialized_envelope)
-            os.replace(tmp_path, self.shared_override_path)
-        except BaseException:
-            tmp_path.unlink(missing_ok=True)
-            raise
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(serialized_envelope)
+        os.replace(tmp_path, self.shared_override_path)
         self._override_content_digest = hashlib.sha256(
             serialized_envelope.encode("utf-8")
         ).hexdigest()

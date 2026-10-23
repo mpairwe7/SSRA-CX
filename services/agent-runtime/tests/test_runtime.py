@@ -1406,7 +1406,14 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
         make_conversation_event("Verify sender +211 918806493 — is this an official SSRA phone?")
     )
     assert sender_phone_turn.artifacts[0].tool == "verify_sender"
+    assert sender_phone_turn.artifacts[0].structured_content["identifier"] == "+211 918806493"
     assert sender_phone_turn.artifacts[0].structured_content["status"] == "OFFICIAL_VERIFIED"
+
+    scam_phone_turn = rt.run_turn(
+        make_conversation_event("Verify sender +211 912999999 — is this an official SSRA phone?")
+    )
+    assert scam_phone_turn.artifacts[0].tool == "verify_sender"
+    assert scam_phone_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
 
     sender_sms_turn = rt.run_turn(make_conversation_event("Verify sender ID from SSRA SMS"))
     assert sender_sms_turn.artifacts[0].tool == "verify_sender"
@@ -1482,13 +1489,21 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert "3250000" in auth_dec_turn.answer.segments[0].text
 
     compound_dec_tcc = rt.run_turn(
-        make_conversation_event("Check my customs declaration at Nimule and check my TCC status"),
+        make_conversation_event(
+            "Check my filing status, my customs declaration status at Nimule, and check my TCC status"
+        ),
         auth_level=AuthLevel.T1_TIN_BOUND,
         subject_ref="sub_taxpayer_deng_02",
     )
     assert compound_dec_tcc.plan is not None
     assert "customs.get_declaration_status" in compound_dec_tcc.plan.steps
     assert "tcc.get_tcc_status" in compound_dec_tcc.plan.steps
+
+    default_wht_turn = rt.run_turn(make_conversation_event("Please calculate withholding tax"))
+    assert default_wht_turn.artifacts[0].tool == "calculate_withholding_estimate"
+
+    fallback_verify_turn = rt.run_turn(make_conversation_event("Cash collector demanded money"))
+    assert fallback_verify_turn.artifacts[0].tool == "verify_payment_account"
 
     tax_dec_turn = rt.run_turn(
         make_conversation_event("What is my tax declaration status?"),
