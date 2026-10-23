@@ -855,6 +855,7 @@ function renderPwaShellHtml(locale, nonce) {
       let state = {
         locale: shell?.dataset.locale || "en",
         theme: systemTheme(),
+        themeChosen: false,
         lowDataMode: autoLowData,
         autoNarrate: false,
         settingsTab: "general",
@@ -867,6 +868,7 @@ function renderPwaShellHtml(locale, nonce) {
           state = {
             ...state,
             theme: saved.theme || state.theme,
+            themeChosen: Boolean(saved.theme),
             locale: saved.locale || state.locale,
             lowDataMode: saved.lowDataMode ?? state.lowDataMode,
             autoNarrate: Boolean(saved.autoNarrate),
@@ -908,7 +910,7 @@ function renderPwaShellHtml(locale, nonce) {
             STORAGE_KEY,
             JSON.stringify({
               locale: state.locale,
-              theme: state.theme,
+              theme: state.themeChosen ? state.theme : null,
               lowDataMode: state.lowDataMode,
               autoNarrate: state.autoNarrate,
               conversations: publicOnlyConvs,
@@ -949,6 +951,12 @@ function renderPwaShellHtml(locale, nonce) {
         saveState();
       }
       applyTheme(state.theme);
+      // Until the user picks a theme, follow later system colour or contrast changes.
+      ["(prefers-color-scheme: light)", "(prefers-contrast: more)"].forEach((query) => {
+        window.matchMedia?.(query)?.addEventListener?.("change", () => {
+          if (!state.themeChosen) applyTheme(systemTheme());
+        });
+      });
 
       // Offline fallback abstains, says whether the question was sent, and never cites a source.
       function computeOfflineResilienceAnswer(text, opts = {}) {
@@ -1666,6 +1674,7 @@ function renderPwaShellHtml(locale, nonce) {
 
       document.getElementById("theme-toggle-btn")?.addEventListener("click", () => {
         const next = state.theme === "dark" ? "light" : state.theme === "light" ? "high-contrast" : "dark";
+        state.themeChosen = true;
         applyTheme(next);
       });
 
