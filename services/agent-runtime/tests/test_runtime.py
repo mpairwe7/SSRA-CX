@@ -1448,8 +1448,38 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     )
     assert cust_tariff_turn.answer.abstained is False
     assert cust_tariff_turn.artifacts[0].tool == "lookup_tariff"
+    assert cust_tariff_turn.plan is not None
+    assert cust_tariff_turn.plan.steps == ["customs.lookup_tariff"]
     assert cust_tariff_turn.artifacts[0].structured_content["duty_rate_percent"] == "35"
     assert cust_tariff_turn.artifacts[0].structured_content["excise_rate_percent"] == "50"
+
+    # Unknown HS code gracefully abstains and offers HandoffCard (Principle 1)
+    unknown_hs_turn = rt.run_turn(
+        make_conversation_event("What is the customs tariff rate for HS 9999.99?")
+    )
+    assert unknown_hs_turn.answer.abstained is True
+    assert unknown_hs_turn.artifacts == []
+
+    # Authenticated T1 Customs Declaration Status (`customs.get_declaration_status`)
+    anon_dec_turn = rt.run_turn(
+        make_conversation_event("Check my customs declaration status at Nimule"),
+        auth_level=AuthLevel.ANONYMOUS,
+    )
+    assert anon_dec_turn.policy_decision == "STEP_UP"
+    assert anon_dec_turn.artifacts == []
+
+    auth_dec_turn = rt.run_turn(
+        make_conversation_event("Check my customs declaration status at Nimule"),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_deng_02",
+    )
+    assert auth_dec_turn.policy_decision == "ALLOW"
+    assert auth_dec_turn.answer.abstained is False
+    assert auth_dec_turn.plan is not None
+    assert auth_dec_turn.plan.steps == ["customs.get_declaration_status"]
+    assert auth_dec_turn.artifacts[0].tool == "get_declaration_status"
+    assert "SSD-NIM-2026-••89" in auth_dec_turn.answer.segments[0].text
+    assert "3250000" in auth_dec_turn.answer.segments[0].text
 
     # Field officer invalid task_type validation
     with pytest.raises(SSRAError) as bad_fo_exc:

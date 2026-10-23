@@ -13,7 +13,6 @@ import hashlib
 import hmac
 import json
 import os
-import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -24,7 +23,7 @@ _DEFAULT_FLAGS_FILE = Path(__file__).resolve().parents[4] / "ai" / "policies" / 
 _DEFAULT_SHARED_OVERRIDE_PATH = Path(
     os.environ.get(
         "SSRA_FEATURE_FLAGS_OVERRIDE_FILE",
-        str(Path(tempfile.gettempdir()) / "ssra_feature_flag_overrides.json"),
+        "/tmp/ssra_feature_flag_overrides.json",  # noqa: S108 — local tmpfs path matching docker-compose.gpu.yml
     )
 )
 

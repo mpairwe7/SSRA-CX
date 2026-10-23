@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ssra_core import AuthLevel, IntentName, LocaleCode
+from ssra_core import AuthLevel, IntentName, LocaleCode, McpErrorCode, SSRAError
 
 from ssra_runtime.schemas import ToolArtifact
 from ssra_runtime.state import ConversationGraphState
@@ -128,31 +128,36 @@ def execute_knowledge_qa_subgraph(
         artifacts.append(art)
         return {"artifacts": artifacts, "budget": budget}
 
-    # Customs HS code tariff lookup / duty estimate (T0 public customs tools)
+    # Customs HS code tariff lookup / duty estimate (T0 public customs tools; Principle 1 safe abstention on unknown HS codes)
     hs_code = str(slots.get("hs_code", "")).strip()
     if hs_code:
         cif_usd = str(slots.get("cif_value_usd", "")).strip()
-        if cif_usd:
-            cust_art = gateway.invoke_tool(
+        try:
+            if cif_usd:
+                cust_art = gateway.invoke_tool(
+                    server_name="customs",
+                    tool_name="estimate_duties",
+                    arguments={"hs_code": hs_code, "cif_value_usd": cif_usd},
+                    auth_level=auth_level,
+                    subject_ref=subject_ref,
+                    budget=budget,
+                )
+                artifacts.append(cust_art)
+                return {"artifacts": artifacts, "budget": budget}
+            tariff_art = gateway.invoke_tool(
                 server_name="customs",
-                tool_name="estimate_duties",
-                arguments={"hs_code": hs_code, "cif_value_usd": cif_usd},
+                tool_name="lookup_tariff",
+                arguments={"hs_code": hs_code},
                 auth_level=auth_level,
                 subject_ref=subject_ref,
                 budget=budget,
             )
-            artifacts.append(cust_art)
+            artifacts.append(tariff_art)
             return {"artifacts": artifacts, "budget": budget}
-        tariff_art = gateway.invoke_tool(
-            server_name="customs",
-            tool_name="lookup_tariff",
-            arguments={"hs_code": hs_code},
-            auth_level=auth_level,
-            subject_ref=subject_ref,
-            budget=budget,
-        )
-        artifacts.append(tariff_art)
-        return {"artifacts": artifacts, "budget": budget}
+        except SSRAError as exc:
+            if exc.code == McpErrorCode.NOT_FOUND:
+                return {"artifacts": artifacts, "budget": budget}
+            raise
 
     # Default: search published knowledge corpus
     query = state.get("redacted_user_text") or state.get("raw_user_text", "SSRA eTax")

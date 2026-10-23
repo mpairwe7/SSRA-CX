@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 from datetime import date
 from pathlib import Path
@@ -14,20 +15,30 @@ _SEED_CORPUS = Path(__file__).resolve().parents[4] / "knowledge" / "corpus" / "s
 _SOURCES_YAML = Path(__file__).resolve().parents[4] / "knowledge" / "sources.yaml"
 
 
+@functools.lru_cache(maxsize=4)
+def _load_cached_corpus_and_sources(
+    corpus_file: Path, sources_file: Path
+) -> tuple[str, tuple[dict[str, Any], ...], dict[str, dict[str, Any]]]:
+    raw = json.loads(corpus_file.read_text(encoding="utf-8"))
+    snapshot_version = str(raw.get("snapshot_version", "2026.10.1"))
+    chunks = tuple(raw.get("chunks", []))
+    sources_by_id: dict[str, dict[str, Any]] = {}
+    if sources_file.exists():
+        src_raw = yaml.safe_load(sources_file.read_text(encoding="utf-8")) or {}
+        for s in src_raw.get("sources", []):
+            if isinstance(s, dict) and "id" in s:
+                sources_by_id[str(s["id"])] = s
+    return snapshot_version, chunks, sources_by_id
+
+
 class KnowledgeCorpusAdapter:
     def __init__(self, corpus_path: Path | None = None, sources_path: Path | None = None) -> None:
-        target = corpus_path or _SEED_CORPUS
-        raw = json.loads(target.read_text(encoding="utf-8"))
-        self.snapshot_version: str = str(raw.get("snapshot_version", "2026.10.1"))
-        self._chunks: list[dict[str, Any]] = list(raw.get("chunks", []))
-
-        src_file = sources_path or _SOURCES_YAML
-        self._sources_by_id: dict[str, dict[str, Any]] = {}
-        if src_file.exists():
-            src_raw = yaml.safe_load(src_file.read_text(encoding="utf-8")) or {}
-            for s in src_raw.get("sources", []):
-                if isinstance(s, dict) and "id" in s:
-                    self._sources_by_id[str(s["id"])] = s
+        target = (corpus_path or _SEED_CORPUS).resolve()
+        src_file = (sources_path or _SOURCES_YAML).resolve()
+        snap_ver, chunks, sources_by_id = _load_cached_corpus_and_sources(target, src_file)
+        self.snapshot_version: str = snap_ver
+        self._chunks: list[dict[str, Any]] = list(chunks)
+        self._sources_by_id: dict[str, dict[str, Any]] = dict(sources_by_id)
 
     def is_temporally_valid(self, chk: dict[str, Any], as_of: date) -> bool:
         """Enforce bi-temporal validity & supersession filtering (MemStrata arXiv:2606.26511)."""

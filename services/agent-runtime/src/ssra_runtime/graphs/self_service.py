@@ -42,12 +42,22 @@ def execute_self_service_subgraph(
         t1_read_steps = [
             s
             for s in planned_steps
-            if s in ("ledger.get_balance", "ledger.get_filing_status", "tcc.get_tcc_status")
+            if s
+            in (
+                "ledger.get_balance",
+                "ledger.get_filing_status",
+                "tcc.get_tcc_status",
+                "customs.get_declaration_status",
+            )
         ]
         if not t1_read_steps:
             default_map = {
                 IntentName.GET_BALANCE: "ledger.get_balance",
-                IntentName.GET_FILING_STATUS: "ledger.get_filing_status",
+                IntentName.GET_FILING_STATUS: (
+                    "customs.get_declaration_status"
+                    if slots.get("include_customs_declaration")
+                    else "ledger.get_filing_status"
+                ),
                 IntentName.GET_TCC_STATUS: "tcc.get_tcc_status",
             }
             t1_read_steps = [default_map[intent_name]]

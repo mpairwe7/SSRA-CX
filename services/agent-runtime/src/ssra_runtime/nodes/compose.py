@@ -435,6 +435,55 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             ),
         }
 
+    dec_art = next((a for a in artifacts if a.tool == "get_declaration_status"), None)
+    if dec_art is not None:
+        sc = dec_art.structured_content
+        dec_ref = str(sc["declaration_ref_masked"])
+        port = str(sc["port_of_entry"])
+        status = str(sc["status"])
+        duty_ssp = str(sc["assessed_duty_ssp"])
+        as_of = str(sc["as_of"])
+        cit = Citation(
+            id="cit_ecustoms_declaration",
+            snapshot_version="2026.10.1",
+            doc_title="SSRA National e-Customs Declaration Record",
+            section_anchor=f"Customs-{dec_ref}",
+            effective_from=as_of,
+            url="https://customs.eservices.gov.ss/",
+        )
+        num_claim = NumericClaim(
+            value=duty_ssp,
+            unit=NumericUnit.SSP,
+            source_ref=f"{dec_art.id}.assessed_duty_ssp",
+        )
+        text = (
+            f"Customs declaration {dec_ref} at {port} has status {status} "
+            f"(Assessed duty: {duty_ssp} SSP as of {as_of}). "
+            f"Pay exclusively through https://etax.nra.gov.ss/ into designated commercial banks."
+        )
+        return {
+            "citations": [cit],
+            "answer": Answer(
+                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
+                citations=[cit],
+                numbers=[num_claim],
+                ui_component=GenerativeUIComponent(
+                    name=GenerativeUIComponentName.FILING_STATUS_TIMELINE,
+                    props={
+                        "declaration_ref_masked": dec_ref,
+                        "port_of_entry": port,
+                        "filing_status": status,
+                        "last_filed_period": as_of,
+                        "as_of": as_of,
+                    },
+                )
+                if capabilities.rich_ui
+                else None,
+                is_estimate=False,
+                abstained=False,
+            ),
+        }
+
     tcc_art = next((a for a in artifacts if a.tool == "get_tcc_status"), None)
     if tcc_art is not None:
         sc = tcc_art.structured_content

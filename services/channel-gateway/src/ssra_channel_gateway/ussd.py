@@ -171,11 +171,14 @@ def render_ussd_screen(
             send_sms_followup=True,
         )
     if choice == "0":
-        txt = (
-            "END Talab mukalama min Muwazaf SSRA اتسجل (Itnin-Juma 08:00-17:00 Juba)."
-            if is_pga
-            else "END Your callback request has been queued for an SSRA Officer (Mon-Fri 08:00-17:00 EAT)."
-        )
+        if is_pga:
+            topic_pga = _TOPIC_NAMES_PGA.get(parent_topic, "")
+            prefix_pga = f" ({topic_pga})" if topic_pga else ""
+            txt = f"END Talab mukalama min Muwazaf SSRA{prefix_pga} اتسجل (Itnin-Juma 08:00-17:00 Juba)."
+        else:
+            topic_en = _TOPIC_NAMES_EN.get(parent_topic, "")
+            prefix_en = f" ({topic_en})" if topic_en else ""
+            txt = f"END Your{prefix_en} callback request has been queued for an SSRA Officer (Mon-Fri 08:00-17:00 EAT)."
         return UssdScreenResponse(
             session_id=session_id, response_type="END", screen_text=txt[:USSD_MAX_CHARS]
         )

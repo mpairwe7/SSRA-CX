@@ -120,6 +120,28 @@ def build_execution_plan(
             steps=[f"single.{intent.intent.value}"],
             tier=tier,
         )
+    if intent.intent == IntentName.VERIFY_OFFICIAL_CHANNEL:
+        verif_step = (
+            "official-channels.verify_sender"
+            if intent.slots.get("verification_mode") == "sender"
+            else "official-channels.verify_payment_account"
+        )
+        return Plan(subgraph=selected_subgraph, steps=[verif_step], tier=tier)
+    if intent.intent == IntentName.KNOWLEDGE_QA and intent.slots.get("hs_code"):
+        cust_step = (
+            "customs.estimate_duties"
+            if intent.slots.get("cif_value_usd")
+            else "customs.lookup_tariff"
+        )
+        return Plan(subgraph=selected_subgraph, steps=[cust_step], tier=tier)
+    if intent.intent == IntentName.GET_FILING_STATUS and intent.slots.get(
+        "include_customs_declaration"
+    ):
+        return Plan(
+            subgraph=selected_subgraph,
+            steps=["customs.get_declaration_status"],
+            tier=tier,
+        )
     steps = detect_compound_self_service_steps(canonical_query, intent.intent)
     return Plan(
         subgraph=selected_subgraph,

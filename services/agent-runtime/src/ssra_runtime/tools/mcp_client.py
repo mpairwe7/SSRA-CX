@@ -9,6 +9,7 @@ Enforces:
 
 from __future__ import annotations
 
+import functools
 import json
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,7 @@ from ssra_runtime.schemas import ToolArtifact, TurnBudget
 _RISK_TIERS_FILE = Path(__file__).resolve().parents[5] / "ai" / "policies" / "risk-tiers.yaml"
 
 
+@functools.lru_cache(maxsize=1)
 def _load_canonical_tool_tiers() -> dict[str, str]:
     raw = yaml.safe_load(_RISK_TIERS_FILE.read_text(encoding="utf-8"))
     return {str(k): str(v) for k, v in raw.get("tool_tiers", {}).items()}

@@ -25,6 +25,7 @@ _SAFE_CONTEXT_PATTERNS: tuple[re.Pattern[str], ...] = (
     ),
     re.compile(r"\b[A-Z]+_[0-9A-Z_]+\b"),
     re.compile(r"••••\d{4}"),
+    re.compile(r"\bSSD-[A-Z]+-\d{4}-••\d{2}\b"),
     re.compile(r"\+211(?:\s*\d{9}|•••••••\d{2}|\b)"),
     re.compile(r"\b918806493\b|\b912388318\b|\b919382390\b|\b917803637\b|\b921058043\b"),
     re.compile(r"\(\d{1,2}\)"),  # Parenthesized list bullets e.g. (1), (2), (3), (4)

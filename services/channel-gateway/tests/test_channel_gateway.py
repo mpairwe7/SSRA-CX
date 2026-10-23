@@ -121,6 +121,14 @@ def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> Non
         == "END Rabit Jamarik ($500) (https://customs.eservices.gov.ss/) jahiz li irsal bil SMS li raqamak."
     )
 
+    r_cb_en = render_ussd_screen(session_id="ussd_01", ussd_input="1*0", locale="en")
+    assert r_cb_en.response_type == "END"
+    assert "TIN Registration" in r_cb_en.screen_text
+
+    r_cb_pga = render_ussd_screen(session_id="ussd_01", ussd_input="5*0", locale="pga")
+    assert r_cb_pga.response_type == "END"
+    assert "Jamarik ($500)" in r_cb_pga.screen_text
+
     r_timeout_pga = render_ussd_screen(
         session_id="ussd_01", ussd_input="1", elapsed_seconds=150, locale="pga"
     )
