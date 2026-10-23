@@ -23,6 +23,9 @@ ROOT = Path(__file__).resolve().parents[1]
 _ACTION_SHA_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 _ZIZMOR_ACTION = "zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482"
 _GITLEAKS_ARCHIVE_SHA256 = "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
+_TRUFFLEHOG_ARCHIVE_SHA256 = "ed6d5c585f1e589c192c450369afb029050f76fe16e86a0cf58ee0658a67f86d"
+_TRIVY_ARCHIVE_SHA256 = "1816b632dfe529869c740c0913e36bd1629cb7688bd5634f4a858c1d57c88b75"
+_COMPROMISED_TRIVY_SHA256 = "822dd269ec10459572dfaaefe163dae693c344249a0161953f0d5cdd110bd2a0"
 _PNPM_VERSION = "10.33.0"
 _PNPM_INTEGRITY = (
     "sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544"
@@ -138,6 +141,9 @@ def verify_ci_security_policy(repo_root: Path) -> None:
         "verify": {"contents": "read"},
         "secret-history": {"contents": "read"},
         "workflow-security": {"actions": "read", "contents": "read"},
+        "trivy-security": {"contents": "read"},
+        "sast-dast": {"contents": "read"},
+        "frontend-security": {"contents": "read"},
     }
     for job_name, expected in expected_permissions.items():
         job = jobs.get(job_name)
@@ -146,28 +152,32 @@ def verify_ci_security_policy(repo_root: Path) -> None:
             f"ci.yml job '{job_name}' must use only {expected} permissions"
         )
 
-    verify_steps = _workflow_steps(jobs["verify"], ci_path, "verify")
-    pnpm_step = _find_step_with_uses(
-        verify_steps,
-        "pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda",
-        "verify",
-    )
-    assert pnpm_step.get("with") in (None, {}), (
-        "verify must derive pnpm from the integrity-pinned packageManager field instead of "
-        "declaring a second action version"
-    )
-    uv_step = _find_step_with_uses(
-        verify_steps,
-        "astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca",
-        "verify",
-    )
-    uv_with = uv_step.get("with", {})
-    assert isinstance(uv_with, dict) and uv_with.get("version") == _UV_VERSION, (
-        f"verify must pin uv {_UV_VERSION}"
-    )
-    assert uv_with.get("checksum") == _UV_ARCHIVE_SHA256, (
-        "verify must validate the pinned uv release archive checksum"
-    )
+    for pnpm_job_name in ("verify", "frontend-security"):
+        pnpm_job_steps = _workflow_steps(jobs[pnpm_job_name], ci_path, pnpm_job_name)
+        pnpm_step = _find_step_with_uses(
+            pnpm_job_steps,
+            "pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda",
+            pnpm_job_name,
+        )
+        assert pnpm_step.get("with") in (None, {}), (
+            "verify must derive pnpm from the integrity-pinned packageManager field instead of "
+            "declaring a second action version"
+        )
+
+    for uv_job_name in ("verify", "sast-dast", "frontend-security"):
+        uv_job_steps = _workflow_steps(jobs[uv_job_name], ci_path, uv_job_name)
+        uv_step = _find_step_with_uses(
+            uv_job_steps,
+            "astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca",
+            uv_job_name,
+        )
+        uv_with = uv_step.get("with", {})
+        assert isinstance(uv_with, dict) and uv_with.get("version") == _UV_VERSION, (
+            f"{uv_job_name} must pin uv {_UV_VERSION}"
+        )
+        assert uv_with.get("checksum") == _UV_ARCHIVE_SHA256, (
+            f"{uv_job_name} must validate the pinned uv release archive checksum"
+        )
 
     history_job = jobs["secret-history"]
     history_steps = _workflow_steps(history_job, ci_path, "secret-history")
@@ -184,8 +194,49 @@ def verify_ci_security_policy(repo_root: Path) -> None:
     assert _GITLEAKS_ARCHIVE_SHA256 in history_run and "sha256sum --check" in history_run, (
         "secret-history must verify the pinned Gitleaks archive checksum"
     )
+    assert _TRUFFLEHOG_ARCHIVE_SHA256 in history_run, (
+        "secret-history must verify the pinned TruffleHog v3.88.15 archive checksum"
+    )
     assert 'gitleaks detect --redact --log-opts="--all"' in history_run, (
         "secret-history must scan all reachable Git history with redacted output"
+    )
+    assert "trufflehog git file://. --results=verified --fail --no-update" in history_run, (
+        "secret-history must run TruffleHog v3 verified full-history scan with --no-update"
+    )
+
+    trivy_job = jobs["trivy-security"]
+    trivy_steps = _workflow_steps(trivy_job, ci_path, "trivy-security")
+    trivy_run = "\n".join(str(step.get("run", "")) for step in trivy_steps)
+    assert (
+        _TRIVY_ARCHIVE_SHA256 in trivy_run
+        and _COMPROMISED_TRIVY_SHA256 not in trivy_run
+        and "v0.69.4" not in trivy_run
+        and "sha256sum --check" in trivy_run
+    ), (
+        "trivy-security must verify the pre-compromise Trivy v0.69.3 SHA-256 checksum and reject v0.69.4"
+    )
+    assert (
+        "trivy fs --scanners vuln,misconfig,secret" in trivy_run
+        and "trivy sbom --severity HIGH,CRITICAL" in trivy_run
+    ), "trivy-security must run both Trivy filesystem and CycloneDX 1.6 SBOM scans"
+
+    sast_dast_job = jobs["sast-dast"]
+    sast_dast_steps = _workflow_steps(sast_dast_job, ci_path, "sast-dast")
+    sast_dast_run = "\n".join(str(step.get("run", "")) for step in sast_dast_steps)
+    assert (
+        "uv run ruff check ." in sast_dast_run
+        and "uv run python tools/run_sast_dast_sec_pipeline.py --ci-sast-dast" in sast_dast_run
+    ), "sast-dast must run Ruff Bandit SAST and the live ASGI DAST & SARIF pipeline"
+
+    fe_sec_job = jobs["frontend-security"]
+    fe_sec_steps = _workflow_steps(fe_sec_job, ci_path, "frontend-security")
+    fe_sec_run = "\n".join(str(step.get("run", "")) for step in fe_sec_steps)
+    assert (
+        "corepack pnpm audit --audit-level=high" in fe_sec_run
+        and "uv run python tools/verify_frontend_budgets_and_a11y.py" in fe_sec_run
+        and "corepack pnpm exec playwright test" in fe_sec_run
+    ), (
+        "frontend-security must run pnpm audit, frontend budget/CSP SAST, and Playwright browser assurance"
     )
 
     workflow_security = jobs["workflow-security"]
@@ -323,6 +374,10 @@ def main() -> None:
     )
     assert not pnpm_ws.get("minimumReleaseAgeExclude"), (
         "pnpm cooldown exclusions require a reviewed, time-bounded exception before use"
+    )
+    pnpm_overrides = pnpm_ws.get("overrides", {})
+    assert isinstance(pnpm_overrides, dict) and pnpm_overrides.get("basic-ftp") == "6.2.3", (
+        "pnpm-workspace.yaml must pin overrides.basic-ftp to 6.2.3 (CVE-2026-102990 remediation)"
     )
     root_package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
     assert root_package.get("packageManager") == f"pnpm@{_PNPM_VERSION}+{_PNPM_INTEGRITY}", (

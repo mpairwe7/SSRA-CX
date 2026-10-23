@@ -1,0 +1,174 @@
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "artifacts": [
+        {
+          "location": {
+            "uri": ".github/workflows/ci.yml",
+            "uriBaseId": "%SRCROOT%"
+          }
+        },
+        {
+          "location": {
+            "uri": ".gitlab-ci.yml",
+            "uriBaseId": "%SRCROOT%"
+          }
+        },
+        {
+          "location": {
+            "uri": "infra/security/cicd-pipeline-model.yaml",
+            "uriBaseId": "%SRCROOT%"
+          }
+        },
+        {
+          "location": {
+            "uri": "infra/observability/cyclonedx-sbom.json",
+            "uriBaseId": "%SRCROOT%"
+          }
+        },
+        {
+          "location": {
+            "uri": "apps/web/server.js",
+            "uriBaseId": "%SRCROOT%"
+          }
+        },
+        {
+          "location": {
+            "uri": "apps/console/server.js",
+            "uriBaseId": "%SRCROOT%"
+          }
+        }
+      ],
+      "invocations": [
+        {
+          "commandLine": "uv run python tools/run_sast_dast_sec_pipeline.py",
+          "executionSuccessful": true
+        }
+      ],
+      "properties": {
+        "allGatesPassed": true,
+        "gateSummaries": [
+          {
+            "category": "CICD_MODEL",
+            "message": "Verified 6-stage CI/CD DAG model parity, dual archive+binary SHA-256 scanner pins, GitLab full-history parity, Trivy 0.69.4 compromise denylist, and OWASP CICD-SEC-01..10 controls.",
+            "ruleId": "CICD-MODEL-01",
+            "status": "PASS"
+          },
+          {
+            "category": "SAST_PYTHON_AST",
+            "message": "Scanned 212 Python modules with import-alias resolution (SAST-PY-01..03: zero dangerous sinks, dynamic SQL expressions, or unbounded httpx calls).",
+            "ruleId": "SAST-PY-01",
+            "status": "PASS"
+          },
+          {
+            "category": "SAST_AGENTIC_MCP_SCHEMAS",
+            "message": "Verified all 33 MCP tool schemas across 11 servers enforce additionalProperties: False and zero model-supplied TIN/subject_ref on T1-T3 tools.",
+            "ruleId": "SAST-PY-04",
+            "status": "PASS"
+          },
+          {
+            "category": "SAST_OPENTOFU_HCL",
+            "message": "Verified 5 OpenTofu HCL modules for multi-line block syntax and Trivy parser compatibility.",
+            "ruleId": "SAST-PY-05",
+            "status": "PASS"
+          },
+          {
+            "category": "SAST_FRONTEND_AND_BFF",
+            "message": "Scanned 41 TypeScript and 5 JavaScript modules (SAST-FE-01..05: DOM-XSS, Trusted Types, CSP Level 3, Service Worker, and BFF process sinks).",
+            "ruleId": "SAST-FE-01",
+            "status": "PASS"
+          },
+          {
+            "category": "DAST_ASGI_AND_BFF",
+            "message": "Executed 10 live DAST probe suites across ASGI services, MCP gateway, Channel Gateway, and Node.js BFF servers (DAST-01..10: Host injection, ASVS headers, DoS caps, H-06 mode fuzzing, staff 403, ASI02/03 smuggling, MCP NUL-byte/rebinding, ASI01 injection, webhook HMAC, and BFF route gates).",
+            "ruleId": "DAST-01",
+            "status": "PASS"
+          }
+        ],
+        "modelId": "ssra-cx-devsecops-cicd-model-v1",
+        "standards": [
+          "NIST-SP-800-218-v1.1-and-v1.2-draft",
+          "NIST-SP-800-218A",
+          "OWASP-CICD-SEC-01..10",
+          "OWASP-ASVS-5.0.0-L2-L3",
+          "OWASP-ASI-2026-01..10",
+          "OWASP-MCP-01..10",
+          "SLSA-v1.2-Build-L3",
+          "CycloneDX-v1.6-ECMA-424"
+        ]
+      },
+      "results": [],
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/mpairwe7/SSRA-CX",
+          "name": "ssra-cx-devsecops-modelling-pipeline",
+          "rules": [
+            {
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "id": "CICD-MODEL-01",
+              "name": "CICD_MODEL",
+              "shortDescription": {
+                "text": "Verified 6-stage CI/CD DAG model parity, dual archive+binary SHA-256 scanner pins, GitLab full-history parity, Trivy 0.69.4 compromise denylist, and OWASP CICD-SEC-01..10 controls."
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "id": "SAST-PY-01",
+              "name": "SAST_PYTHON_AST",
+              "shortDescription": {
+                "text": "Scanned 212 Python modules with import-alias resolution (SAST-PY-01..03: zero dangerous sinks, dynamic SQL expressions, or unbounded httpx calls)."
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "id": "SAST-PY-04",
+              "name": "SAST_AGENTIC_MCP_SCHEMAS",
+              "shortDescription": {
+                "text": "Verified all 33 MCP tool schemas across 11 servers enforce additionalProperties: False and zero model-supplied TIN/subject_ref on T1-T3 tools."
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "id": "SAST-PY-05",
+              "name": "SAST_OPENTOFU_HCL",
+              "shortDescription": {
+                "text": "Verified 5 OpenTofu HCL modules for multi-line block syntax and Trivy parser compatibility."
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "id": "SAST-FE-01",
+              "name": "SAST_FRONTEND_AND_BFF",
+              "shortDescription": {
+                "text": "Scanned 41 TypeScript and 5 JavaScript modules (SAST-FE-01..05: DOM-XSS, Trusted Types, CSP Level 3, Service Worker, and BFF process sinks)."
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "id": "DAST-01",
+              "name": "DAST_ASGI_AND_BFF",
+              "shortDescription": {
+                "text": "Executed 10 live DAST probe suites across ASGI services, MCP gateway, Channel Gateway, and Node.js BFF servers (DAST-01..10: Host injection, ASVS headers, DoS caps, H-06 mode fuzzing, staff 403, ASI02/03 smuggling, MCP NUL-byte/rebinding, ASI01 injection, webhook HMAC, and BFF route gates)."
+              }
+            }
+          ],
+          "semanticVersion": "2026.10.1"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}

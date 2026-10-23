@@ -1,7 +1,21 @@
-# Portable Self-Hosted GitLab / Forgejo CI Pipeline (Section 15 & 16)
+# Portable Self-Hosted GitLab / Forgejo DevSecOps CI Pipeline (Section 15 & 16, ADR-015, ADR-022)
 stages:
+  - security
   - verify
   - eval
+
+sec_sast_dast_trivy_trufflehog:
+  stage: security
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - pnpm install --frozen-lockfile
+    - uv sync --locked
+    - task sec
+  artifacts:
+    paths:
+      - infra/observability/sast-dast-sarif-v2.1.0.json
+      - infra/observability/cyclonedx-sbom.json
 
 verify_code_and_contracts:
   stage: verify
@@ -9,6 +23,7 @@ verify_code_and_contracts:
     - pnpm install --frozen-lockfile
     - uv sync --locked
     - task gen
+    - git diff --exit-code
     - task lint
     - task test
 
@@ -21,3 +36,4 @@ run_eval_and_redteam_gates:
       - evals/reports/latest-eval-report.json
       - evals/reports/latest-eval-report.md
       - infra/observability/cyclonedx-sbom.json
+      - infra/observability/sast-dast-sarif-v2.1.0.json

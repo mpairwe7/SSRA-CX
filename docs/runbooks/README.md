@@ -16,8 +16,9 @@
 | `docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait` | Start local sovereign GPU + local HF cache (`Sunflower-Qwen3.5-9B`, `Sunflower-Qwen3.8-27B`, `SunflowerASR`) + Qdrant + Valkey + PostgreSQL 18 + `ssra-frontend` (`:3033`) + `ssra-console` (`:3034`) stack (`127.0.0.1:18000` API, `127.0.0.1:18001` Runtime) and run `uv run python tools/run_20000_complex_ngrok_benchmark.py` |
 | `task down` | Stop local Docker Compose stack cleanly (`--remove-orphans`) |
 | `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.prod.yml --profile prod up -d --wait` | Validate/start the intended production/DR stack; API and runtime remain unready by design until approved providers and durable state are implemented |
-| `task gen` | Regenerate Pydantic v2 models, TypeScript types, Zod 4 schemas, OpenAPI 3.1 client, and CycloneDX 1.6 SBOM + ML-BOM |
-| `task lint` | Run Ruff check/format, `basedpyright` strict, `import-linter`, JSON Schema 2020-12 validator (33 MCP tools), `gitleaks`, Biome, and TypeScript `tsc` |
+| `task gen` | Regenerate Pydantic v2 models, TypeScript types, Zod 4 schemas, OpenAPI 3.1 client, CycloneDX 1.6 SBOM + ML-BOM, SLSA v1.0 provenance, and deterministic OASIS SARIF v2.1.0 security telemetry |
+| `task lint` | Run Ruff check/format, `basedpyright` strict, `import-linter`, JSON Schema 2020-12 validator (33 MCP tools), supply-chain verifier, SAST/DAST/CI-model verifier, `gitleaks`, Biome, and TypeScript `tsc` |
+| `task sec` | Run full DevSecOps SAST, Live In-Process ASGI DAST, Gitleaks, TruffleHog v3, Trivy (`fs` + `sbom`), Frontend SAST, and `pnpm audit`. See [DevSecOps SAST, DAST, Trivy, TruffleHog & CI/CD Modelling Pipeline](./devsecops-sast-dast-cicd-pipeline.md). |
 | `task test` | Run Python (`pytest` + Hypothesis, `>= 98%` coverage gate), TypeScript (`vitest`) unit/contract suites, and the lock-pinned Playwright rendered-browser suite. See [Rendered Browser Flow Assurance](./browser-flow-assurance.md). |
 | `task eval` | Run the 600-item reference golden dataset (`300 en`, `150 ar`, `150 pga`), OWASP Agentic `ASI01`–`ASI10` red-team suite, ASGI/DR drills, and a readiness audit that reports blockers without advancing Phase Exit Gates |
 

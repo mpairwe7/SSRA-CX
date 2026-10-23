@@ -13,3 +13,9 @@ blockExoticSubdeps: true
 # Dependency lifecycle scripts remain blocked until an individually reviewed
 # package is listed here with a true value.
 allowBuilds: {}
+
+# Remediate CVE-2026-102990 / GHSA-c475-qrg2-pj4r (basic-ftp <= 6.2.0 ReDoS in
+# transitive @go-task/cli -> proxy-agent -> get-uri dependency) using 6.2.3
+# (published 2026-10-09, satisfies the 7-day minimumReleaseAge policy).
+overrides:
+  basic-ftp: "6.2.3"

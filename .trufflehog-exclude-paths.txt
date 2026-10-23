@@ -1,0 +1,12 @@
+# Repository-governed TruffleHog v3 exclude paths for the secondary `verified,unknown` scan pass.
+# Note: Pass 1 (`trufflehog git file://. --results=verified --fail --no-update`) runs across 100%
+# of git history with zero path or detector exclusions.
+# Pass 2 (`--results=verified,unknown --exclude-detectors=JDBC`) excludes only local dependency
+# caches and synthetic SSRF/redaction unit-test fixtures that intentionally contain unresolvable
+# placeholder connection strings.
+^node_modules/
+^\.venv/
+^\.trufflehog-exclude-paths\.txt$
+^services/agent-runtime/tests/test_runtime\.py$
+^mcp-servers/ledger/tests/test_mcp_servers\.py$
+^libs/ssra_security/tests/test_supply_chain_policy\.py$
