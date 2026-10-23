@@ -611,10 +611,7 @@ class CallLobbyManager:
             entry.claimed_by = ""
             entry.claimed_name = ""
         elif event_type == "call.risk":
-            lvl = str(data.get("level", "none"))
-            entry.risk_level = (
-                "at_risk" if lvl == "at_risk" else "watch" if lvl == "watch" else "none"
-            )
+            entry.risk_level = _lobby_risk_level(data.get("level", "none"))
             entry.risk_signals = [str(s) for s in (data.get("signals") or [])]
         elif event_type == "call.bridged":
             entry.status = "bridged"
@@ -633,6 +630,18 @@ class CallLobbyManager:
         self._ended[call_id] = None
         if len(self._ended) > MAX_ENDED_CALL_TOMBSTONES:
             self._ended.popitem(last=False)
+
+
+def _lobby_risk_level(value: Any) -> Literal["none", "watch", "at_risk"]:
+    """Accept only known risk levels, so an unexpected value cannot silently lower a caller's risk."""
+    level = str(value).strip()
+    if level == "at_risk":
+        return "at_risk"
+    if level == "watch":
+        return "watch"
+    if level == "none":
+        return "none"
+    raise ValueError(f"Unsupported call risk level '{value}'")
 
 
 def _lobby_priority(value: Any) -> str:

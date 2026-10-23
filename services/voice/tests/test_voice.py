@@ -439,6 +439,10 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         claim_lobby.apply_event("call.teleported", {"call_id": "c2"})
     with pytest.raises(ValueError, match="Unsupported call priority"):
         claim_lobby.apply_event("call.priority_raised", {"call_id": "c2", "priority": "vip"})
+    claim_lobby.apply_event("call.risk", {"call_id": "c2", "level": "at_risk"})
+    with pytest.raises(ValueError, match="Unsupported call risk level"):
+        claim_lobby.apply_event("call.risk", {"call_id": "c2", "level": "AT_RISK"})
+    assert claim_lobby.calls["c2"].risk_level == "at_risk"
 
     # A rejected event changes nothing, so a call never half-enters the waiting queue.
     partial = CallLobbyManager()
