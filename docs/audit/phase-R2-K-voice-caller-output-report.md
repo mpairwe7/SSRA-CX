@@ -45,6 +45,7 @@ See [ADR-026](../adr/0026-voice-caller-output-disclosure-and-figure-safe-text.md
 | Python suites in `libs`, `services`, `mcp-servers`, and `evals/suites`, with the worktree packages first on the path | 112 passed |
 | `packages/chat-ui`: Biome, `tsc --noEmit`, Vitest | Pass (3 tests) |
 | Ruff, Ruff format, strict basedpyright on every changed Python file | Pass, 0 errors |
+| SAST, live ASGI DAST, and CI model (`tools/run_sast_dast_sec_pipeline.py --ci-sast-dast`) | Pass after regenerating the SARIF report: the AST scan now covers 214 modules (the new `channel_text` module and its tests) and still finds zero dangerous sinks. The other `task gen` generators produced no drift |
 
 ## Findings recorded, not changed
 
