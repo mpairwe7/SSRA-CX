@@ -5,6 +5,11 @@
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
+## 0.14 [R2-H Long-Conversation Performance and Trusted Types](./audit/phase-R2-H-performance-trusted-types-report.md) (2026-10-24)
+
+- Fixed AUD-029. Transcript updates rebuild only changed turns, long conversations open progressively, and off-screen rows use `content-visibility: auto`. The worst 80-turn interaction under 4× and 6× CPU fell from 256 and 368 ms to 120 and 144 ms, inside the 200 ms INP threshold.
+- Fixed AUD-030. Trusted Types are enforced with named policies on both surfaces, including a script-URL policy for the service worker. Lighthouse `trusted-types-xss` reports no items, and all four Lighthouse categories still score 100. Five rendered tests were added (four fail on the R2-G code); the suite passes with 45 tests.
+
 ## 0.13 [R2-G Adaptive Layout, Reflow, and Saved History](./audit/phase-R2-G-adaptive-layout-report.md) (2026-10-24)
 
 - Audited accessibility, adaptability, mobile responsiveness, Lighthouse, and loading performance. Lighthouse 12.8.2 scored 100 in all four categories for the public and staff pages on the live stack. A Playwright lab audit covered ten viewports, text spacing, 200 % text, CPU-throttled interaction latency, 2G and 3G, and back/forward cache, and found AUD-025 to AUD-033.
