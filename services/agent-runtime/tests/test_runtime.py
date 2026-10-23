@@ -1443,18 +1443,71 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert lookalike_scam_turn.artifacts[0].tool == "verify_payment_account"
     assert lookalike_scam_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
 
-    dec_paye_turn = rt.run_turn(make_conversation_event("Calculate PAYE estimate on 60000.00 SSP"))
+    userinfo_scam_turn = rt.run_turn(
+        make_conversation_event(
+            "Is https://etax.nra.gov.ss@evil.example/ an official SSRA payment portal?"
+        )
+    )
+    assert userinfo_scam_turn.artifacts[0].tool == "verify_payment_account"
+    assert userinfo_scam_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
+
+    homoglyph_scam_turn = rt.run_turn(
+        make_conversation_event("Is https://\u0435tax.nra.gov.ss/ an official SSRA payment portal?")
+    )
+    assert homoglyph_scam_turn.artifacts[0].tool == "verify_payment_account"
+    assert homoglyph_scam_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
+
+    http_downgrade_turn = rt.run_turn(
+        make_conversation_event("Is http://etax.nra.gov.ss/ an official SSRA payment portal?")
+    )
+    assert http_downgrade_turn.artifacts[0].tool == "verify_payment_account"
+    assert http_downgrade_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
+
+    bad_port_scam_turn = rt.run_turn(
+        make_conversation_event("Is https://etax.nra.gov.ss:8443/ an official SSRA payment portal?")
+    )
+    assert bad_port_scam_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
+
+    invalid_port_scam_turn = rt.run_turn(
+        make_conversation_event("Is https://etax.nra.gov.ss:abc/ an official SSRA payment portal?")
+    )
+    assert invalid_port_scam_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
+
+    official_deeplink_turn = rt.run_turn(
+        make_conversation_event(
+            "Is https://etax.nra.gov.ss/login?lang=en an official SSRA payment portal?"
+        )
+    )
+    assert official_deeplink_turn.artifacts[0].tool == "verify_payment_account"
+    assert official_deeplink_turn.artifacts[0].structured_content["status"] == "OFFICIAL_VERIFIED"
+
+    dec_paye_turn = rt.run_turn(
+        make_conversation_event("In 2026, calculate PAYE estimate on 60000.00 SSP")
+    )
     assert dec_paye_turn.artifacts[0].tool == "calculate_paye_estimate"
     assert dec_paye_turn.artifacts[0].structured_content["gross_monthly_ssp"] == "60000"
 
+    untagged_year_paye_turn = rt.run_turn(
+        make_conversation_event("In 2026, calculate PAYE estimate on 250000")
+    )
+    assert untagged_year_paye_turn.artifacts[0].tool == "calculate_paye_estimate"
+    assert untagged_year_paye_turn.artifacts[0].structured_content["gross_monthly_ssp"] == "250000"
+
     # 4. Conversational T0 Customs Duty Estimation (`estimate_duties`) & Tariff Lookup (`lookup_tariff`)
     cust_est_turn = rt.run_turn(
-        make_conversation_event("Estimate customs duty for HS 8703.23 with CIF 10,000 USD")
+        make_conversation_event("In 2026, estimate customs duty for HS 8703.23 with CIF 10,000 USD")
     )
     assert cust_est_turn.answer.abstained is False
     assert cust_est_turn.artifacts[0].tool == "estimate_duties"
     assert cust_est_turn.artifacts[0].structured_content["estimated_duty_ssp"] == "9000000"
     assert cust_est_turn.answer.is_estimate is True
+
+    cust_sub1k_turn = rt.run_turn(
+        make_conversation_event("Estimate customs duty for HS 8703.23 with CIF 500 USD")
+    )
+    assert cust_sub1k_turn.artifacts[0].tool == "estimate_duties"
+    assert cust_sub1k_turn.artifacts[0].structured_content["cif_value_usd"] == "500"
+    assert cust_sub1k_turn.artifacts[0].structured_content["estimated_duty_ssp"] == "450000"
 
     cust_tariff_turn = rt.run_turn(
         make_conversation_event("What is the customs tariff rate for HS 2203.00 as of 2026?")
@@ -1504,6 +1557,24 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert compound_dec_tcc.plan is not None
     assert "customs.get_declaration_status" in compound_dec_tcc.plan.steps
     assert "tcc.get_tcc_status" in compound_dec_tcc.plan.steps
+    assert "SSD-NIM-2026-••89" in compound_dec_tcc.answer.segments[0].text
+    assert "3250000 SSP" in compound_dec_tcc.answer.segments[0].text
+    assert "TCC status:" in compound_dec_tcc.answer.segments[0].text
+    assert {c.id for c in compound_dec_tcc.answer.citations} == {
+        "cit_etax_filing",
+        "cit_ecustoms_declaration",
+    }
+
+    compound_only_dec_tcc = rt.run_turn(
+        make_conversation_event("Check my customs declaration at Nimule and check my TCC status"),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_deng_02",
+    )
+    assert "SSD-NIM-2026-••89" in compound_only_dec_tcc.answer.segments[0].text
+    assert "TCC status:" in compound_only_dec_tcc.answer.segments[0].text
+    assert "Customs declaration release requires settling assessed duties" in (
+        compound_only_dec_tcc.answer.segments[0].text
+    )
 
     default_wht_turn = rt.run_turn(make_conversation_event("Please calculate withholding tax"))
     assert default_wht_turn.artifacts[0].tool == "calculate_withholding_estimate"

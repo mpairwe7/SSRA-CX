@@ -29,18 +29,47 @@ def _load_intent_tiers() -> dict[str, RiskTier]:
 
 _INTENT_TIERS = _load_intent_tiers()
 _ARABIC_DIGIT_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹٬", "01234567890123456789,")
-_MONEY_RE = re.compile(r"\b(\d{1,3}(?:,\d{3})+|\d{4,10})(?:\.\d+)?\b")
+_TAGGED_MONEY_RE = re.compile(
+    r"(?:(?:\b(?:cif|ssp|usd)\b|\$)\s*(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,10}(?:\.\d+)?)\b"
+    r"|\b(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,10}(?:\.\d+)?)\s*(?:\b(?:ssp|usd)\b|جنيه|دولار))",
+    re.IGNORECASE,
+)
+_UNTAGGED_MONEY_RE = re.compile(r"\b(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{4,10}(?:\.\d+)?)\b")
 _HS_CODE_RE = re.compile(r"\b(\d{4}\.\d{2})\b")
 _HS_CUE_RE = re.compile(
     r"\b(?:hs|hs\s+code|tariff|customs|duty|duties)\b",
     re.IGNORECASE,
 )
+_URL_TOKEN_RE = re.compile(r"(https?://\S+)", re.IGNORECASE)
 _EMAIL_RE = re.compile(r"\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b")
 _PHONE_211_RE = re.compile(r"(\+211[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3}|\+211\d{9})")
 _DOMAIN_CANDIDATE_RE = re.compile(
-    r"\b((?:https?://)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s?)]*)?)",
+    r"(?<!\S)((?:[^\s/$.?#]+\.)+[a-z\u0400-\u04ff]{2,}(?:/\S*)?)",
     re.IGNORECASE,
 )
+
+
+def _normalise_amount_token(raw_token: str) -> str:
+    """Strip thousands commas and redundant trailing '.00' while preserving non-zero fractional cents."""
+    cleaned = raw_token.replace(",", "").strip()
+    if "." in cleaned:
+        cleaned = cleaned.rstrip("0").rstrip(".")
+    return cleaned or "0"
+
+
+def _extract_monetary_amount(scan_text: str) -> str | None:
+    """Extract a monetary amount, prioritizing explicit SSP/USD/CIF/$ tags and skipping calendar years (1900-2099)."""
+    tagged = _TAGGED_MONEY_RE.search(scan_text)
+    if tagged:
+        raw_val = tagged.group(1) or tagged.group(2)
+        if raw_val:
+            return _normalise_amount_token(raw_val)
+    for match in _UNTAGGED_MONEY_RE.finditer(scan_text):
+        tok = match.group(1)
+        if "," not in tok and "." not in tok and len(tok) == 4 and 1900 <= int(tok) <= 2099:
+            continue
+        return _normalise_amount_token(tok)
+    return None
 
 
 def _detect_withholding_category(lower: str) -> str:
@@ -112,6 +141,10 @@ def _detect_withholding_category(lower: str) -> str:
 def _extract_official_channel_candidate(text: str, lower: str) -> tuple[str, str]:
     """Extract the candidate identifier and verification mode ('sender' vs 'payment_account')."""
     is_sender_query = "verify sender" in lower or "sender id" in lower or "sms from" in lower
+    url_match = _URL_TOKEN_RE.search(text)
+    if url_match:
+        raw_url = url_match.group(1).rstrip(".,;:)]?!'\"")
+        return raw_url, "sender" if is_sender_query else "payment_account"
     if "[redacted_email]" in lower or "+211•••••••" in text:
         return "unverified-sender-contact", "sender"
     email_match = _EMAIL_RE.search(text)
@@ -122,7 +155,7 @@ def _extract_official_channel_candidate(text: str, lower: str) -> tuple[str, str
         return phone_match.group(1), "sender"
     domain_match = _DOMAIN_CANDIDATE_RE.search(text)
     if domain_match:
-        raw_dom = domain_match.group(1).rstrip(".,;:)]")
+        raw_dom = domain_match.group(1).rstrip(".,;:)]?!'\"")
         return raw_dom, "sender" if is_sender_query else "payment_account"
     if "tsa-etax-bank" in lower:
         return "TSA-ETAX-BANK", "payment_account"
@@ -146,11 +179,11 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
     money_scan_text = (
         _HS_CODE_RE.sub(" ", normalized_digits_text) if has_hs_cue else normalized_digits_text
     )
-    amount_match = _MONEY_RE.search(money_scan_text)
-    if amount_match:
-        slots["amount_ssp"] = amount_match.group(1).replace(",", "")
-        if "cif" in lower or "usd" in lower:
-            slots["cif_value_usd"] = slots["amount_ssp"]
+    extracted_amount = _extract_monetary_amount(money_scan_text)
+    if extracted_amount is not None:
+        slots["amount_ssp"] = extracted_amount
+        if "cif" in lower or "usd" in lower or "$" in normalized_digits_text:
+            slots["cif_value_usd"] = extracted_amount
 
     # 1. T4 Human-only intents: waivers, penalty remission, refunds, tax disputes, legal rulings
     if any(

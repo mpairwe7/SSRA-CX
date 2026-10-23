@@ -395,7 +395,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             ),
         }
 
-    # 5b. Authenticated T1 Filing Status (`FilingStatusTimeline`) & TCC Status
+    # 5b. Authenticated T1 Filing Status (`FilingStatusTimeline`), Customs Declaration & TCC Status
     filing_art = next((a for a in artifacts if a.tool == "get_filing_status"), None)
     if filing_art is not None:
         sc = filing_art.structured_content
@@ -409,16 +409,60 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             effective_from=as_of,
             url="https://etax.nra.gov.ss/",
         )
+        cits = [cit]
+        nums: list[NumericClaim] = []
+        extra_filing_clauses: list[str] = []
+        dec_comp = next((a for a in artifacts if a.tool == "get_declaration_status"), None)
+        if dec_comp is not None:
+            dsc = dec_comp.structured_content
+            d_ref = str(dsc["declaration_ref_masked"])
+            d_duty = str(dsc["assessed_duty_ssp"])
+            d_as_of = str(dsc["as_of"])
+            cits.append(
+                Citation(
+                    id="cit_ecustoms_declaration",
+                    snapshot_version="2026.10.1",
+                    doc_title="SSRA National e-Customs Declaration Record",
+                    section_anchor=f"Customs-{d_ref}",
+                    effective_from=d_as_of,
+                    url="https://customs.eservices.gov.ss/",
+                )
+            )
+            nums.append(
+                NumericClaim(
+                    value=d_duty,
+                    unit=NumericUnit.SSP,
+                    source_ref=f"{dec_comp.id}.assessed_duty_ssp",
+                )
+            )
+            extra_filing_clauses.append(
+                f"Customs declaration {d_ref} at {dsc['port_of_entry']}: {dsc['status']} "
+                f"(Assessed duty: {d_duty} SSP as of {d_as_of})."
+            )
+        tcc_comp = next((a for a in artifacts if a.tool == "get_tcc_status"), None)
+        if tcc_comp is not None:
+            extra_filing_clauses.append(
+                f"TCC status: {tcc_comp.structured_content.get('tcc_status', 'UNKNOWN')}."
+            )
+        verif = state.get("outcome_verification") or {}
+        for note in verif.get("remediation_notes", []):
+            extra_filing_clauses.append(str(note))
+        suffix = f" {' '.join(extra_filing_clauses)}" if extra_filing_clauses else ""
         text = (
             f"For TIN {tin_masked}, your e-Tax filing status is {sc['filing_status']} "
-            f"(Last filed period: {sc['last_filed_period']}) as of {as_of} via https://etax.nra.gov.ss/."
+            f"(Last filed period: {sc['last_filed_period']}) as of {as_of} via https://etax.nra.gov.ss/.{suffix}"
         )
         return {
-            "citations": [cit],
+            "citations": cits,
             "answer": Answer(
-                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
-                citations=[cit],
-                numbers=[],
+                segments=[
+                    AnswerSegment(
+                        text=text[: capabilities.max_len],
+                        citation_ids=[c.id for c in cits],
+                    )
+                ],
+                citations=cits,
+                numbers=nums,
                 ui_component=GenerativeUIComponent(
                     name=GenerativeUIComponentName.FILING_STATUS_TIMELINE,
                     props={
@@ -456,10 +500,20 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             unit=NumericUnit.SSP,
             source_ref=f"{dec_art.id}.assessed_duty_ssp",
         )
+        extra_dec_clauses: list[str] = []
+        tcc_comp = next((a for a in artifacts if a.tool == "get_tcc_status"), None)
+        if tcc_comp is not None:
+            extra_dec_clauses.append(
+                f"TCC status: {tcc_comp.structured_content.get('tcc_status', 'UNKNOWN')}."
+            )
+        verif = state.get("outcome_verification") or {}
+        for note in verif.get("remediation_notes", []):
+            extra_dec_clauses.append(str(note))
+        suffix = f" {' '.join(extra_dec_clauses)}" if extra_dec_clauses else ""
         text = (
             f"Customs declaration {dec_ref} at {port} has status {status} "
             f"(Assessed duty: {duty_ssp} SSP as of {as_of}). "
-            f"Pay exclusively through https://etax.nra.gov.ss/ into designated commercial banks."
+            f"Pay exclusively through https://etax.nra.gov.ss/ into designated commercial banks.{suffix}"
         )
         return {
             "citations": [cit],
