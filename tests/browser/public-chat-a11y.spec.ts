@@ -188,3 +188,103 @@ test("the theme follows the system until the user chooses one", async ({ page })
   await expect(html).toHaveAttribute("data-theme", "light");
 });
 
+test("continuous voice conversation auto-advances across turns and filters speaker echo", async ({ page }) => {
+  await page.addInitScript(() => {
+    const startCalls: string[] = [];
+    let currentRec: {
+      lang: string;
+      onresult: ((ev: unknown) => void) | null;
+      onend: (() => void) | null;
+      stop: () => void;
+    } | null = null;
+
+    class MockSpeechRecognition {
+      lang = "en-US";
+      continuous = false;
+      interimResults = false;
+      onresult: ((ev: unknown) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        startCalls.push(this.lang);
+        currentRec = this;
+      }
+      stop() {
+        if (currentRec === this) currentRec = null;
+      }
+    }
+
+    Object.defineProperty(window, "SpeechRecognition", {
+      value: MockSpeechRecognition,
+      configurable: true,
+    });
+    Object.defineProperty(window, "__voiceTest", {
+      value: {
+        getStartCalls: () => startCalls.slice(),
+        emitTranscript: (text: string) => {
+          const rec = currentRec;
+          rec?.onresult?.({ results: [[{ transcript: text }]] });
+          rec?.onend?.();
+          if (currentRec === rec) currentRec = null;
+        },
+      },
+    });
+    window.speechSynthesis.speak = (utterance: SpeechSynthesisUtterance) => {
+      utterance.onstart?.(new Event("start") as SpeechSynthesisEvent);
+      window.setTimeout(() => {
+        utterance.onend?.(new Event("end") as SpeechSynthesisEvent);
+      }, 20);
+    };
+  });
+
+  await page.goto("/en");
+  await page.locator("#open-call-btn").click();
+  const listenBtn = page.locator("#call-listen-btn");
+  await listenBtn.click();
+  await expect(listenBtn).toHaveAttribute("aria-pressed", "true");
+
+  // Turn 1: spoken question is sent automatically, spoken back, and recognition re-arms after cooldown.
+  await page.evaluate(() => {
+    (window as unknown as { __voiceTest: { emitTranscript: (t: string) => void } }).__voiceTest.emitTranscript(
+      "Where can I find general e-Tax filing guidance?",
+    );
+  });
+  await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(1);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => (window as unknown as { __voiceTest: { getStartCalls: () => string[] } }).__voiceTest.getStartCalls().length,
+        ),
+      { timeout: 5_000 },
+    )
+    .toBeGreaterThanOrEqual(2);
+
+  // Speaker echo matching the assistant's reply is ignored and does not create a second turn.
+  await page.evaluate(() => {
+    (window as unknown as { __voiceTest: { emitTranscript: (t: string) => void } }).__voiceTest.emitTranscript(
+      "Synthetic browser verification response",
+    );
+  });
+  await expect(page.locator("#call-voice-status")).toContainText("Ignored speaker echo");
+  await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(1);
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => (window as unknown as { __voiceTest: { getStartCalls: () => string[] } }).__voiceTest.getStartCalls().length,
+        ),
+      { timeout: 5_000 },
+    )
+    .toBeGreaterThanOrEqual(3);
+
+  // Turn 2: a genuine follow-up question succeeds without re-clicking the microphone button.
+  await page.evaluate(() => {
+    (window as unknown as { __voiceTest: { emitTranscript: (t: string) => void } }).__voiceTest.emitTranscript(
+      "What is the PAYE filing deadline each month?",
+    );
+  });
+  await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(2);
+});
+

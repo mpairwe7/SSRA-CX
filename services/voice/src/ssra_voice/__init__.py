@@ -1447,6 +1447,301 @@ def fixed_voice_prompts() -> frozenset[str]:
     )
 
 
+# Post-TTS room/handset acoustic tail cooldown (MARIA OS / Speko 2026 turn-taking standard).
+POST_TTS_ECHO_COOLDOWN_MS: int = 450
+
+_BACKCHANNEL_PHRASES: frozenset[str] = frozenset(
+    {
+        "mm",
+        "mmm",
+        "mm hm",
+        "mm-hm",
+        "mmhm",
+        "uh huh",
+        "uh-huh",
+        "okay",
+        "ok",
+        "i see",
+        "right",
+        "got it",
+        "نعم",
+        "تمام",
+        "ايوه",
+        "أيوة",
+    }
+)
+_SPEECH_TOKEN_RE = re.compile(r"[\w\u0600-\u06ff]+", flags=re.UNICODE)
+
+
+def _speech_tokens(text: str) -> list[str]:
+    return [tok.lower() for tok in _SPEECH_TOKEN_RE.findall(text) if tok.strip()]
+
+
+def is_backchannel_utterance(text: str) -> bool:
+    """Return True when a short listener acknowledgement should not interrupt the assistant's reply."""
+    tokens = _speech_tokens(text)
+    if not tokens or len(tokens) > 2:
+        return False
+    normalized = " ".join(tokens)
+    return normalized in _BACKCHANNEL_PHRASES
+
+
+def is_likely_tts_echo(
+    transcript: str,
+    last_assistant_spoken_text: str,
+    *,
+    elapsed_since_tts_end_ms: int | float | None = None,
+) -> bool:
+    """Detect when a microphone transcript is acoustic echo of the assistant's own TTS output.
+
+    Within ``POST_TTS_ECHO_COOLDOWN_MS`` (450 ms) after TTS playback ends—or while TTS is still
+    playing (`elapsed_since_tts_end_ms <= 0`)—room reverberation and speaker coupling can feed the
+    assistant's words back into the recognizer. Outside the cooldown window, only long high-overlap
+    repeats (>= 4 words, >= 85% token overlap) count as self-echo.
+    """
+    caller_tokens = _speech_tokens(transcript)
+    assistant_tokens = _speech_tokens(last_assistant_spoken_text)
+    if not caller_tokens or not assistant_tokens:
+        return False
+    caller_joined = " ".join(caller_tokens)
+    assistant_joined = " ".join(assistant_tokens)
+    caller_padded = f" {caller_joined} "
+    assistant_padded = f" {assistant_joined} "
+    assistant_set = set(assistant_tokens)
+    overlap = sum(1 for tok in caller_tokens if tok in assistant_set) / len(caller_tokens)
+
+    in_echo_tail = (
+        elapsed_since_tts_end_ms is not None
+        and math.isfinite(elapsed_since_tts_end_ms)
+        and elapsed_since_tts_end_ms <= POST_TTS_ECHO_COOLDOWN_MS
+    )
+    if in_echo_tail:
+        if caller_padded in assistant_padded:
+            return True
+        if len(caller_tokens) >= 2 and overlap >= 0.75:
+            return True
+    if len(caller_tokens) >= 4 and (caller_padded in assistant_padded or overlap >= 0.85):
+        return True
+    return False
+
+
+@dataclass(frozen=True)
+class VoiceTurnOutcome:
+    """Outcome of one turn in a stateful multi-turn `VoiceCallSession`."""
+
+    session_id: str
+    phase: Literal["opening_disclosure", "recording_consent", "active_ai", "transferred", "ended"]
+    turn_index: int
+    decision: VoiceSessionDecision | None
+    ignored_as_echo: bool = False
+    ignored_as_backchannel: bool = False
+    consecutive_low_confidence_turns: int = 0
+    heard_assistant_context: str = ""
+
+
+class VoiceCallSession:
+    """Stateful multi-turn voice call controller (`ADR-027`).
+
+    Connects opening disclosure, opt-in recording consent, post-TTS echo suppression, backchannel
+    filtering, barge-in context trimming, and multi-turn recovery across turns.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_id: str,
+        locale: LocaleCode,
+        recording_offered: bool = True,
+        wer_evidence: Mapping[LocaleCode, VoiceWerEvidence] = APPROVED_VOICE_WER_EVIDENCE,
+        enable_spoken_clarify_gate: bool = True,
+    ) -> None:
+        self.session_id = session_id
+        self.locale = locale
+        self.recording_offered = recording_offered
+        self.wer_evidence = wer_evidence
+        self.enable_spoken_clarify_gate = enable_spoken_clarify_gate
+        self.phase: Literal[
+            "opening_disclosure", "recording_consent", "active_ai", "transferred", "ended"
+        ] = "opening_disclosure"
+        self.disclosure_playing: bool = False
+        self.recording_consent_granted: bool = False
+        self.turn_index: int = 0
+        self.consecutive_low_confidence_turns: int = 0
+        self.last_assistant_spoken_text: str = ""
+        self.last_interrupted_unspoken_text: str = ""
+        self.history: list[dict[str, Any]] = []
+
+    def start_call(self) -> list[VoicePrompt]:
+        """Play the opening AI disclosure and, if offered, request opt-in recording consent."""
+        prompts = build_call_opening_prompts(self.locale, recording_offered=self.recording_offered)
+        self.last_assistant_spoken_text = " ".join(p.text for p in prompts)
+        self.disclosure_playing = True
+        self.phase = "opening_disclosure"
+        return prompts
+
+    def mark_disclosure_finished(self) -> None:
+        """Mark the non-interruptible AI disclosure as finished and advance to consent or active AI."""
+        self.disclosure_playing = False
+        if self.phase == "opening_disclosure":
+            self.phase = "recording_consent" if self.recording_offered else "active_ai"
+
+    def submit_recording_consent(self, dtmf_digit: str | None) -> VoiceTurnOutcome:
+        """Record keypad 1 consent (or continue unrecorded on 2/None); keypad 0 transfers to an officer."""
+        self.disclosure_playing = False
+        if dtmf_digit == "0":
+            decision = route_voice_turn(
+                session_id=self.session_id,
+                locale=self.locale,
+                recording_consent_granted=False,
+                wer_evidence=self.wer_evidence,
+                dtmf_digit="0",
+            )
+            self.phase = "transferred"
+            return VoiceTurnOutcome(
+                session_id=self.session_id,
+                phase=self.phase,
+                turn_index=self.turn_index,
+                decision=decision,
+                consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                heard_assistant_context=self.last_assistant_spoken_text,
+            )
+        self.recording_consent_granted = resolve_recording_consent(dtmf_digit)
+        self.phase = "active_ai"
+        return VoiceTurnOutcome(
+            session_id=self.session_id,
+            phase=self.phase,
+            turn_index=self.turn_index,
+            decision=None,
+            consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+            heard_assistant_context=self.last_assistant_spoken_text,
+        )
+
+    def record_assistant_reply(
+        self,
+        reply_text: str,
+        *,
+        interrupted_at_sentence: int | None = None,
+    ) -> str:
+        """Record what the assistant actually spoke, trimming unspoken sentences on barge-in."""
+        sentences = split_tts_sentences(reply_text)
+        if interrupted_at_sentence is not None and 0 <= interrupted_at_sentence < len(sentences):
+            heard = " ".join(sentences[:interrupted_at_sentence]).strip()
+            unspoken = " ".join(sentences[interrupted_at_sentence:]).strip()
+        else:
+            heard = " ".join(sentences).strip()
+            unspoken = ""
+        self.last_assistant_spoken_text = heard
+        self.last_interrupted_unspoken_text = unspoken
+        if heard:
+            self.history.append(
+                {
+                    "speaker": "assistant",
+                    "text": heard,
+                    "seq": len(self.history) + 1,
+                    "interrupted": bool(unspoken),
+                }
+            )
+        return heard
+
+    def process_caller_turn(
+        self,
+        *,
+        transcript: str = "",
+        dtmf_digit: str | None = None,
+        assistant_speaking: bool = False,
+        elapsed_since_tts_end_ms: int | float | None = None,
+        utterance_confidence: float = 0.95,
+        whisper_signals: WhisperSegmentSignals | None = None,
+    ) -> VoiceTurnOutcome:
+        """Process one caller turn while preserving multi-turn continuity, echo suppression, and recovery."""
+        if dtmf_digit == "0":
+            self.disclosure_playing = False
+        if self.disclosure_playing and dtmf_digit is None:
+            return VoiceTurnOutcome(
+                session_id=self.session_id,
+                phase=self.phase,
+                turn_index=self.turn_index,
+                decision=None,
+                consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                heard_assistant_context=self.last_assistant_spoken_text,
+            )
+        if self.phase in ("opening_disclosure", "recording_consent") and dtmf_digit in ("1", "2"):
+            return self.submit_recording_consent(dtmf_digit)
+        if self.phase in ("opening_disclosure", "recording_consent"):
+            self.disclosure_playing = False
+            self.phase = "active_ai"
+
+        if dtmf_digit is None and transcript.strip():
+            effective_elapsed = 0.0 if assistant_speaking else elapsed_since_tts_end_ms
+            if is_likely_tts_echo(
+                transcript,
+                self.last_assistant_spoken_text,
+                elapsed_since_tts_end_ms=effective_elapsed,
+            ):
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=None,
+                    ignored_as_echo=True,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                )
+            if assistant_speaking and is_backchannel_utterance(transcript):
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=None,
+                    ignored_as_backchannel=True,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                )
+
+        asr_verdict = (
+            assess_whisper_segment(whisper_signals) if whisper_signals is not None else "accept"
+        )
+        is_low_conf_spoken_turn = dtmf_digit is None and (
+            asr_verdict != "accept" or utterance_confidence < MIN_UTTERANCE_ASR_CONFIDENCE
+        )
+        next_low_conf_count = (
+            self.consecutive_low_confidence_turns + 1 if is_low_conf_spoken_turn else 0
+        )
+
+        decision = route_voice_turn(
+            session_id=self.session_id,
+            locale=self.locale,
+            recording_consent_granted=self.recording_consent_granted,
+            wer_evidence=self.wer_evidence,
+            dtmf_digit=dtmf_digit,
+            barge_in_detected=assistant_speaking,
+            utterance_confidence=utterance_confidence,
+            consecutive_low_confidence_turns=next_low_conf_count,
+            enable_spoken_clarify_gate=self.enable_spoken_clarify_gate,
+            whisper_signals=whisper_signals,
+        )
+        self.turn_index += 1
+        self.consecutive_low_confidence_turns = next_low_conf_count
+        if transcript.strip() and asr_verdict == "accept":
+            self.history.append(
+                {
+                    "speaker": "caller",
+                    "text": transcript.strip(),
+                    "seq": len(self.history) + 1,
+                }
+            )
+        if decision.action == "WARM_TRANSFER_TO_OFFICER":
+            self.phase = "transferred"
+        return VoiceTurnOutcome(
+            session_id=self.session_id,
+            phase=self.phase,
+            turn_index=self.turn_index,
+            decision=decision,
+            consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+            heard_assistant_context=self.last_assistant_spoken_text,
+        )
+
+
 @dataclass(frozen=True)
 class HybridVoiceRouteDecision:
     """Decision from the October 2026 Hybrid Speech Router."""
