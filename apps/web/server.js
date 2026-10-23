@@ -675,6 +675,7 @@ function renderPwaShellHtml(locale, nonce) {
     .call-dock-side { display: inline-flex; align-items: center; gap: 0.45rem; }
     .call-ctl { width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-0); background: var(--surface-2); border: 1px solid var(--border-1); }
     .call-ctl--muted { background: rgba(251, 191, 36, 0.2); border-color: var(--warning); color: var(--warning); }
+    .call-ctl--hangup { background: rgba(251, 113, 133, 0.2); border-color: var(--danger); color: var(--danger); }
     .call-orb-wrap { width: 76px; height: 60px; display: flex; align-items: center; justify-content: center; flex: none; }
     .call-orb { position: relative; width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: transform 0.08s linear; }
     .call-orb-core { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 28%, rgba(249, 199, 79, 0.55), transparent 42%), radial-gradient(circle at 60% 65%, #0F47AF, #078930 78%); box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.18); }
@@ -1008,6 +1009,7 @@ function renderPwaShellHtml(locale, nonce) {
         </div>
         <div class="call-dock-side">
           <button type="button" id="call-officer-btn" class="call-ctl" aria-label="Request an SSRA officer" title="Request an SSRA officer">${ICONS.user}</button>
+          <button type="button" id="call-hangup-btn" class="call-ctl call-ctl--hangup" aria-label="End call" title="End call">${ICONS.phoneOff}</button>
         </div>
       </footer>
       <div class="call-actions-row">
@@ -1686,6 +1688,9 @@ function renderPwaShellHtml(locale, nonce) {
         if ("speechSynthesis" in window) {
           window.speechSynthesis.cancel();
         }
+        document.querySelectorAll("[data-speak]").forEach((btn) => {
+          setSafeHtml(btn, ICONS.speaker + " Listen");
+        });
       }
 
       function newThreadId() {
@@ -1998,15 +2003,14 @@ function renderPwaShellHtml(locale, nonce) {
         }
         const speakBtn = e.target.closest("[data-speak]");
         if (speakBtn && "speechSynthesis" in window) {
-          if (window.speechSynthesis.speaking) {
-            window.speechSynthesis.cancel();
-            setSafeHtml(speakBtn, ICONS.speaker + " Listen");
+          if (assistantCurrentlySpeaking || window.speechSynthesis.speaking) {
+            stopAssistantSpeechPlayback();
+            syncNarrationBar(false, "");
+            syncComposerRecordingUi();
             return;
           }
-          const u = speechUtterance(speakBtn.getAttribute("data-speak") || "");
-          u.onend = () => { setSafeHtml(speakBtn, ICONS.speaker + " Listen"); };
           setSafeHtml(speakBtn, ICONS.stop + " Stop Audio");
-          window.speechSynthesis.speak(u);
+          speakAssistantReply(speakBtn.getAttribute("data-speak") || "");
           return;
         }
         const copyBtn = e.target.closest("[data-copy]");
@@ -2447,7 +2451,14 @@ function renderPwaShellHtml(locale, nonce) {
         }
         if (e.target.closest("#toggle-narrate-btn")) {
           state.autoNarrate = !state.autoNarrate;
+          if (!state.autoNarrate) {
+            voiceContinuousActive = false;
+            stopActiveSpeechRecognition();
+            stopAssistantSpeechPlayback();
+            syncNarrationBar(false, "");
+          }
           saveState();
+          syncVoiceModalButtons();
           renderSettingsTabContent("voice");
           document.getElementById("toggle-narrate-btn")?.focus();
           return;
@@ -2511,6 +2522,17 @@ function renderPwaShellHtml(locale, nonce) {
           } else if (shell?.getAttribute("data-mobile-rail") === "open") {
             shell.setAttribute("data-mobile-rail", "closed");
             syncMobileRailA11y(true);
+          } else if (activeSpeechRec || voiceContinuousActive) {
+            e.preventDefault();
+            voiceContinuousActive = false;
+            stopActiveSpeechRecognition();
+            syncVoiceModalButtons();
+            setVoiceStatus("Voice recording cancelled.");
+          } else if (assistantCurrentlySpeaking || !narrationBarEl?.classList.contains("is-hidden")) {
+            e.preventDefault();
+            stopAssistantSpeechPlayback();
+            syncNarrationBar(false, "");
+            syncComposerRecordingUi();
           }
         }
       });
@@ -2632,7 +2654,7 @@ function renderPwaShellHtml(locale, nonce) {
           );
         }
         if (composerVoiceModeBtn) {
-          const vmOn = Boolean(voiceContinuousActive || state.autoNarrate);
+          const vmOn = Boolean(voiceContinuousActive);
           composerVoiceModeBtn.classList.toggle("is-active", vmOn);
           composerVoiceModeBtn.setAttribute("aria-pressed", String(vmOn));
           composerVoiceModeBtn.setAttribute(
@@ -2646,14 +2668,17 @@ function renderPwaShellHtml(locale, nonce) {
           callOrbEl.setAttribute("data-mode", orbMode);
         }
         if (callStatusPillEl && callStatusLabelEl) {
+          const curStatus = callStatusPillEl.getAttribute("data-status");
           if (voiceContinuousActive || assistantCurrentlySpeaking || isListening) {
-            callStatusPillEl.setAttribute("data-status", "ai");
-            callStatusLabelEl.textContent = assistantCurrentlySpeaking
-              ? "Speaking · Automated AI"
-              : isListening
-                ? "Listening · Automated AI"
-                : "Connected · Automated AI";
-          } else if (callStatusPillEl.getAttribute("data-status") !== "transferring") {
+            if (curStatus !== "transferring") {
+              callStatusPillEl.setAttribute("data-status", "ai");
+              callStatusLabelEl.textContent = assistantCurrentlySpeaking
+                ? "Speaking · Automated AI"
+                : isListening
+                  ? "Listening · Automated AI"
+                  : "Connected · Automated AI";
+            }
+          } else if (curStatus !== "transferring" && curStatus !== "ended") {
             callStatusPillEl.setAttribute("data-status", "consent");
             callStatusLabelEl.textContent = "AI Receptionist · Automated";
           }
@@ -2736,6 +2761,9 @@ function renderPwaShellHtml(locale, nonce) {
           }
           assistantCurrentlySpeaking = false;
           lastTtsEndedAtMs = Date.now();
+          document.querySelectorAll("[data-speak]").forEach((btn) => {
+            setSafeHtml(btn, ICONS.speaker + " Listen");
+          });
           syncNarrationBar(false, "");
           syncComposerRecordingUi();
           if (voiceContinuousActive && !callMuted) {
@@ -2835,14 +2863,58 @@ function renderPwaShellHtml(locale, nonce) {
         }
       });
 
+      const callHangupBtn = document.getElementById("call-hangup-btn");
+
+      function resetOfficerBtnUi() {
+        if (!callOfficerBtn) return;
+        callOfficerBtn.setAttribute("aria-label", "Request an SSRA officer");
+        callOfficerBtn.setAttribute("title", "Request an SSRA officer");
+        setSafeHtml(callOfficerBtn, ICONS.user);
+      }
+
       callOfficerBtn?.addEventListener("click", () => {
+        const curStatus = callStatusPillEl?.getAttribute("data-status");
+        if (curStatus === "transferring") {
+          // CallScreen.tsx requestCallback parity: one button changes its job when the wait starts.
+          resetOfficerBtnUi();
+          if (callStatusPillEl) callStatusPillEl.setAttribute("data-status", "ended");
+          if (callStatusLabelEl) callStatusLabelEl.textContent = "Call ended · Callback guidance";
+          appendCallCaption(
+            "system",
+            "Callback guidance requested. Use the official SSRA contact details in the chat transcript to schedule a call.",
+          );
+          return;
+        }
         if (callStatusPillEl) callStatusPillEl.setAttribute("data-status", "transferring");
         if (callStatusLabelEl) callStatusLabelEl.textContent = "Transferring · Officer handoff";
+        callOfficerBtn.setAttribute("aria-label", "Request a callback instead");
+        callOfficerBtn.setAttribute("title", "Request a callback instead");
+        setSafeHtml(callOfficerBtn, ICONS.phone);
         appendCallCaption(
           "system",
           "Requesting an SSRA tax officer. No live telephony trunk is connected in this public browser session; preparing official contact and callback guidance.",
         );
         sendTurn("I would like to speak with an SSRA tax officer", { fromVoiceLoop: voiceContinuousActive });
+      });
+
+      callHangupBtn?.addEventListener("click", () => {
+        voiceContinuousActive = false;
+        if (activeTurnAbortController) activeTurnAbortController.abort();
+        stopActiveSpeechRecognition();
+        stopAssistantSpeechPlayback();
+        syncNarrationBar(false, "");
+        resetOfficerBtnUi();
+        if (callStatusPillEl) callStatusPillEl.setAttribute("data-status", "ended");
+        if (callStatusLabelEl) callStatusLabelEl.textContent = "Call ended";
+        appendCallCaption("system", "Thank you for calling SSRA Assist.");
+        syncVoiceModalButtons();
+        setVoiceStatus("Call ended. Tap Start voice conversation to begin a new session.");
+      });
+
+      window.addEventListener("pagehide", () => {
+        voiceContinuousActive = false;
+        stopActiveSpeechRecognition();
+        stopAssistantSpeechPlayback();
       });
 
       function startVoiceRecognition(options) {
@@ -2866,6 +2938,10 @@ function renderPwaShellHtml(locale, nonce) {
         }
         stopActiveSpeechRecognition();
         stopAssistantSpeechPlayback();
+        if (callStatusPillEl?.getAttribute("data-status") === "ended") {
+          resetOfficerBtnUi();
+          callStatusPillEl.setAttribute("data-status", "ai");
+        }
         voiceContinuousActive = continuousLoop || Boolean(state.autoNarrate);
         syncVoiceModalButtons();
 
