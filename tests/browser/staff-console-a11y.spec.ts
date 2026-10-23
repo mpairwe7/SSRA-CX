@@ -29,6 +29,8 @@ test("the command palette follows the APG combobox pattern", async ({ page }) =>
   await expect(combobox).toHaveAttribute("aria-activedescendant", "cmdk-opt-1");
   await expect(page.locator("#cmdk-opt-1")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#cmdk-opt-0")).toHaveAttribute("aria-selected", "false");
+  await page.keyboard.press("Home");
+  await expect(combobox).toHaveAttribute("aria-activedescendant", "cmdk-opt-0");
 
   await combobox.fill("zzz-synthetic-no-match");
   await expect(combobox).not.toHaveAttribute("aria-activedescendant", /.+/);

@@ -634,7 +634,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     }
 
     .staff-rail {
-      position: fixed; inset: 0 auto 0 0; z-index: 30;
+      position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 30;
       display: flex; flex-direction: column;
       width: var(--rail-w-collapsed);
       background: var(--ops-glass-bg);
@@ -1578,6 +1578,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           if (e.key === "Escape") { e.preventDefault(); closeCmdk(); }
           else if (e.key === "ArrowDown" && cmds.length) { e.preventDefault(); cmdkActiveIdx = (cmdkActiveIdx + 1) % cmds.length; renderCmdkList(); }
           else if (e.key === "ArrowUp" && cmds.length) { e.preventDefault(); cmdkActiveIdx = (cmdkActiveIdx - 1 + cmds.length) % cmds.length; renderCmdkList(); }
+          else if (e.key === "Home" && cmds.length) { e.preventDefault(); cmdkActiveIdx = 0; renderCmdkList(); }
+          else if (e.key === "End" && cmds.length) { e.preventDefault(); cmdkActiveIdx = cmds.length - 1; renderCmdkList(); }
           else if (e.key === "Enter" && cmds.length) { e.preventDefault(); closeCmdk(); cmds[cmdkActiveIdx]?.run(); }
           return;
         }

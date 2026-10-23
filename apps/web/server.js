@@ -31,6 +31,19 @@ const ALLOWED_FONT_FILES = new Set([
   "IBMPlexMono-Light.woff2",
   "IBMPlexMono-Regular.woff2",
 ]);
+const FONT_CACHE = new Map();
+for (const fontName of ALLOWED_FONT_FILES) {
+  const fontPath = path.join(FONTS_DIR, fontName);
+  if (fs.existsSync(fontPath)) {
+    const buffer = fs.readFileSync(fontPath);
+    const etag = `"${crypto.createHash("sha256").update(buffer).digest("hex").slice(0, 32)}"`;
+    FONT_CACHE.set(fontName, { buffer, etag, byteLength: String(buffer.byteLength) });
+  }
+}
+const SW_PATH = path.join(__dirname, "public", "sw.js");
+const SW_CONTENT = fs.existsSync(SW_PATH)
+  ? fs.readFileSync(SW_PATH, "utf-8")
+  : "self.addEventListener('install', () => self.skipWaiting());";
 const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
 const HOSTNAME = process.env.HOSTNAME ?? "0.0.0.0";
 const INTERNAL_API_URL = (process.env.INTERNAL_API_URL ?? "http://ssra-api:8000").replace(
@@ -149,6 +162,7 @@ function acceptsEncoding(acceptEncHeader, targetCoding) {
 }
 
 function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
+  const isHead = String(req.method ?? "GET").toUpperCase() === "HEAD";
   const acceptEnc = String(req.headers["accept-encoding"] ?? "");
   const buf = Buffer.from(bodyStr, "utf-8");
   if (buf.length > 512 && acceptsEncoding(acceptEnc, "br")) {
@@ -163,9 +177,10 @@ function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
     res.writeHead(statusCode, {
       ...headers,
       "Content-Encoding": "br",
+      "Content-Length": String(compressed.byteLength),
       Vary: "Accept-Encoding",
     });
-    res.end(compressed);
+    res.end(isHead ? undefined : compressed);
     return;
   }
   if (buf.length > 512 && acceptsEncoding(acceptEnc, "gzip")) {
@@ -173,13 +188,17 @@ function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
     res.writeHead(statusCode, {
       ...headers,
       "Content-Encoding": "gzip",
+      "Content-Length": String(compressed.byteLength),
       Vary: "Accept-Encoding",
     });
-    res.end(compressed);
+    res.end(isHead ? undefined : compressed);
     return;
   }
-  res.writeHead(statusCode, headers);
-  res.end(buf);
+  res.writeHead(statusCode, {
+    ...headers,
+    "Content-Length": String(buf.byteLength),
+  });
+  res.end(isHead ? undefined : buf);
 }
 
 function renderPwaShellHtml(locale, nonce) {
@@ -2034,15 +2053,32 @@ function renderPwaShellHtml(locale, nonce) {
         if (e.target === confirmBackdrop) closeTopModal();
       });
 
-      // ConversationSearch Modal (Ctrl+K)
+      // ConversationSearch Modal (Ctrl+K — ConversationSearch.tsx pattern)
       const searchBackdrop = document.getElementById("search-modal-backdrop");
       const searchInput = document.getElementById("conv-search-input");
       const searchResults = document.getElementById("conv-search-results");
+      let searchActiveIdx = 0;
+      function getSearchMatches() {
+        const q = (searchInput?.value || "").trim().toLocaleLowerCase();
+        return state.conversations.filter((c) => !q || c.title.toLocaleLowerCase().includes(q));
+      }
+      function selectSearchConversation(convId) {
+        if (!convId) return;
+        state.activeId = convId;
+        closeAllModals();
+        renderApp();
+        if (window.matchMedia?.("(max-width: 960px)")?.matches) {
+          shell?.setAttribute("data-mobile-rail", "closed");
+          syncMobileRailA11y(false);
+        }
+        input?.focus();
+      }
       function renderSearchModalList() {
         const q = (searchInput?.value || "").trim().toLocaleLowerCase();
-        const matches = state.conversations.filter((c) => !q || c.title.toLocaleLowerCase().includes(q));
-        let html = matches.map((c) =>
-          '<button type="button" class="acct-pop-item" data-jump-conv="' + escapeHtml(c.id) + '"><span>' + ICONS.messageSquare + " " + escapeHtml(c.title) + '</span><span class="jump-open-tag">Open</span></button>'
+        const matches = getSearchMatches();
+        if (searchActiveIdx >= matches.length) searchActiveIdx = 0;
+        let html = matches.map((c, idx) =>
+          '<button type="button" class="acct-pop-item' + (idx === searchActiveIdx ? " active" : "") + '" data-jump-conv="' + escapeHtml(c.id) + '" data-active="' + (idx === searchActiveIdx) + '"><span>' + ICONS.messageSquare + " " + escapeHtml(c.title) + '</span><span class="jump-open-tag">Open</span></button>'
         ).join("");
         if (!matches.length && q) {
           html = '<p class="rail-empty-hint" role="status">No saved conversations match this search.</p>';
@@ -2050,9 +2086,11 @@ function renderPwaShellHtml(locale, nonce) {
           html = '<p class="rail-empty-hint" role="status">No saved conversations yet.</p>';
         }
         setSafeHtml(searchResults, html);
+        searchResults?.querySelector('[data-active="true"]')?.scrollIntoView({ block: "nearest" });
       }
       function openSearchModal() {
         if (searchInput) searchInput.value = "";
+        searchActiveIdx = 0;
         renderSearchModalList();
         openModal(searchBackdrop, searchInput);
       }
@@ -2060,19 +2098,37 @@ function renderPwaShellHtml(locale, nonce) {
       searchBackdrop?.addEventListener("click", (e) => {
         if (e.target === searchBackdrop) closeAllModals();
       });
-      searchInput?.addEventListener("input", renderSearchModalList);
+      searchInput?.addEventListener("input", () => {
+        searchActiveIdx = 0;
+        renderSearchModalList();
+      });
+      searchInput?.addEventListener("keydown", (e) => {
+        const matches = getSearchMatches();
+        if (!matches.length) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          searchActiveIdx = (searchActiveIdx + 1) % matches.length;
+          renderSearchModalList();
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          searchActiveIdx = (searchActiveIdx - 1 + matches.length) % matches.length;
+          renderSearchModalList();
+        } else if (e.key === "Home") {
+          e.preventDefault();
+          searchActiveIdx = 0;
+          renderSearchModalList();
+        } else if (e.key === "End") {
+          e.preventDefault();
+          searchActiveIdx = matches.length - 1;
+          renderSearchModalList();
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          selectSearchConversation(matches[searchActiveIdx]?.id);
+        }
+      });
       searchResults?.addEventListener("click", (e) => {
         const btn = e.target.closest("[data-jump-conv]");
-        if (btn) {
-          state.activeId = btn.getAttribute("data-jump-conv");
-          closeAllModals();
-          renderApp();
-          if (window.matchMedia?.("(max-width: 960px)")?.matches) {
-            shell?.setAttribute("data-mobile-rail", "closed");
-            syncMobileRailA11y(false);
-          }
-          input?.focus();
-        }
+        if (btn) selectSearchConversation(btn.getAttribute("data-jump-conv"));
       });
 
       // FE-G6: Interactive 5-Tab SettingsDialog Modal
@@ -2409,21 +2465,28 @@ const server = http.createServer(async (req, res) => {
 
   if (isGetOrHead && pathname.startsWith("/fonts/")) {
     const fontName = pathname.slice("/fonts/".length);
-    if (ALLOWED_FONT_FILES.has(fontName)) {
-      const fontPath = path.join(FONTS_DIR, fontName);
-      if (fs.existsSync(fontPath)) {
-        const fontBytes = fs.readFileSync(fontPath);
-        res.writeHead(200, {
-          ...secHeaders,
-          "Content-Type": "font/woff2",
-          "Cache-Control": "public, max-age=31536000, immutable",
-        });
-        res.end(fontBytes);
+    const cached = FONT_CACHE.get(fontName);
+    if (cached) {
+      const fontHeaders = {
+        ...secHeaders,
+        "Content-Type": "font/woff2",
+        "Cache-Control": "public, max-age=31536000, immutable",
+        ETag: cached.etag,
+      };
+      if (req.headers["if-none-match"] === cached.etag) {
+        res.writeHead(304, fontHeaders);
+        res.end();
         return;
       }
+      res.writeHead(200, {
+        ...fontHeaders,
+        "Content-Length": cached.byteLength,
+      });
+      res.end(method === "HEAD" ? undefined : cached.buffer);
+      return;
     }
     res.writeHead(404, { "Content-Type": "application/json", ...secHeaders });
-    res.end(JSON.stringify({ error: "FONT_NOT_FOUND" }));
+    res.end(method === "HEAD" ? undefined : JSON.stringify({ error: "FONT_NOT_FOUND" }));
     return;
   }
 
@@ -2469,16 +2532,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (isGetOrHead && pathname === "/sw.js") {
-    const swPath = path.join(__dirname, "public", "sw.js");
-    const swContent = fs.existsSync(swPath)
-      ? fs.readFileSync(swPath, "utf-8")
-      : "self.addEventListener('install', () => self.skipWaiting());";
     res.writeHead(200, {
       "Content-Type": "application/javascript; charset=utf-8",
       "Clear-Site-Data": '"cache"',
       ...secHeaders,
     });
-    res.end(swContent);
+    res.end(method === "HEAD" ? undefined : SW_CONTENT);
     return;
   }
 
