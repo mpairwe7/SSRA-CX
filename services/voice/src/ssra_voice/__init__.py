@@ -302,7 +302,9 @@ def route_voice_turn(
     A barge-in sets ``cancel_active_reply`` on every decision. A Whisper transcript judged silent or
     unreliable is never streamed to the runtime; the caller gets the keypad menu instead.
     """
-    asr_verdict = assess_whisper_segment(whisper_signals) if whisper_signals else "accept"
+    asr_verdict = (
+        assess_whisper_segment(whisper_signals) if whisper_signals is not None else "accept"
+    )
     asr_rejected_reason = _ASR_REJECTION_REASONS.get(asr_verdict)
     effective_confidence = utterance_confidence if asr_verdict == "accept" else 0.0
     asr_engine = ASR_MODEL_BY_LOCALE[locale]
