@@ -5,6 +5,13 @@
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
+## 0.16 Dependency Security Patch: zod 4.6.7 (2026-10-24)
+
+- Upgraded `zod` from 4.6.5 to 4.6.7 in the seven workspace manifests and `pnpm-lock.yaml` for [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) (high: validating an oversized constrained collection can exhaust memory; fixed in 4.6.6 by upstream commit `a0ebf970`, which checks array, set, and map size bounds before parsing elements). `pnpm audit --audit-level=high` had started failing on every pull request. This supersedes the Dependabot bump (#76).
+- Verified 2026-10-24: 4.6.7 was published 2026-10-12, so it is past the seven-day cooldown and needs no exception. It is MIT-licensed and carries SLSA v1 npm provenance naming upstream commit `b500a2ee`. The upstream tag comparison and the published tarballs show that 4.6.7 differs from 4.6.6 only in its version strings. The lockfile integrity `sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==` matches the npm registry.
+- Upstream disclosed that six malicious commits pushed to its `main` with a compromised credential on 2026-09-21 were reverted the same day, removed from history, and never published to npm. The 4.6.6 provenance names the pre-rewrite copy of a commit; 4.6.7's names a commit on the rewritten `main`.
+- Checks: `pnpm audit` reports no known vulnerabilities; Biome, `tsc`, all workspace Vitest suites, the frontend budget and WCAG verifier, and the 45 rendered browser tests pass.
+
 ## 0.15 [Live Regression Tooling](./runbooks/live-regression.md) (2026-10-24)
 
 - Recorded [the 2026-10-23 live regression](./audit/live-regression-2026-10-23.md) of `f9c8861` on the GPU profile. Public BFF and staff preview: 55 of 55 checks through the public tunnel. Core API and runtime suite: passed. 1,000-scenario benchmark: 1,000 of 1,000, p50 113.6 ms, p95 270.7 ms.
