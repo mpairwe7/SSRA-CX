@@ -23,6 +23,14 @@ describe("@ssra/ui design tokens and RTL layout", () => {
   it("enforces WCAG 2.2 AA touch target minimum, SC 3.3.8 OTP autofill, and Arabic RTL direction", () => {
     expect(SSRA_DESIGN_TOKENS.minTouchTargetPx).toBeGreaterThanOrEqual(44);
     expect(SSRA_DESIGN_TOKENS.focusOutlineCss).toContain("2px solid");
+    expect(SSRA_DESIGN_TOKENS.typography.fontFamilyOpsSans).toContain("IBM Plex Sans");
+    expect(SSRA_DESIGN_TOKENS.typography.fontFamilyOpsMono).toContain("IBM Plex Mono");
+    expect(SSRA_DESIGN_TOKENS.typography.fontFeatureSettings).toBe('"cv11", "ss01"');
+    expect(SSRA_DESIGN_TOKENS.typography.opsTypeScalePx["2xl"]).toBe(34);
+    expect(SSRA_DESIGN_TOKENS.chatv2.railWidthPx).toBe(300);
+    expect(SSRA_DESIGN_TOKENS.opsConsole.collapsedRailWidthPx).toBe(52);
+    expect(SSRA_DESIGN_TOKENS.opsConsole.expandedRailWidthPx).toBe(208);
+    expect(SSRA_DESIGN_TOKENS.opsConsole.seriesPaletteDark).toHaveLength(8);
     const otpAr = buildAccessibleOtpInputProps("ar");
     expect(otpAr.autoComplete).toBe("one-time-code");
     expect(otpAr.dir).toBe("ltr");

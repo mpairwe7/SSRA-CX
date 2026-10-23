@@ -250,6 +250,16 @@ def main() -> None:
         )
         html_en = resp_none.read().decode("utf-8")
         assert 'data-mobile-rail="closed"' in html_en and 'id="rail-mobile-backdrop"' in html_en
+        assert 'id="rail-hotzone"' in html_en and "IBMPlexSans-Regular.woff2" in html_en
+        conn.close()
+
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request("GET", "/fonts/IBMPlexSans-Regular.woff2")
+        resp_font = conn.getresponse()
+        assert resp_font.status == 200 and resp_font.getheader("Content-Type") == "font/woff2", (
+            f"Expected 200 font/woff2 on /fonts/IBMPlexSans-Regular.woff2, got {resp_font.status}"
+        )
+        resp_font.read()
         conn.close()
 
         conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
@@ -296,7 +306,21 @@ def main() -> None:
         assert preview.status == 200
         assert 'id="mobile-ops-nav-btn"' in html_ops and 'id="ops-mobile-backdrop"' in html_ops
         assert "Preview only · no authenticated staff session" in html_ops
+        assert (
+            "IBMPlexMono-Light.woff2" in html_ops and 'class="ops-stat-grid ov-stats"' in html_ops
+        )
         assert "Live Sovereign GPU Stack" not in html_ops
+        conn.close()
+
+        conn = http.client.HTTPConnection("127.0.0.1", 39124, timeout=2.0)
+        conn.request("GET", "/fonts/IBMPlexMono-Light.woff2")
+        resp_ops_font = conn.getresponse()
+        assert (
+            resp_ops_font.status == 200 and resp_ops_font.getheader("Content-Type") == "font/woff2"
+        ), (
+            f"Expected 200 font/woff2 on console /fonts/IBMPlexMono-Light.woff2, got {resp_ops_font.status}"
+        )
+        resp_ops_font.read()
         conn.close()
 
         for method, route in [

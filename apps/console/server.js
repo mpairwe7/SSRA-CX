@@ -6,9 +6,22 @@
  */
 
 import crypto from "node:crypto";
+import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 import { renderOpsDashboardHtml } from "../../packages/ui/ops-console.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FONTS_DIR = path.resolve(__dirname, "../../packages/ui/fonts");
+const ALLOWED_FONT_FILES = new Set([
+  "IBMPlexSans-Regular.woff2",
+  "IBMPlexSans-Medium.woff2",
+  "IBMPlexSans-SemiBold.woff2",
+  "IBMPlexMono-Light.woff2",
+  "IBMPlexMono-Regular.woff2",
+]);
 
 const PORT = Number.parseInt(process.env.PORT ?? "3001", 10);
 const HOSTNAME = process.env.HOSTNAME ?? "0.0.0.0";
@@ -38,7 +51,7 @@ async function readConsoleBody(req) {
 
 function buildConsoleHeaders(nonce) {
   return {
-    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types ssra-ops-html`,
+    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; font-src 'self' data:; connect-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types ssra-ops-html`,
     "X-Nonce": nonce,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -149,6 +162,26 @@ const server = http.createServer(async (req, res) => {
   if (isGetOrHead && pathname === "/robots.txt") {
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", ...secHeaders });
     res.end("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /v1/\n");
+    return;
+  }
+
+  if (isGetOrHead && pathname.startsWith("/fonts/")) {
+    const fontName = pathname.slice("/fonts/".length);
+    if (ALLOWED_FONT_FILES.has(fontName)) {
+      const fontPath = path.join(FONTS_DIR, fontName);
+      if (fs.existsSync(fontPath)) {
+        const fontBytes = fs.readFileSync(fontPath);
+        res.writeHead(200, {
+          ...secHeaders,
+          "Content-Type": "font/woff2",
+          "Cache-Control": "public, max-age=31536000, immutable",
+        });
+        res.end(fontBytes);
+        return;
+      }
+    }
+    res.writeHead(404, { "Content-Type": "application/json", ...secHeaders });
+    res.end(JSON.stringify({ error: "FONT_NOT_FOUND" }));
     return;
   }
 

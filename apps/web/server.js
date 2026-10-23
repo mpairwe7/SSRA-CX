@@ -23,6 +23,14 @@ import zlib from "node:zlib";
 import { ICONS } from "../../packages/ui/icons.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FONTS_DIR = path.resolve(__dirname, "../../packages/ui/fonts");
+const ALLOWED_FONT_FILES = new Set([
+  "IBMPlexSans-Regular.woff2",
+  "IBMPlexSans-Medium.woff2",
+  "IBMPlexSans-SemiBold.woff2",
+  "IBMPlexMono-Light.woff2",
+  "IBMPlexMono-Regular.woff2",
+]);
 const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
 const HOSTNAME = process.env.HOSTNAME ?? "0.0.0.0";
 const INTERNAL_API_URL = (process.env.INTERNAL_API_URL ?? "http://ssra-api:8000").replace(
@@ -79,7 +87,7 @@ function negotiateAcceptLanguage(acceptLanguage) {
 
 function buildSecurityHeaders(nonce) {
   return {
-    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types ssra-web-html ssra-web-script-url`,
+    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; font-src 'self' data:; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types ssra-web-html ssra-web-script-url`,
     "X-Nonce": nonce,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -188,16 +196,54 @@ function renderPwaShellHtml(locale, nonce) {
   <title>SSRA Assist — South Sudan Revenue Authority Official AI Assistant</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <style nonce="${nonce}">
+    @font-face {
+      font-family: "IBM Plex Sans";
+      src: url("/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "IBM Plex Sans";
+      src: url("/fonts/IBMPlexSans-Medium.woff2") format("woff2");
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "IBM Plex Sans";
+      src: url("/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "IBM Plex Mono";
+      src: url("/fonts/IBMPlexMono-Light.woff2") format("woff2");
+      font-weight: 300;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "IBM Plex Mono";
+      src: url("/fonts/IBMPlexMono-Regular.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
     :root {
       color-scheme: dark;
-      --font-sans: "Aptos", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      --font-mono: "Cascadia Code", "SFMono-Regular", "IBM Plex Mono", monospace;
+      --font-geist-sans: "Aptos", "Avenir Next", "Trebuchet MS", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, system-ui, sans-serif;
+      --font-geist-mono: "IBM Plex Mono", "Cascadia Code", "SFMono-Regular", "Fira Code", monospace;
+      --font-sans: var(--font-geist-sans);
+      --font-mono: var(--font-geist-mono);
       --bg-0: #091310;
       --bg-1: #0E1C17;
       --bg-2: #142720;
       --surface-1: rgba(236, 245, 238, 0.04);
       --surface-2: rgba(236, 245, 238, 0.07);
       --surface-3: rgba(236, 245, 238, 0.11);
+      --surface-4: rgba(236, 245, 238, 0.15);
       --surface-ink: rgba(9, 19, 16, 0.88);
       --border-0: rgba(220, 235, 224, 0.075);
       --border-1: rgba(220, 235, 224, 0.13);
@@ -216,15 +262,29 @@ function renderPwaShellHtml(locale, nonce) {
       --grad-primary: linear-gradient(135deg, #07792B 0%, #0D6E38 52%, #0F47AF 100%);
       --grad-gold: linear-gradient(135deg, #F4C430 0%, #D49B0B 100%);
       --grad-user: linear-gradient(135deg, rgba(7, 137, 48, 0.24), rgba(244, 196, 48, 0.12));
+      --cv2-rail: 300px;
+      --cv2-top-h: calc(60px + env(safe-area-inset-top, 0px));
+      --cv2-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
+      --cv2-tap: 140ms;
+      --cv2-accent: #078930;
+      --cv2-accent-contrast: #FFFFFF;
+      --cv2-accent-hover: #056A24;
+      --cv2-accent-soft: rgba(7, 137, 48, 0.18);
+      --cv2-user-bubble: rgba(7, 137, 48, 0.20);
+      --cv2-user-bubble-border: rgba(244, 196, 48, 0.35);
+      --cv2-focus: #F4C430;
       --success: #34d399;
       --warning: #fbbf24;
       --danger: #fb7185;
+      --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.35);
       --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04);
       --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+      --radius-xs: 6px;
       --radius-sm: 10px;
       --radius-md: 14px;
       --radius-lg: 18px;
       --radius-xl: 24px;
+      --radius-2xl: 32px;
       --radius-pill: 999px;
     }
     :root[data-theme="light"] {
@@ -235,6 +295,7 @@ function renderPwaShellHtml(locale, nonce) {
       --surface-1: rgba(12, 28, 20, 0.032);
       --surface-2: rgba(12, 28, 20, 0.058);
       --surface-3: rgba(12, 28, 20, 0.092);
+      --surface-4: rgba(12, 28, 20, 0.13);
       --surface-ink: rgba(250, 251, 247, 0.94);
       --border-0: rgba(12, 28, 20, 0.08);
       --border-1: rgba(12, 28, 20, 0.14);
@@ -246,10 +307,18 @@ function renderPwaShellHtml(locale, nonce) {
       --ssra-blue-bright: #0F47AF;
       --ssra-teal-light: #066926;
       --ssra-gold: #704B00;
+      --cv2-accent: #07792B;
+      --cv2-accent-contrast: #FFFFFF;
+      --cv2-accent-hover: #055E21;
+      --cv2-accent-soft: rgba(7, 137, 48, 0.10);
+      --cv2-user-bubble: #EAF4EC;
+      --cv2-user-bubble-border: rgba(7, 137, 48, 0.28);
+      --cv2-focus: #704B00;
       --success: #066926;
       --warning: #853A06;
       --danger: #B91C1C;
       --grad-user: linear-gradient(135deg, rgba(7, 137, 48, 0.14), rgba(212, 155, 11, 0.12));
+      --shadow-sm: 0 1px 2px rgba(12, 28, 20, 0.08), 0 2px 6px rgba(12, 28, 20, 0.05);
       --shadow-md: 0 6px 20px rgba(12, 28, 20, 0.08), 0 0 0 1px rgba(12, 28, 20, 0.05);
       --shadow-lg: 0 16px 44px rgba(12, 28, 20, 0.12), 0 0 0 1px rgba(12, 28, 20, 0.06);
     }
@@ -261,15 +330,23 @@ function renderPwaShellHtml(locale, nonce) {
       --surface-1: #0D0D0D;
       --surface-2: #161616;
       --surface-3: #222222;
+      --surface-4: #2E2E2E;
       --surface-ink: #000000;
       --border-1: #FFFFFF;
       --border-2: #FFD60A;
       --text-0: #FFFFFF;
       --text-1: #FFFFFF;
       --text-2: #E5E7EB;
+      --cv2-user-bubble: #111111;
+      --cv2-user-bubble-border: #FFD60A;
     }
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; height: 100%; min-height: 100dvh; font-family: var(--font-sans); background: var(--bg-0); color: var(--text-1); overflow: hidden; }
+    html, body {
+      margin: 0; padding: 0; height: 100%; min-height: 100dvh;
+      font-family: var(--font-sans); font-feature-settings: "cv11", "ss01";
+      -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+      background: var(--bg-0); color: var(--text-1); overflow: hidden;
+    }
     body::before {
       content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
       background:
@@ -295,16 +372,31 @@ function renderPwaShellHtml(locale, nonce) {
     }
     .skip-link:focus { top: 10px; }
 
-    /* App Shell Grid (chatv2) */
-    .app-shell { display: grid; grid-template-columns: 288px minmax(0, 1fr); height: 100dvh; width: 100%; transition: grid-template-columns 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
-    .app-shell[data-sidebar="collapsed"] { grid-template-columns: 0px minmax(0, 1fr); }
+    /* App Shell Grid & Hover-Peek (chatv2/shell.css pattern) */
+    .app-shell { display: grid; grid-template-columns: var(--cv2-rail, 300px) minmax(0, 1fr); height: 100dvh; width: 100%; transition: grid-template-columns 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+    .app-shell[data-sidebar="collapsed"] { --cv2-rail: 0px; grid-template-columns: 0px minmax(0, 1fr); }
+    .rail-hotzone { display: none; }
     @media (min-width: 961px) {
-      .app-shell[data-sidebar="collapsed"] .rail-wrap { visibility: hidden; pointer-events: none; }
+      .app-shell[data-sidebar="collapsed"]:not([data-rail-peek="true"]) .rail-wrap { visibility: hidden; pointer-events: none; border-inline-end-width: 0; }
     }
+    @media (min-width: 961px) and (hover: hover) {
+      .app-shell[data-sidebar="collapsed"] .rail-hotzone {
+        display: block; position: fixed; inset-block: 0; inset-inline-start: 0; width: 16px; z-index: 54;
+      }
+      .app-shell[data-sidebar="collapsed"][data-rail-peek="true"] .rail-wrap {
+        position: fixed; inset: 0 auto 0 0; width: 300px; z-index: 55; visibility: visible; pointer-events: auto;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32); animation: railPeekIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      :root[dir="rtl"] .app-shell[data-sidebar="collapsed"][data-rail-peek="true"] .rail-wrap {
+        inset: 0 0 0 auto; animation: railPeekInRtl 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+    }
+    @keyframes railPeekIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+    @keyframes railPeekInRtl { from { transform: translateX(100%); } to { transform: translateX(0); } }
     .rail-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 45; }
     @media (max-width: 960px) {
       .app-shell { grid-template-columns: minmax(0, 1fr); }
-      .rail-wrap { position: fixed; inset: 0 auto 0 0; width: min(292px, 86vw); z-index: 50; transform: translateX(-100%); visibility: hidden; transition: transform 0.22s ease, visibility 0s linear 0.22s; }
+      .rail-wrap { position: fixed; inset: 0 auto 0 0; width: min(300px, 86vw); z-index: 50; transform: translateX(-100%); visibility: hidden; transition: transform 0.22s ease, visibility 0s linear 0.22s; }
       :root[dir="rtl"] .rail-wrap { inset: 0 0 0 auto; transform: translateX(100%); }
       .app-shell[data-mobile-rail="open"] .rail-wrap { transform: translateX(0); visibility: visible; transition: transform 0.22s ease, visibility 0s; }
       .app-shell[data-mobile-rail="open"] .rail-mobile-backdrop { display: block; }
@@ -350,7 +442,7 @@ function renderPwaShellHtml(locale, nonce) {
     }
     .rail-list { flex: 1; overflow-y: auto; padding: 0.2rem 0.55rem; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; }
 
-    /* 1-line conversation row with hover actions (chatv2/sidebar.css pattern) */
+    /* 1-line conversation row with status dot & hover actions (chatv2/sidebar.css pattern) */
     .rail-group { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
     .rail-row {
       position: relative; display: flex; align-items: center; justify-content: space-between;
@@ -363,13 +455,19 @@ function renderPwaShellHtml(locale, nonce) {
       flex: 1; min-width: 0; padding: 0.5rem 0.65rem; color: var(--text-1);
       font-size: 0.84rem; cursor: pointer; white-space: nowrap; overflow: hidden;
       text-overflow: ellipsis; border: none; background: transparent; text-align: start;
-      font-family: inherit;
+      font-family: inherit; display: inline-flex; align-items: center; gap: 8px;
     }
     .rail-row.active .rail-item { color: var(--text-0); font-weight: 600; }
+    .rail-item-dot {
+      width: 5px; height: 5px; border-radius: 50%; border: 1px solid var(--text-3); flex-shrink: 0;
+    }
+    .rail-row.active .rail-item-dot { background: var(--cv2-accent); border-color: var(--cv2-accent); }
+    .rail-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rail-row-actions {
       display: none; align-items: center; gap: 2px; padding-inline-end: 6px;
     }
     .rail-row:hover .rail-row-actions, .rail-row:focus-within .rail-row-actions { display: inline-flex; }
+    @media (hover: none) { .rail-row-actions { display: inline-flex; } }
     .rail-act-mini {
       width: 44px; height: 44px; border-radius: 6px; border: none; background: transparent;
       color: var(--text-2); cursor: pointer; font-size: 0.74rem; display: inline-flex;
@@ -444,16 +542,33 @@ function renderPwaShellHtml(locale, nonce) {
     .ldv2-cat { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ssra-gold); }
     .landing-chip-text { font-size: 0.85rem; font-weight: 500; color: var(--text-0); line-height: 1.35; }
 
-    /* Chat Stream Area */
+    /* Chat Stream Area (chatv2/messages.css & loading.css pattern) */
     .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    .message-list { flex: 1; overflow-y: auto; padding: 1.25rem clamp(1rem, 4vw, 3rem); display: flex; flex-direction: column; gap: 1rem; max-width: 880px; width: 100%; margin: 0 auto; }
-    .message-row { display: flex; flex-direction: column; gap: 0.35rem; animation: fadeIn 0.2s ease-out; content-visibility: auto; contain-intrinsic-size: auto 160px; }
+    .message-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 1.25rem clamp(1rem, 4vw, 3rem); display: flex; flex-direction: column; gap: 1.15rem; max-width: 880px; width: 100%; margin: 0 auto; container-type: inline-size; }
+    .message-row { display: flex; flex-direction: column; gap: 0.35rem; animation: fadeIn 0.22s var(--cv2-spring) both; content-visibility: auto; contain-intrinsic-size: auto 160px; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
     .message-row-user { align-items: flex-end; }
-    .message-row-assistant { align-items: flex-start; }
-    .bubble { max-width: min(720px, 92%); padding: 0.95rem 1.15rem; border-radius: var(--radius-lg); line-height: 1.55; font-size: 0.94rem; }
-    .bubble.user { background: var(--grad-user); border: 1px solid rgba(244, 196, 48, 0.35); color: var(--text-0); border-bottom-right-radius: 6px; }
+    .message-row-assistant { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: flex-start; }
+    .avatar.assistant {
+      width: 32px; height: 32px; border-radius: 8px; background: var(--grad-primary);
+      color: #fff; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+      margin-top: 2px; box-shadow: var(--shadow-sm);
+    }
+    @media (max-width: 720px) {
+      .message-row-assistant { display: flex; flex-direction: column; }
+      .avatar.assistant { display: none; }
+    }
+    .bubble { max-width: min(720px, 92%); padding: 0.95rem 1.15rem; border-radius: var(--radius-lg); line-height: 1.62; font-size: 0.94rem; }
+    .bubble.user { background: var(--cv2-user-bubble); border: 1px solid var(--cv2-user-bubble-border); color: var(--text-0); border-radius: 16px; border-bottom-right-radius: 6px; max-width: min(78%, 640px); }
     .bubble.assistant { background: var(--surface-2); border: 1px solid var(--border-1); color: var(--text-0); border-bottom-left-radius: 6px; box-shadow: var(--shadow-md); width: 100%; }
+    .lds { display: inline-flex; align-items: center; gap: 10px; }
+    .lds-grid { display: grid; grid-template-columns: repeat(3, 4px); gap: 1.5px; flex-shrink: 0; }
+    .lds-cell { width: 4px; height: 4px; border-radius: 1px; background: var(--text-0); animation: pixelOn 1.2s ease-in-out infinite; }
+    .lds-cell:nth-child(2), .lds-cell:nth-child(6) { animation-delay: 0.15s; }
+    .lds-cell:nth-child(3), .lds-cell:nth-child(7) { animation-delay: 0.3s; }
+    .lds-cell:nth-child(4), .lds-cell:nth-child(8) { animation-delay: 0.45s; }
+    .lds-cell:nth-child(5), .lds-cell:nth-child(9) { animation-delay: 0.6s; }
+    @keyframes pixelOn { 0%, 100% { opacity: 0.18; } 50% { opacity: 1; } }
     .turn-meta-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin-bottom: 0.55rem; font-size: 0.74rem; color: var(--text-2); }
     .meta-pill { padding: 0.18rem 0.55rem; border-radius: var(--radius-pill); background: var(--surface-3); border: 1px solid var(--border-1); font-weight: 600; font-size: 0.75rem; }
     .meta-pill.verified { color: var(--success); border-color: rgba(52, 211, 153, 0.35); }
@@ -473,13 +588,18 @@ function renderPwaShellHtml(locale, nonce) {
     .gen-kv dt { color: var(--text-2); }
     .gen-kv dd { margin: 0; font-weight: 700; color: var(--text-0); font-variant-numeric: tabular-nums; }
     .gen-estimate-note { font-weight: 600; color: var(--warning); }
-    .turn-actions { display: flex; align-items: center; gap: 0.45rem; margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid var(--border-0); }
-    .turn-act-btn { min-height: 44px; padding: 0.25rem 0.75rem; border-radius: 6px; background: var(--surface-1); border: 1px solid var(--border-0); color: var(--text-2); font-size: 0.74rem; cursor: pointer; }
-    .turn-act-btn:hover { color: var(--text-0); border-color: var(--border-1); }
+    .turn-actions { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid var(--border-0); opacity: 0.45; transition: opacity 0.16s ease; }
+    .message-list > article:last-of-type .turn-actions,
+    .message-row:hover .turn-actions,
+    .message-row:focus-within .turn-actions { opacity: 1; }
+    @media (hover: none) { .turn-actions { opacity: 1; } }
+    .turn-act-btn { min-height: 44px; padding: 0.25rem 0.75rem; border-radius: 8px; background: var(--surface-1); border: 1px solid var(--border-0); color: var(--text-2); font-size: 0.74rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; }
+    .turn-act-btn:hover { background: var(--surface-3); color: var(--text-0); border-color: var(--border-1); }
 
-    /* Composer Dock */
+    /* Two-Row Composer Dock (chatv2/composer.css & interactions.css pattern) */
+    .chatv2 button, .chatv2 [role="button"], .chatv2 .landing-chip { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
     .composer-dock { width: 100%; max-width: 820px; margin: 0 auto; padding: 0.65rem 1rem max(0.85rem, env(safe-area-inset-bottom)); }
-    .composer-box { background: var(--surface-2); backdrop-filter: blur(20px); border: 1px solid var(--border-2); border-radius: var(--radius-xl); padding: 0.65rem 0.85rem; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 0.45rem; transition: border-color 0.15s ease; }
+    .composer-box { background: var(--surface-2); backdrop-filter: blur(20px); border: 1px solid var(--border-2); border-radius: 16px; padding: 0.65rem 0.85rem; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 0.45rem; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
     .composer-box:focus-within { border-color: var(--ssra-gold); }
     .composer-textarea { width: 100%; min-height: 46px; max-height: 140px; resize: none; border: none; background: transparent; color: var(--text-0); font: inherit; font-size: 0.95rem; outline: none; line-height: 1.45; }
     .composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
@@ -595,6 +715,7 @@ function renderPwaShellHtml(locale, nonce) {
   <noscript><p class="noscript-note">SSRA Assist needs JavaScript to answer questions. For SSRA tax services, use the official e-Tax portal: https://etax.nra.gov.ss/</p></noscript>
 
   <div id="ssra-app-shell" class="app-shell chatv2" data-sidebar="open" data-mobile-rail="closed" data-locale="${locale}">
+    <div id="rail-hotzone" class="rail-hotzone" aria-hidden="true"></div>
     <div id="rail-mobile-backdrop" class="rail-mobile-backdrop" aria-hidden="true"></div>
     <!-- Left Conversation Rail (ConversationRail.tsx + AccountRail.tsx pattern) -->
     <aside class="rail-wrap" id="conversation-rail" aria-label="Conversation history and account">
@@ -1154,7 +1275,8 @@ function renderPwaShellHtml(locale, nonce) {
         }
         const meta = turn.meta || {};
         if (meta.kind === "pending") {
-          return '<article class="message-row message-row-assistant" aria-busy="true"><div class="bubble assistant"><div class="turn-content-text">' + escapeHtml(turn.content) + "</div></div></article>";
+          const grid = '<span class="lds-grid" aria-hidden="true">' + '<span class="lds-cell"></span>'.repeat(9) + "</span>";
+          return '<article class="message-row message-row-assistant" aria-busy="true"><div class="avatar assistant" aria-hidden="true">' + ICONS.ssraCrest + '</div><div class="bubble assistant"><div class="lds">' + grid + '<div class="turn-content-text">' + escapeHtml(turn.content) + "</div></div></div></article>";
         }
         const citationCount = Array.isArray(meta.citations) ? meta.citations.length : 0;
         const actions = meta.kind === "failure"
@@ -1167,6 +1289,7 @@ function renderPwaShellHtml(locale, nonce) {
               : "");
 
         return '<article class="message-row message-row-assistant">' +
+          '<div class="avatar assistant" aria-hidden="true">' + ICONS.ssraCrest + "</div>" +
           '<div class="bubble assistant">' +
             renderTrustPills(meta) +
             '<div class="turn-content-text">' + escapeHtml(turn.content) + "</div>" +
@@ -1182,7 +1305,8 @@ function renderPwaShellHtml(locale, nonce) {
         const active = c.id === state.activeId ? " active" : "";
         return '<li class="rail-row' + active + '">' +
           '<button type="button" class="rail-item" data-conv-id="' + escapeHtml(c.id) + '" aria-label="Open conversation: ' + escapeHtml(c.title) + '"' + (active ? ' aria-current="true"' : "") + '>' +
-            (c.pinned ? ICONS.pin + " " : ICONS.messageSquare + " ") + escapeHtml(c.title) +
+            '<span class="rail-item-dot" aria-hidden="true"></span>' +
+            '<span class="rail-item-title">' + (c.pinned ? ICONS.pin + " " : "") + escapeHtml(c.title) + "</span>" +
           "</button>" +
           '<div class="rail-row-actions">' +
             '<button type="button" class="rail-act-mini" data-pin-conv="' + escapeHtml(c.id) + '" aria-label="' + (c.pinned ? "Unpin" : "Pin") + ' conversation: ' + escapeHtml(c.title) + '" title="' + (c.pinned ? "Unpin" : "Pin") + ' conversation">' + ICONS.pin + "</button>" +
@@ -1756,6 +1880,7 @@ function renderPwaShellHtml(locale, nonce) {
       };
       const toggleSidebar = () => {
         const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
+        shell?.removeAttribute("data-rail-peek");
         if (isMobileViewport) {
           const mob = shell?.getAttribute("data-mobile-rail");
           shell?.setAttribute("data-mobile-rail", mob === "open" ? "closed" : "open");
@@ -1765,6 +1890,24 @@ function renderPwaShellHtml(locale, nonce) {
         }
         syncMobileRailA11y(true);
       };
+      const setRailPeek = (peek) => {
+        const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
+        if (isMobileViewport || shell?.getAttribute("data-sidebar") !== "collapsed") {
+          shell?.removeAttribute("data-rail-peek");
+          return;
+        }
+        if (peek) {
+          shell?.setAttribute("data-rail-peek", "true");
+          railAsideEl?.removeAttribute("inert");
+        } else {
+          shell?.removeAttribute("data-rail-peek");
+          railAsideEl?.setAttribute("inert", "");
+        }
+      };
+      document.getElementById("rail-hotzone")?.addEventListener("mouseenter", () => setRailPeek(true));
+      railAsideEl?.addEventListener("mouseleave", () => {
+        if (shell?.getAttribute("data-rail-peek") === "true") setRailPeek(false);
+      });
       document.getElementById("rail-collapse-btn")?.addEventListener("click", toggleSidebar);
       document.getElementById("header-rail-btn")?.addEventListener("click", toggleSidebar);
       document.getElementById("rail-mobile-backdrop")?.addEventListener("click", () => {
@@ -2093,6 +2236,9 @@ function renderPwaShellHtml(locale, nonce) {
           e.preventDefault();
           if (searchBackdrop?.classList.contains("open")) closeAllModals();
           else if (!openModal) openSearchModal();
+        } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b" && !openModal) {
+          e.preventDefault();
+          toggleSidebar();
         } else if (e.key === "Escape") {
           if (openModal) {
             closeTopModal();
@@ -2258,6 +2404,26 @@ const server = http.createServer(async (req, res) => {
   if (isGetOrHead && pathname === "/robots.txt") {
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", ...secHeaders });
     res.end("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /v1/\n");
+    return;
+  }
+
+  if (isGetOrHead && pathname.startsWith("/fonts/")) {
+    const fontName = pathname.slice("/fonts/".length);
+    if (ALLOWED_FONT_FILES.has(fontName)) {
+      const fontPath = path.join(FONTS_DIR, fontName);
+      if (fs.existsSync(fontPath)) {
+        const fontBytes = fs.readFileSync(fontPath);
+        res.writeHead(200, {
+          ...secHeaders,
+          "Content-Type": "font/woff2",
+          "Cache-Control": "public, max-age=31536000, immutable",
+        });
+        res.end(fontBytes);
+        return;
+      }
+    }
+    res.writeHead(404, { "Content-Type": "application/json", ...secHeaders });
+    res.end(JSON.stringify({ error: "FONT_NOT_FOUND" }));
     return;
   }
 
