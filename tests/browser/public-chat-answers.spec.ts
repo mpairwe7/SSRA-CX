@@ -48,6 +48,11 @@ test("estimates render only with an approved source and an estimate label", asyn
   await expect(uncited).toContainText("Estimate unavailable");
   await expect(uncited.locator(".gen-kv")).toHaveCount(0);
   await expect(uncited).toContainText("No source cited");
+
+  const unregistered = await askScenario(page, "synthetic-scenario:unregistered-calculator-type");
+  await expect(unregistered).toContainText("Synthetic scenario response.");
+  await expect(unregistered.locator(".gen-ui-card")).toHaveCount(0);
+  await expect(unregistered).not.toContainText("222");
 });
 
 test("answers show plain trust cues instead of internal telemetry", async ({ page }) => {

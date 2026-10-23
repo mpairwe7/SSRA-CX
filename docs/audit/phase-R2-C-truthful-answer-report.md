@@ -59,6 +59,8 @@ Gate R1 approval permits non-production R2 reference remediation. All evidence c
 
 ## Residual work
 
+- AUD-024: the runtime (commit `774dd7c`) emits `CalculatorForm` with `calculator_type: "CUSTOMS_DUTY"`, which the registry rejects. Public chat shows the cited answer text without a card until the registry is extended under ADR-005.
+
 - AUD-018 to AUD-023 are planned for R2-D, R2-E, and R2-F.
 - Server-side binding of anonymous threads to an HttpOnly session (ADR-012).
 - OQ-010 must supply approved contact options before a handoff can show hours or channels.

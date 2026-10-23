@@ -10,7 +10,7 @@
 |---|---:|---|
 | S0 | 0 | None |
 | S1 | 4 | AUD-001, AUD-002, AUD-003, AUD-014 |
-| S2 | 14 | AUD-004 through AUD-012, AUD-015, AUD-016, AUD-018, AUD-019, AUD-020 |
+| S2 | 15 | AUD-004 through AUD-012, AUD-015, AUD-016, AUD-018, AUD-019, AUD-020, AUD-024 |
 | S3 | 5 | AUD-013, AUD-017, AUD-021, AUD-022, AUD-023 |
 
 ### AUD-001 · S1 · Runtime durability · Conversation state is process-local
@@ -240,3 +240,14 @@ These findings came from a code and rendered-browser review of `apps/web/server.
 - Impact: Staff reviewing the preview may assume capabilities exist that are not built or connected.
 - Fix: Planned for R2-F. Describe destinations as planned capabilities, and render the preview state on the server.
 - Phase: R2-F · Owner: Frontend · Status: Open.
+
+### AUD-024 · S2 · Contract drift · Runtime emits Generative UI props outside the closed registry
+
+- Location: `services/agent-runtime/src/ssra_runtime/nodes/compose.py` (customs duty estimate, from commit `774dd7c`); `packages/chat-ui/src/index.ts` `CalculatorFormPropsSchema`.
+- Evidence: `compose.py` emits `CalculatorForm` with `calculator_type: "CUSTOMS_DUTY"` and spreads tool output (`**sc`). The registry allows only `z.enum(["PAYE", "WHT"])`. The same commit widened the served renderer's duck typing to show `estimated_duty_ssp`, and reintroduced the `filing_status || "COMPLIANT"` default for `last_filed_period`. R2-C replaces that renderer.
+- Standard: Master prompt invariant 9 (closed, Zod-validated registry); ADR-005; ADR-023.
+- Impact: Runtime and registry disagree about which cards exist. With ADR-023, the public renderer shows the cited answer text but no card for customs estimates. A future permissive renderer could again show unvalidated amounts.
+- Fix: Extend the registry under ADR-005, with schema, contract codegen, renderer, and rendered tests, if customs estimates need a card. Add a runtime contract test that validates every emitted `ui_component` against the registry schemas.
+- Verification: A rendered test asserts that an unregistered calculator type renders no amount card.
+- Phase: R2 · Owner: Agent runtime and Frontend · Status: Open. Mitigated in public chat by ADR-023.
+

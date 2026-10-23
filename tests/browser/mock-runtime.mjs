@@ -94,6 +94,14 @@ const SCENARIOS = {
       { is_estimate: true },
     ),
   ],
+  "synthetic-scenario:unregistered-calculator-type": () => [
+    200,
+    syntheticCard(
+      "CalculatorForm",
+      { calculator_type: "SYNTHETIC_TYPE", estimated_duty_ssp: "222", is_estimate: true },
+      { citations: [SYNTHETIC_CITATION], is_estimate: true },
+    ),
+  ],
   "synthetic-scenario:unavailable": () => [503, { detail: "Synthetic unavailable detail" }],
   "synthetic-scenario:rate-limited": () => [
     429,
