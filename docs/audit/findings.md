@@ -195,7 +195,9 @@ These findings came from a code and rendered-browser review of `apps/web/server.
 - Impact: Screen-reader users get repeated or missing announcements and cannot operate some controls predictably.
 - Fix: R2-D (public chat). The transcript is no longer a live region; a separate polite status region announces "Preparing an answer", "Answer received", and "Not answered". The composer status stays visible at every width, and the keyboard tips hide on small screens. The account panel uses the disclosure pattern and closes on Escape or when focus leaves it. Settings tabs follow the APG model (roving `tabindex`, arrow keys, Home and End, `aria-controls`, a labelled tabpanel). A modal stack makes the page inert behind dialogs and returns focus. An in-page dialog replaces `prompt` and `confirm`, with Cancel focused by default. Clearing from Settings asks for confirmation. False shortcut hints were removed. Conversation groups are lists under headings. Speech output uses the interface language.
 - Verification: `tests/browser/public-chat-a11y.spec.ts` (8 tests) fails on the R2-C code and passes after R2-D.
-- Phase: R2-D, R2-F · Owner: Frontend · Status: Public chat fixed in R2-D; staff command palette and account menu open for R2-F.
+- Staff console (R2-F): the command palette follows the APG combobox pattern (`role="combobox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`, options with `aria-selected`, and a polite result count), and the shell is inert while it is open. The account menu follows the APG menu-button pattern: focus moves to the first item, arrow keys and Home/End move between items, Escape closes and returns focus, Tab closes, and radio items sit in labelled groups.
+- Verification (R2-F): `tests/browser/staff-console-a11y.spec.ts` fails on the R2-E code and passes after R2-F.
+- Phase: R2-D, R2-F · Owner: Frontend · Status: Fixed in R2-D (public chat) and R2-F (staff console).
 
 ### AUD-019 · S2 · Accessibility · Light-theme status text fails contrast; preview status is styled as healthy
 
@@ -205,7 +207,8 @@ These findings came from a code and rendered-browser review of `apps/web/server.
 - Impact: The two most important status messages are unreadable in light theme, and a non-operational state looks healthy.
 - Fix: R2-D sets the light-theme offline text to `#991B1B` (6.35:1 on the badge background), follows the system colour scheme and `prefers-contrast: more` until the user chooses, adds `forced-colors` borders and focus colours, and raises small labels to at least 12 px. The console colours are planned for R2-F.
 - Verification: A rendered test computes the offline status contrast in the light theme and requires at least 4.5:1.
-- Phase: R2-D, R2-F · Owner: Frontend · Status: Public chat fixed in R2-D; staff console open for R2-F.
+- Staff console (R2-F): the preview chip uses the theme accent (7.79:1 on white in the light theme). The preview status pill uses the warning colour instead of the success colour. The unused `.ops-preview-banner` rule was removed.
+- Phase: R2-D, R2-F · Owner: Frontend · Status: Fixed in R2-D (public chat) and R2-F (staff console).
 
 ### AUD-020 · S2 · Language governance · UI publishes unreviewed strings for Phase 4 locales
 
@@ -243,8 +246,9 @@ These findings came from a code and rendered-browser review of `apps/web/server.
 - Evidence: Descriptions include "live calls, transfers & takeover", "served right now", and "Merkle seal proof", but every staff route is a preview with no data. Main content is rendered only by script.
 - Standard: Master prompt invariant 10; ADR-018.
 - Impact: Staff reviewing the preview may assume capabilities exist that are not built or connected.
-- Fix: Planned for R2-F. Describe destinations as planned capabilities, and render the preview state on the server.
-- Phase: R2-F · Owner: Frontend · Status: Open.
+- Fix: R2-F removes the `blurb` descriptions; they were never rendered, so they were dead data. The destination list moves to module scope, and the server renders the preview card, page title, and heading for each route. Client navigation updates only the heading and title. The page is now meaningful without JavaScript.
+- Verification: A rendered test with JavaScript disabled finds the route heading and preview statement, and none of the capability claims.
+- Phase: R2-F · Owner: Frontend · Status: Fixed in R2-F.
 
 ### AUD-024 · S2 · Contract drift · Runtime emits Generative UI props outside the closed registry
 

@@ -22,6 +22,150 @@ const OPS_ROUTE_PREFIXES = [
   "/ops",
 ];
 
+// Preview destinations. Every route renders the same non-operational preview card.
+const DESTINATIONS = [
+  {
+    href: "/admin",
+    label: "Operations overview",
+    navLabel: "Overview",
+    group: "Work",
+    icon: ICONS.gauge,
+    roles: ["ssra_admin", "ssra_auditor", "ssra_staff"],
+  },
+  {
+    href: "/agent",
+    label: "My queue & Copilot",
+    navLabel: "My queue",
+    group: "Work",
+    icon: ICONS.inbox,
+    roles: ["ssra_staff", "ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/admin/tickets",
+    label: "All tickets",
+    navLabel: "All tickets",
+    group: "Work",
+    icon: ICONS.list,
+    roles: ["ssra_staff", "ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/calls",
+    label: "Phone calls desk",
+    navLabel: "Calls",
+    group: "Work",
+    icon: ICONS.phone,
+    roles: ["ssra_staff", "ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/admin/quality",
+    label: "Service quality audit",
+    navLabel: "Quality audit",
+    group: "Audit",
+    icon: ICONS.clipboardCheck,
+    roles: ["ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/admin/audit",
+    label: "WORM Audit trail",
+    navLabel: "Audit trail",
+    group: "Audit",
+    icon: ICONS.shieldCheck,
+    roles: ["ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/admin/replay",
+    label: "Forensic turn replay",
+    navLabel: "Forensic replay",
+    group: "Audit",
+    icon: ICONS.history,
+    roles: ["ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/admin/flags",
+    label: "Flags & kill switches",
+    navLabel: "Flags",
+    group: "Configure",
+    icon: ICONS.flag,
+    roles: ["ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/admin/discrepancies",
+    label: "Knowledge & Bug Reports",
+    navLabel: "Bug Reports",
+    group: "Configure",
+    icon: ICONS.alertTriangle,
+    roles: ["ssra_staff", "ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/admin/overrides",
+    label: "Knowledge release & overrides",
+    navLabel: "Overrides",
+    group: "Configure",
+    icon: ICONS.sliders,
+    roles: ["ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/admin/outbox",
+    label: "Notification outbox",
+    navLabel: "Outbox",
+    group: "Configure",
+    icon: ICONS.send,
+    roles: ["ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/admin/connectors",
+    label: "MCP System connectors",
+    navLabel: "Connectors",
+    group: "Configure",
+    icon: ICONS.plug,
+    roles: ["ssra_staff", "ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/analytics",
+    label: "Analytics & CX Scorecard",
+    navLabel: "Analytics",
+    group: "Observe",
+    icon: ICONS.chart,
+    roles: ["ssra_admin", "ssra_auditor"],
+  },
+  {
+    href: "/analytics/evaluation",
+    label: "Answer evaluation",
+    navLabel: "Evaluation",
+    group: "Observe",
+    icon: ICONS.beaker,
+    roles: ["ssra_admin", "ssra_auditor"],
+  },
+];
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/\x60/g, "&#96;");
+}
+
+function destinationTitle(route) {
+  return (
+    DESTINATIONS.find((destination) => destination.href === route)?.label || "Operations overview"
+  );
+}
+
+// Rendered on the server so the preview state is readable without JavaScript.
+function renderPreviewCard(title) {
+  return `<section class="ops-panel ops-preview-card" aria-labelledby="preview-title">
+          <span class="ops-preview-chip">Preview only</span>
+          <h1 id="preview-title">${escapeHtml(title)}</h1>
+          <p>This screen is not connected to an authenticated staff session. It contains no live taxpayer records, casework, service telemetry, or operational controls.</p>
+          <p>Staff access will be enabled after SSRA approves the identity provider and role mapping, and the service can verify those permissions on the server.</p>
+          <ul><li>Use a staff identity provider with server-validated sessions.</li><li>Show live data only with its source, observation time, and freshness state.</li><li>Require server-side authorization and an audit record for every staff action.</li></ul>
+          <a class="ops-btn primary" href="/en" data-nav="/en">Open the public assistant ${ICONS.arrowUpRight}</a>
+        </section>`;
+}
+
 export function isOpsDashboardPath(pathname) {
   if (!pathname || pathname === "/") return false;
   return OPS_ROUTE_PREFIXES.some(
@@ -59,13 +203,14 @@ function compactOpsHtmlAssetBlocks(html) {
 
 export function renderOpsDashboardHtml(rawPathname, nonce) {
   const currentPath = normalizeOpsRoute(rawPathname);
+  const currentTitle = destinationTitle(currentPath);
   const rawHtml = `<!DOCTYPE html>
 <html lang="en" data-theme="dark" data-rail-mode="always-open">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="Non-operational preview of SSRA Assist staff navigation. No live taxpayer data, service telemetry, or staff actions." />
-  <title>SSRA Operations Console Preview — South Sudan Revenue Authority</title>
+  <title>SSRA Operations Console Preview — ${escapeHtml(currentTitle)}</title>
   <style nonce="${nonce}">
     :root {
       color-scheme: dark;
@@ -428,8 +573,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     .call-bar-left, .call-bar-right { display: flex; align-items: center; gap: var(--ops-space-3); flex-wrap: wrap; }
     .presence-pill {
       display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
-      border-radius: var(--ops-radius-pill); background: rgba(52, 211, 153, 0.12);
-      border: 1px solid rgba(52, 211, 153, 0.35); color: var(--ops-good-ink); font-weight: var(--ops-weight-semi);
+      border-radius: var(--ops-radius-pill); background: rgba(251, 191, 36, 0.12);
+      border: 1px solid rgba(251, 191, 36, 0.4); color: var(--ops-warn-ink); font-weight: var(--ops-weight-semi);
     }
 
     /* ── OpsPage, OpsPanel & StatCard (ops.css + admin.css pattern) ── */
@@ -638,13 +783,11 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     .ops-degrade-label { font-size: 12px; font-weight: 600; color: var(--text-0); }
     .ops-release-steps { margin: 0; padding-inline-start: 18px; display: grid; gap: 8px; font-size: 13px; }
     .ops-panel-mt { margin-top: 24px; }
-    .ops-preview-banner { margin: 14px 20px 0; padding: 14px 16px; border: 2px solid #F4C430; border-radius: var(--ops-radius-md); background: rgba(244, 196, 48, 0.12); color: var(--text-0); line-height: 1.5; }
-    .ops-preview-banner strong { display: block; margin-bottom: 3px; color: #F4C430; }
     .ops-preview-card { max-width: 760px; margin: 28px auto; padding: 24px; }
     .ops-preview-card h1 { margin: 8px 0; }
     .ops-preview-card p, .ops-preview-card li { line-height: 1.6; }
     .ops-preview-card ul { padding-inline-start: 1.25rem; }
-    .ops-preview-chip { display: inline-block; padding: 4px 9px; border: 1px solid #F4C430; border-radius: 999px; color: #F4C430; font-weight: 700; }
+    .ops-preview-chip { display: inline-block; padding: 4px 9px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-weight: 700; }
     @media (prefers-reduced-motion: reduce) {
       .staff-rail { transition: none !important; }
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -680,18 +823,22 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       <div class="staff-rail-scroll" id="staff-rail-groups"></div>
 
       <div class="staff-rail-foot">
-        <div id="staff-acct-menu" class="staff-acct-menu" role="menu" aria-label="Officer account and console settings">
-          <div class="staff-acct-heading" role="presentation">Preview persona · not access control</div>
-          <button type="button" class="staff-acct-item" data-set-role="ssra_admin" role="menuitemradio" aria-checked="true"><span>Administrator view (preview)</span><span>${ICONS.check}</span></button>
-          <button type="button" class="staff-acct-item" data-set-role="ssra_staff" role="menuitemradio" aria-checked="false"><span>Tax agent view (preview)</span><span></span></button>
-          <button type="button" class="staff-acct-item" data-set-role="ssra_auditor" role="menuitemradio" aria-checked="false"><span>Auditor view (preview)</span><span></span></button>
+        <div id="staff-acct-menu" class="staff-acct-menu" role="menu" aria-label="Preview persona and appearance">
+          <div role="group" aria-label="Preview persona, not access control">
+            <div class="staff-acct-heading" aria-hidden="true">Preview persona · not access control</div>
+            <button type="button" class="staff-acct-item" data-set-role="ssra_admin" role="menuitemradio" aria-checked="true" tabindex="-1"><span>Administrator view (preview)</span><span>${ICONS.check}</span></button>
+            <button type="button" class="staff-acct-item" data-set-role="ssra_staff" role="menuitemradio" aria-checked="false" tabindex="-1"><span>Tax agent view (preview)</span><span></span></button>
+            <button type="button" class="staff-acct-item" data-set-role="ssra_auditor" role="menuitemradio" aria-checked="false" tabindex="-1"><span>Auditor view (preview)</span><span></span></button>
+          </div>
           <hr class="staff-acct-hr" role="separator" />
-          <div class="staff-acct-heading" role="presentation">Appearance</div>
-          <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio" aria-checked="true"><span>${ICONS.moon} Dark Mesh</span></button>
-          <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio" aria-checked="false"><span>${ICONS.sun} Light Paper</span></button>
-          <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio" aria-checked="false"><span>${ICONS.contrast} High Contrast (WCAG AAA)</span></button>
+          <div role="group" aria-label="Appearance">
+            <div class="staff-acct-heading" aria-hidden="true">Appearance</div>
+            <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio" aria-checked="true" tabindex="-1"><span>${ICONS.moon} Dark</span></button>
+            <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.sun} Light</span></button>
+            <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.contrast} High contrast</span></button>
+          </div>
           <hr class="staff-acct-hr" role="separator" />
-          <a href="/en" class="staff-acct-item" role="menuitem"><span>${ICONS.messageSquare} Return to Taxpayer MainChat</span><span>${ICONS.arrowUpRight}</span></a>
+          <a href="/en" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.messageSquare} Return to the public assistant</span><span>${ICONS.arrowUpRight}</span></a>
         </div>
         <button type="button" id="staff-acct-trigger" class="staff-acct-trigger" aria-label="Preview persona menu; not signed in" aria-expanded="false" aria-haspopup="menu">
           <span class="staff-acct-avatar"><span id="acct-initials">P</span></span>
@@ -718,8 +865,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         </div>
       </div>
 
-      <main id="staff-main" class="ops-page" data-route="${currentPath}" tabindex="-1">
-        <!-- Populated dynamically by route renderer below -->
+      <main id="staff-main" class="ops-page" data-route="${escapeHtml(currentPath)}" tabindex="-1">
+        ${renderPreviewCard(currentTitle)}
       </main>
     </div>
   </div>
@@ -727,8 +874,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
   <!-- Command Palette Dialog (⌘K / Ctrl+K) -->
   <div id="cmdk-backdrop" class="ops-cmdk-backdrop" role="dialog" aria-modal="true" aria-label="Command palette">
     <div class="ops-cmdk-dialog">
-      <input id="cmdk-input" class="ops-cmdk-input" type="text" aria-label="Search preview navigation" placeholder="Search preview pages… (type to filter)" autocomplete="off" />
+      <input id="cmdk-input" class="ops-cmdk-input" type="text" role="combobox" aria-expanded="true" aria-controls="cmdk-list" aria-autocomplete="list" aria-label="Search preview navigation" placeholder="Search preview pages… (type to filter)" autocomplete="off" />
       <ul id="cmdk-list" class="ops-cmdk-list" role="listbox" aria-label="Available commands"></ul>
+      <p id="cmdk-count" class="ops-sr-only" role="status" aria-live="polite"></p>
       <div class="ops-cmdk-foot">
         <span>↑↓ to navigate · Enter to open · Esc to close</span>
         <span>Preview only · no staff session</span>
@@ -739,22 +887,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
   <script nonce="${nonce}">
     (() => {
       const ICONS = ${JSON.stringify(ICONS)};
-      const DESTINATIONS = [
-        { href: "/admin", label: "Operations overview", navLabel: "Overview", group: "Work", icon: ICONS.gauge, blurb: "Service levels, officers on duty, answer authority", roles: ["ssra_admin", "ssra_auditor", "ssra_staff"] },
-        { href: "/agent", label: "My queue & Copilot", navLabel: "My queue", group: "Work", icon: ICONS.inbox, blurb: "Claim a case, review AI cited draft, and reply", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
-        { href: "/admin/tickets", label: "All tickets", navLabel: "All tickets", group: "Work", icon: ICONS.list, blurb: "Every escalation, every status, every team", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
-        { href: "/calls", label: "Phone calls desk", navLabel: "Calls", group: "Work", icon: ICONS.phone, blurb: "AI phone receptionist: live calls, transfers & takeover", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
-        { href: "/admin/quality", label: "Service quality audit", navLabel: "Quality audit", group: "Audit", icon: ICONS.clipboardCheck, blurb: "Where answers went wrong, from taxpayers' ratings", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/audit", label: "WORM Audit trail", navLabel: "Audit trail", group: "Audit", icon: ICONS.shieldCheck, blurb: "Who changed or read what, and Merkle seal proof", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/replay", label: "Forensic turn replay", navLabel: "Forensic replay", group: "Audit", icon: ICONS.history, blurb: "Turn-by-turn redacted replay & numeric provenance", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/flags", label: "Flags & kill switches", navLabel: "Flags", group: "Configure", icon: ICONS.flag, blurb: "Degradation ladder and feature flags served right now", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/discrepancies", label: "Knowledge & Bug Reports", navLabel: "Bug Reports", group: "Configure", icon: ICONS.alertTriangle, blurb: "Taxpayer-reported inaccuracies and knowledge discrepancies", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
-        { href: "/admin/overrides", label: "Knowledge release & overrides", navLabel: "Overrides", group: "Configure", icon: ICONS.sliders, blurb: "6-step KnowledgeSnapshot pipeline & verified staff replies", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/outbox", label: "Notification outbox", navLabel: "Outbox", group: "Configure", icon: ICONS.send, blurb: "Queued SMS, WhatsApp, and email rows", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/admin/connectors", label: "MCP System connectors", navLabel: "Connectors", group: "Configure", icon: ICONS.plug, blurb: "Health and circuit-breaker state for 11 MCP servers", roles: ["ssra_staff", "ssra_admin", "ssra_auditor"] },
-        { href: "/analytics", label: "Analytics & CX Scorecard", navLabel: "Analytics", group: "Observe", icon: ICONS.chart, blurb: "Service levels, topics, retrieval and satisfaction", roles: ["ssra_admin", "ssra_auditor"] },
-        { href: "/analytics/evaluation", label: "Answer evaluation", navLabel: "Evaluation", group: "Observe", icon: ICONS.beaker, blurb: "RAG & numeric provenance metrics against thresholds", roles: ["ssra_admin", "ssra_auditor"] },
-      ];
+      const DESTINATIONS = ${JSON.stringify(DESTINATIONS)};
 
       const ROLE_META = {
         ssra_admin: { initials: "P", name: "Preview persona", label: "Not signed in · preview only" },
@@ -866,17 +999,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         const route = DESTINATIONS.find((destination) => destination.href === state.route);
         const title = route?.label || "Operations overview";
         document.title = "SSRA Operations Console Preview — " + title;
-        setSafeHtml(
-          mainEl,
-          '<section class="ops-panel ops-preview-card" aria-labelledby="preview-title">' +
-            '<span class="ops-preview-chip">Preview only</span>' +
-            '<h1 id="preview-title">' + escapeHtml(title) + "</h1>" +
-            '<p>This screen is not connected to an authenticated staff session. It contains no live taxpayer records, casework, service telemetry, or operational controls.</p>' +
-            '<p>Staff access will be enabled after SSRA approves the identity provider and role mapping, and the service can verify those permissions on the server.</p>' +
-            '<ul><li>Use a staff identity provider with server-validated sessions.</li><li>Show live data only with its source, observation time, and freshness state.</li><li>Require server-side authorization and an audit record for every staff action.</li></ul>' +
-            '<a class="ops-btn primary" href="/en" data-nav="/en">Open the public assistant ' + ICONS.arrowUpRight + "</a>" +
-          "</section>",
-        );
+        const titleEl = document.getElementById("preview-title");
+        if (titleEl) titleEl.textContent = title;
       }
 
       function navigateTo(href) {
@@ -991,32 +1115,69 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
         }
       });
 
-      // AccountMenu popover
+      // AccountMenu (APG menu button): arrow keys move, Escape closes and returns focus.
+      const menuItems = () => Array.from(acctMenu?.querySelectorAll('[role^="menuitem"]') || []);
+      function openAcctMenu() {
+        acctMenu?.classList.add("open");
+        acctTrigger?.setAttribute("aria-expanded", "true");
+        menuItems()[0]?.focus();
+      }
+      function closeAcctMenu(returnFocus) {
+        if (!acctMenu?.classList.contains("open")) return;
+        acctMenu.classList.remove("open");
+        acctTrigger?.setAttribute("aria-expanded", "false");
+        if (returnFocus) acctTrigger?.focus();
+        applyChrome();
+      }
+      function setPreviewPersona(role) {
+        state.role = ROLE_META[role] ? role : "ssra_admin";
+        writeUiPreference("ssra-ops-preview-persona", state.role);
+        renderCurrentRoute();
+      }
       acctTrigger?.addEventListener("click", (e) => {
         e.stopPropagation();
-        const isOpen = acctMenu?.classList.toggle("open");
-        acctTrigger.setAttribute("aria-expanded", String(Boolean(isOpen)));
+        if (acctMenu?.classList.contains("open")) closeAcctMenu(false);
+        else openAcctMenu();
+      });
+      acctTrigger?.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          openAcctMenu();
+          if (e.key === "ArrowUp") menuItems().at(-1)?.focus();
+        }
+      });
+      acctMenu?.addEventListener("keydown", (e) => {
+        const items = menuItems();
+        const current = items.indexOf(document.activeElement);
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          closeAcctMenu(true);
+        } else if (e.key === "Tab") {
+          closeAcctMenu(false);
+        } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key) && items.length > 0) {
+          e.preventDefault();
+          const next = e.key === "Home" ? 0
+            : e.key === "End" ? items.length - 1
+              : (current + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+          items[next]?.focus();
+        }
       });
       document.addEventListener("click", (e) => {
-        if (!e.target.closest(".staff-rail-foot")) {
-          acctMenu?.classList.remove("open");
-          acctTrigger?.setAttribute("aria-expanded", "false");
-        }
+        if (!e.target.closest(".staff-rail-foot")) closeAcctMenu(false);
       });
       acctMenu?.addEventListener("click", (e) => {
         const roleBtn = e.target.closest("[data-set-role]");
         if (roleBtn) {
-          state.role = roleBtn.getAttribute("data-set-role") || "ssra_admin";
-          writeUiPreference("ssra-ops-preview-persona", state.role);
-          acctMenu.classList.remove("open");
-          renderCurrentRoute();
+          closeAcctMenu(true);
+          setPreviewPersona(roleBtn.getAttribute("data-set-role"));
           return;
         }
         const themeBtn = e.target.closest("[data-set-theme]");
         if (themeBtn) {
           state.theme = themeBtn.getAttribute("data-set-theme") || "dark";
           writeUiPreference("ssra-ops-theme", state.theme);
-          acctMenu.classList.remove("open");
+          closeAcctMenu(true);
           applyChrome();
         }
       });
@@ -1036,11 +1197,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             run: () => navigateTo(d.href),
           })),
           { label: "Open Taxpayer MainChat (/en)", hint: "Surface", run: () => window.location.assign("/en") },
-          { label: "Preview persona: Administrator", hint: "Preview", run: () => { state.role = "ssra_admin"; renderCurrentRoute(); } },
-          { label: "Preview persona: Tax Agent", hint: "Preview", run: () => { state.role = "ssra_staff"; renderCurrentRoute(); } },
-          { label: "Preview persona: Auditor", hint: "Preview", run: () => { state.role = "ssra_auditor"; renderCurrentRoute(); } },
+          { label: "Preview persona: Administrator", hint: "Preview", run: () => setPreviewPersona("ssra_admin") },
+          { label: "Preview persona: Tax Agent", hint: "Preview", run: () => setPreviewPersona("ssra_staff") },
+          { label: "Preview persona: Auditor", hint: "Preview", run: () => setPreviewPersona("ssra_auditor") },
           { label: "Cycle Theme (Dark / Light / High-Contrast)", hint: "Appearance", run: () => {
             state.theme = state.theme === "dark" ? "light" : state.theme === "light" ? "high-contrast" : "dark";
+            writeUiPreference("ssra-ops-theme", state.theme);
             applyChrome();
           } },
         ];
@@ -1057,19 +1219,26 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           setSafeHtml(
             cmdkList,
             cmds.map((c, idx) =>
-              '<li class="ops-cmdk-item" role="option" data-cmd-idx="' + idx + '" data-active="' + (idx === cmdkActiveIdx) + '">' +
+              '<li id="cmdk-opt-' + idx + '" class="ops-cmdk-item" role="option" aria-selected="' + (idx === cmdkActiveIdx) + '" data-cmd-idx="' + idx + '" data-active="' + (idx === cmdkActiveIdx) + '">' +
                 "<span>" + escapeHtml(c.label) + "</span>" +
                 '<span class="ops-kbd">' + escapeHtml(c.hint) + "</span>" +
               "</li>"
             ).join("")
           );
+          cmdkList.querySelector('[data-active="true"]')?.scrollIntoView({ block: "nearest" });
         }
+        if (cmds.length > 0) cmdkInput?.setAttribute("aria-activedescendant", "cmdk-opt-" + cmdkActiveIdx);
+        else cmdkInput?.removeAttribute("aria-activedescendant");
+        const countEl = document.getElementById("cmdk-count");
+        if (countEl) countEl.textContent = cmds.length === 0 ? "No matching destinations" : cmds.length + (cmds.length === 1 ? " destination" : " destinations");
         return cmds;
       }
 
       function openCmdk() {
+        closeAcctMenu(false);
         cmdkReturnFocusEl = document.activeElement;
         cmdkBackdrop?.classList.add("open");
+        document.getElementById("ssra-staff-shell")?.setAttribute("inert", "");
         if (cmdkInput) {
           cmdkInput.value = "";
           cmdkActiveIdx = 0;
@@ -1079,6 +1248,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
       }
       function closeCmdk() {
         cmdkBackdrop?.classList.remove("open");
+        document.getElementById("ssra-staff-shell")?.removeAttribute("inert");
         if (
           cmdkReturnFocusEl &&
           cmdkReturnFocusEl.isConnected &&

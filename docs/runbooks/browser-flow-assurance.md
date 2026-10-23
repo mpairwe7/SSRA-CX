@@ -53,6 +53,7 @@ The test harness must not use credentials, live taxpayer/staff data, real tax fi
 | Public mobile rail | 320 CSS-pixel reflow, minimum target size, reduced motion, inert-state synchronization, visible focus, and Escape focus return. |
 | Arabic and constrained network | `lang=ar` and RTL layout, explicit low-data mode, offline safe fallback, and preserved composer draft. |
 | Staff preview dashboard | Persistent preview state, command-palette visible focus, client-side navigation focus return, and `403`/`no-store` API denial. |
+| Staff console semantics | The command palette follows the APG combobox pattern and makes the shell inert; the account menu supports arrow keys, Home/End, and Escape; the light-theme preview chip reaches 4.5:1 and the status pill uses the warning colour; the preview renders without JavaScript and claims no live capability. |
 | Staff mobile rail | Drawer focus enters the first navigation item and returns to its trigger after Escape. |
 
 ## Artifacts and triage
