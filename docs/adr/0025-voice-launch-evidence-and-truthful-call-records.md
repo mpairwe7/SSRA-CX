@@ -12,6 +12,14 @@ The master prompt allows a language on voice only after its word-error rate on S
 
 The officer brief was built by keyword rules but attributed to a model. It asserted an open item that no turn supported, and its truncation could leak part of a TIN. Retention periods were hard-coded while OQ-009 is open, and the shared TTS cache stored audio of personal answers.
 
+## Options Considered
+
+1. **Keep the per-turn WER argument.** Any integration could approve a language by passing a number. Rejected.
+2. **Load evidence from an environment variable or a runtime file.** It could change without review, and a missing file would still have to fail closed. Deferred until a signed evidence registry exists.
+3. **A governed, read-only mapping in code that ships empty (chosen).** Every entry is a reviewed change. Tests and benchmarks inject labelled synthetic evidence explicitly.
+4. **Brief attribution:** keep the model name (rejected: it is false), drop the field (rejected: it breaks the console contract), or set it to `None` and have the console say the brief was built by rules (chosen).
+5. **Retention:** keep the hard-coded periods until SSRA Legal answers (rejected: invented values look approved), or leave every period unset until one is approved (chosen).
+
 ## Decision
 
 1. Voice launch is decided by governed evidence, not by a runtime number. `APPROVED_VOICE_WER_EVIDENCE` maps a language to a `VoiceWerEvidence` record (WER, SSRA test set, date, utterance count). It ships empty. An entry is added only by a reviewed change that cites an SSRA-approved measurement. Without an entry, the caller goes to an officer.
