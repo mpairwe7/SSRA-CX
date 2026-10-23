@@ -121,9 +121,14 @@ test("rename, delete, and clear use in-page dialogs with a safe default", async 
 test("the page advertises only shortcuts that work", async ({ page }) => {
   await page.goto("/en");
   await expect(page.locator("body")).not.toContainText(/Ctrl\+N|Ctrl\+,/);
+  await ask(page, "Synthetic public guidance question");
+  await page.getByRole("button", { name: /New Conversation/ }).click();
+  await expect(page.locator("#landing-view")).toBeVisible();
   await page.keyboard.press("Control+k");
-  await expect(page.getByRole("textbox", { name: "Search saved conversations" })).toBeFocused();
-  await page.keyboard.press("Escape");
+  const searchInput = page.getByRole("textbox", { name: "Search saved conversations" });
+  await expect(searchInput).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#chat-view")).toBeVisible();
 });
 
 test("the offline status meets 4.5:1 contrast in the light theme", async ({ browser }) => {

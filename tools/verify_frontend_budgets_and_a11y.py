@@ -256,10 +256,28 @@ def main() -> None:
         conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
         conn.request("GET", "/fonts/IBMPlexSans-Regular.woff2")
         resp_font = conn.getresponse()
-        assert resp_font.status == 200 and resp_font.getheader("Content-Type") == "font/woff2", (
-            f"Expected 200 font/woff2 on /fonts/IBMPlexSans-Regular.woff2, got {resp_font.status}"
+        font_etag = resp_font.getheader("ETag")
+        assert (
+            resp_font.status == 200
+            and resp_font.getheader("Content-Type") == "font/woff2"
+            and font_etag
+        ), (
+            f"Expected 200 font/woff2 with ETag on /fonts/IBMPlexSans-Regular.woff2, got {resp_font.status}"
         )
         resp_font.read()
+        conn.close()
+
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request(
+            "GET",
+            "/fonts/IBMPlexSans-Regular.woff2",
+            headers={"If-None-Match": str(font_etag)},
+        )
+        resp_font_304 = conn.getresponse()
+        assert resp_font_304.status == 304, (
+            f"Expected 304 on If-None-Match, got {resp_font_304.status}"
+        )
+        resp_font_304.read()
         conn.close()
 
         conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)

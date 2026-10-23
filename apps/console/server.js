@@ -22,6 +22,15 @@ const ALLOWED_FONT_FILES = new Set([
   "IBMPlexMono-Light.woff2",
   "IBMPlexMono-Regular.woff2",
 ]);
+const FONT_CACHE = new Map();
+for (const fontName of ALLOWED_FONT_FILES) {
+  const fontPath = path.join(FONTS_DIR, fontName);
+  if (fs.existsSync(fontPath)) {
+    const buffer = fs.readFileSync(fontPath);
+    const etag = `"${crypto.createHash("sha256").update(buffer).digest("hex").slice(0, 32)}"`;
+    FONT_CACHE.set(fontName, { buffer, etag, byteLength: String(buffer.byteLength) });
+  }
+}
 
 const PORT = Number.parseInt(process.env.PORT ?? "3001", 10);
 const HOSTNAME = process.env.HOSTNAME ?? "0.0.0.0";
@@ -92,6 +101,7 @@ function acceptsEncoding(acceptEncHeader, targetCoding) {
 }
 
 function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
+  const isHead = String(req.method ?? "GET").toUpperCase() === "HEAD";
   const acceptEnc = String(req.headers["accept-encoding"] ?? "");
   const buf = Buffer.from(bodyStr, "utf-8");
   if (buf.length > 512 && acceptsEncoding(acceptEnc, "br")) {
@@ -105,9 +115,10 @@ function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
     res.writeHead(statusCode, {
       ...headers,
       "Content-Encoding": "br",
+      "Content-Length": String(compressed.byteLength),
       Vary: "Accept-Encoding",
     });
-    res.end(compressed);
+    res.end(isHead ? undefined : compressed);
     return;
   }
   if (buf.length > 512 && acceptsEncoding(acceptEnc, "gzip")) {
@@ -115,13 +126,17 @@ function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
     res.writeHead(statusCode, {
       ...headers,
       "Content-Encoding": "gzip",
+      "Content-Length": String(compressed.byteLength),
       Vary: "Accept-Encoding",
     });
-    res.end(compressed);
+    res.end(isHead ? undefined : compressed);
     return;
   }
-  res.writeHead(statusCode, headers);
-  res.end(buf);
+  res.writeHead(statusCode, {
+    ...headers,
+    "Content-Length": String(buf.byteLength),
+  });
+  res.end(isHead ? undefined : buf);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -167,21 +182,28 @@ const server = http.createServer(async (req, res) => {
 
   if (isGetOrHead && pathname.startsWith("/fonts/")) {
     const fontName = pathname.slice("/fonts/".length);
-    if (ALLOWED_FONT_FILES.has(fontName)) {
-      const fontPath = path.join(FONTS_DIR, fontName);
-      if (fs.existsSync(fontPath)) {
-        const fontBytes = fs.readFileSync(fontPath);
-        res.writeHead(200, {
-          ...secHeaders,
-          "Content-Type": "font/woff2",
-          "Cache-Control": "public, max-age=31536000, immutable",
-        });
-        res.end(fontBytes);
+    const cached = FONT_CACHE.get(fontName);
+    if (cached) {
+      const fontHeaders = {
+        ...secHeaders,
+        "Content-Type": "font/woff2",
+        "Cache-Control": "public, max-age=31536000, immutable",
+        ETag: cached.etag,
+      };
+      if (req.headers["if-none-match"] === cached.etag) {
+        res.writeHead(304, fontHeaders);
+        res.end();
         return;
       }
+      res.writeHead(200, {
+        ...fontHeaders,
+        "Content-Length": cached.byteLength,
+      });
+      res.end(method === "HEAD" ? undefined : cached.buffer);
+      return;
     }
     res.writeHead(404, { "Content-Type": "application/json", ...secHeaders });
-    res.end(JSON.stringify({ error: "FONT_NOT_FOUND" }));
+    res.end(method === "HEAD" ? undefined : JSON.stringify({ error: "FONT_NOT_FOUND" }));
     return;
   }
 
