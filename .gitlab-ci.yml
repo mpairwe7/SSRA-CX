@@ -6,6 +6,8 @@ stages:
 
 sec_sast_dast_trivy_trufflehog:
   stage: security
+  variables:
+    GIT_DEPTH: "0"
   script:
     - pnpm install --frozen-lockfile
     - uv sync --locked

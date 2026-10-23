@@ -313,19 +313,36 @@ def test_python_sast_rejects_eval_and_unbounded_httpx_client(tmp_path: Path) -> 
 
 
 def test_frontend_sast_rejects_raw_innerhtml_assignment(tmp_path: Path) -> None:
-    """Frontend SAST must reject raw innerHTML DOM-XSS sinks in TypeScript modules."""
+    """Frontend SAST must reject raw innerHTML, +=, and insertAdjacentHTML sinks while allowing ==."""
     mod = _sec_pipeline_module()
     fe_sast_fn = cast(Callable[[Path], list[dict[str, str]]], mod["run_frontend_and_bff_sast"])
 
     web_src = tmp_path / "apps" / "web" / "src"
     web_src.mkdir(parents=True)
-    (web_src / "xss.ts").write_text(
-        "export function render(el: HTMLElement, html: string) { el.innerHTML = html; }\n",
+    target = web_src / "xss.ts"
+    target.write_text(
+        "export function render(el: HTMLElement, html: string) { el.innerHTML += html; }\n",
         encoding="utf-8",
     )
 
     with pytest.raises(AssertionError, match="SAST-FE-01"):
         fe_sast_fn(tmp_path)
+
+    target.write_text(
+        'export function render(el: HTMLElement, html: string) { el.insertAdjacentHTML("beforeend", html); }\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(AssertionError, match="SAST-FE-01"):
+        fe_sast_fn(tmp_path)
+
+
+def test_scanner_runner_rejects_unverified_path_binary(tmp_path: Path) -> None:
+    """Scanner command runner must reject binaries outside the SHA-256 verified cache root."""
+    mod = _sec_pipeline_module()
+    run_cmd = cast(Callable[..., None], mod["_run_verified_scanner_cmd"])
+
+    with pytest.raises(AssertionError, match="ssra-verified-scanners"):
+        run_cmd(["/usr/bin/gitleaks", "detect"], cwd=tmp_path)
 
 
 def test_cicd_pipeline_model_and_live_asgi_dast_suite_pass() -> None:

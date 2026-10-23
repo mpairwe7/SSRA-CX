@@ -13,11 +13,14 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
+import io
 import json
 import os
 import re
-import shutil
 import subprocess
+import tarfile
+import urllib.request
 from pathlib import Path
 
 import yaml
@@ -25,6 +28,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 PIPELINE_MODEL_PATH = ROOT / "infra" / "security" / "cicd-pipeline-model.yaml"
 SARIF_OUTPUT_PATH = ROOT / "infra" / "observability" / "sast-dast-sarif-v2.1.0.json"
+VERIFIED_SCANNERS_ROOT = Path("/tmp/ssra-verified-scanners")  # noqa: S108 — deterministic local verified scanner cache
 
 _REQUIRED_CICD_SEC_CONTROLS = tuple(f"CICD-SEC-{i:02d}" for i in range(1, 11))
 _FORBIDDEN_PY_CALLS = frozenset(
@@ -41,7 +45,10 @@ _FORBIDDEN_PY_CALLS = frozenset(
 )
 _SINGLE_LINE_MULTI_ARG_TF_RE = re.compile(r"variable\s+\"[^\"]+\"\s*\{[^}\n]*,[^}\n]*\}")
 _RAW_DOM_XSS_RE = re.compile(
-    r"(\.\s*innerHTML\s*=|\.\s*outerHTML\s*=|\bdocument\.write\s*\(|\bdangerouslySetInnerHTML\b|\beval\s*\(|\bnew\s+Function\s*\()"
+    r"(\.\s*(?:innerHTML|outerHTML)\s*\+?=(?!=)|\.\s*insertAdjacentHTML\s*\(|\bdocument\.write(?:ln)?\s*\(|\bdangerouslySetInnerHTML\b|\beval\s*\(|\bnew\s+Function\s*\()"
+)
+_APPROVED_TRUSTED_TYPES_ASSIGNMENT = (
+    "el.innerHTML = ttPolicy ? ttPolicy.createHTML(htmlStr) : htmlStr;"
 )
 
 
@@ -53,6 +60,29 @@ def _call_qualname(node: ast.Call) -> str:
     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
         return f"{func.value.id}.{func.attr}"
     return ""
+
+
+def _git_tracked_relpaths(repo_root: Path) -> set[str] | None:
+    """Return git-tracked POSIX relative paths when `repo_root` is a Git worktree."""
+    if not (repo_root / ".git").exists():
+        return None
+    res = subprocess.run(
+        ["git", "ls-files", "-z"],  # noqa: S607
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+    )
+    if res.returncode != 0:
+        return None
+    raw = res.stdout.decode("utf-8", errors="replace")
+    return {entry for entry in raw.split("\x00") if entry}
+
+
+def _count_tracked(paths: list[Path], repo_root: Path, tracked: set[str] | None) -> int:
+    """Count git-tracked files among `paths` so untracked local scratch files do not cause SARIF drift."""
+    if tracked is None:
+        return len(paths)
+    return sum(1 for p in paths if p.relative_to(repo_root).as_posix() in tracked)
 
 
 def verify_cicd_pipeline_model(repo_root: Path) -> list[dict[str, str]]:
@@ -103,12 +133,40 @@ def verify_cicd_pipeline_model(repo_root: Path) -> list[dict[str, str]]:
         "Trivy SHA-256 matches a compromised denylist digest"
     )
 
-    # 3. Verify 1-to-1 stage parity with .github/workflows/ci.yml
+    # 3. Verify 1-to-1 stage parity and per-job scanner archive URL + SHA-256 pins with .github/workflows/ci.yml
     ci_path = repo_root / ".github" / "workflows" / "ci.yml"
     ci_workflow = yaml.safe_load(ci_path.read_text(encoding="utf-8"))
     assert isinstance(ci_workflow, dict), "ci.yml must be a YAML mapping"
     ci_jobs = ci_workflow.get("jobs")
     assert isinstance(ci_jobs, dict), "ci.yml must define jobs"
+
+    scanner_jobs = {
+        "gitleaks": "secret-history",
+        "trufflehog": "secret-history",
+        "trivy": "trivy-security",
+    }
+    for pinned_scanner, job_name in scanner_jobs.items():
+        pin = scanner_pins[pinned_scanner]
+        assert isinstance(pin, dict)
+        scanner_job = ci_jobs.get(job_name)
+        assert isinstance(scanner_job, dict), (
+            f"ci.yml is missing the '{job_name}' job for scanner '{pinned_scanner}'"
+        )
+        scanner_steps = scanner_job.get("steps", [])
+        assert isinstance(scanner_steps, list)
+        scanner_run = "\n".join(
+            str(step.get("run", "")) for step in scanner_steps if isinstance(step, dict)
+        )
+        archive_path = f"/tmp/{pinned_scanner}.tar.gz"  # noqa: S108 — matches CI workflow literal string
+        assert f"-o {archive_path} {pin.get('archive_url')}" in scanner_run, (
+            f"ci.yml job '{job_name}' is missing modeled {pinned_scanner} archive_url"
+        )
+        expected_check = (
+            f'printf \'%s  %s\\n\' "{pin.get("sha256")}" "{archive_path}" | sha256sum --check'
+        )
+        assert expected_check in scanner_run, (
+            f"ci.yml job '{job_name}' is missing modeled {pinned_scanner} sha256 verification"
+        )
 
     stages = model.get("stages")
     assert isinstance(stages, dict) and len(stages) >= 6, (
@@ -157,6 +215,7 @@ def verify_cicd_pipeline_model(repo_root: Path) -> list[dict[str, str]]:
 
 def run_python_ast_and_agentic_sast(repo_root: Path) -> list[dict[str, str]]:
     """Run deterministic Python AST security analysis and Agentic MCP tool schema SAST."""
+    tracked = _git_tracked_relpaths(repo_root)
     py_dirs = ("libs", "services", "mcp-servers", "tools", "evals")
     py_files = sorted(
         path
@@ -242,22 +301,25 @@ def run_python_ast_and_agentic_sast(repo_root: Path) -> list[dict[str, str]]:
             "single-line variable block cannot contain comma-separated arguments"
         )
 
+    tracked_py_count = _count_tracked(py_files, repo_root, tracked)
+    tracked_tf_count = _count_tracked(tf_files, repo_root, tracked)
     return [
         {
             "ruleId": "SAST-PY-01..05",
             "category": "SAST_PYTHON_AND_AGENTIC",
             "status": "PASS",
             "message": (
-                f"Scanned {len(py_files)} Python modules, {tool_count} MCP tool schemas (T1-T3 zero-TIN), "
-                f"and {len(tf_files)} OpenTofu HCL modules with 0 findings."
+                f"Scanned {tracked_py_count} Python modules, {tool_count} MCP tool schemas (T1-T3 zero-TIN), "
+                f"and {tracked_tf_count} OpenTofu HCL modules with 0 findings."
             ),
         }
     ]
 
 
 def run_frontend_and_bff_sast(repo_root: Path) -> list[dict[str, str]]:
-    """Run static security analysis across frontend packages and Node.js BFF servers."""
-    fe_files = sorted(
+    """Run static security analysis across frontend TypeScript/JavaScript modules and Node.js BFF servers."""
+    tracked = _git_tracked_relpaths(repo_root)
+    fe_ts_files = sorted(
         [
             *(repo_root / "apps" / "web" / "src").rglob("*.ts"),
             *(repo_root / "apps" / "console" / "src").rglob("*.ts"),
@@ -267,14 +329,38 @@ def run_frontend_and_bff_sast(repo_root: Path) -> list[dict[str, str]]:
             *(repo_root / "packages" / "telemetry" / "src").rglob("*.ts"),
         ]
     )
-    assert fe_files, "No frontend TypeScript source files found for SAST scan"
+    assert fe_ts_files, "No frontend TypeScript source files found for SAST scan"
 
     # SAST-FE-01: Zero raw DOM XSS sinks in TypeScript modules
-    for fe_file in fe_files:
+    for fe_file in fe_ts_files:
         rel = fe_file.relative_to(repo_root).as_posix()
         txt = fe_file.read_text(encoding="utf-8")
         assert not _RAW_DOM_XSS_RE.search(txt), (
-            f"SAST-FE-01 DOM-XSS sink violation in {rel}: raw innerHTML/outerHTML/eval/Function forbidden"
+            f"SAST-FE-01 DOM-XSS sink violation in {rel}: raw innerHTML/outerHTML/insertAdjacentHTML/eval/Function forbidden"
+        )
+
+    # SAST-FE-01b: Scan deployed DOM-bearing JavaScript sources while preserving only the
+    # single approved W3C Trusted Types assignment inside `setSafeHtml`.
+    fe_js_files = sorted(
+        p
+        for p in (
+            repo_root / "apps" / "web" / "server.js",
+            repo_root / "apps" / "web" / "public" / "sw.js",
+            repo_root / "apps" / "console" / "server.js",
+            repo_root / "packages" / "ui" / "ops-console.js",
+            repo_root / "packages" / "ui" / "icons.js",
+        )
+        if p.is_file()
+    )
+    for js_file in fe_js_files:
+        rel_js = js_file.relative_to(repo_root).as_posix()
+        js_txt = js_file.read_text(encoding="utf-8")
+        assert js_txt.count(_APPROVED_TRUSTED_TYPES_ASSIGNMENT) <= 1, (
+            f"SAST-FE-01 violation in {rel_js}: multiple innerHTML assignments found"
+        )
+        sanitized_js = js_txt.replace(_APPROVED_TRUSTED_TYPES_ASSIGNMENT, "", 1)
+        assert not _RAW_DOM_XSS_RE.search(sanitized_js), (
+            f"SAST-FE-01 DOM-XSS sink violation in {rel_js}: raw innerHTML/outerHTML/insertAdjacentHTML/eval/Function outside setSafeHtml is forbidden"
         )
 
     # SAST-FE-02 & SAST-FE-03: BFF & Operations Console security invariants
@@ -307,13 +393,14 @@ def run_frontend_and_bff_sast(repo_root: Path) -> list[dict[str, str]]:
         "SAST-FE-04 violation: Service Worker logout purge or no-store guard missing"
     )
 
+    tracked_fe_count = _count_tracked(fe_ts_files, repo_root, tracked)
     return [
         {
             "ruleId": "SAST-FE-01..04",
             "category": "SAST_FRONTEND_AND_BFF",
             "status": "PASS",
             "message": (
-                f"Scanned {len(fe_files)} TypeScript modules plus Node BFF & Service Worker "
+                f"Scanned {tracked_fe_count} TypeScript modules plus Node BFF & Service Worker "
                 "for DOM-XSS, Trusted Types, CSP Level 3, and fail-closed BFF boundaries."
             ),
         }
@@ -511,137 +598,181 @@ def run_live_in_process_dast() -> list[dict[str, str]]:
     ]
 
 
-def _resolve_binary(name: str, fallback_paths: tuple[str, ...]) -> str | None:
-    """Locate a CLI scanner binary on PATH or in known local install locations."""
-    found = shutil.which(name)
-    if found:
-        return found
-    for candidate in fallback_paths:
-        if Path(candidate).is_file() and os.access(candidate, os.X_OK):
-            return candidate
-    return None
+def _ensure_verified_scanner_binary(scanner_name: str, repo_root: Path) -> str:
+    """Download, verify SHA-256 archive digest, and extract the pinned scanner binary.
+
+    Never resolves arbitrary binaries from `PATH`: only the binary extracted from the
+    SHA-256-verified release archive declared in `infra/security/cicd-pipeline-model.yaml`
+    is returned and executed.
+    """
+    model = yaml.safe_load(
+        (repo_root / "infra" / "security" / "cicd-pipeline-model.yaml").read_text(encoding="utf-8")
+    )
+    assert isinstance(model, dict)
+    pins = model.get("scanner_pins", {})
+    assert isinstance(pins, dict)
+    pin = pins.get(scanner_name)
+    assert isinstance(pin, dict), f"Missing scanner pin for '{scanner_name}'"
+
+    version = str(pin["version"])
+    archive_url = str(pin["archive_url"])
+    expected_archive_sha256 = str(pin["sha256"])
+    assert archive_url.startswith("https://github.com/"), (
+        f"Scanner archive_url for {scanner_name} must use https://github.com/"
+    )
+
+    install_dir = (
+        VERIFIED_SCANNERS_ROOT / f"{scanner_name}-{version}-{expected_archive_sha256[:12]}"
+    )
+    bin_path = install_dir / scanner_name
+    digest_stamp = install_dir / ".binary.sha256"
+
+    if bin_path.is_file() and digest_stamp.is_file():
+        recorded_bin_sha = digest_stamp.read_text(encoding="utf-8").strip()
+        actual_bin_sha = hashlib.sha256(bin_path.read_bytes()).hexdigest()
+        if recorded_bin_sha and actual_bin_sha == recorded_bin_sha:
+            return str(bin_path)
+
+    install_dir.mkdir(parents=True, exist_ok=True)
+    with urllib.request.urlopen(archive_url, timeout=60) as resp:  # noqa: S310 — pinned https://github.com release URL
+        archive_bytes = resp.read()
+    actual_archive_sha256 = hashlib.sha256(archive_bytes).hexdigest()
+    assert actual_archive_sha256 == expected_archive_sha256, (
+        f"SHA-256 mismatch for {scanner_name} v{version} archive: "
+        f"expected {expected_archive_sha256}, got {actual_archive_sha256}"
+    )
+
+    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as tf:
+        member = tf.getmember(scanner_name)
+        assert member.isfile(), f"Archive member '{scanner_name}' must be a regular file"
+        extracted = tf.extractfile(member)
+        assert extracted is not None
+        bin_bytes = extracted.read()
+
+    bin_path.write_bytes(bin_bytes)
+    bin_path.chmod(0o755)
+    digest_stamp.write_text(hashlib.sha256(bin_bytes).hexdigest() + "\n", encoding="utf-8")
+    return str(bin_path)
 
 
 def _run_verified_scanner_cmd(cmd: list[str], *, cwd: Path) -> None:
     """Execute a verified static CLI scanner command without a shell."""
     assert cmd and all(isinstance(arg, str) and "\x00" not in arg for arg in cmd)
-    subprocess.run(cmd, cwd=cwd, check=True)  # noqa: S603 — static argv to verified local scanner binary
+    assert Path(cmd[0]).is_absolute() and str(cmd[0]).startswith(str(VERIFIED_SCANNERS_ROOT)), (
+        f"Scanner binary '{cmd[0]}' must reside under {VERIFIED_SCANNERS_ROOT}"
+    )
+    subprocess.run(cmd, cwd=cwd, check=True)  # noqa: S603 — static argv to SHA-256 verified binary
 
 
 def run_external_scanners(
     repo_root: Path, *, require_scanners: bool = False
 ) -> list[dict[str, str]]:
-    """Run Gitleaks, TruffleHog v3, and Trivy when installed (or fail closed when `require_scanners=True`)."""
+    """Run SHA-256-verified Gitleaks, TruffleHog v3, and Trivy binaries."""
+    _ = require_scanners
     results: list[dict[str, str]] = []
 
-    # 1. Gitleaks (working tree + git history)
-    gitleaks_bin = _resolve_binary("gitleaks", ("/home/developer/.local/bin/gitleaks",))
-    if gitleaks_bin is None:
-        assert not require_scanners, "Required scanner binary 'gitleaks' is not installed"
-    else:
-        _run_verified_scanner_cmd([gitleaks_bin, "detect", "--no-git"], cwd=repo_root)
-        results.append(
-            {
-                "ruleId": "SEC-SCAN-GITLEAKS",
-                "category": "SECRET_SCANNING",
-                "status": "PASS",
-                "message": "Gitleaks working-tree secret scan passed with 0 findings.",
-            }
-        )
+    # 1. Gitleaks (working tree + full reachable Git history, both with --redact)
+    gitleaks_bin = _ensure_verified_scanner_binary("gitleaks", repo_root)
+    _run_verified_scanner_cmd([gitleaks_bin, "detect", "--no-git", "--redact"], cwd=repo_root)
+    _run_verified_scanner_cmd(
+        [gitleaks_bin, "detect", "--redact", "--log-opts=--all"], cwd=repo_root
+    )
+    results.append(
+        {
+            "ruleId": "SEC-SCAN-GITLEAKS",
+            "category": "SECRET_SCANNING",
+            "status": "PASS",
+            "message": "Gitleaks v8.21.2 working-tree and full-history redacted secret scans passed with 0 findings.",
+        }
+    )
 
     # 2. TruffleHog v3 (Pass 1: verified across all git history; Pass 2: verified,unknown with governed exclusions)
-    trufflehog_bin = _resolve_binary("trufflehog", ("/home/developer/.local/bin/trufflehog",))
-    if trufflehog_bin is None:
-        assert not require_scanners, "Required scanner binary 'trufflehog' is not installed"
-    else:
-        _run_verified_scanner_cmd(
-            [
-                trufflehog_bin,
-                "git",
-                "file://.",
-                "--results=verified",
-                "--fail",
-                "--no-update",
-            ],
-            cwd=repo_root,
-        )
-        _run_verified_scanner_cmd(
-            [
-                trufflehog_bin,
-                "git",
-                "file://.",
-                "--results=verified,unknown",
-                "--exclude-detectors=JDBC",
-                "--exclude-paths=.trufflehog-exclude-paths.txt",
-                "--fail",
-                "--no-update",
-            ],
-            cwd=repo_root,
-        )
-        results.append(
-            {
-                "ruleId": "SEC-SCAN-TRUFFLEHOG",
-                "category": "SECRET_SCANNING",
-                "status": "PASS",
-                "message": "TruffleHog v3 dual-pass Git history secret scan passed with 0 findings.",
-            }
-        )
+    trufflehog_bin = _ensure_verified_scanner_binary("trufflehog", repo_root)
+    _run_verified_scanner_cmd(
+        [
+            trufflehog_bin,
+            "git",
+            "file://.",
+            "--results=verified",
+            "--fail",
+            "--no-update",
+        ],
+        cwd=repo_root,
+    )
+    _run_verified_scanner_cmd(
+        [
+            trufflehog_bin,
+            "git",
+            "file://.",
+            "--results=verified,unknown",
+            "--exclude-detectors=JDBC",
+            "--exclude-paths=.trufflehog-exclude-paths.txt",
+            "--fail",
+            "--no-update",
+        ],
+        cwd=repo_root,
+    )
+    results.append(
+        {
+            "ruleId": "SEC-SCAN-TRUFFLEHOG",
+            "category": "SECRET_SCANNING",
+            "status": "PASS",
+            "message": "TruffleHog v3.88.15 dual-pass Git history secret scan passed with 0 findings.",
+        }
+    )
 
     # 3. Trivy (SCA lockfiles + Dockerfiles + OpenTofu IaC + CycloneDX 1.6 SBOM)
-    trivy_bin = _resolve_binary("trivy", ("/home/developer/bin/trivy",))
-    if trivy_bin is None:
-        assert not require_scanners, "Required scanner binary 'trivy' is not installed"
-    else:
-        trivy_cache = Path.home() / ".cache" / "trivy"
-        skip_db_flags = (
-            ["--skip-db-update", "--skip-check-update"]
-            if (trivy_cache / "db" / "trivy.db").is_file()
-            else []
-        )
-        _run_verified_scanner_cmd(
-            [
-                trivy_bin,
-                "fs",
-                "--scanners",
-                "vuln,misconfig,secret",
-                "--include-dev-deps",
-                "--skip-dirs",
-                ".venv,node_modules",
-                "--severity",
-                "HIGH,CRITICAL",
-                "--skip-version-check",
-                *skip_db_flags,
-                "--exit-code",
-                "1",
-                ".",
-            ],
-            cwd=repo_root,
-        )
-        _run_verified_scanner_cmd(
-            [
-                trivy_bin,
-                "sbom",
-                "--severity",
-                "HIGH,CRITICAL",
-                "--skip-version-check",
-                *(["--skip-db-update"] if skip_db_flags else []),
-                "--exit-code",
-                "1",
-                "infra/observability/cyclonedx-sbom.json",
-            ],
-            cwd=repo_root,
-        )
-        results.append(
-            {
-                "ruleId": "SEC-SCAN-TRIVY",
-                "category": "TRIVY_SCA_IAC_SBOM",
-                "status": "PASS",
-                "message": (
-                    "Trivy v0.69.3 SCA (pnpm-lock.yaml + uv.lock incl. devDeps), "
-                    "19 Dockerfiles, OpenTofu IaC, and CycloneDX 1.6 SBOM scan passed with 0 HIGH/CRITICAL findings."
-                ),
-            }
-        )
+    trivy_bin = _ensure_verified_scanner_binary("trivy", repo_root)
+    trivy_cache = Path.home() / ".cache" / "trivy"
+    skip_db_flags = (
+        ["--skip-db-update", "--skip-check-update"]
+        if (trivy_cache / "db" / "trivy.db").is_file()
+        else []
+    )
+    _run_verified_scanner_cmd(
+        [
+            trivy_bin,
+            "fs",
+            "--scanners",
+            "vuln,misconfig,secret",
+            "--include-dev-deps",
+            "--skip-dirs",
+            ".venv,node_modules",
+            "--severity",
+            "HIGH,CRITICAL",
+            "--skip-version-check",
+            *skip_db_flags,
+            "--exit-code",
+            "1",
+            ".",
+        ],
+        cwd=repo_root,
+    )
+    _run_verified_scanner_cmd(
+        [
+            trivy_bin,
+            "sbom",
+            "--severity",
+            "HIGH,CRITICAL",
+            "--skip-version-check",
+            *(["--skip-db-update"] if skip_db_flags else []),
+            "--exit-code",
+            "1",
+            "infra/observability/cyclonedx-sbom.json",
+        ],
+        cwd=repo_root,
+    )
+    results.append(
+        {
+            "ruleId": "SEC-SCAN-TRIVY",
+            "category": "TRIVY_SCA_IAC_SBOM",
+            "status": "PASS",
+            "message": (
+                "Trivy v0.69.3 SCA (pnpm-lock.yaml + uv.lock incl. devDeps), "
+                "19 Dockerfiles, OpenTofu IaC, and CycloneDX 1.6 SBOM scan passed with 0 HIGH/CRITICAL findings."
+            ),
+        }
+    )
 
     return results
 
@@ -713,7 +844,7 @@ def main() -> None:
     parser.add_argument(
         "--require-scanners",
         action="store_true",
-        help="Fail closed if any external CLI scanner binary is absent",
+        help="Fail closed if any external CLI scanner binary cannot be provisioned and SHA-256 verified",
     )
     args = parser.parse_args()
 

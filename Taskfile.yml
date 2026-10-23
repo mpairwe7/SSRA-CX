@@ -34,7 +34,7 @@ tasks:
       - uv run python tools/verify_frontend_budgets_and_a11y.py
       - uv run python tools/verify_supply_chain_and_signatures.py
       - uv run python tools/run_sast_dast_sec_pipeline.py
-      - gitleaks detect --no-git
+      - gitleaks detect --no-git --redact
       - corepack pnpm run lint
       - corepack pnpm run typecheck
 
@@ -47,7 +47,7 @@ tasks:
       - uv run ruff check .
       - uv run python tools/verify_supply_chain_and_signatures.py
       - uv run python tools/verify_frontend_budgets_and_a11y.py
-      - uv run python tools/run_sast_dast_sec_pipeline.py --full-sec
+      - uv run python tools/run_sast_dast_sec_pipeline.py --full-sec --require-scanners
       - corepack pnpm audit --audit-level=high
 
   test:
