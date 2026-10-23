@@ -1481,6 +1481,22 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert "SSD-NIM-2026-••89" in auth_dec_turn.answer.segments[0].text
     assert "3250000" in auth_dec_turn.answer.segments[0].text
 
+    compound_dec_tcc = rt.run_turn(
+        make_conversation_event("Check my customs declaration at Nimule and check my TCC status"),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_deng_02",
+    )
+    assert compound_dec_tcc.plan is not None
+    assert "customs.get_declaration_status" in compound_dec_tcc.plan.steps
+    assert "tcc.get_tcc_status" in compound_dec_tcc.plan.steps
+
+    tax_dec_turn = rt.run_turn(
+        make_conversation_event("What is my tax declaration status?"),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_deng_02",
+    )
+    assert tax_dec_turn.artifacts[0].tool == "get_filing_status"
+
     # Field officer invalid task_type validation
     with pytest.raises(SSRAError) as bad_fo_exc:
         execute_field_officer_assist(

@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import json
 import os
+import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -297,12 +298,19 @@ class FeatureFlagEngine:
         sig = hmac.new(self.salt.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
         envelope = {"overrides": overrides_dict, "hmac_sha256": sig}
         serialized_envelope = json.dumps(envelope, sort_keys=True)
-        tmp_path = self.shared_override_path.with_name(
-            f".{self.shared_override_path.name}.{os.getpid()}.tmp"
+        fd, tmp_name = tempfile.mkstemp(
+            dir=self.shared_override_path.parent,
+            prefix=f".{self.shared_override_path.name}.",
+            suffix=".tmp",
         )
-        tmp_path.write_text(serialized_envelope, encoding="utf-8")
-        tmp_path.chmod(0o600)
-        os.replace(tmp_path, self.shared_override_path)
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(serialized_envelope)
+            os.replace(tmp_path, self.shared_override_path)
+        except BaseException:
+            tmp_path.unlink(missing_ok=True)
+            raise
         self._override_content_digest = hashlib.sha256(
             serialized_envelope.encode("utf-8")
         ).hexdigest()

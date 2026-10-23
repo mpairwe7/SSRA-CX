@@ -468,14 +468,8 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
                 citations=[cit],
                 numbers=[num_claim],
                 ui_component=GenerativeUIComponent(
-                    name=GenerativeUIComponentName.FILING_STATUS_TIMELINE,
-                    props={
-                        "declaration_ref_masked": dec_ref,
-                        "port_of_entry": port,
-                        "filing_status": status,
-                        "last_filed_period": as_of,
-                        "as_of": as_of,
-                    },
+                    name=GenerativeUIComponentName.CITATION_LIST,
+                    props={"citations": [cit.model_dump(mode="json")]},
                 )
                 if capabilities.rich_ui
                 else None,

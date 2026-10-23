@@ -134,15 +134,24 @@ def build_execution_plan(
             else "customs.lookup_tariff"
         )
         return Plan(subgraph=selected_subgraph, steps=[cust_step], tier=tier)
+    steps = detect_compound_self_service_steps(canonical_query, intent.intent)
     if intent.intent == IntentName.GET_FILING_STATUS and intent.slots.get(
         "include_customs_declaration"
     ):
-        return Plan(
-            subgraph=selected_subgraph,
-            steps=["customs.get_declaration_status"],
-            tier=tier,
+        lower_q = canonical_query.lower()
+        also_wants_filing = any(
+            k in lower_q for k in ("filing status", "did my return", "return status", "last filed")
         )
-    steps = detect_compound_self_service_steps(canonical_query, intent.intent)
+        if also_wants_filing:
+            if "customs.get_declaration_status" not in steps:
+                steps.insert(0, "customs.get_declaration_status")
+        else:
+            steps = [
+                "customs.get_declaration_status" if s == "ledger.get_filing_status" else s
+                for s in steps
+            ]
+            if "customs.get_declaration_status" not in steps:
+                steps.insert(0, "customs.get_declaration_status")
     return Plan(
         subgraph=selected_subgraph,
         steps=steps[:MAX_PLAN_STEPS],

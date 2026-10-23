@@ -302,20 +302,27 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
             language=locale,
             confidence=0.98,
         )
-    if any(
+    has_customs_declaration_cue = any(
         w in lower
         for w in (
-            "my filing status",
-            "did my return go through",
             "my customs declaration",
-            "declaration status",
+            "customs declaration status",
             "my nimule declaration",
+            "nimule declaration status",
         )
-    ):
-        if any(
+    )
+    if (
+        any(
             w in lower
-            for w in ("my customs declaration", "declaration status", "my nimule declaration")
-        ):
+            for w in (
+                "my filing status",
+                "did my return go through",
+                "my tax declaration status",
+            )
+        )
+        or has_customs_declaration_cue
+    ):
+        if has_customs_declaration_cue:
             slots["include_customs_declaration"] = True
         return Intent(
             intent=IntentName.GET_FILING_STATUS,
