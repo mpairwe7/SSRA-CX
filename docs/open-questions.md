@@ -144,13 +144,14 @@
 - **Specific Questions for SSRA Communications & Legal:**
   1. Who in SSRA Legal/Communications owns final approval of the multilingual tax termbase (`ai/termbase/`) and the 600+ Phase 1 golden eval items (300 `en`, 150 `ar`, 150 `pga`)?
   2. What orthographic convention should be used as primary for Juba Arabic (`pga`) in text channels (Latin script vs. Arabic script variants)?
+  3. Who reviews the public web interface strings? As of 2026-10-23 (AUD-020), the web shell shows interface text only for `en`, `pga`, and `ar`; the five Phase 4 locales show English with a notice. The current Latin-script `pga` landing subtitle contains one Arabic-script word (`الموظفين`); a qualified reviewer should correct it rather than an engineer.
 
 ### OQ-009 — Legal Retention, Taxpayer Secrecy & Fiscal Calendar Confirmation
 - **Blocks:** Phase 1
 - **Context:** Constitution Article 22, NRA Act 2016 (as amended 2023), Taxation Act 2009, Cybercrimes Provisional Order 2021, and the planned 2026 Data Protection Bill govern privacy and secrecy.
 - **Specific Questions for SSRA Legal:**
   1. Confirm the statutory retention periods for conversation logs, voice recordings, case attachments, and `AuditEvent` WORM archives.
-  2. Confirm the exact statutory wording required for AI transparency disclosure and voice recording consent.
+  2. Confirm the exact statutory wording required for AI transparency disclosure and voice recording consent. Until then, the public web composer shows interim English wording (AUD-021): "SSRA Assist is an automated AI assistant and can make mistakes. Check answers against the cited sources. Don’t enter your TIN, phone number, or passwords in this public chat."
   3. Confirm the fiscal year dates (1 July to 30 June) and statutory filing/payment deadlines per tax type for the initial `TaxFact` seed registry.
 
 ### OQ-010 — Contact-Centre Operations, Queues, Hours & SLAs

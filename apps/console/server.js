@@ -83,7 +83,11 @@ function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
   const buf = Buffer.from(bodyStr, "utf-8");
   if (buf.length > 512 && acceptsEncoding(acceptEnc, "br")) {
     const compressed = zlib.brotliCompressSync(buf, {
-      params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 },
+      // Quality 5 measured smaller than quality 4 (which was larger than gzip level 6) for about 0.5 ms more CPU.
+      params: {
+        [zlib.constants.BROTLI_PARAM_QUALITY]: 5,
+        [zlib.constants.BROTLI_PARAM_SIZE_HINT]: buf.length,
+      },
     });
     res.writeHead(statusCode, {
       ...headers,
