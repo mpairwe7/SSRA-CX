@@ -23,7 +23,7 @@ _SAFE_CONTEXT_PATTERNS: tuple[re.Pattern[str], ...] = (
         r"\b(?:[a-z]+_)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
         flags=re.IGNORECASE,
     ),
-    re.compile(r"\b[A-Z]+_[0-9A-Z_]+\b"),
+    re.compile(r"\b[A-Z]+_[0-9A-Z_]+\b", flags=re.IGNORECASE),
     re.compile(r"••••\d{4}"),
     re.compile(r"\bSSD-[A-Z]+-\d{4}-••\d{2}\b"),
     re.compile(r"\+211(?:\s*\d{9}|•••••••\d{2}|\b)"),

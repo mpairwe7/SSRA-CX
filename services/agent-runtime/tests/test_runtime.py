@@ -18,7 +18,10 @@ from ssra_core import (
 from ssra_runtime import SSRAConversationRuntime, create_runtime_app
 from ssra_runtime.gateway_server import create_agentgateway_app
 from ssra_runtime.graphs import build_minimal_complaint_ticket, get_guided_journey_steps
-from ssra_runtime.guardrails import validate_numeric_provenance
+from ssra_runtime.guardrails import (
+    validate_numeric_provenance,
+    verify_no_cross_subject_or_unmasked_pii,
+)
 from ssra_testing import AsgiTestClient, make_conversation_event
 
 
@@ -172,6 +175,9 @@ def test_t2_write_triggers_confirmation_interrupt_and_executes_after_token() -> 
     assert turn2.pending_confirmation is None
     assert any(a.tool == "book_appointment" for a in turn2.artifacts)
     assert "CONFIRMED" in turn2.answer.segments[0].text
+    assert verify_no_cross_subject_or_unmasked_pii(
+        "Appointment appt_019a1111-2222-7333-8444-123456789012 at office JUBA_HQ is CONFIRMED."
+    ).passed
 
     # Deterministic HELP keyword, T1 filing_status & tcc_status, T2 create_case, and preference hydration
     help_turn = runtime.run_turn(make_conversation_event("HELP", channel=ChannelName.SMS))
