@@ -164,3 +164,22 @@ test("Listen speaks in the interface language", async ({ page }) => {
   await page.locator("article.message-row-assistant").last().getByRole("button", { name: /Listen/ }).click();
   expect(await page.evaluate(() => (window as unknown as { __spokenLangs: string[] }).__spokenLangs)).toEqual(["ar"]);
 });
+
+test("the theme follows the system until the user chooses one", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/en");
+  const html = page.locator("html");
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(html).toHaveAttribute("data-theme", "light");
+  await page.reload();
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(html).toHaveAttribute("data-theme", "dark");
+
+  await page.locator("#theme-toggle-btn").click();
+  await expect(html).toHaveAttribute("data-theme", "light");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.reload();
+  await expect(html).toHaveAttribute("data-theme", "light");
+});
+
