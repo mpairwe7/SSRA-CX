@@ -79,7 +79,7 @@ function negotiateAcceptLanguage(acceptLanguage) {
 
 function buildSecurityHeaders(nonce) {
   return {
-    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
+    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types ssra-web-html ssra-web-script-url`,
     "X-Nonce": nonce,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -447,7 +447,7 @@ function renderPwaShellHtml(locale, nonce) {
     /* Chat Stream Area */
     .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     .message-list { flex: 1; overflow-y: auto; padding: 1.25rem clamp(1rem, 4vw, 3rem); display: flex; flex-direction: column; gap: 1rem; max-width: 880px; width: 100%; margin: 0 auto; }
-    .message-row { display: flex; flex-direction: column; gap: 0.35rem; animation: fadeIn 0.2s ease-out; }
+    .message-row { display: flex; flex-direction: column; gap: 0.35rem; animation: fadeIn 0.2s ease-out; content-visibility: auto; contain-intrinsic-size: auto 160px; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
     .message-row-user { align-items: flex-end; }
     .message-row-assistant { align-items: flex-start; }
@@ -806,13 +806,22 @@ function renderPwaShellHtml(locale, nonce) {
   <script nonce="${nonce}">
     (() => {
       const ICONS = ${JSON.stringify(ICONS)};
+      // Trusted Types: the only script URL this page may load is its own service worker.
+      const scriptUrlPolicy = window.trustedTypes?.createPolicy
+        ? window.trustedTypes.createPolicy("ssra-web-script-url", {
+            createScriptURL: (url) => {
+              if (url !== "/sw.js") throw new TypeError("Script URL not allowed: " + url);
+              return url;
+            },
+          })
+        : null;
       if ("serviceWorker" in navigator) {
         caches?.keys?.().then((keys) => {
           keys.forEach((k) => {
             if (k !== "ssra-assist-public-shell-v2026.10.4") caches.delete(k);
           });
         }).catch(() => {});
-        navigator.serviceWorker.register("/sw.js").catch(() => {});
+        navigator.serviceWorker.register(scriptUrlPolicy ? scriptUrlPolicy.createScriptURL("/sw.js") : "/sw.js").catch(() => {});
       }
 
       // W3C Trusted Types & 6-character HTML Escaping (FE-G3)
@@ -1240,6 +1249,55 @@ function renderPwaShellHtml(locale, nonce) {
         return [...groups.entries()].filter(([, rows]) => rows.length > 0);
       }
 
+      // Rebuild only the turns that changed, and open long conversations progressively: rewriting
+      // a long transcript on every update made 80-turn interactions exceed 200 ms (AUD-029).
+      const FIRST_PAINT_TURNS = 30;
+      const PREPEND_CHUNK_TURNS = 20;
+      let renderedTranscript = { convId: null, turnHtml: [], offset: 0 };
+      let prependTimer = 0;
+
+      function appendTurnHtml(htmlList, prepend) {
+        const holder = document.createElement("div");
+        setSafeHtml(holder, htmlList.join(""));
+        if (prepend) msgList.prepend(...holder.children);
+        else msgList.append(...holder.children);
+      }
+
+      function prependEarlierTurns(convId) {
+        const rt = renderedTranscript;
+        if (rt.convId !== convId || rt.offset === 0) return;
+        const start = Math.max(0, rt.offset - PREPEND_CHUNK_TURNS);
+        const scroller = msgList.scrollHeight > msgList.clientHeight + 1 ? msgList : document.querySelector(".app-main-col");
+        const anchor = msgList.lastElementChild;
+        const anchorTop = anchor ? anchor.getBoundingClientRect().top : 0;
+        appendTurnHtml(rt.turnHtml.slice(start, rt.offset), true);
+        // Keep the latest turn where it was; a no-op where the browser's scroll anchoring already did.
+        if (scroller && anchor) scroller.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
+        renderedTranscript = { ...rt, offset: start };
+        if (start > 0) prependTimer = window.setTimeout(() => prependEarlierTurns(convId), 0);
+      }
+
+      function renderTranscript(conv) {
+        const turnHtml = conv.turns.map(renderTurnHtml);
+        const prev = renderedTranscript;
+        const domMatches = prev.convId === conv.id && msgList.children.length === prev.turnHtml.length - prev.offset;
+        const unchangedBeforeOffset = domMatches && prev.turnHtml.slice(0, prev.offset).every((h, i) => h === turnHtml[i]);
+        if (unchangedBeforeOffset) {
+          let first = prev.offset;
+          while (first < turnHtml.length && turnHtml[first] === prev.turnHtml[first]) first += 1;
+          while (msgList.children.length > first - prev.offset) msgList.lastElementChild.remove();
+          if (first < turnHtml.length) appendTurnHtml(turnHtml.slice(first), false);
+          renderedTranscript = { convId: conv.id, turnHtml, offset: prev.offset };
+          return;
+        }
+        window.clearTimeout(prependTimer);
+        const offset = Math.max(0, turnHtml.length - FIRST_PAINT_TURNS);
+        setSafeHtml(msgList, turnHtml.slice(offset).join(""));
+        renderedTranscript = { convId: conv.id, turnHtml, offset };
+        if (offset > 0) prependTimer = window.setTimeout(() => prependEarlierTurns(conv.id), 0);
+      }
+
+      let renderedRailHtml = null;
       function renderApp() {
         const activeConv = state.conversations.find((c) => c.id === state.activeId) || null;
         const deviceNote = document.getElementById("rail-device-note");
@@ -1249,28 +1307,28 @@ function renderPwaShellHtml(locale, nonce) {
             : "Conversations are not saved. They disappear when you close or reload this page.";
         }
         if (convListEl) {
-          if (state.conversations.length === 0) {
-            setSafeHtml(
-              convListEl,
-              '<p class="rail-empty-hint">No saved conversations yet. Start a conversation to keep it on this device.</p>',
-            );
-          } else {
-            const html = groupConversationRows(state.conversations).map(([label, rows]) =>
-              '<h2 class="rail-section-label">' + escapeHtml(label) + '</h2><ul class="rail-group">' + rows.map(renderConvRow).join("") + "</ul>"
-            ).join("");
-            setSafeHtml(convListEl, html);
+          const railHtml = state.conversations.length === 0
+            ? '<p class="rail-empty-hint">No saved conversations yet. Start a conversation to keep it on this device.</p>'
+            : groupConversationRows(state.conversations).map(([label, rows]) =>
+                '<h2 class="rail-section-label">' + escapeHtml(label) + '</h2><ul class="rail-group">' + rows.map(renderConvRow).join("") + "</ul>"
+              ).join("");
+          if (railHtml !== renderedRailHtml) {
+            setSafeHtml(convListEl, railHtml);
+            renderedRailHtml = railHtml;
           }
         }
         if (!activeConv || activeConv.turns.length === 0) {
           landingView?.classList.remove("is-hidden");
           chatView?.classList.add("is-hidden");
           if (activeTitleEl) activeTitleEl.textContent = "New Conversation";
+          window.clearTimeout(prependTimer);
+          renderedTranscript = { convId: null, turnHtml: [], offset: 0 };
         } else {
           landingView?.classList.add("is-hidden");
           chatView?.classList.remove("is-hidden");
           if (activeTitleEl) activeTitleEl.textContent = activeConv.title;
           if (msgList) {
-            setSafeHtml(msgList, activeConv.turns.map(renderTurnHtml).join(""));
+            renderTranscript(activeConv);
             const lastTurn = msgList.lastElementChild;
             const visibleHeight = Math.min(msgList.clientHeight, window.innerHeight);
             lastTurn?.scrollIntoView({ block: lastTurn.offsetHeight > visibleHeight ? "start" : "end" });

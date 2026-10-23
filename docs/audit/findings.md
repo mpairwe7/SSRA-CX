@@ -304,15 +304,17 @@ Evidence comes from Lighthouse 12.8.2 (Apache-2.0, run from a verified local cac
 
 - Location: `apps/web/server.js` `renderApp()`, which rewrites the whole transcript on every update.
 - Evidence: With 80 synthetic turns, the worst interaction took 272 ms at 4× and 344 ms at 6× CPU slowdown. With 6 turns it took 64 ms and 88 ms. The Core Web Vitals "good" INP threshold is 200 ms.
-- Fix: Planned for R2-H: incremental transcript updates and `content-visibility: auto` on message rows, measured before and after.
-- Phase: R2-H · Owner: Frontend · Status: Open.
+- Fix: R2-H rebuilds only the turns that changed and keeps earlier message nodes. It opens long conversations progressively: the latest 30 turns paint first and older turns are prepended in 20-turn chunks while an anchor keeps the latest turn in place. Message rows use `content-visibility: auto` with a remembered intrinsic size, and the rail skips unchanged rewrites.
+- Verification: With 80 turns the worst interaction fell from 256 ms to 120 ms at 4× and from 368 ms to 144 ms at 6× CPU, and opening the conversation from 240 ms to 152 ms at 6×. Send-to-answer at 6× fell from 708 ms to 161 ms. Rendered tests check node preservation, progressive completion in order with the latest turn in view, and `content-visibility`. Lab numbers are not field INP; CrUX or RUM data is still needed.
+- Phase: R2-H · Owner: Frontend · Status: Fixed in R2-H.
 
 ### AUD-030 · S2 · DOM XSS hardening · Trusted Types are created but not enforced
 
 - Location: `apps/web/server.js` and `apps/console/server.js` CSP.
 - Evidence: Lighthouse `trusted-types-xss` reported (severity High) that no CSP Trusted Types directive was found. Both pages create a policy, but without `require-trusted-types-for 'script'` any DOM sink still accepts a string. Trusted Types is supported in Chrome 83, Firefox 148, and Safari 26.
-- Fix: Planned for R2-H: enforce Trusted Types with named policies, including a script-URL policy for the service worker.
-- Phase: R2-H · Owner: Frontend and Security · Status: Open.
+- Fix: R2-H enforces `require-trusted-types-for 'script'` with named policies: `ssra-web-html` and `ssra-web-script-url` (which allows only `/sw.js`) for the public chat, and `ssra-ops-html` for the staff preview. A string assignment to any DOM sink now throws.
+- Verification: Rendered tests check both CSP headers, a rejected string `innerHTML` assignment on each surface, and service-worker registration through the script-URL policy. Lighthouse `trusted-types-xss` now reports no items, and the full browser suite shows no console errors.
+- Phase: R2-H · Owner: Frontend and Security · Status: Fixed in R2-H.
 
 ### AUD-031 · S3 · Regression tooling · Live smoke suite asserts behaviour the fail-closed policy forbids
 
