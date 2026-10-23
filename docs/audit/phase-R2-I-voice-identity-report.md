@@ -19,9 +19,9 @@ No live telephony path exists. These functions are called only by tests, evaluat
 
 ## Implemented controls
 
-- `verify_voice_dtmf_step_up(…, otp_verifier=None, attempts_used=0)`. With no verifier, the result is `WARM_TRANSFER_TO_OFFICER`, with the reason citing OQ-005. A verifier that returns false gives `OTP_REJECTED`. Three attempts give `WARM_TRANSFER_TO_OFFICER`. The masked TIN is returned only after verification.
+- `verify_voice_dtmf_step_up(…, otp_verifier=None, call_id, attempt_store)`. With no verifier, the result is `WARM_TRANSFER_TO_OFFICER`, with the reason citing OQ-005. A verifier that returns false gives `OTP_REJECTED` and is recorded in the `StepUpAttemptStore`; the third rejection gives `WARM_TRANSFER_TO_OFFICER`. A verifier or store that raises gives `WARM_TRANSFER_TO_OFFICER`. The masked TIN is returned only after verification.
 - `_carryover_signing_key()` requires 32 bytes or more and otherwise raises `UPSTREAM_UNAVAILABLE` (`503`). `issued_at` is signed, and verification rejects tokens older than 900 seconds or more than 60 seconds in the future. With the key unset, carryover stays disabled. `.env.example` was not changed, because workspace policy forbids committing `.env*` files; the key is documented in ADR-024.
-- `CallLobbyManager` accepts only the events in `LOBBY_EVENT_TYPES` and the priorities in `normal`, `high`, and `urgent`. A claim needs an `officer_id` and a call that is waiting for an officer; the first claim wins. Ended calls leave a tombstone (bounded at 4,096) so late events return an ended entry instead of reviving the call. A missing `waiting_since` stays `None`.
+- `CallLobbyManager` accepts only the events in `LOBBY_EVENT_TYPES` and the priorities in `normal`, `high`, and `urgent`. A claim needs an `officer_id` and a call that is waiting for an officer; the first claim wins. Ended calls leave a tombstone (bounded at 4,096) so late events return an ended entry instead of reviving the call, and only `call.started` can add a call, so an evicted ended call is rejected rather than revived. Events are validated before the stored entry changes. A missing or non-finite `waiting_since` stays `None`.
 
 See [ADR-024](../adr/0024-voice-identity-step-up-and-carryover-fail-closed.md).
 

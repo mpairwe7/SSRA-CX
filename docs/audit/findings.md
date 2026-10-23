@@ -350,8 +350,8 @@ Scope: `services/voice` (`ssra_voice`), `packages/chat-ui/src/call-receptionist.
 - Evidence: Any 9–12 digit TIN with any 6 digits returned `authorized=True` and `BOUND_T1` or `BOUND_T3`. The OTP was never checked against an issued code, attempts were unlimited, and the existing unit test asserted this as correct. No caller outside tests exists today.
 - Standard: Master prompt invariant 8 (OTP and identity verification outside the model, strict subject binding); OWASP ASVS v5.0.0 V6 (authentication); OQ-005 (identity proofing).
 - Impact: Once connected to an IVR, any caller could bind any taxpayer's identity, and at T3.
-- Fix: The function now requires an injected `otp_verifier` port, backed by the approved identity provider. Without one it returns `WARM_TRANSFER_TO_OFFICER`. A rejected code returns `OTP_REJECTED`, and after three attempts the call goes to an officer. The masked TIN is returned only on success.
-- Verification: The tightened unit test fails on `70a6d1a` (`authorized` was `True` with no verifier) and passes after the fix. It covers the no-verifier, wrong-code, exhausted-attempts, and verified paths.
+- Fix: The function now requires an injected `otp_verifier` port, backed by the approved identity provider. Without one it returns `WARM_TRANSFER_TO_OFFICER`. A rejected code returns `OTP_REJECTED`. Each rejection is recorded in an injected `StepUpAttemptStore` against the call's `call_id`, so the limit cannot be reset by the caller; the third rejection sends the call to an officer. A verifier or store that raises also sends the call to an officer and binds nothing. The masked TIN is returned only on success.
+- Verification: The tightened unit test fails on `70a6d1a` (`authorized` was `True` with no verifier) and passes after the fix. It covers no verifier, three rejections counted by the store, a correct code after the limit, a raising verifier, a raising store, a missing `call_id`, and the verified path. CodeRabbit review of #97 prompted the store and the exception handling.
 - Phase: R2-I · Owner: Voice and Security · Status: Fixed in R2-I.
 
 ### AUD-035 · S1 (latent) · Token integrity · Call-to-web carryover tokens were signed with a public constant and never expired
@@ -369,7 +369,7 @@ Scope: `services/voice` (`ssra_voice`), `packages/chat-ui/src/call-receptionist.
 - Location: `ssra_voice` `CallLobbyManager.apply_event`.
 - Evidence: A second `call.claimed` silently replaced the first officer. A claim was accepted in any state. A late `call.risk` event after `call.ended` recreated the call. Unknown event types and arbitrary priority strings were accepted. A missing `waiting_since` became `1.0`, a 1970 timestamp, so wait times were invented.
 - Standard: Master prompt invariant 10 (truthful interface state).
-- Fix: Only a call waiting for an officer can be claimed, and the first claim wins. Ended calls leave a bounded tombstone, so late events do not revive them. Unknown events and priorities are rejected, and a missing wait start stays `None`.
+- Fix: Only a call waiting for an officer can be claimed, and the first claim wins. Ended calls leave a tombstone (the most recent 4,096), and only `call.started` can add a call, so a late event for an ended call is ignored or, once its tombstone has been evicted, rejected. Each event is validated before the stored entry changes, so an invalid priority can no longer leave a call half-entered in the waiting queue. Non-finite wait times become `None`. Unknown events and priorities are rejected, and a missing wait start stays `None`.
 - Verification: Unit tests cover claim-before-transfer, double claim, revival after end, unknown events, and unknown priorities. The evaluation suite still passes.
 - Phase: R2-I · Owner: Voice · Status: Fixed in R2-I.
 

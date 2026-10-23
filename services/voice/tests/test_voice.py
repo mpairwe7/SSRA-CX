@@ -6,6 +6,20 @@ from ssra_core import LocaleCode
 from ssra_voice import ASR_MODEL_BY_LOCALE, is_voice_language_approved, route_voice_turn
 
 
+class _SyntheticAttemptStore:
+    """Test double for the durable per-call attempt store (OQ-015)."""
+
+    def __init__(self) -> None:
+        self.failures: dict[str, int] = {}
+
+    def failed_attempts(self, call_id: str) -> int:
+        return self.failures.get(call_id, 0)
+
+    def record_failed_attempt(self, call_id: str) -> int:
+        self.failures[call_id] = self.failures.get(call_id, 0) + 1
+        return self.failures[call_id]
+
+
 def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     """Verify ASR/TTS model selection, WER gate, DTMF step-up, hybrid speech router, and spoken figure fidelity."""
     assert "whisper" in ASR_MODEL_BY_LOCALE[LocaleCode.EN]
@@ -72,10 +86,13 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     assert d_strike2.action == "WARM_TRANSFER_TO_OFFICER"
 
     # Voice DTMF step-up blocks spoken OTP and SIM-swap, and masks TIN on keypad entry
+    store = _SyntheticAttemptStore()
     spoken_attempt = verify_voice_dtmf_step_up(
         dtmf_tin_digits="1002001234",
         dtmf_otp_digits="123456",
         input_modality="spoken_asr",
+        call_id="call_dtmf",
+        attempt_store=store,
     )
     assert spoken_attempt.authorized is False
     assert spoken_attempt.action == "REJECTED_SPOKEN_OTP"
@@ -84,6 +101,8 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         dtmf_tin_digits="1002001234",
         dtmf_otp_digits="123456",
         requested_tier="T4",
+        call_id="call_dtmf",
+        attempt_store=store,
     )
     assert t4_attempt.action == "WARM_TRANSFER_TO_OFFICER"
 
@@ -92,6 +111,8 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         dtmf_otp_digits="123456",
         input_modality="dtmf_rfc4733",
         requested_tier="T3",
+        call_id="call_dtmf",
+        attempt_store=store,
     )
     assert no_verifier.authorized is False
     assert no_verifier.action == "WARM_TRANSFER_TO_OFFICER"
@@ -100,23 +121,52 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     def _synthetic_verifier(tin: str, otp: str) -> bool:
         return tin == "1002001234" and otp == "654321"
 
-    wrong_code = verify_voice_dtmf_step_up(
-        dtmf_tin_digits="1002001234",
-        dtmf_otp_digits="123456",
-        requested_tier="T3",
-        otp_verifier=_synthetic_verifier,
-    )
-    assert wrong_code.authorized is False
-    assert wrong_code.action == "OTP_REJECTED"
+    # The store counts every rejected code, so the caller cannot reset the three-attempt limit.
+    actions = [
+        verify_voice_dtmf_step_up(
+            dtmf_tin_digits="1002001234",
+            dtmf_otp_digits="123456",
+            requested_tier="T3",
+            otp_verifier=_synthetic_verifier,
+            call_id="call_dtmf",
+            attempt_store=store,
+        ).action
+        for _ in range(3)
+    ]
+    assert actions == ["OTP_REJECTED", "OTP_REJECTED", "WARM_TRANSFER_TO_OFFICER"]
+    assert store.failures["call_dtmf"] == 3
     exhausted = verify_voice_dtmf_step_up(
         dtmf_tin_digits="1002001234",
         dtmf_otp_digits="654321",
         requested_tier="T3",
         otp_verifier=_synthetic_verifier,
-        attempts_used=3,
+        call_id="call_dtmf",
+        attempt_store=store,
     )
     assert exhausted.authorized is False
     assert exhausted.action == "WARM_TRANSFER_TO_OFFICER"
+
+    def _failing_verifier(tin: str, otp: str) -> bool:
+        raise TimeoutError("identity provider timed out")
+
+    class _BrokenStore(_SyntheticAttemptStore):
+        def failed_attempts(self, call_id: str) -> int:
+            raise OSError("attempt store unavailable")
+
+    for verifier, attempt_store in (
+        (_failing_verifier, _SyntheticAttemptStore()),
+        (_synthetic_verifier, _BrokenStore()),
+    ):
+        unavailable = verify_voice_dtmf_step_up(
+            dtmf_tin_digits="1002001234",
+            dtmf_otp_digits="654321",
+            requested_tier="T3",
+            otp_verifier=verifier,
+            call_id="call_unavailable",
+            attempt_store=attempt_store,
+        )
+        assert (unavailable.authorized, unavailable.action) == (False, "WARM_TRANSFER_TO_OFFICER")
+        assert unavailable.tin_masked is None
 
     dtmf_ok = verify_voice_dtmf_step_up(
         dtmf_tin_digits="1002001234",
@@ -124,6 +174,8 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         input_modality="dtmf_rfc4733",
         requested_tier="T3",
         otp_verifier=_synthetic_verifier,
+        call_id="call_dtmf_ok",
+        attempt_store=store,
     )
     assert dtmf_ok.authorized is True
     assert dtmf_ok.action == "BOUND_T3"
@@ -134,7 +186,17 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     from ssra_core import SSRAError
 
     with pytest.raises(SSRAError):
-        verify_voice_dtmf_step_up(dtmf_tin_digits="123", dtmf_otp_digits="12")
+        verify_voice_dtmf_step_up(
+            dtmf_tin_digits="123", dtmf_otp_digits="12", call_id="call_dtmf", attempt_store=store
+        )
+    with pytest.raises(SSRAError):
+        verify_voice_dtmf_step_up(
+            dtmf_tin_digits="1002001234",
+            dtmf_otp_digits="654321",
+            otp_verifier=_synthetic_verifier,
+            call_id=" ",
+            attempt_store=store,
+        )
 
     followup = build_voice_spoken_turn_and_sms_followup(
         reply_text="Your PAYE is 25,000 SSP per month. File by the 15th. Pay via bank only. Extra fourth sentence omitted.",
@@ -290,6 +352,26 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         claim_lobby.apply_event("call.teleported", {"call_id": "c2"})
     with pytest.raises(ValueError, match="Unsupported call priority"):
         claim_lobby.apply_event("call.priority_raised", {"call_id": "c2", "priority": "vip"})
+
+    # A rejected event changes nothing, so a call never half-enters the waiting queue.
+    partial = CallLobbyManager()
+    partial.apply_event("call.started", {"call_id": "c3", "topic": "paye"})
+    with pytest.raises(ValueError, match="Unsupported call priority"):
+        partial.apply_event(
+            "call.transfer_requested", {"call_id": "c3", "priority": "vip", "topic": "vat"}
+        )
+    assert (partial.calls["c3"].status, partial.calls["c3"].topic) == ("ai", "general")
+    with pytest.raises(ValueError, match="not waiting"):
+        partial.apply_event("call.claimed", {"call_id": "c3", "officer_id": "stf_1"})
+    nan_wait = partial.apply_event(
+        "call.transfer_requested", {"call_id": "c3", "waiting_since": float("nan")}
+    )
+    assert nan_wait.waiting_since is None
+    # Only call.started adds a call, so an unknown or evicted call cannot reappear in the queue.
+    with pytest.raises(ValueError, match="not in the lobby"):
+        partial.apply_event("call.transfer_requested", {"call_id": "c_unknown"})
+    assert partial.apply_event("call.ended", {"call_id": "c_never_seen"}).status == "ended"
+    assert "c_never_seen" not in partial.calls
 
     from ssra_voice import resolve_mt_and_tts_turn_plan, validate_call_wrap_up
 

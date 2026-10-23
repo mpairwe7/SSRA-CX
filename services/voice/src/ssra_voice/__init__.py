@@ -5,13 +5,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import time
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from ssra_core import LocaleCode, McpErrorCode, SSRAError
 from ssra_security import redact_pii
@@ -457,15 +458,20 @@ MAX_ENDED_CALL_TOMBSTONES: int = 4096
 
 
 def _optional_timestamp(value: Any) -> float | None:
-    """Return a provided wait-start timestamp, or None when the event did not supply one."""
-    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    """Return a provided wait-start timestamp, or None when the event supplied no usable one."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    timestamp = float(value)
+    return timestamp if math.isfinite(timestamp) else None
 
 
 class CallLobbyManager:
     """Server/Console Call Lobby State Machine (`useCallConsoleStore.ts` pattern).
 
     The first officer to claim a waiting call owns it, ended calls cannot be revived by late
-    events, and unknown event types are rejected.
+    events, and unknown event types are rejected. Only ``call.started`` can add a call, so a late
+    event for an ended call whose tombstone has been evicted is rejected rather than reviving it.
+    Each event is validated before the stored entry is changed.
     """
 
     def __init__(self) -> None:
@@ -480,13 +486,23 @@ class CallLobbyManager:
             raise ValueError("call_id is required")
         if call_id in self._ended:
             return LobbyCallEntry(call_id=call_id, status="ended")
-        entry = self.calls.get(call_id) or LobbyCallEntry(call_id=call_id)
+        entry = self.calls.get(call_id)
+        if entry is None:
+            if event_type in {"call.ended", "call.wrapped_up"}:
+                self._remember_ended(call_id)
+                return LobbyCallEntry(call_id=call_id, status="ended")
+            if event_type != "call.started":
+                raise ValueError(
+                    f"Call {call_id} is not in the lobby; only call.started can add it"
+                )
+            entry = LobbyCallEntry(call_id=call_id)
         if event_type == "call.started":
             entry.status = "ai"
         elif event_type == "call.transfer_requested":
+            priority = _lobby_priority(data.get("priority", "normal"))
             entry.status = "transferring"
             entry.topic = str(data.get("topic", entry.topic))
-            entry.priority = _lobby_priority(data.get("priority", "normal"))
+            entry.priority = priority
             entry.reason = str(data.get("reason", ""))
             entry.waiting_since = _optional_timestamp(data.get("waiting_since"))
             entry.claimed_by = ""
@@ -533,12 +549,15 @@ class CallLobbyManager:
         elif event_type in {"call.ended", "call.wrapped_up"}:
             entry.status = "ended"
             self.calls.pop(call_id, None)
-            self._ended[call_id] = None
-            if len(self._ended) > MAX_ENDED_CALL_TOMBSTONES:
-                self._ended.popitem(last=False)
+            self._remember_ended(call_id)
             return entry
         self.calls[call_id] = entry
         return entry
+
+    def _remember_ended(self, call_id: str) -> None:
+        self._ended[call_id] = None
+        if len(self._ended) > MAX_ENDED_CALL_TOMBSTONES:
+            self._ended.popitem(last=False)
 
 
 def _lobby_priority(value: Any) -> str:
@@ -992,6 +1011,16 @@ OtpVerifier = Callable[[str, str], bool]
 MAX_DTMF_STEP_UP_ATTEMPTS: int = 3
 
 
+class StepUpAttemptStore(Protocol):
+    """Per-call count of rejected keypad codes, kept for the life of the call in durable state (OQ-015)."""
+
+    def failed_attempts(self, call_id: str) -> int: ...
+
+    def record_failed_attempt(self, call_id: str) -> int:
+        """Add one rejected code for the call and return the new total."""
+        ...
+
+
 def verify_voice_dtmf_step_up(
     *,
     dtmf_tin_digits: str,
@@ -1000,12 +1029,16 @@ def verify_voice_dtmf_step_up(
     requested_tier: Literal["T1", "T2", "T3", "T4"] = "T1",
     sim_swap_recent: bool = False,
     otp_verifier: OtpVerifier | None = None,
-    attempts_used: int = 0,
+    call_id: str,
+    attempt_store: StepUpAttemptStore,
 ) -> VoiceDtmfStepUpResult:
     """Enforce RFC 4733 DTMF-only TIN/OTP entry with recording pause and SIM-swap / T4 guards.
 
     Well-formed digits are not proof of identity. The OTP must be confirmed by an approved
-    ``otp_verifier``; without one the call goes to an officer instead of binding a subject.
+    ``otp_verifier``; without one the call goes to an officer instead of binding a subject. Each
+    rejected code is recorded in ``attempt_store`` against ``call_id``, so the three-attempt limit
+    cannot be reset by the caller. If the verifier or the store fails, nothing is bound and the call
+    goes to an officer.
     """
     if requested_tier == "T4" or sim_swap_recent:
         return VoiceDtmfStepUpResult(
@@ -1031,14 +1064,19 @@ def verify_voice_dtmf_step_up(
             "DTMF step-up requires 9..12 ASCII TIN digits and 6 ASCII OTP digits",
             status_code=400,
         )
-    if attempts_used >= MAX_DTMF_STEP_UP_ATTEMPTS:
-        return VoiceDtmfStepUpResult(
-            authorized=False,
-            action="WARM_TRANSFER_TO_OFFICER",
-            tin_masked=None,
-            recording_paused_for_dtmf=True,
-            reason="Too many keypad verification attempts on this call",
+    if not call_id.strip():
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "DTMF step-up requires the call_id that keypad attempts are counted against",
+            status_code=400,
         )
+    too_many_attempts = VoiceDtmfStepUpResult(
+        authorized=False,
+        action="WARM_TRANSFER_TO_OFFICER",
+        tin_masked=None,
+        recording_paused_for_dtmf=True,
+        reason="Too many keypad verification attempts on this call",
+    )
     if otp_verifier is None:
         return VoiceDtmfStepUpResult(
             authorized=False,
@@ -1047,19 +1085,34 @@ def verify_voice_dtmf_step_up(
             recording_paused_for_dtmf=True,
             reason="No approved OTP verifier is configured (OQ-005); identity cannot be confirmed on this call",
         )
-    if not otp_verifier(clean_tin, clean_otp):
+    try:
+        if attempt_store.failed_attempts(call_id) >= MAX_DTMF_STEP_UP_ATTEMPTS:
+            return too_many_attempts
+        if otp_verifier(clean_tin, clean_otp):
+            return VoiceDtmfStepUpResult(
+                authorized=True,
+                action="BOUND_T3" if requested_tier == "T3" else "BOUND_T1",
+                tin_masked=f"••••{clean_tin[-4:]}",
+                recording_paused_for_dtmf=True,
+            )
+        failures = attempt_store.record_failed_attempt(call_id)
+    except Exception:
+        # A provider or attempt-store failure must never bind a subject, and the caller still needs help.
         return VoiceDtmfStepUpResult(
             authorized=False,
-            action="OTP_REJECTED",
+            action="WARM_TRANSFER_TO_OFFICER",
             tin_masked=None,
             recording_paused_for_dtmf=True,
-            reason="The keypad code was not accepted",
+            reason="Identity verification is unavailable on this call",
         )
+    if failures >= MAX_DTMF_STEP_UP_ATTEMPTS:
+        return too_many_attempts
     return VoiceDtmfStepUpResult(
-        authorized=True,
-        action="BOUND_T3" if requested_tier == "T3" else "BOUND_T1",
-        tin_masked=f"••••{clean_tin[-4:]}",
+        authorized=False,
+        action="OTP_REJECTED",
+        tin_masked=None,
         recording_paused_for_dtmf=True,
+        reason="The keypad code was not accepted",
     )
 
 
@@ -1489,6 +1542,7 @@ __all__ = [
     "OfficerCallBrief",
     "OtpVerifier",
     "SpokenNumberVerbalization",
+    "StepUpAttemptStore",
     "TtsCachedAudio",
     "TtsPhraseCache",
     "VADConfig",
