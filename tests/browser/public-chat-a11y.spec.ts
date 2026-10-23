@@ -239,9 +239,16 @@ test("continuous voice conversation auto-advances across turns and filters speak
 
   await page.goto("/en");
   await page.locator("#open-call-btn").click();
+  await expect(page.locator("#call-lang-chip-text")).toHaveText("English · auto");
+  await page.locator("#call-lang-chip").click();
+  await page.locator('.call-lang-option[data-call-lang="en"]').click();
+  await expect(page.locator("#call-lang-chip-text")).toHaveText("English · chosen");
+
   const listenBtn = page.locator("#call-listen-btn");
   await listenBtn.click();
   await expect(listenBtn).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#call-orb")).toHaveAttribute("data-mode", "listening");
+  await expect(page.locator("#composer-recording-bar")).toBeVisible();
 
   // Turn 1: spoken question is sent automatically, spoken back, and recognition re-arms after cooldown.
   await page.evaluate(() => {
@@ -250,6 +257,8 @@ test("continuous voice conversation auto-advances across turns and filters speak
     );
   });
   await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(1);
+  await expect(page.locator("#call-thread .call-turn--caller")).toHaveCount(1);
+  await expect(page.locator("#call-thread .call-turn--agent")).toHaveCount(1);
   await expect
     .poll(
       () =>
