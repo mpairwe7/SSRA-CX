@@ -50,6 +50,7 @@ test("public chat renders a safe answer through the subject-stripping BFF", asyn
   await expect(page.locator("#rail-conv-list .rail-item-dot")).toHaveCount(1);
 
   // Desktop Ctrl+B collapse & left-edge hover-peek (chatv2/shell.css pattern)
+  await page.mouse.move(640, 360);
   await page.keyboard.press("Control+b");
   await expect(page.locator("#ssra-app-shell")).toHaveAttribute("data-sidebar", "collapsed");
   await page.locator("#rail-hotzone").dispatchEvent("mouseenter");

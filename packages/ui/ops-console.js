@@ -159,8 +159,24 @@ function destinationMeta(route) {
   );
 }
 
+function resolvePublicAssistantUrl(publicWebOrigin) {
+  const candidate = String(
+    publicWebOrigin ??
+      process.env.PUBLIC_WEB_URL ??
+      process.env.NEXT_PUBLIC_WEB_URL ??
+      "http://127.0.0.1:3000",
+  ).trim();
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return `${parsed.origin}/en`;
+    }
+  } catch {}
+  return "http://127.0.0.1:3000/en";
+}
+
 // Rendered on the server so the preview state is readable without JavaScript.
-function renderPreviewCard(title, group = "Work") {
+function renderPreviewCard(title, group = "Work", publicAssistantUrl = "http://127.0.0.1:3000/en") {
   return `<header class="ops-page-head">
           <div>
             <span id="preview-eyebrow" class="ops-eyebrow">${escapeHtml(group)} · Preview only</span>
@@ -169,7 +185,7 @@ function renderPreviewCard(title, group = "Work") {
           </div>
           <div class="ops-page-actions">
             <span class="ops-fresh"><span class="ops-fresh-dot is-stale" aria-hidden="true"></span>Session unverified · preview only</span>
-            <a class="ops-btn is-primary primary" href="/en" data-nav="/en">Open the public assistant ${ICONS.arrowUpRight}</a>
+            <a class="ops-btn is-primary primary" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Open the public assistant ${ICONS.arrowUpRight}</a>
           </div>
         </header>
 
@@ -292,10 +308,11 @@ function compactOpsHtmlAssetBlocks(html) {
     });
 }
 
-export function renderOpsDashboardHtml(rawPathname, nonce) {
+export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
   const currentPath = normalizeOpsRoute(rawPathname);
   const currentMeta = destinationMeta(currentPath);
   const currentTitle = currentMeta.label;
+  const publicAssistantUrl = resolvePublicAssistantUrl(publicWebOrigin);
   const rawHtml = `<!DOCTYPE html>
 <html lang="en" data-theme="dark" data-rail-mode="always-open">
 <head>
@@ -1083,7 +1100,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.contrast} High contrast</span></button>
           </div>
           <hr class="staff-acct-hr" role="separator" />
-          <a href="/en" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.messageSquare} Return to the public assistant</span><span>${ICONS.arrowUpRight}</span></a>
+          <a href="${escapeHtml(publicAssistantUrl)}" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.messageSquare} Return to the public assistant</span><span>${ICONS.arrowUpRight}</span></a>
         </div>
         <button type="button" id="staff-acct-trigger" class="staff-acct-trigger" aria-label="Preview persona menu; not signed in" aria-expanded="false" aria-haspopup="menu">
           <span class="staff-acct-avatar"><span id="acct-initials">P</span></span>
@@ -1106,12 +1123,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
           <span>No live calls, taxpayer records, or service telemetry are shown.</span>
         </div>
         <div class="call-bar-right">
-          <a href="/en" class="ops-btn primary">${ICONS.messageSquare} Taxpayer MainChat</a>
+          <a href="${escapeHtml(publicAssistantUrl)}" class="ops-btn primary">${ICONS.messageSquare} Taxpayer MainChat</a>
         </div>
       </div>
 
       <main id="staff-main" class="ops-page" data-route="${escapeHtml(currentPath)}" tabindex="-1">
-        ${renderPreviewCard(currentTitle, currentMeta.group)}
+        ${renderPreviewCard(currentTitle, currentMeta.group, publicAssistantUrl)}
       </main>
     </div>
   </div>
@@ -1133,6 +1150,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
     (() => {
       const ICONS = ${JSON.stringify(ICONS)};
       const DESTINATIONS = ${JSON.stringify(DESTINATIONS)};
+      const PUBLIC_ASSISTANT_URL = ${JSON.stringify(publicAssistantUrl)};
 
       const ROLE_META = {
         ssra_admin: { initials: "P", name: "Preview persona", label: "Not signed in · preview only" },
@@ -1253,8 +1271,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
 
       function navigateTo(href) {
         if (!href) return;
-        if (href === "/en" || href.startsWith("/en")) {
-          window.location.assign(href);
+        if (href === PUBLIC_ASSISTANT_URL || href === "/en" || href.startsWith("/en") || /^https?:\\/\\//i.test(href)) {
+          window.location.assign(href === "/en" || href.startsWith("/en") ? PUBLIC_ASSISTANT_URL : href);
           return;
         }
         state.route = href;
@@ -1443,7 +1461,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce) {
             hint: d.group,
             run: () => navigateTo(d.href),
           })),
-          { label: "Open Taxpayer MainChat (/en)", hint: "Surface", run: () => window.location.assign("/en") },
+          { label: "Open Taxpayer MainChat (/en)", hint: "Surface", run: () => window.location.assign(PUBLIC_ASSISTANT_URL) },
           { label: "Preview persona: Administrator", hint: "Preview", run: () => setPreviewPersona("ssra_admin") },
           { label: "Preview persona: Tax Agent", hint: "Preview", run: () => setPreviewPersona("ssra_staff") },
           { label: "Preview persona: Auditor", hint: "Preview", run: () => setPreviewPersona("ssra_auditor") },

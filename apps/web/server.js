@@ -374,9 +374,9 @@ function renderPwaShellHtml(locale, nonce) {
 
     /* App Shell Grid & Hover-Peek (chatv2/shell.css pattern) */
     .app-shell { display: grid; grid-template-columns: var(--cv2-rail, 300px) minmax(0, 1fr); height: 100dvh; width: 100%; transition: grid-template-columns 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
-    .app-shell[data-sidebar="collapsed"] { --cv2-rail: 0px; grid-template-columns: 0px minmax(0, 1fr); }
     .rail-hotzone { display: none; }
     @media (min-width: 961px) {
+      .app-shell[data-sidebar="collapsed"] { --cv2-rail: 0px; grid-template-columns: 0px minmax(0, 1fr); }
       .app-shell[data-sidebar="collapsed"]:not([data-rail-peek="true"]) .rail-wrap { visibility: hidden; pointer-events: none; border-inline-end-width: 0; }
     }
     @media (min-width: 961px) and (hover: hover) {
@@ -395,7 +395,7 @@ function renderPwaShellHtml(locale, nonce) {
     @keyframes railPeekInRtl { from { transform: translateX(100%); } to { transform: translateX(0); } }
     .rail-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 45; }
     @media (max-width: 960px) {
-      .app-shell { grid-template-columns: minmax(0, 1fr); }
+      .app-shell, .app-shell[data-sidebar="collapsed"] { grid-template-columns: minmax(0, 1fr); }
       .rail-wrap { position: fixed; inset: 0 auto 0 0; width: min(300px, 86vw); z-index: 50; transform: translateX(-100%); visibility: hidden; transition: transform 0.22s ease, visibility 0s linear 0.22s; }
       :root[dir="rtl"] .rail-wrap { inset: 0 0 0 auto; transform: translateX(100%); }
       .app-shell[data-mobile-rail="open"] .rail-wrap { transform: translateX(0); visibility: visible; transition: transform 0.22s ease, visibility 0s; }
