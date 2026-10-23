@@ -10,8 +10,10 @@ import os
 import re
 import time
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import date
+from types import MappingProxyType
 from typing import Any, Literal, Protocol
 
 from ssra_core import LocaleCode, McpErrorCode, SSRAError
@@ -177,17 +179,58 @@ def build_voice_prosody_eq_metadata(
     }
 
 
-def is_voice_language_approved(locale: LocaleCode, measured_wer: float) -> bool:
-    _ = locale
-    return 0.0 <= measured_wer <= MAX_VOICE_WER_GATE
+@dataclass(frozen=True)
+class VoiceWerEvidence:
+    """A measured word-error rate for one language on a named SSRA test set (OQ-008)."""
+
+    locale: LocaleCode
+    word_error_rate: float
+    test_set: str
+    measured_on: date
+    utterance_count: int
+
+
+# Governed launch evidence for voice languages. An entry needs an SSRA-approved measurement on an
+# SSRA test set (OQ-008). There is none yet, so every language routes callers to an officer.
+APPROVED_VOICE_WER_EVIDENCE: Mapping[LocaleCode, VoiceWerEvidence] = MappingProxyType({})
+
+
+def _wer_gate_failure(
+    locale: LocaleCode, evidence: Mapping[LocaleCode, VoiceWerEvidence]
+) -> str | None:
+    """Return why a language may not run on voice, or None when its evidence meets the gate."""
+    record = evidence.get(locale)
+    if (
+        record is None
+        or record.locale != locale
+        or record.utterance_count <= 0
+        or not record.test_set.strip()
+        or not math.isfinite(record.word_error_rate)
+        or record.word_error_rate < 0.0
+    ):
+        return f"no approved word-error-rate evidence for {locale.value} (OQ-008)"
+    if record.word_error_rate > MAX_VOICE_WER_GATE:
+        return (
+            f"{locale.value} word-error rate {record.word_error_rate:.2f} on {record.test_set} "
+            f"is above the {MAX_VOICE_WER_GATE:.2f} gate"
+        )
+    return None
+
+
+def is_voice_language_approved(
+    locale: LocaleCode,
+    evidence: Mapping[LocaleCode, VoiceWerEvidence] = APPROVED_VOICE_WER_EVIDENCE,
+) -> bool:
+    """Return whether governed word-error-rate evidence allows this language on voice."""
+    return _wer_gate_failure(locale, evidence) is None
 
 
 def route_voice_turn(
     *,
     session_id: str,
     locale: LocaleCode,
-    measured_wer: float,
     recording_consent_granted: bool,
+    wer_evidence: Mapping[LocaleCode, VoiceWerEvidence] = APPROVED_VOICE_WER_EVIDENCE,
     dtmf_digit: str | None = None,
     barge_in_detected: bool = False,
     utterance_confidence: float = 0.95,
@@ -199,11 +242,18 @@ def route_voice_turn(
     asr_engine = ASR_MODEL_BY_LOCALE[locale]
     tts_engine = TTS_MODEL_BY_LOCALE[locale]
 
-    if (
-        dtmf_digit == "0"
-        or not is_voice_language_approved(locale, measured_wer)
-        or consecutive_low_confidence_turns >= 2
-    ):
+    transfer_reasons = [
+        reason
+        for reason in (
+            "caller pressed 0 for an officer" if dtmf_digit == "0" else None,
+            _wer_gate_failure(locale, wer_evidence),
+            f"{consecutive_low_confidence_turns} consecutive low-confidence turns"
+            if consecutive_low_confidence_turns >= 2
+            else None,
+        )
+        if reason
+    ]
+    if transfer_reasons:
         return VoiceSessionDecision(
             session_id=session_id,
             locale=locale,
@@ -212,8 +262,7 @@ def route_voice_turn(
             recording_enabled=recording_consent_granted,
             action="WARM_TRANSFER_TO_OFFICER",
             warm_transfer_summary=(
-                f"Warm transfer from IVR ({locale.value}): caller pressed 0, language WER "
-                f"{measured_wer:.2f} exceeded gate {MAX_VOICE_WER_GATE}, or consecutive low-confidence turns={consecutive_low_confidence_turns}."
+                f"Warm transfer from IVR ({locale.value}): {'; '.join(transfer_reasons)}."
             ),
         )
 
@@ -344,10 +393,27 @@ class OfficerCallBrief:
     sentiment: Literal["calm", "confused", "frustrated", "distressed"]
     suggested_opener: str
     turns_covered: int
-    model: str = "ssra-sovereign/sunflower-qwen3.5-9b"
+    # The model that wrote the brief; None when it was built by the keyword rules below.
+    model: str | None = None
     fallback: bool = False
     verified_artifacts: list[dict[str, Any]] = field(default_factory=list)
     recommended_officer_action: str = "Review verified e-Tax context and confirm next step"
+
+
+_DISTRESS_WORDS_RE = re.compile(r"\b(?:urgent(?:ly)?|blocked|seiz(?:ed|ure)|distress(?:ed)?)\b")
+_FRUSTRATION_WORDS_RE = re.compile(r"\b(?:errors?|fail(?:ed|s|ing)|frustrat(?:ed|ing)|wrong)\b")
+_CONFUSION_WORDS_RE = re.compile(r"\b(?:confus(?:ed|ing)|understand)\b")
+
+
+def _turn_seqs(turn: dict[str, Any] | None) -> list[int]:
+    """Return a turn's sequence number as evidence, or nothing when it has no valid one."""
+    seq = turn.get("seq") if turn is not None else None
+    return [seq] if isinstance(seq, int) and not isinstance(seq, bool) and seq > 0 else []
+
+
+def _redacted_turn_text(turn: dict[str, Any], limit: int) -> str:
+    """Redact a turn before shortening it, so truncation cannot split an identifier past redaction."""
+    return redact_pii(str(turn.get("text", ""))).redacted_text[:limit]
 
 
 def generate_officer_call_brief(
@@ -357,56 +423,65 @@ def generate_officer_call_brief(
     transfer_reason: str,
     verified_artifacts: list[dict[str, Any]] | None = None,
 ) -> OfficerCallBrief:
-    """Build the 10-second Officer Call Brief (`CallBriefCard.tsx`) with turn-sequence evidence links."""
-    caller_turns = [t for t in turns if t.get("speaker") == "caller"]
-    ai_turns = [t for t in turns if t.get("speaker") == "assistant"]
+    """Build the 10-second Officer Call Brief (`CallBriefCard.tsx`) with turn-sequence evidence links.
 
-    first_caller_seq = int(caller_turns[0].get("seq", 1)) if caller_turns else 1
-    last_caller_seq = int(caller_turns[-1].get("seq", 1)) if caller_turns else 1
-    raw_goal = (
-        str(caller_turns[0].get("text", "Taxpayer inquiry")) if caller_turns else "Taxpayer inquiry"
+    The brief is assembled by keyword rules, not by a model, so ``model`` is None. It states only
+    what the turns support: the caller's first and latest requests, the assistant's latest replies,
+    and the transfer reason it was given.
+    """
+    caller_turns = [
+        t for t in turns if t.get("speaker") == "caller" and str(t.get("text", "")).strip()
+    ]
+    ai_turns = [
+        t for t in turns if t.get("speaker") == "assistant" and str(t.get("text", "")).strip()
+    ]
+    first_caller = caller_turns[0] if caller_turns else None
+    last_caller = caller_turns[-1] if caller_turns else None
+    redacted_goal = (
+        _redacted_turn_text(first_caller, 240)
+        if first_caller is not None
+        else "The caller has not stated a goal yet"
     )
-    redacted_goal = redact_pii(raw_goal).redacted_text
 
     ai_claims = [
-        BriefClaim(
-            text=redact_pii(str(t.get("text", ""))[:140]).redacted_text,
-            turn_seqs=[int(t.get("seq", idx + 1))],
-        )
-        for idx, t in enumerate(ai_turns[:3])
-        if str(t.get("text", "")).strip()
+        BriefClaim(text=_redacted_turn_text(t, 140), turn_seqs=_turn_seqs(t)) for t in ai_turns[-3:]
     ]
 
     combined_lower = " ".join(str(t.get("text", "")).lower() for t in caller_turns)
     sentiment: Literal["calm", "confused", "frustrated", "distressed"] = "calm"
-    if any(w in combined_lower for w in ("urgent", "blocked", "seized", "distress")):
+    if _DISTRESS_WORDS_RE.search(combined_lower):
         sentiment = "distressed"
-    elif any(w in combined_lower for w in ("error", "failed", "frustrated", "wrong")):
+    elif _FRUSTRATION_WORDS_RE.search(combined_lower):
         sentiment = "frustrated"
-    elif any(w in combined_lower for w in ("confused", "how", "understand")):
+    elif _CONFUSION_WORDS_RE.search(combined_lower):
         sentiment = "confused"
 
     return OfficerCallBrief(
         call_id=call_id,
-        why_officer=BriefClaim(text=transfer_reason, turn_seqs=[last_caller_seq]),
-        caller_goal=BriefClaim(text=redacted_goal, turn_seqs=[first_caller_seq]),
+        why_officer=BriefClaim(text=transfer_reason, turn_seqs=_turn_seqs(last_caller)),
+        caller_goal=BriefClaim(text=redacted_goal, turn_seqs=_turn_seqs(first_caller)),
         ai_already_said=ai_claims,
         still_open=[
             BriefClaim(
-                text=f"Resolve {transfer_reason.lower()} and confirm next filing/payment step",
-                turn_seqs=[last_caller_seq],
+                text=f"Latest caller request: {_redacted_turn_text(last_caller, 140)}",
+                turn_seqs=_turn_seqs(last_caller),
             )
-        ],
+        ]
+        if last_caller is not None
+        else [],
         details_given=[
             {
-                "label": "Redacted Summary",
+                "label": "First caller message (redacted)",
                 "value": redacted_goal[:80],
-                "turn_seqs": [first_caller_seq],
+                "turn_seqs": _turn_seqs(first_caller),
             }
-        ],
+        ]
+        if first_caller is not None
+        else [],
         sentiment=sentiment,
         suggested_opener=(
-            f"Hello, I am an SSRA officer and I can see your inquiry regarding '{redacted_goal[:60]}' — let's resolve this together."
+            "Hello, I'm an SSRA officer. I have the notes from your call with the automated "
+            "assistant. Let's go through your question together."
         ),
         turns_covered=len(turns),
         fallback=len(turns) == 0,
@@ -536,10 +611,7 @@ class CallLobbyManager:
             entry.claimed_by = ""
             entry.claimed_name = ""
         elif event_type == "call.risk":
-            lvl = str(data.get("level", "none"))
-            entry.risk_level = (
-                "at_risk" if lvl == "at_risk" else "watch" if lvl == "watch" else "none"
-            )
+            entry.risk_level = _lobby_risk_level(data.get("level", "none"))
             entry.risk_signals = [str(s) for s in (data.get("signals") or [])]
         elif event_type == "call.bridged":
             entry.status = "bridged"
@@ -558,6 +630,18 @@ class CallLobbyManager:
         self._ended[call_id] = None
         if len(self._ended) > MAX_ENDED_CALL_TOMBSTONES:
             self._ended.popitem(last=False)
+
+
+def _lobby_risk_level(value: Any) -> Literal["none", "watch", "at_risk"]:
+    """Accept only known risk levels, so an unexpected value cannot silently lower a caller's risk."""
+    level = str(value).strip()
+    if level == "at_risk":
+        return "at_risk"
+    if level == "watch":
+        return "watch"
+    if level == "none":
+        return "none"
+    raise ValueError(f"Unsupported call risk level '{value}'")
 
 
 def _lobby_priority(value: Any) -> str:
@@ -801,10 +885,18 @@ VOICE_EVENT_TYPES: frozenset[str] = frozenset(
 
 @dataclass(frozen=True)
 class VoiceRetentionPolicy:
-    raw_audio_ttl_hours: int = 24
-    transcript_ttl_days: int = 90
-    analytics_ttl_days: int = 365
+    """Voice retention periods. None means no approved period (OQ-009 item 1): keep nothing after the call."""
+
+    raw_audio_ttl_hours: int | None = None
+    transcript_ttl_days: int | None = None
+    analytics_ttl_days: int | None = None
     store_raw_audio: bool = False
+
+    def __post_init__(self) -> None:
+        if self.store_raw_audio and self.raw_audio_ttl_hours is None:
+            raise ValueError(
+                "Raw call audio cannot be stored without an approved retention period (OQ-009)"
+            )
 
 
 def build_voice_consent_audit_entry(
@@ -826,6 +918,9 @@ def build_voice_consent_audit_entry(
         "audio_sha256": hashlib.sha256(audio_bytes).hexdigest() if audio_bytes else None,
         "raw_audio_stored": active_policy.store_raw_audio,
         "transcript_ttl_days": active_policy.transcript_ttl_days,
+        "retention_status": "approved"
+        if active_policy.transcript_ttl_days is not None
+        else "pending_oq_009",
     }
 
 
@@ -851,13 +946,29 @@ class TtsCachedAudio:
     error: str | None = None
 
 
+class TtsSynthesizer(Protocol):
+    def __call__(self, text: str, /, *, language: str, voice: str) -> TtsCachedAudio: ...
+
+
+def _normalize_phrase(text: str) -> str:
+    return " ".join(text.split())
+
+
 class TtsPhraseCache:
     """Bounded LRU TTS Phrase Cache (`TestTtsPhraseCache` in `test_voice_robustness.py`):
     Serves repeated phrases with `backend='<engine>+cache'` and `latency_ms=0.0`, and never caches failures.
+
+    The cache is shared across calls, so it stores audio only for fixed, non-personal prompts
+    (``fixed_voice_prompts()`` by default). Any other text is synthesized and returned without
+    being kept.
     """
 
-    def __init__(self, *, max_entries: int = 256) -> None:
+    def __init__(
+        self, *, max_entries: int = 256, cacheable_phrases: frozenset[str] | None = None
+    ) -> None:
         self.max_entries = max(1, max_entries)
+        phrases = fixed_voice_prompts() if cacheable_phrases is None else cacheable_phrases
+        self._cacheable = frozenset(_normalize_phrase(p) for p in phrases)
         self._store: OrderedDict[str, TtsCachedAudio] = OrderedDict()
 
     @staticmethod
@@ -872,7 +983,7 @@ class TtsPhraseCache:
         *,
         language: str,
         voice: str | None,
-        synthesizer: Any,
+        synthesizer: TtsSynthesizer,
     ) -> TtsCachedAudio:
         resolved_voice = resolve_tts_voice(language, voice)
         if resolved_voice is None:
@@ -884,6 +995,8 @@ class TtsPhraseCache:
                 latency_ms=0.0,
                 error=f"Unsupported TTS locale '{language}'",
             )
+        if _normalize_phrase(text) not in self._cacheable:
+            return synthesizer(text, language=language, voice=resolved_voice)
         key = self._make_key(text, language=language, voice=resolved_voice)
         cached = self._store.get(key)
         if cached is not None:
@@ -1156,6 +1269,11 @@ _TOOL_WAIT_FILLERS: dict[LocaleCode, str] = {
 def get_localized_tool_wait_filler(locale: LocaleCode = LocaleCode.EN) -> str:
     """Return a zero-digit, pre-cacheable filler utterance (`<250ms` TTFA) spoken while MCP tools execute."""
     return _TOOL_WAIT_FILLERS.get(locale, _TOOL_WAIT_FILLERS[LocaleCode.EN])
+
+
+def fixed_voice_prompts() -> frozenset[str]:
+    """Return the fixed, non-personal prompts whose audio may be cached and reused across calls."""
+    return frozenset(_TOOL_WAIT_FILLERS.values())
 
 
 @dataclass(frozen=True)
@@ -1519,6 +1637,7 @@ def verify_call_to_web_carryover(
 
 
 __all__ = [
+    "APPROVED_VOICE_WER_EVIDENCE",
     "ASR_MODEL_BY_LOCALE",
     "CARRYOVER_TTL_SECONDS",
     "LOBBY_EVENT_TYPES",
@@ -1545,16 +1664,19 @@ __all__ = [
     "StepUpAttemptStore",
     "TtsCachedAudio",
     "TtsPhraseCache",
+    "TtsSynthesizer",
     "VADConfig",
     "VoiceRetentionPolicy",
     "VoiceSessionDecision",
     "VoiceStreamSession",
     "VoiceWebSocketConcurrencyGuard",
+    "VoiceWerEvidence",
     "build_call_to_web_carryover",
     "build_chat_to_call_carryover",
     "build_voice_consent_audit_entry",
     "build_voice_prosody_eq_metadata",
     "build_voice_spoken_turn_and_sms_followup",
+    "fixed_voice_prompts",
     "generate_officer_call_brief",
     "get_localized_tool_wait_filler",
     "is_voice_language_approved",

@@ -98,9 +98,12 @@ export interface OfficerCallBriefModel {
   readonly sentiment: "calm" | "confused" | "frustrated" | "distressed";
   readonly suggested_opener: string;
   readonly turns_covered: number;
-  readonly model: string;
+  /** The model that wrote the brief; null when it was built by keyword rules. */
+  readonly model: string | null;
   readonly fallback?: boolean | undefined;
 }
+
+export const RULE_BASED_BRIEF_ATTRIBUTION = "Built by keyword rules, not by a model";
 
 export const MOOD_LABEL: Record<OfficerCallBriefModel["sentiment"], string> = {
   calm: "Calm",
@@ -130,7 +133,7 @@ export function buildCallBriefCardView(params: {
       mode: "compact" as const,
       statusText: params.brief.caller_goal.text,
       moodLabel: MOOD_LABEL[params.brief.sentiment],
-      modelAttribution: params.brief.model,
+      modelAttribution: params.brief.model ?? RULE_BASED_BRIEF_ATTRIBUTION,
     };
   }
   return {
@@ -139,7 +142,7 @@ export function buildCallBriefCardView(params: {
     moodLabel: MOOD_LABEL[params.brief.sentiment],
     modelAttribution: params.brief.fallback
       ? "no model answered — check the transcript"
-      : params.brief.model,
+      : (params.brief.model ?? RULE_BASED_BRIEF_ATTRIBUTION),
   };
 }
 

@@ -37,6 +37,7 @@ import {
   pointsHint,
   previousWindow,
   QUANTILE_PLAIN_LABELS,
+  RULE_BASED_BRIEF_ATTRIBUTION,
   resolveAgentQueueHotkey,
   resolveCallWorkspaceState,
   resolveExtractedFieldReview,
@@ -750,6 +751,20 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     });
     expect(briefCard.mode).toBe("full");
     expect(briefCard.moodLabel).toBe("Frustrated");
+    const ruleBasedCard = buildCallBriefCardView({
+      brief: {
+        caller_goal: { text: "Unblock TIN ••••1234", turn_seqs: [1] },
+        ai_already_said: [],
+        still_open: [],
+        details_given: [],
+        sentiment: "calm",
+        suggested_opener: "Hello, I'm an SSRA officer.",
+        turns_covered: 1,
+        model: null,
+      },
+      loading: false,
+    });
+    expect(ruleBasedCard.modelAttribution).toBe(RULE_BASED_BRIEF_ATTRIBUTION);
 
     expect(
       validateWrapUpFormSubmission({

@@ -1,9 +1,15 @@
 # SSRA Assist — Delivery Progress Across Phases 0–4 (`docs/PROGRESS.md`)
 
-**Last Updated:** 2026-10-23
+**Last Updated:** 2026-10-24
 
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
+
+## 0.18 [R2-J Voice Launch Evidence and Truthful Call Records](./audit/phase-R2-J-voice-truthful-records-report.md) (2026-10-24)
+
+- Fixed AUD-037. Voice launch now requires governed WER evidence (`APPROVED_VOICE_WER_EVIDENCE`, empty until OQ-008 is answered) instead of a number passed on every turn, so every voice caller is transferred to an officer. The benchmark generators label their speech scenarios as simulated, and the phase-gate audit asserts that no language is approved.
+- Fixed AUD-038. Officer briefs built by rules are no longer attributed to a model (the console says so), state only supported claims, list the latest replies, and redact before truncating; the old code leaked the first five digits of a TIN at the cut. Transfer summaries give the actual reasons.
+- Fixed AUD-039 and AUD-040. Voice retention has no invented periods (pending OQ-009), and the shared TTS cache stores only fixed prompts. See [ADR-025](./adr/0025-voice-launch-evidence-and-truthful-call-records.md).
 
 ## 0.17 [R2-I Voice Identity Step-Up, Carryover Tokens, and Call Lobby Integrity](./audit/phase-R2-I-voice-identity-report.md) (2026-10-24)
 

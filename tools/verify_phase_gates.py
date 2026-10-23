@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,7 +12,7 @@ from ssra_api import create_api_app
 from ssra_core import LocaleCode
 from ssra_runtime import create_runtime_app
 from ssra_testing import AsgiTestClient
-from ssra_voice import MAX_VOICE_WER_GATE, is_voice_language_approved
+from ssra_voice import MAX_VOICE_WER_GATE, VoiceWerEvidence, is_voice_language_approved
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -96,9 +97,27 @@ def verify_all_gates() -> dict[str, str]:
         r_inbox = api_client.get("/v1/conversations/inbox?office_code=JUBA_HQ")
         assert r_inbox.status_code == 403
 
-    # Gate 4: verify local voice criteria; operational analytics remain unavailable.
-    assert is_voice_language_approved(LocaleCode.PGA, MAX_VOICE_WER_GATE) is True
-    assert is_voice_language_approved(LocaleCode.DIN, MAX_VOICE_WER_GATE + 0.05) is False
+    # Gate 4: no language has governed voice WER evidence (OQ-008), and the gate itself holds
+    # for synthetic evidence at and above the limit. Operational analytics remain unavailable.
+    assert not any(is_voice_language_approved(locale) for locale in LocaleCode)
+
+    def _synthetic(locale: LocaleCode, wer: float) -> dict[LocaleCode, VoiceWerEvidence]:
+        return {
+            locale: VoiceWerEvidence(
+                locale=locale,
+                word_error_rate=wer,
+                test_set="synthetic-gate-check",
+                measured_on=date(2026, 10, 24),
+                utterance_count=1,
+            )
+        }
+
+    assert is_voice_language_approved(
+        LocaleCode.PGA, _synthetic(LocaleCode.PGA, MAX_VOICE_WER_GATE)
+    )
+    assert not is_voice_language_approved(
+        LocaleCode.DIN, _synthetic(LocaleCode.DIN, MAX_VOICE_WER_GATE + 0.05)
+    )
     with patch.dict("os.environ", {"SSRA_RUNTIME_MODE": "reference"}):
         r_insights = AsgiTestClient(create_api_app()).get("/v1/analytics/insights")
         assert r_insights.status_code == 503
@@ -109,7 +128,7 @@ def verify_all_gates() -> dict[str, str]:
         "Gate_1_Public_Assistant": "reference evaluation evidence verified; not launch approval",
         "Gate_2_Authenticated_Self_Service": "blocked pending OQ-005 and OQ-015",
         "Gate_3_Staff_Copilot_And_Knowledge_Ops": "blocked pending OQ-014 and OQ-015",
-        "Gate_4_Reach_And_Intelligence": "blocked pending OQ-013 and operational approval",
+        "Gate_4_Reach_And_Intelligence": "blocked pending OQ-008 voice WER evidence, OQ-013, and operational approval",
     }
 
 

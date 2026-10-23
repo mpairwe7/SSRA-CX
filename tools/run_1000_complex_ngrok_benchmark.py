@@ -8,11 +8,11 @@ Formulates 1,000 complex SSRA Assist (`ssra-cx`) scenarios across the 3 major la
 
 Across 3 modalities:
 - `TTT` (Text-to-Text Multi-Turn, Long-Horizon, Compound Planner, 4-Tier Memory & Security/Fuzzy): 400 scenarios
-- `STT` (Speech-to-Text Whisper/SunflowerASR + Acoustic Prosody + Spoken ClarifyGate + Live Runtime Turn): 300 scenarios
-- `TTS` (Live Runtime Turn -> Hybrid Speech Router + Statutory Figure Verbalizer + Spoken Fidelity Guard + EQ Prosody): 300 scenarios
+- `STT` (simulated speech turn: text plus a synthetic ASR confidence through the voice routing gate, Spoken ClarifyGate and a live runtime turn; no audio or ASR model): 300 scenarios
+- `TTS` (live runtime turn -> hybrid speech router, figure verbalizer, spoken-figure guard and synthesis envelope; no audio is synthesized): 300 scenarios
 
 Executes all 1,000 scenarios against the live Ngrok HTTPS URL (`--ngrok-url`) backed by the local Docker GPU +
-Local HF Cache (`Sunflower-Qwen3.5-9B`, `Sunflower-Qwen3.8-27B`, `SunflowerASR`) + Qdrant + Valkey + PostgreSQL 18 stack.
+Local HF Cache (`Sunflower-Qwen3.5-9B`, `Sunflower-Qwen3.8-27B`) + Qdrant + Valkey + PostgreSQL 18 stack.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import json
 import statistics
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -32,6 +32,7 @@ import httpx
 from ssra_core import LocaleCode
 from ssra_voice import (
     VoiceStreamSession,
+    VoiceWerEvidence,
     build_voice_prosody_eq_metadata,
     get_localized_tool_wait_filler,
     resolve_hf_voice_model_cache,
@@ -47,6 +48,26 @@ ROOT = Path(__file__).resolve().parents[1]
 DATASET_PATH = ROOT / "evals" / "datasets" / "complex-1000-multimodal-scenarios-2026-10.json"
 REPORT_JSON_PATH = ROOT / "evals" / "reports" / "complex-1000-ngrok-benchmark-report.json"
 REPORT_MD_PATH = ROOT / "evals" / "reports" / "complex-1000-ngrok-benchmark-report.md"
+
+
+# Speech scenarios are simulated: they send text and exercise only the voice routing gate, so this
+# word-error-rate evidence is a synthetic fixture, not a measurement (OQ-008).
+_SIMULATED_WER_EVIDENCE: dict[LocaleCode, VoiceWerEvidence] = {
+    locale: VoiceWerEvidence(
+        locale=locale,
+        word_error_rate=0.05,
+        test_set="synthetic benchmark fixture (no audio)",
+        measured_on=date(2026, 10, 24),
+        utterance_count=1,
+    )
+    for locale in (LocaleCode.EN, LocaleCode.AR, LocaleCode.PGA, LocaleCode.DIN)
+}
+SPEECH_SIMULATION_NOTE = (
+    "Speech scenarios are simulated. `STT` scenarios send text with a synthetic ASR confidence "
+    "through the voice routing gate, using synthetic word-error-rate evidence; no audio is captured "
+    "or transcribed and no ASR model runs. `TTS` scenarios build synthesis envelopes and check "
+    "spoken figures; no audio is synthesized. These results say nothing about ASR or TTS accuracy."
+)
 
 
 @dataclass(frozen=True)
@@ -68,7 +89,6 @@ class ComplexScenario:
     is_multi_turn: bool = False
     followup_message: str | None = None
     asr_confidence: float = 0.94
-    asr_wer: float = 0.06
     expect_clarify_gate: bool = False
     expect_security_block: bool = False
 
@@ -356,7 +376,6 @@ def build_1000_complex_scenarios() -> list[ComplexScenario]:
                         expected_intent=exp_int,
                         expected_policy=exp_pol,
                         asr_confidence=0.68 if is_clarify else 0.93,
-                        asr_wer=0.08 if is_clarify else 0.05,
                         expect_clarify_gate=is_clarify,
                     )
                 )
@@ -472,7 +491,7 @@ async def execute_single_scenario(
             decision = route_voice_turn(
                 session_id=f"vs_{scen.scenario_id}",
                 locale=loc_enum,
-                measured_wer=scen.asr_wer,
+                wer_evidence=_SIMULATED_WER_EVIDENCE,
                 recording_consent_granted=True,
                 utterance_confidence=scen.asr_confidence,
                 consecutive_low_confidence_turns=0,
@@ -873,6 +892,7 @@ async def run_benchmark_async(
         "git_revision": git_rev,
         "target_ngrok_url": target_label,
         "total_scenarios": len(results),
+        "speech_scenarios_simulated": True,
         "total_turns_executed": total_turns,
         "total_http_requests_over_ngrok": total_http,
         "scenarios_passed": passed_count,
@@ -922,6 +942,7 @@ async def run_benchmark_async(
         f"- **Date:** {run_date}",
         f"- **Target Endpoint:** `{target_label}` ({transport})",
         f"- **Total Complex Scenarios Formulated & Executed:** `{summary['total_scenarios']}` (`340 en`, `330 ar/pga`, `330 din`)",
+        f"- **Speech scenarios:** {SPEECH_SIMULATION_NOTE}",
         f"- **Total Conversational Turns Executed:** `{summary['total_turns_executed']}`",
         f"- **Total Live HTTP Requests:** `{summary['total_http_requests_over_ngrok']}`",
         f"- **Overall Scenario Pass / Accuracy Rate:** **`{summary['overall_accuracy_pct']}%`** (`{summary['scenarios_passed']}/{summary['total_scenarios']}`)",

@@ -25,10 +25,10 @@ The master prompt specifies Voice/IVR as a Phase 4 channel. It requires a SIP tr
 | AUD-034 | S1 (latent) | DTMF step-up authorized any well-formed TIN and OTP, with no OTP check and no attempt limit | R2-I (fixed) |
 | AUD-035 | S1 (latent) | Carryover tokens were signed with a public constant key and never expired | R2-I (fixed) |
 | AUD-036 | S2 | Call lobby allowed double claims and revived ended calls, accepted unknown events, and invented wait times | R2-I (fixed) |
-| AUD-037 | S2 | WER gate trusts a per-call number; benchmarks report STT/TTS without processing audio | R2-J |
-| AUD-038 | S2 | Officer brief misattributes its producer and adds unsupported claims; transfer summary gives generic reasons | R2-J |
-| AUD-039 | S2 | Voice retention periods invented while OQ-009 is open | R2-J |
-| AUD-040 | S3 | TTS phrase cache keeps audio of any text | R2-J |
+| AUD-037 | S2 | WER gate trusts a per-call number; benchmarks report STT/TTS without processing audio | R2-J (fixed) |
+| AUD-038 | S2 | Officer brief misattributes its producer, adds unsupported claims, and could leak part of a TIN; transfer summary gives generic reasons | R2-J (fixed) |
+| AUD-039 | S2 | Voice retention periods invented while OQ-009 is open | R2-J (fixed) |
+| AUD-040 | S3 | TTS phrase cache keeps audio of any text | R2-J (fixed) |
 | AUD-041 | S2 | SMS and IVR output can cut figures; "SSRA OFFICIAL" label; spelled-out numbers pass the figure guard | R2-K |
 | AUD-042 | S2 | No spoken AI disclosure at call start; barge-in not implemented | R2-K |
 | AUD-043 | S2 | Core API, Sunflower vLLM, and Orpheus TTS published on all interfaces; Orpheus not digest-pinned | Decision needed (R3) |
@@ -38,7 +38,7 @@ Details and evidence are in [the findings register](../audit/findings.md#call-re
 ## Phased remediation
 
 1. **R2-I: Identity and integrity (implemented).** DTMF step-up requires an approved OTP verifier and fails closed without one. Carryover tokens need a configured key and expire. The call lobby enforces first-claim-wins and keeps tombstones for ended calls.
-2. **R2-J: Truthful gates and records.** A governed per-language WER record with no approved languages until evidence exists. Benchmarks label speech scenarios as simulated. Officer briefs and transfer summaries state only what happened. Retention is pending OQ-009. The TTS cache covers fixed prompts only.
+2. **R2-J: Truthful gates and records (implemented).** A governed per-language WER record with no approved languages until evidence exists. Benchmarks label speech scenarios as simulated. Officer briefs and transfer summaries state only what happened. Retention is pending OQ-009. The TTS cache covers fixed prompts only.
 3. **R2-K: What the caller hears and receives.** A spoken AI disclosure and a route to a person at call start (interim wording pending OQ-009). Barge-in cancels both playback and generation. SMS and IVR output never split a figure, and respect GSM-7 and UCS-2 segment limits. The spoken-figure guard also detects spelled-out numbers.
 4. **Platform decision (R3).** Bind the Core API and model servers to loopback, pin or remove Orpheus, and route model calls through `agentgateway`.
 
