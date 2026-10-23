@@ -14,7 +14,7 @@ The master prompt specifies Voice/IVR as a Phase 4 channel. It requires a SIP tr
 | `ssra_voice` | A library of routing, step-up, brief, lobby, caching, and speech-formatting helpers. `python -m ssra_voice` prints a status object and exits. It is called only by unit tests, evaluation suites, and benchmark tools |
 | `call-receptionist.ts` | View-model helpers (consent gate, language chip, orb animation, caption pinning). Not imported by the served pages |
 | `VoiceIvrChannelAdapter` | Joins answer segments and cuts at 1,000 characters |
-| Web voice-input dialog | Browser speech recognition for `en` and `ar`, with the R2-D accessibility fixes |
+| Web voice-input dialog | Browser speech recognition for `en` and `ar`, with the R2-D accessibility fixes; upgraded in ADR-027 with the `FinalYearProject` Call Receptionist sheet (`CallOrb`, `CallLanguageChip`, live caption thread, Mute/Officer dock) and main-composer `NarrationBar`, `.composer-active-recording` bar, and `#composer-voicemode-btn` toggle |
 | Staff "Calls" route | A non-operational preview (ADR-018) |
 | GPU profile | Runs an Orpheus TTS container that no SSRA code calls |
 

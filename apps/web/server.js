@@ -615,25 +615,80 @@ function renderPwaShellHtml(locale, nonce) {
     .turn-act-btn { min-height: 44px; padding: 0.25rem 0.75rem; border-radius: 8px; background: var(--surface-1); border: 1px solid var(--border-0); color: var(--text-2); font-size: 0.74rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; }
     .turn-act-btn:hover { background: var(--surface-3); color: var(--text-0); border-color: var(--border-1); }
 
-    /* Two-Row Composer Dock (chatv2/composer.css & interactions.css pattern) */
+    /* Two-Row Composer Dock (chatv2/composer.css, NarrationBar.tsx & interactions.css pattern) */
     .chatv2 button, .chatv2 [role="button"], .chatv2 .landing-chip { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
     .composer-dock { width: 100%; max-width: 820px; margin: 0 auto; padding: 0.65rem 1rem max(0.85rem, env(safe-area-inset-bottom)); }
+    .narration-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.45rem; padding: 0.4rem 0.75rem; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border-2); color: var(--text-0); font-size: 0.8rem; }
+    .narration-text { display: flex; align-items: center; gap: 0.5rem; min-width: 0; flex: 1; overflow: hidden; }
+    .narration-label { font-weight: 700; color: var(--ssra-gold); white-space: nowrap; }
+    .narration-sentence { color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .narration-actions { display: inline-flex; align-items: center; gap: 0.35rem; flex-shrink: 0; }
+    .narration-btn { min-width: 36px; min-height: 36px; padding: 0 0.5rem; border-radius: 8px; border: 1px solid var(--border-1); background: var(--surface-1); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
     .composer-box { background: var(--surface-2); backdrop-filter: blur(20px); border: 1px solid var(--border-2); border-radius: 16px; padding: 0.65rem 0.85rem; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 0.45rem; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
     .composer-box:focus-within { border-color: var(--ssra-gold); }
+    .composer-box.is-recording { border-color: var(--danger); }
+    .composer-active-recording { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; min-height: 48px; padding: 0.25rem 0.35rem; border-radius: 12px; background: rgba(251, 113, 133, 0.08); border: 1px solid rgba(251, 113, 133, 0.35); }
+    .composer-rec-label { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.84rem; font-weight: 600; color: var(--text-0); }
+    .composer-rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); animation: callDotPulse 1.4s ease-in-out infinite; }
+    .composer-rec-controls { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .composer-rec-cancel, .composer-rec-confirm { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border-1); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .composer-rec-cancel { background: var(--surface-1); color: var(--danger); }
+    .composer-rec-confirm { background: var(--grad-primary); color: #fff; border-color: transparent; }
     .composer-textarea { width: 100%; min-height: 46px; max-height: 140px; resize: none; border: none; background: transparent; color: var(--text-0); font: inherit; font-size: 0.95rem; outline: none; line-height: 1.45; }
-    .composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-    .composer-tools-left, .composer-tools-right { display: flex; align-items: center; gap: 0.45rem; }
+    .composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+    .composer-tools-left, .composer-tools-right { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+    .voicemode-circle-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--surface-1); border: 1px solid var(--border-2); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .voicemode-circle-btn.is-active { background: rgba(7, 137, 48, 0.22); border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.28); color: #2ECC71; }
     .send-btn { min-height: 44px; padding: 0 1rem; border-radius: var(--radius-pill); background: var(--grad-primary); color: #fff; border: none; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; }
     .send-btn:disabled { opacity: 0.48; cursor: not-allowed; }
     .composer-waveform { display: inline-flex; align-items: center; gap: 3px; height: 16px; }
     .composer-waveform span { width: 3px; height: 12px; border-radius: 2px; background: var(--ssra-gold); display: inline-block; }
 
-    /* Modals: CallScreen, ConversationSearch (⌘K), SettingsDialog */
+    /* Modals: CallScreen & CallOrb (FinalYearProject call.css pattern), ConversationSearch (⌘K), SettingsDialog */
     .modal-backdrop { position: fixed; inset: 0; background: rgba(5, 10, 8, 0.76); backdrop-filter: blur(14px); z-index: 100; display: none; place-items: center; padding: 1rem; }
     .modal-backdrop.open { display: grid; }
-    .call-modal { max-width: 440px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-xl); padding: 1.75rem 1.5rem; text-align: center; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; align-items: center; gap: 1rem; }
-    .call-orb { width: 108px; height: 108px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #2ECC71, #078930 55%, #0F47AF 95%); box-shadow: 0 0 40px rgba(7, 137, 48, 0.45); animation: orbPulse 2.2s ease-in-out infinite; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 0.88rem; }
-    @keyframes orbPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+    .call-modal { max-width: 540px; width: 100%; max-height: min(86vh, 720px); background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-xl); padding: 1.15rem 1.25rem; text-align: center; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; align-items: stretch; gap: 0.75rem; overflow: hidden; }
+    .call-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-1); }
+    .call-header-meta { display: inline-flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+    .call-status-pill { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.78rem; font-weight: 600; padding: 0.25rem 0.7rem; border-radius: 999px; background: var(--surface-2); color: var(--text-1); border: 1px solid var(--border-1); }
+    .call-status-pill[data-status="ai"] { background: rgba(7, 137, 48, 0.18); color: #2ECC71; border-color: rgba(46, 204, 113, 0.4); }
+    .call-status-pill[data-status="transferring"] { background: rgba(251, 191, 36, 0.16); color: var(--warning); border-color: rgba(251, 191, 36, 0.4); }
+    .call-status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .call-status-pill[data-status="ai"] .call-status-dot { animation: callDotPulse 1.6s infinite; }
+    @keyframes callDotPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(1.3); } }
+    .call-lang { position: relative; }
+    .call-lang-chip { display: inline-flex; align-items: center; gap: 0.3rem; font: inherit; font-size: 0.75rem; font-weight: 600; min-height: 34px; padding: 0.2rem 0.55rem; border-radius: 8px; background: var(--surface-2); color: var(--text-0); border: 1px solid var(--border-1); cursor: pointer; }
+    .call-lang-menu { position: absolute; top: calc(100% + 0.35rem); inset-inline-end: 0; z-index: 10; min-width: 11rem; padding: 0.35rem; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: 12px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 2px; }
+    .call-lang-option { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 38px; padding: 0.4rem 0.6rem; font: inherit; font-size: 0.82rem; color: var(--text-0); background: transparent; border: none; border-radius: 8px; cursor: pointer; text-align: start; }
+    .call-lang-option[aria-pressed="true"], .call-lang-option:hover { background: var(--surface-2); }
+    .call-timer { font-size: 0.8rem; font-weight: 700; color: var(--text-1); font-variant-numeric: tabular-nums; }
+    .call-thread-wrap { position: relative; min-height: 96px; max-height: 180px; flex: 1; display: flex; flex-direction: column; border-radius: 12px; background: var(--surface-1); border: 1px solid var(--border-1); overflow: hidden; }
+    .call-thread { flex: 1; overflow-y: auto; padding: 0.75rem 0.85rem; display: flex; flex-direction: column; gap: 0.65rem; text-align: start; }
+    .call-turn { display: flex; flex-direction: column; gap: 0.2rem; max-width: 100%; }
+    .call-turn--caller { align-self: flex-end; align-items: flex-end; max-width: 85%; }
+    .call-turn--agent { align-self: stretch; align-items: flex-start; }
+    .call-bubble { padding: 0.45rem 0.75rem; border-radius: 14px; border-bottom-right-radius: 5px; background: var(--cv2-user-bubble); border: 1px solid var(--cv2-user-bubble-border); color: var(--text-0); font-size: 0.86rem; line-height: 1.4; }
+    .call-say { font-size: 0.9rem; line-height: 1.5; color: var(--text-0); }
+    .call-system-note { align-self: center; margin: 0; font-size: 0.75rem; color: var(--text-2); text-align: center; }
+    .call-jump { position: absolute; inset-inline-start: 50%; bottom: 0.45rem; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.65rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; color: var(--text-0); background: var(--bg-1); border: 1px solid var(--border-2); cursor: pointer; }
+    .call-dock { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; padding-top: 0.45rem; border-top: 1px solid var(--border-1); }
+    .call-dock-side { display: inline-flex; align-items: center; gap: 0.45rem; }
+    .call-ctl { width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-0); background: var(--surface-2); border: 1px solid var(--border-1); }
+    .call-ctl--muted { background: rgba(251, 191, 36, 0.2); border-color: var(--warning); color: var(--warning); }
+    .call-ctl--hangup { background: rgba(251, 113, 133, 0.2); border-color: var(--danger); color: var(--danger); }
+    .call-orb-wrap { width: 76px; height: 60px; display: flex; align-items: center; justify-content: center; flex: none; }
+    .call-orb { position: relative; width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: transform 0.08s linear; }
+    .call-orb-core { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 28%, rgba(249, 199, 79, 0.55), transparent 42%), radial-gradient(circle at 60% 65%, #0F47AF, #078930 78%); box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.18); }
+    .call-orb-halo { position: absolute; inset: -12px; border-radius: 50%; background: radial-gradient(circle, rgba(15, 71, 175, 0.42), transparent 68%); opacity: 0.25; pointer-events: none; transition: opacity 0.08s linear; }
+    .call-orb[data-mode="listening"] .call-orb-core { background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.5), transparent 42%), radial-gradient(circle at 60% 65%, #2ECC71, #078930 74%); }
+    .call-orb[data-mode="listening"] .call-orb-halo { background: radial-gradient(circle, rgba(46, 204, 113, 0.45), transparent 68%); opacity: 0.65; }
+    .call-orb[data-mode="speaking"] { transform: scale(1.1); }
+    .call-orb[data-mode="speaking"] .call-orb-halo { opacity: 0.85; }
+    .call-orb[data-mode="idle"] { animation: orbPulse 2.8s ease-in-out infinite; }
+    @keyframes orbPulse { 0%, 100% { transform: scale(0.97); } 50% { transform: scale(1.03); } }
+    @media (prefers-reduced-motion: reduce) {
+      .call-orb, .call-orb[data-mode="idle"], .call-orb[data-mode="speaking"], .call-status-pill[data-status="ai"] .call-status-dot, .composer-rec-dot { animation: none; transform: none; transition: none; }
+    }
 
     .search-modal { max-width: 540px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
     .search-input { width: 100%; padding: 14px 16px; border: none; border-bottom: 1px solid var(--border-1); background: transparent; color: var(--text-0); font: inherit; font-size: 0.95rem; outline: none; }
@@ -859,9 +914,32 @@ function renderPwaShellHtml(locale, nonce) {
 
         <!-- Floating Composer Dock -->
         <div class="composer-dock">
+          <!-- WCAG 2.2 SC 1.4.2 NarrationBar (NarrationBar.tsx pattern) -->
+          <div id="narration-bar" class="narration-bar is-hidden" role="region" aria-label="Read-aloud controls" data-testid="narration-bar">
+            <div class="narration-text">
+              <span id="narration-label" class="narration-label" aria-live="polite">Reading aloud</span>
+              <span id="narration-sentence" class="narration-sentence" aria-hidden="true"></span>
+            </div>
+            <div class="narration-actions">
+              <button type="button" id="narration-pause-btn" class="narration-btn" aria-label="Pause reading">${ICONS.pause}</button>
+              <button type="button" id="narration-stop-btn" class="narration-btn" aria-label="Stop reading" aria-keyshortcuts="Escape">${ICONS.stop}</button>
+            </div>
+          </div>
           <form id="ssra-chat-form" class="composer-box">
             <label for="ssra-chat-input" class="sr-only">Ask SSRA Assist</label>
             <textarea id="ssra-chat-input" class="composer-textarea" rows="1" required placeholder="Ask about SSRA taxes, TIN, PAYE, TCC, or customs in English, Arabic, or Juba Arabic…"></textarea>
+            <!-- In-Composer Active Recording Panel (ChatInput.tsx composer-active-recording pattern) -->
+            <div id="composer-recording-bar" class="composer-active-recording is-hidden" data-testid="composer-active-recording">
+              <div class="composer-rec-label">
+                <span class="composer-rec-dot" aria-hidden="true"></span>
+                <span id="composer-rec-text">Listening…</span>
+              </div>
+              <div class="composer-rec-controls">
+                <span class="composer-waveform" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
+                <button type="button" id="composer-rec-cancel" class="composer-rec-cancel" data-testid="composer-rec-cancel" aria-label="Cancel voice recording">${ICONS.close}</button>
+                <button type="button" id="composer-rec-confirm" class="composer-rec-confirm" data-testid="composer-rec-confirm" aria-label="Confirm voice recording">${ICONS.check}</button>
+              </div>
+            </div>
             <div class="composer-toolbar">
               <div class="composer-tools-left">
                 <button type="button" id="voice-dictate-btn" class="icon-btn" title="Voice typing uses your browser's speech recognition" aria-label="Voice typing">
@@ -871,6 +949,7 @@ function renderPwaShellHtml(locale, nonce) {
                 <span class="composer-keys">Enter to send · Shift+Enter for a new line · Ctrl+K to search</span>
               </div>
               <div class="composer-tools-right">
+                <button type="button" id="composer-voicemode-btn" class="voicemode-circle-btn" data-testid="composer-voicemode" aria-pressed="false" aria-label="Enter voice conversation mode" title="Toggle hands-free voice conversation">${ICONS.voiceWave}</button>
                 <button type="submit" id="ssra-chat-submit" class="send-btn">${ICONS.send} Send</button>
               </div>
             </div>
@@ -881,17 +960,58 @@ function renderPwaShellHtml(locale, nonce) {
     </div>
   </div>
 
-  <!-- AI Call Receptionist Modal (CallScreen & CallOrb) -->
+  <!-- AI Call Receptionist Modal (CallScreen.tsx & CallOrb.tsx pattern) -->
   <div id="call-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="call-modal-title">
-    <div class="call-modal">
-    <div class="eyebrow-pill">${ICONS.mic} Browser voice input</div>
+    <div class="call-modal call-card--live">
+      <header class="call-header">
+        <div id="call-status-pill" class="call-status-pill" data-status="consent">
+          <span class="call-status-dot" aria-hidden="true"></span>
+          <span id="call-status-label">AI Receptionist · Automated</span>
+        </div>
+        <div class="call-header-meta">
+          <div class="call-lang">
+            <button type="button" id="call-lang-chip" class="call-lang-chip" aria-expanded="false" aria-controls="call-lang-menu" aria-label="Call language: English · auto">
+              ${ICONS.globe}
+              <span id="call-lang-chip-text">English · auto</span>
+              ${ICONS.chevronDown}
+            </button>
+            <div id="call-lang-menu" class="call-lang-menu is-hidden" role="group" aria-label="Call language">
+              <button type="button" aria-pressed="true" class="call-lang-option" data-call-lang="en"><span>English</span></button>
+              <button type="button" aria-pressed="false" class="call-lang-option" data-call-lang="ar"><span>العربية</span></button>
+            </div>
+          </div>
+          <span id="call-timer" class="call-timer">00:00</span>
+        </div>
+      </header>
+      <div class="eyebrow-pill">${ICONS.mic} Browser voice input</div>
       <h2 id="call-modal-title" class="call-modal-title">Speak or choose a sample question</h2>
       <p id="call-transcript-live" class="call-transcript-live">Voice typing depends on your browser and is currently available only in English and Arabic. Your browser may process audio outside SSRA. Do not speak or type a TIN, balance, or other private account details in this public chat.</p>
       <p id="call-voice-status" class="call-transcript-live" role="status" aria-live="polite">Ready. Tap Start voice conversation for hands-free back-and-forth, or choose a sample question.</p>
+      <div class="call-thread-wrap">
+        <div id="call-thread" class="call-thread" role="log" aria-label="Call transcript">
+          <p class="call-system-note">You are speaking with SSRA Assist, an automated AI assistant. It can make mistakes.</p>
+        </div>
+        <button type="button" id="call-jump-btn" class="call-jump is-hidden">${ICONS.chevronDown} Jump to latest</button>
+      </div>
       <div class="call-prompts-row">
         <button type="button" class="icon-btn call-sample-btn" data-voice-q="Where can I find general e-Tax filing guidance?">${ICONS.messageSquare} "General e-Tax guidance"</button>
         <button type="button" class="icon-btn call-sample-btn" data-voice-q="Where can I find general customs guidance?">${ICONS.messageSquare} "General customs guidance"</button>
       </div>
+      <footer class="call-dock">
+        <div class="call-dock-side">
+          <button type="button" id="call-mute-btn" class="call-ctl" aria-pressed="false" aria-label="Mute microphone" title="Mute microphone">${ICONS.mic}</button>
+        </div>
+        <div class="call-orb-wrap" aria-hidden="true">
+          <div id="call-orb" class="call-orb" data-mode="idle">
+            <span class="call-orb-core"></span>
+            <span class="call-orb-halo"></span>
+          </div>
+        </div>
+        <div class="call-dock-side">
+          <button type="button" id="call-officer-btn" class="call-ctl" aria-label="Request an SSRA officer" title="Request an SSRA officer">${ICONS.user}</button>
+          <button type="button" id="call-hangup-btn" class="call-ctl call-ctl--hangup" aria-label="End call" title="End call">${ICONS.phoneOff}</button>
+        </div>
+      </footer>
       <div class="call-actions-row">
         <button type="button" id="call-listen-btn" class="icon-btn">${ICONS.mic} Start voice conversation</button>
         <button type="button" id="call-interrupt-btn" class="icon-btn">${ICONS.stop} Interrupt &amp; speak</button>
@@ -1568,6 +1688,9 @@ function renderPwaShellHtml(locale, nonce) {
         if ("speechSynthesis" in window) {
           window.speechSynthesis.cancel();
         }
+        document.querySelectorAll("[data-speak]").forEach((btn) => {
+          setSafeHtml(btn, ICONS.speaker + " Listen");
+        });
       }
 
       function newThreadId() {
@@ -1640,11 +1763,17 @@ function renderPwaShellHtml(locale, nonce) {
         }
         conv.updatedAtMs = Date.now();
         conv.turns.push({ role: "user", content: trimmed });
+        if (fromVoiceLoop || voiceContinuousActive || callBackdrop?.classList.contains("open")) {
+          appendCallCaption("caller", trimmed);
+        }
 
         if (navigator.onLine === false) {
           const offline = computeOfflineResilienceAnswer(trimmed);
           const offlineReply = { role: "assistant", content: offline.content, meta: offline.meta };
           conv.turns.push(offlineReply);
+          if (fromVoiceLoop || voiceContinuousActive || callBackdrop?.classList.contains("open")) {
+            appendCallCaption("assistant", offline.content);
+          }
           restoreDraft(trimmed);
           saveState();
           renderApp();
@@ -1741,6 +1870,9 @@ function renderPwaShellHtml(locale, nonce) {
           }
         }
         conv.turns[conv.turns.length - 1] = reply;
+        if (fromVoiceLoop || voiceContinuousActive || callBackdrop?.classList.contains("open")) {
+          appendCallCaption("assistant", reply.content);
+        }
         if (reply.meta?.kind === "failure" && hintEl) {
           hintEl.textContent = restoreDraft(trimmed)
             ? "Not answered. Your message is back in the box."
@@ -1871,15 +2003,14 @@ function renderPwaShellHtml(locale, nonce) {
         }
         const speakBtn = e.target.closest("[data-speak]");
         if (speakBtn && "speechSynthesis" in window) {
-          if (window.speechSynthesis.speaking) {
-            window.speechSynthesis.cancel();
-            setSafeHtml(speakBtn, ICONS.speaker + " Listen");
+          if (assistantCurrentlySpeaking || window.speechSynthesis.speaking) {
+            stopAssistantSpeechPlayback();
+            syncNarrationBar(false, "");
+            syncComposerRecordingUi();
             return;
           }
-          const u = speechUtterance(speakBtn.getAttribute("data-speak") || "");
-          u.onend = () => { setSafeHtml(speakBtn, ICONS.speaker + " Listen"); };
           setSafeHtml(speakBtn, ICONS.stop + " Stop Audio");
-          window.speechSynthesis.speak(u);
+          speakAssistantReply(speakBtn.getAttribute("data-speak") || "");
           return;
         }
         const copyBtn = e.target.closest("[data-copy]");
@@ -2320,7 +2451,14 @@ function renderPwaShellHtml(locale, nonce) {
         }
         if (e.target.closest("#toggle-narrate-btn")) {
           state.autoNarrate = !state.autoNarrate;
+          if (!state.autoNarrate) {
+            voiceContinuousActive = false;
+            stopActiveSpeechRecognition();
+            stopAssistantSpeechPlayback();
+            syncNarrationBar(false, "");
+          }
           saveState();
+          syncVoiceModalButtons();
           renderSettingsTabContent("voice");
           document.getElementById("toggle-narrate-btn")?.focus();
           return;
@@ -2384,6 +2522,17 @@ function renderPwaShellHtml(locale, nonce) {
           } else if (shell?.getAttribute("data-mobile-rail") === "open") {
             shell.setAttribute("data-mobile-rail", "closed");
             syncMobileRailA11y(true);
+          } else if (activeSpeechRec || voiceContinuousActive) {
+            e.preventDefault();
+            voiceContinuousActive = false;
+            stopActiveSpeechRecognition();
+            syncVoiceModalButtons();
+            setVoiceStatus("Voice recording cancelled.");
+          } else if (assistantCurrentlySpeaking || !narrationBarEl?.classList.contains("is-hidden")) {
+            e.preventDefault();
+            stopAssistantSpeechPlayback();
+            syncNarrationBar(false, "");
+            syncComposerRecordingUi();
           }
         }
       });
@@ -2392,13 +2541,170 @@ function renderPwaShellHtml(locale, nonce) {
       const callVoiceStatusEl = document.getElementById("call-voice-status");
       const callListenBtn = document.getElementById("call-listen-btn");
       const callInterruptBtn = document.getElementById("call-interrupt-btn");
+      const callStatusPillEl = document.getElementById("call-status-pill");
+      const callStatusLabelEl = document.getElementById("call-status-label");
+      const callLangChipBtn = document.getElementById("call-lang-chip");
+      const callLangChipTextEl = document.getElementById("call-lang-chip-text");
+      const callLangMenuEl = document.getElementById("call-lang-menu");
+      const callTimerEl = document.getElementById("call-timer");
+      const callThreadEl = document.getElementById("call-thread");
+      const callJumpBtn = document.getElementById("call-jump-btn");
+      const callMuteBtn = document.getElementById("call-mute-btn");
+      const callOrbEl = document.getElementById("call-orb");
+      const callOfficerBtn = document.getElementById("call-officer-btn");
+      const narrationBarEl = document.getElementById("narration-bar");
+      const narrationLabelEl = document.getElementById("narration-label");
+      const narrationSentenceEl = document.getElementById("narration-sentence");
+      const narrationPauseBtn = document.getElementById("narration-pause-btn");
+      const narrationStopBtn = document.getElementById("narration-stop-btn");
+      const composerRecBarEl = document.getElementById("composer-recording-bar");
+      const composerRecCancelBtn = document.getElementById("composer-rec-cancel");
+      const composerRecConfirmBtn = document.getElementById("composer-rec-confirm");
+      const composerVoiceModeBtn = document.getElementById("composer-voicemode-btn");
+      let callMuted = false;
+      let callDurationSec = 0;
+      let callDurationTimer = null;
+      let callPinnedToBottom = true;
+      let callLangSource = "auto";
+      let narrationPaused = false;
+
+      function formatMmSs(sec) {
+        const s = Math.max(0, Math.floor(sec || 0));
+        return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+      }
+
+      function syncCallLanguageChipUi() {
+        const langName = state.locale === "ar" ? "العربية" : "English";
+        const suffix = callLangSource === "chosen" ? " · chosen" : " · auto";
+        const label = langName + suffix;
+        if (callLangChipTextEl) callLangChipTextEl.textContent = label;
+        callLangChipBtn?.setAttribute("aria-label", "Call language: " + label);
+        document.querySelectorAll(".call-lang-option[data-call-lang]").forEach((opt) => {
+          const isChosen = opt.getAttribute("data-call-lang") === (state.locale === "ar" ? "ar" : "en");
+          opt.setAttribute("aria-pressed", String(isChosen));
+        });
+      }
+
+      function appendCallCaption(speaker, text) {
+        if (!callThreadEl || !text) return;
+        const row = document.createElement("div");
+        if (speaker === "caller") {
+          row.className = "call-turn call-turn--caller";
+          const b = document.createElement("div");
+          b.className = "call-bubble";
+          b.textContent = text;
+          row.appendChild(b);
+        } else if (speaker === "system") {
+          const p = document.createElement("p");
+          p.className = "call-system-note";
+          p.textContent = text;
+          callThreadEl.appendChild(p);
+        } else {
+          row.className = "call-turn call-turn--agent";
+          const s = document.createElement("div");
+          s.className = "call-say";
+          s.textContent = text;
+          row.appendChild(s);
+        }
+        if (speaker !== "system") callThreadEl.appendChild(row);
+        if (callPinnedToBottom) {
+          callThreadEl.scrollTop = callThreadEl.scrollHeight;
+          callJumpBtn?.classList.add("is-hidden");
+        } else {
+          callJumpBtn?.classList.remove("is-hidden");
+        }
+      }
+
+      callThreadEl?.addEventListener("scroll", () => {
+        if (!callThreadEl) return;
+        const dist = callThreadEl.scrollHeight - callThreadEl.scrollTop - callThreadEl.clientHeight;
+        callPinnedToBottom = dist < 48;
+        callJumpBtn?.classList.toggle("is-hidden", callPinnedToBottom);
+      });
+      callJumpBtn?.addEventListener("click", () => {
+        if (!callThreadEl) return;
+        callPinnedToBottom = true;
+        callThreadEl.scrollTop = callThreadEl.scrollHeight;
+        callJumpBtn.classList.add("is-hidden");
+      });
+
+      function syncNarrationBar(active, sentenceText) {
+        if (!narrationBarEl) return;
+        narrationBarEl.classList.toggle("is-hidden", !active);
+        if (!active) {
+          narrationPaused = false;
+          return;
+        }
+        if (narrationLabelEl) narrationLabelEl.textContent = narrationPaused ? "Paused" : "Reading aloud";
+        if (narrationSentenceEl && typeof sentenceText === "string") narrationSentenceEl.textContent = sentenceText;
+        if (narrationPauseBtn) {
+          narrationPauseBtn.setAttribute("aria-label", narrationPaused ? "Resume reading" : "Pause reading");
+          setSafeHtml(narrationPauseBtn, narrationPaused ? ICONS.play : ICONS.pause);
+        }
+      }
+
+      function syncComposerRecordingUi() {
+        const isListening = Boolean(activeSpeechRec) && !callMuted;
+        composerRecBarEl?.classList.toggle("is-hidden", !isListening);
+        form?.classList.toggle("is-recording", isListening);
+        if (composerRecConfirmBtn) {
+          composerRecConfirmBtn.setAttribute(
+            "aria-label",
+            voiceContinuousActive ? "Send voice recording" : "Stop and insert voice text",
+          );
+        }
+        if (composerVoiceModeBtn) {
+          const vmOn = Boolean(voiceContinuousActive);
+          composerVoiceModeBtn.classList.toggle("is-active", vmOn);
+          composerVoiceModeBtn.setAttribute("aria-pressed", String(vmOn));
+          composerVoiceModeBtn.setAttribute(
+            "aria-label",
+            vmOn ? "Exit voice conversation mode" : "Enter voice conversation mode",
+          );
+        }
+        if (callOrbEl) {
+          // Playback (speaking) wins ties over listening so speaker echo never flickers the orb.
+          const orbMode = assistantCurrentlySpeaking ? "speaking" : isListening ? "listening" : "idle";
+          callOrbEl.setAttribute("data-mode", orbMode);
+        }
+        if (callStatusPillEl && callStatusLabelEl) {
+          const curStatus = callStatusPillEl.getAttribute("data-status");
+          if (voiceContinuousActive || assistantCurrentlySpeaking || isListening) {
+            if (curStatus !== "transferring") {
+              callStatusPillEl.setAttribute("data-status", "ai");
+              callStatusLabelEl.textContent = assistantCurrentlySpeaking
+                ? "Speaking · Automated AI"
+                : isListening
+                  ? "Listening · Automated AI"
+                  : "Connected · Automated AI";
+            }
+          } else if (curStatus !== "transferring" && curStatus !== "ended") {
+            callStatusPillEl.setAttribute("data-status", "consent");
+            callStatusLabelEl.textContent = "AI Receptionist · Automated";
+          }
+        }
+      }
 
       function setVoiceStatus(message) {
         if (callVoiceStatusEl) callVoiceStatusEl.textContent = message;
         if (hintEl) hintEl.textContent = message;
+        syncComposerRecordingUi();
       }
 
       function syncVoiceModalButtons() {
+        syncCallLanguageChipUi();
+        syncComposerRecordingUi();
+        if (voiceContinuousActive && !callDurationTimer) {
+          callDurationSec = 0;
+          if (callTimerEl) callTimerEl.textContent = "00:00";
+          callDurationTimer = window.setInterval(() => {
+            callDurationSec += 1;
+            if (callTimerEl) callTimerEl.textContent = formatMmSs(callDurationSec);
+          }, 1000);
+        } else if (!voiceContinuousActive && callDurationTimer) {
+          window.clearInterval(callDurationTimer);
+          callDurationTimer = null;
+        }
         if (!callListenBtn) return;
         if (voiceContinuousActive) {
           callListenBtn.setAttribute("aria-pressed", "true");
@@ -2410,11 +2716,11 @@ function renderPwaShellHtml(locale, nonce) {
       }
 
       function scheduleNextVoiceTurnListen() {
-        if (!voiceContinuousActive) return;
+        if (!voiceContinuousActive || callMuted) return;
         if (postTtsResumeTimer) window.clearTimeout(postTtsResumeTimer);
         postTtsResumeTimer = window.setTimeout(() => {
           postTtsResumeTimer = null;
-          if (voiceContinuousActive && !assistantCurrentlySpeaking && !activeTurnAbortController) {
+          if (voiceContinuousActive && !callMuted && !assistantCurrentlySpeaking && !activeTurnAbortController) {
             startVoiceRecognition({ continuousLoop: true });
           }
         }, POST_TTS_ECHO_COOLDOWN_MS);
@@ -2429,6 +2735,9 @@ function renderPwaShellHtml(locale, nonce) {
         activeUtterance = u;
         lastSpokenAssistantText = cleanTextForSpeech(replyText);
         assistantCurrentlySpeaking = true;
+        narrationPaused = false;
+        syncNarrationBar(true, lastSpokenAssistantText);
+        syncComposerRecordingUi();
         if (voiceContinuousActive) {
           setVoiceStatus("Speaking answer… tap Interrupt & speak at any time to ask a follow-up.");
         }
@@ -2452,7 +2761,12 @@ function renderPwaShellHtml(locale, nonce) {
           }
           assistantCurrentlySpeaking = false;
           lastTtsEndedAtMs = Date.now();
-          if (voiceContinuousActive) {
+          document.querySelectorAll("[data-speak]").forEach((btn) => {
+            setSafeHtml(btn, ICONS.speaker + " Listen");
+          });
+          syncNarrationBar(false, "");
+          syncComposerRecordingUi();
+          if (voiceContinuousActive && !callMuted) {
             setVoiceStatus("Answer finished. Listening for your next question…");
             scheduleNextVoiceTurnListen();
           }
@@ -2461,6 +2775,147 @@ function renderPwaShellHtml(locale, nonce) {
         u.onerror = onSpeechDone;
         window.speechSynthesis.speak(u);
       }
+
+      narrationPauseBtn?.addEventListener("click", () => {
+        if (!("speechSynthesis" in window) || !assistantCurrentlySpeaking) return;
+        if (narrationPaused) {
+          window.speechSynthesis.resume();
+          narrationPaused = false;
+        } else {
+          window.speechSynthesis.pause();
+          narrationPaused = true;
+        }
+        syncNarrationBar(true, lastSpokenAssistantText);
+      });
+      narrationStopBtn?.addEventListener("click", () => {
+        stopAssistantSpeechPlayback();
+        syncNarrationBar(false, "");
+        syncComposerRecordingUi();
+      });
+
+      composerRecCancelBtn?.addEventListener("click", () => {
+        voiceContinuousActive = false;
+        stopActiveSpeechRecognition();
+        syncVoiceModalButtons();
+        setVoiceStatus("Voice recording cancelled.");
+      });
+      composerRecConfirmBtn?.addEventListener("click", () => {
+        if (activeSpeechRec) {
+          stopActiveSpeechRecognition();
+        }
+        syncComposerRecordingUi();
+        if (input && input.value.trim()) {
+          const val = input.value;
+          input.value = "";
+          input.rows = 1;
+          sendTurn(val, { fromVoiceLoop: voiceContinuousActive });
+        }
+      });
+      composerVoiceModeBtn?.addEventListener("click", () => {
+        const nextMode = !voiceContinuousActive;
+        state.autoNarrate = nextMode;
+        saveState();
+        if (!nextMode) {
+          voiceContinuousActive = false;
+          if (activeTurnAbortController) activeTurnAbortController.abort();
+          stopActiveSpeechRecognition();
+          stopAssistantSpeechPlayback();
+          syncNarrationBar(false, "");
+          syncVoiceModalButtons();
+          setVoiceStatus("Voice conversation mode off.");
+          return;
+        }
+        voiceConsecutiveEmptyRetries = 0;
+        startVoiceRecognition({ continuousLoop: true });
+      });
+
+      callLangChipBtn?.addEventListener("click", () => {
+        const isOpen = !callLangMenuEl?.classList.contains("is-hidden");
+        callLangMenuEl?.classList.toggle("is-hidden", isOpen);
+        callLangChipBtn.setAttribute("aria-expanded", String(!isOpen));
+      });
+      document.querySelectorAll(".call-lang-option[data-call-lang]").forEach((opt) => {
+        opt.addEventListener("click", () => {
+          const chosenLang = opt.getAttribute("data-call-lang") || "en";
+          callLangSource = "chosen";
+          if (localeSelect) localeSelect.value = chosenLang;
+          applyLocaleStrings(chosenLang);
+          saveState();
+          callLangMenuEl?.classList.add("is-hidden");
+          callLangChipBtn?.setAttribute("aria-expanded", "false");
+          syncCallLanguageChipUi();
+        });
+      });
+
+      callMuteBtn?.addEventListener("click", () => {
+        callMuted = !callMuted;
+        callMuteBtn.classList.toggle("call-ctl--muted", callMuted);
+        callMuteBtn.setAttribute("aria-pressed", String(callMuted));
+        callMuteBtn.setAttribute("aria-label", callMuted ? "Unmute microphone" : "Mute microphone");
+        setSafeHtml(callMuteBtn, callMuted ? ICONS.micOff : ICONS.mic);
+        if (callMuted) {
+          stopActiveSpeechRecognition();
+          setVoiceStatus("Microphone muted. Tap Unmute microphone to continue speaking.");
+        } else if (voiceContinuousActive && !assistantCurrentlySpeaking) {
+          startVoiceRecognition({ continuousLoop: true });
+        } else {
+          syncComposerRecordingUi();
+        }
+      });
+
+      const callHangupBtn = document.getElementById("call-hangup-btn");
+
+      function resetOfficerBtnUi() {
+        if (!callOfficerBtn) return;
+        callOfficerBtn.setAttribute("aria-label", "Request an SSRA officer");
+        callOfficerBtn.setAttribute("title", "Request an SSRA officer");
+        setSafeHtml(callOfficerBtn, ICONS.user);
+      }
+
+      callOfficerBtn?.addEventListener("click", () => {
+        const curStatus = callStatusPillEl?.getAttribute("data-status");
+        if (curStatus === "transferring") {
+          // CallScreen.tsx requestCallback parity: one button changes its job when the wait starts.
+          resetOfficerBtnUi();
+          if (callStatusPillEl) callStatusPillEl.setAttribute("data-status", "ended");
+          if (callStatusLabelEl) callStatusLabelEl.textContent = "Call ended · Callback guidance";
+          appendCallCaption(
+            "system",
+            "Callback guidance requested. Use the official SSRA contact details in the chat transcript to schedule a call.",
+          );
+          return;
+        }
+        if (callStatusPillEl) callStatusPillEl.setAttribute("data-status", "transferring");
+        if (callStatusLabelEl) callStatusLabelEl.textContent = "Transferring · Officer handoff";
+        callOfficerBtn.setAttribute("aria-label", "Request a callback instead");
+        callOfficerBtn.setAttribute("title", "Request a callback instead");
+        setSafeHtml(callOfficerBtn, ICONS.phone);
+        appendCallCaption(
+          "system",
+          "Requesting an SSRA tax officer. No live telephony trunk is connected in this public browser session; preparing official contact and callback guidance.",
+        );
+        sendTurn("I would like to speak with an SSRA tax officer", { fromVoiceLoop: voiceContinuousActive });
+      });
+
+      callHangupBtn?.addEventListener("click", () => {
+        voiceContinuousActive = false;
+        if (activeTurnAbortController) activeTurnAbortController.abort();
+        stopActiveSpeechRecognition();
+        stopAssistantSpeechPlayback();
+        syncNarrationBar(false, "");
+        resetOfficerBtnUi();
+        if (callStatusPillEl) callStatusPillEl.setAttribute("data-status", "ended");
+        if (callStatusLabelEl) callStatusLabelEl.textContent = "Call ended";
+        appendCallCaption("system", "Thank you for calling SSRA Assist.");
+        syncVoiceModalButtons();
+        setVoiceStatus("Call ended. Tap Start voice conversation to begin a new session.");
+      });
+
+      window.addEventListener("pagehide", () => {
+        voiceContinuousActive = false;
+        stopActiveSpeechRecognition();
+        stopAssistantSpeechPlayback();
+      });
 
       function startVoiceRecognition(options) {
         const continuousLoop = Boolean(options && options.continuousLoop);
@@ -2483,6 +2938,10 @@ function renderPwaShellHtml(locale, nonce) {
         }
         stopActiveSpeechRecognition();
         stopAssistantSpeechPlayback();
+        if (callStatusPillEl?.getAttribute("data-status") === "ended") {
+          resetOfficerBtnUi();
+          callStatusPillEl.setAttribute("data-status", "ai");
+        }
         voiceContinuousActive = continuousLoop || Boolean(state.autoNarrate);
         syncVoiceModalButtons();
 
@@ -2545,7 +3004,8 @@ function renderPwaShellHtml(locale, nonce) {
           if (activeSpeechRec === rec) {
             activeSpeechRec = null;
           }
-          if (!hadError && !receivedTranscript && voiceContinuousActive && !assistantCurrentlySpeaking && !activeTurnAbortController) {
+          syncComposerRecordingUi();
+          if (!hadError && !receivedTranscript && voiceContinuousActive && !callMuted && !assistantCurrentlySpeaking && !activeTurnAbortController) {
             voiceConsecutiveEmptyRetries += 1;
             if (voiceConsecutiveEmptyRetries <= MAX_VOICE_EMPTY_RETRIES) {
               scheduleNextVoiceTurnListen();

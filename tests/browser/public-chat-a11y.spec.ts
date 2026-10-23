@@ -239,9 +239,16 @@ test("continuous voice conversation auto-advances across turns and filters speak
 
   await page.goto("/en");
   await page.locator("#open-call-btn").click();
+  await expect(page.locator("#call-lang-chip-text")).toHaveText("English · auto");
+  await page.locator("#call-lang-chip").click();
+  await page.locator('.call-lang-option[data-call-lang="en"]').click();
+  await expect(page.locator("#call-lang-chip-text")).toHaveText("English · chosen");
+
   const listenBtn = page.locator("#call-listen-btn");
   await listenBtn.click();
   await expect(listenBtn).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#call-orb")).toHaveAttribute("data-mode", "listening");
+  await expect(page.locator("#composer-recording-bar")).toBeVisible();
 
   // Turn 1: spoken question is sent automatically, spoken back, and recognition re-arms after cooldown.
   await page.evaluate(() => {
@@ -250,6 +257,8 @@ test("continuous voice conversation auto-advances across turns and filters speak
     );
   });
   await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(1);
+  await expect(page.locator("#call-thread .call-turn--caller")).toHaveCount(1);
+  await expect(page.locator("#call-thread .call-turn--agent")).toHaveCount(1);
   await expect
     .poll(
       () =>
@@ -286,5 +295,29 @@ test("continuous voice conversation auto-advances across turns and filters speak
     );
   });
   await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(2);
+
+  // Officer handoff -> Request a callback instead -> End call (CallScreen.tsx dock flows).
+  const officerBtn = page.locator("#call-officer-btn");
+  await expect(officerBtn).toHaveAttribute("aria-label", "Request an SSRA officer");
+  await officerBtn.click();
+  await expect(page.locator("#call-status-pill")).toHaveAttribute("data-status", "transferring");
+  await expect(officerBtn).toHaveAttribute("aria-label", "Request a callback instead");
+  await officerBtn.click();
+  await expect(page.locator("#call-status-pill")).toHaveAttribute("data-status", "ended");
+  await expect(officerBtn).toHaveAttribute("aria-label", "Request an SSRA officer");
+
+  await page.locator("#call-hangup-btn").click();
+  await expect(page.locator("#call-status-pill")).toHaveAttribute("data-status", "ended");
+  await expect(page.locator("#call-listen-btn")).toHaveAttribute("aria-pressed", "false");
+  await page.locator("#close-call-btn").click();
+
+  // Main chat composer voice mode button couples with auto-narrate and Escape cancels recording (useVoiceEscape).
+  const voiceModeBtn = page.locator("#composer-voicemode-btn");
+  await voiceModeBtn.click();
+  await expect(voiceModeBtn).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#composer-recording-bar")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(voiceModeBtn).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#composer-recording-bar")).toBeHidden();
 });
 
