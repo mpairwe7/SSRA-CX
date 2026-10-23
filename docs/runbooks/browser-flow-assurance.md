@@ -19,13 +19,23 @@ corepack pnpm exec playwright test
 
 `task test` invokes the same command after the Python and workspace TypeScript suites. In CI, Chromium is installed before `task test` runs.
 
+`task test` sets `TMPDIR=/tmp` for this command. Chromium stores its temporary profile under `TMPDIR`, and a network-mounted `TMPDIR` (for example CIFS) caused intermittent `Target page, context or browser has been closed` and `net::ERR_ABORTED` failures: 1 in 264 trivial page loads on a CIFS `TMPDIR`, against 0 in 3,508 on local disk (2026-10-23). When running the command directly, use a local `TMPDIR` as well.
+
 The Playwright configuration starts only these loopback services:
 
-| Service | Loopback address | Purpose |
+| Service | Default loopback address | Purpose |
 |---|---:|---|
-| Synthetic runtime | `127.0.0.1:3101` | Records only sanitized synthetic turn bodies and returns a fixed synthetic response. |
+| Synthetic runtime | `127.0.0.1:3101` | Records only sanitized synthetic turn bodies. It returns a fixed synthetic response, or a named synthetic scenario (for example a `503`, a `429` with `Retry-After`, a dropped connection, or a card with missing props). |
 | Public web BFF | `127.0.0.1:3100` | Serves the actual `apps/web/server.js` browser shell. |
 | Staff preview | `127.0.0.1:3102` | Serves the actual `apps/console/server.js` preview shell. |
+
+To run a second, isolated copy (for example from another git worktree while the default ports are busy), set a different loopback port base. The runtime, staff preview, and unused API ports follow at `+1`, `+2`, and `+3`:
+
+```bash
+SSRA_BROWSER_TEST_PORT_BASE=3400 corepack pnpm exec playwright test
+```
+
+Do not stop a process that owns the default ports unless you started it; another local session may be running the suite.
 
 The test harness must not use credentials, live taxpayer/staff data, real tax figures, or live upstream endpoints.
 
@@ -34,6 +44,9 @@ The test harness must not use credentials, live taxpayer/staff data, real tax fi
 | Flow | Assertions |
 |---|---|
 | Public chat through BFF | A visible synthetic answer; canonical anonymous request body; client-supplied authorization and subject headers never reach the synthetic runtime. |
+| Public answer rendering | Cards never fill missing values; personal and action cards show a sign-in notice; unregistered components render nothing; no confirmation control; estimates need an approved source; no internal telemetry labels. |
+| Public failure states | `503`, `429` with `Retry-After`, HTML `500`, and a dropped upstream each show a specific plain-language state with no raw body; the draft is restored; `Try again` resends; malformed BFF bodies and thread identifiers return `400`. |
+| Public client integrity | A rejected clipboard write reports failure; new thread identifiers are 128-bit random hex. |
 | Direct protected routes | Direct, percent-encoded, and encoded-separator `/v1` paths remain denied or rejected. |
 | Public mobile rail | 320 CSS-pixel reflow, minimum target size, reduced motion, inert-state synchronization, visible focus, and Escape focus return. |
 | Arabic and constrained network | `lang=ar` and RTL layout, explicit low-data mode, offline safe fallback, and preserved composer draft. |
@@ -44,7 +57,7 @@ The test harness must not use credentials, live taxpayer/staff data, real tax fi
 
 - Playwright keeps screenshots and traces on failure under `test-results/playwright-artifacts/`; a failed CI job uploads those paths and the HTML report under `playwright-report/`. Both paths are ignored by Git.
 - A failed assertion should be repaired at the source, then rerun with the focused spec and the full suite. Do not weaken an assertion merely to make the suite pass.
-- If a prior interrupted run owns a loopback port, stop only the local test process that owns it, then rerun. Do not change test URLs to a shared environment.
+- If a prior interrupted run of yours owns a loopback port, stop only that process, then rerun. If another session owns it, use `SSRA_BROWSER_TEST_PORT_BASE` instead. Do not point test URLs at a shared environment.
 - Record five clean suite runs when collecting flake evidence. The R2-B report records the initial five-run evidence for this suite.
 
 ## Evidence limits

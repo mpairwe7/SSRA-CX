@@ -4,7 +4,7 @@ Every architectural decision with a real reversal cost is recorded here before i
 
 ---
 
-## ADR Catalog (ADR-001 to ADR-022)
+## ADR Catalog (ADR-001 to ADR-023)
 
 | ID | Title | One-Line Problem Statement | Status | Reversal Cost |
 |---|---|---|---|---|
@@ -30,3 +30,4 @@ Every architectural decision with a real reversal cost is recorded here before i
 | **[ADR-020](./0020-node-bff-reference-runtime-and-deferred-nextjs-adoption.md)** | Node BFF Reference Runtime & Deferred Next.js Adoption | How do we align declared frontend dependencies, container entry points, and security maintenance with the runnable application? | Accepted (repository safety baseline) | Medium |
 | **[ADR-021](./0021-rendered-browser-assurance-and-synthetic-runtime.md)** | Rendered Browser Assurance & Synthetic Runtime | How do we prove safety-critical public and staff-preview browser flows without using taxpayer data or treating reference behavior as production evidence? | Accepted (repository safety baseline) | Medium |
 | **[ADR-022](./0022-sast-dast-trivy-trufflehog-cicd-modelling-pipeline.md)** | 6-Stage DevSecOps CI/CD Modelling Pipeline, Polyglot SAST, Live In-Process ASGI DAST, Trivy & Dual-Engine Secret Scanning | How do we model and enforce a high-assurance DevSecOps pipeline covering SAST, DAST, Trivy SCA/IaC/SBOM, Frontend assurance, and Gitleaks + TruffleHog v3 secret scanning while defending against scanner supply-chain compromises? | Accepted (repository safety baseline) | Low–Medium |
+| **[ADR-023](./0023-public-chat-render-boundary-and-truthful-failure-states.md)** | Public Chat Render Boundary & Truthful Failure States | How do we stop the served public chat from showing invented facts, dead action controls, or misleading failure states? | Accepted (repository safety baseline) | Medium |

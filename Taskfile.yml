@@ -61,7 +61,8 @@ tasks:
       - uv run python tools/verify_rules_mutations.py
       - PYTEST_DEBUG_TEMPROOT=/tmp uv run python tools/check_coverage_gate.py
       - corepack pnpm run test
-      - corepack pnpm exec playwright test
+      # Chromium keeps its profile under TMPDIR; a network-mounted TMPDIR causes intermittent target crashes.
+      - TMPDIR=/tmp corepack pnpm exec playwright test
 
   eval:
     desc: Run SSRA Assist evaluations, benchmark ASGI SLOs, and audit phase evidence/blockers without advancing gates

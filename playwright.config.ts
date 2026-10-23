@@ -1,7 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
+import { browserTestPorts } from "./tests/browser/ports";
 
-const publicBaseUrl = "http://127.0.0.1:3100";
-const consoleBaseUrl = "http://127.0.0.1:3102";
+const publicBaseUrl = `http://127.0.0.1:${browserTestPorts.publicWeb}`;
+const consoleBaseUrl = `http://127.0.0.1:${browserTestPorts.console}`;
+const runtimeBaseUrl = `http://127.0.0.1:${browserTestPorts.runtime}`;
 
 export default defineConfig({
   testDir: "./tests/browser",
@@ -28,7 +30,8 @@ export default defineConfig({
   webServer: [
     {
       command: "node tests/browser/mock-runtime.mjs",
-      url: "http://127.0.0.1:3101/healthz",
+      env: { PORT: String(browserTestPorts.runtime) },
+      url: `${runtimeBaseUrl}/healthz`,
       reuseExistingServer: false,
     },
     {
@@ -36,9 +39,9 @@ export default defineConfig({
       url: `${publicBaseUrl}/healthz`,
       env: {
         HOSTNAME: "127.0.0.1",
-        INTERNAL_API_URL: "http://127.0.0.1:3103",
-        INTERNAL_RUNTIME_URL: "http://127.0.0.1:3101",
-        PORT: "3100",
+        INTERNAL_API_URL: `http://127.0.0.1:${browserTestPorts.api}`,
+        INTERNAL_RUNTIME_URL: runtimeBaseUrl,
+        PORT: String(browserTestPorts.publicWeb),
       },
       reuseExistingServer: false,
     },
@@ -47,7 +50,7 @@ export default defineConfig({
       url: `${consoleBaseUrl}/healthz`,
       env: {
         HOSTNAME: "127.0.0.1",
-        PORT: "3102",
+        PORT: String(browserTestPorts.console),
       },
       reuseExistingServer: false,
     },

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
+import { browserTestPorts } from "./ports";
 
-const mockRuntimeUrl = "http://127.0.0.1:3101";
+const mockRuntimeUrl = `http://127.0.0.1:${browserTestPorts.runtime}`;
 
 type CapturedRuntimeRequest = {
   readonly body: Record<string, unknown>;

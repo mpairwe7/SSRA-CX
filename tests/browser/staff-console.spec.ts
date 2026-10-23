@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { browserTestPorts } from "./ports";
 
-const consoleBaseUrl = "http://127.0.0.1:3102";
+const consoleBaseUrl = `http://127.0.0.1:${browserTestPorts.console}`;
 
 test("the staff dashboard remains preview-only and returns focus after navigation", async ({
   page,
