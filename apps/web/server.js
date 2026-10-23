@@ -2023,7 +2023,13 @@ const server = http.createServer(async (req, res) => {
 
   if (method === "POST" && pathname === "/api/chat/stream") {
     const ac = new AbortController();
+    let inactivityTimer = setTimeout(() => ac.abort(), 15_000);
+    const resetInactivityTimeout = () => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => ac.abort(), 15_000);
+    };
     res.on("close", () => {
+      clearTimeout(inactivityTimer);
       if (!res.writableEnded) {
         ac.abort();
       }
@@ -2034,8 +2040,9 @@ const server = http.createServer(async (req, res) => {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream", traceparent },
         body: safeBody,
-        signal: AbortSignal.any([ac.signal, AbortSignal.timeout(15_000)]),
+        signal: ac.signal,
       });
+      resetInactivityTimeout();
       res.writeHead(upstream.status, {
         "Content-Type": upstream.headers.get("content-type") ?? "text/event-stream",
         "X-Accel-Buffering": "no",
@@ -2043,6 +2050,7 @@ const server = http.createServer(async (req, res) => {
       });
       if (upstream.body) {
         for await (const chunk of upstream.body) {
+          resetInactivityTimeout();
           if (res.destroyed) {
             break;
           }
@@ -2063,6 +2071,8 @@ const server = http.createServer(async (req, res) => {
       } else {
         res.end();
       }
+    } finally {
+      clearTimeout(inactivityTimer);
     }
     return;
   }

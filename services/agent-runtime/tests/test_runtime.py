@@ -1464,7 +1464,7 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert http_downgrade_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
 
     bad_port_scam_turn = rt.run_turn(
-        make_conversation_event("Is https://etax.nra.gov.ss:8443/ an official SSRA payment portal?")
+        make_conversation_event("Is etax.nra.gov.ss:8443 an official SSRA payment portal?")
     )
     assert bad_port_scam_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
 
@@ -1503,7 +1503,9 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert cust_est_turn.answer.is_estimate is True
 
     cust_sub1k_turn = rt.run_turn(
-        make_conversation_event("Estimate customs duty for HS 8703.23 with CIF 500 USD")
+        make_conversation_event(
+            "Estimate customs duty for HS 8703.23 with 1,000 SSP freight and CIF 500 USD"
+        )
     )
     assert cust_sub1k_turn.artifacts[0].tool == "estimate_duties"
     assert cust_sub1k_turn.artifacts[0].structured_content["cif_value_usd"] == "500"
@@ -1563,6 +1565,7 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert {c.id for c in compound_dec_tcc.answer.citations} == {
         "cit_etax_filing",
         "cit_ecustoms_declaration",
+        "cit_etax_tcc",
     }
 
     compound_only_dec_tcc = rt.run_turn(
@@ -1575,6 +1578,10 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert "Customs declaration release requires settling assessed duties" in (
         compound_only_dec_tcc.answer.segments[0].text
     )
+    assert {c.id for c in compound_only_dec_tcc.answer.citations} == {
+        "cit_ecustoms_declaration",
+        "cit_etax_tcc",
+    }
 
     default_wht_turn = rt.run_turn(make_conversation_event("Please calculate withholding tax"))
     assert default_wht_turn.artifacts[0].tool == "calculate_withholding_estimate"

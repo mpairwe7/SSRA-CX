@@ -411,7 +411,8 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
         )
         cits = [cit]
         nums: list[NumericClaim] = []
-        extra_filing_clauses: list[str] = []
+        verif = state.get("outcome_verification") or {}
+        extra_filing_clauses: list[str] = [str(n) for n in verif.get("remediation_notes", [])]
         dec_comp = next((a for a in artifacts if a.tool == "get_declaration_status"), None)
         if dec_comp is not None:
             dsc = dec_comp.structured_content
@@ -441,17 +442,26 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             )
         tcc_comp = next((a for a in artifacts if a.tool == "get_tcc_status"), None)
         if tcc_comp is not None:
-            extra_filing_clauses.append(
-                f"TCC status: {tcc_comp.structured_content.get('tcc_status', 'UNKNOWN')}."
+            tsc = tcc_comp.structured_content
+            cits.append(
+                Citation(
+                    id="cit_etax_tcc",
+                    snapshot_version="2026.10.1",
+                    doc_title="SSRA National e-Tax TCC Registry",
+                    section_anchor=f"TCC-{tsc.get('tin_masked', tin_masked)}",
+                    effective_from=str(tsc.get("as_of", as_of)),
+                    url="https://etax.nra.gov.ss/",
+                )
             )
-        verif = state.get("outcome_verification") or {}
-        for note in verif.get("remediation_notes", []):
-            extra_filing_clauses.append(str(note))
+            extra_filing_clauses.append(f"TCC status: {tsc.get('tcc_status', 'UNKNOWN')}.")
         suffix = f" {' '.join(extra_filing_clauses)}" if extra_filing_clauses else ""
-        text = (
-            f"For TIN {tin_masked}, your e-Tax filing status is {sc['filing_status']} "
-            f"(Last filed period: {sc['last_filed_period']}) as of {as_of} via https://etax.nra.gov.ss/.{suffix}"
+        base_filing = (
+            f"TIN {tin_masked} filing: {sc['filing_status']} ({sc['last_filed_period']}) via https://etax.nra.gov.ss/."
+            if capabilities.max_len <= 182 and extra_filing_clauses
+            else f"For TIN {tin_masked}, your e-Tax filing status is {sc['filing_status']} "
+            f"(Last filed period: {sc['last_filed_period']}) as of {as_of} via https://etax.nra.gov.ss/."
         )
+        text = f"{base_filing}{suffix}"
         return {
             "citations": cits,
             "answer": Answer(
@@ -495,35 +505,51 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             effective_from=as_of,
             url="https://customs.eservices.gov.ss/",
         )
+        cits = [cit]
         num_claim = NumericClaim(
             value=duty_ssp,
             unit=NumericUnit.SSP,
             source_ref=f"{dec_art.id}.assessed_duty_ssp",
         )
-        extra_dec_clauses: list[str] = []
+        verif = state.get("outcome_verification") or {}
+        extra_dec_clauses: list[str] = [str(n) for n in verif.get("remediation_notes", [])]
         tcc_comp = next((a for a in artifacts if a.tool == "get_tcc_status"), None)
         if tcc_comp is not None:
-            extra_dec_clauses.append(
-                f"TCC status: {tcc_comp.structured_content.get('tcc_status', 'UNKNOWN')}."
+            tsc = tcc_comp.structured_content
+            cits.append(
+                Citation(
+                    id="cit_etax_tcc",
+                    snapshot_version="2026.10.1",
+                    doc_title="SSRA National e-Tax TCC Registry",
+                    section_anchor=f"TCC-{tsc.get('tin_masked', '••••')}",
+                    effective_from=str(tsc.get("as_of", as_of)),
+                    url="https://etax.nra.gov.ss/",
+                )
             )
-        verif = state.get("outcome_verification") or {}
-        for note in verif.get("remediation_notes", []):
-            extra_dec_clauses.append(str(note))
+            extra_dec_clauses.append(f"TCC status: {tsc.get('tcc_status', 'UNKNOWN')}.")
         suffix = f" {' '.join(extra_dec_clauses)}" if extra_dec_clauses else ""
-        text = (
-            f"Customs declaration {dec_ref} at {port} has status {status} "
+        base_dec = (
+            f"Declaration {dec_ref} ({port}): {status}, duty {duty_ssp} SSP. Pay via https://etax.nra.gov.ss/."
+            if capabilities.max_len <= 182 and extra_dec_clauses
+            else f"Customs declaration {dec_ref} at {port} has status {status} "
             f"(Assessed duty: {duty_ssp} SSP as of {as_of}). "
-            f"Pay exclusively through https://etax.nra.gov.ss/ into designated commercial banks.{suffix}"
+            f"Pay exclusively through https://etax.nra.gov.ss/ into designated commercial banks."
         )
+        text = f"{base_dec}{suffix}"
         return {
-            "citations": [cit],
+            "citations": cits,
             "answer": Answer(
-                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
-                citations=[cit],
+                segments=[
+                    AnswerSegment(
+                        text=text[: capabilities.max_len],
+                        citation_ids=[c.id for c in cits],
+                    )
+                ],
+                citations=cits,
                 numbers=[num_claim],
                 ui_component=GenerativeUIComponent(
                     name=GenerativeUIComponentName.CITATION_LIST,
-                    props={"citations": [cit.model_dump(mode="json")]},
+                    props={"citations": [c.model_dump(mode="json") for c in cits]},
                 )
                 if capabilities.rich_ui
                 else None,

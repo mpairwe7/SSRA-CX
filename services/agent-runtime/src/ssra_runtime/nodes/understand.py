@@ -30,8 +30,13 @@ def _load_intent_tiers() -> dict[str, RiskTier]:
 _INTENT_TIERS = _load_intent_tiers()
 _ARABIC_DIGIT_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹٬", "01234567890123456789,")
 _TAGGED_MONEY_RE = re.compile(
-    r"(?:(?:\b(?:cif|ssp|usd)\b|\$)\s*(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,10}(?:\.\d+)?)\b"
-    r"|\b(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,10}(?:\.\d+)?)\s*(?:\b(?:ssp|usd)\b|جنيه|دولار))",
+    r"(?:(?:\b(?:cif|ssp|usd)\b|\$)\s*(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{1,10}(?:\.\d+)?)\b"
+    r"|\b(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{1,10}(?:\.\d+)?)\s*(?:\b(?:ssp|usd)\b|جنيه|دولار))",
+    re.IGNORECASE,
+)
+_CIF_USD_MONEY_RE = re.compile(
+    r"(?:(?:\b(?:cif|usd)\b|\$)\s*(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{1,10}(?:\.\d+)?)\b"
+    r"|\b(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{1,10}(?:\.\d+)?)\s*(?:\busd\b|دولار))",
     re.IGNORECASE,
 )
 _UNTAGGED_MONEY_RE = re.compile(r"\b(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{4,10}(?:\.\d+)?)\b")
@@ -44,7 +49,7 @@ _URL_TOKEN_RE = re.compile(r"(https?://\S+)", re.IGNORECASE)
 _EMAIL_RE = re.compile(r"\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b")
 _PHONE_211_RE = re.compile(r"(\+211[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3}|\+211\d{9})")
 _DOMAIN_CANDIDATE_RE = re.compile(
-    r"(?<!\S)((?:[^\s/$.?#]+\.)+[a-z\u0400-\u04ff]{2,}(?:/\S*)?)",
+    r"(?<!\S)((?:[^\s/$.?#]+\.)+[a-z\u0400-\u04ff]{2,}(?::[0-9A-Za-z]+)?(?:/\S*)?)",
     re.IGNORECASE,
 )
 
@@ -182,8 +187,15 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
     extracted_amount = _extract_monetary_amount(money_scan_text)
     if extracted_amount is not None:
         slots["amount_ssp"] = extracted_amount
-        if "cif" in lower or "usd" in lower or "$" in normalized_digits_text:
-            slots["cif_value_usd"] = extracted_amount
+    cif_match = _CIF_USD_MONEY_RE.search(money_scan_text)
+    if cif_match is not None:
+        raw_cif = cif_match.group(1) or cif_match.group(2)
+        if raw_cif:
+            slots["cif_value_usd"] = _normalise_amount_token(raw_cif)
+    elif extracted_amount is not None and (
+        "cif" in lower or "usd" in lower or "$" in normalized_digits_text
+    ):
+        slots["cif_value_usd"] = extracted_amount
 
     # 1. T4 Human-only intents: waivers, penalty remission, refunds, tax disputes, legal rulings
     if any(
