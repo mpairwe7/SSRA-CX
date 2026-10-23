@@ -377,29 +377,33 @@ Scope: `services/voice` (`ssra_voice`), `packages/chat-ui/src/call-receptionist.
 
 - Location: `ssra_voice` `is_voice_language_approved` and `route_voice_turn`; `tools/run_1000_complex_ngrok_benchmark.py` and `tools/run_20000_complex_ngrok_benchmark.py`.
 - Evidence: `is_voice_language_approved` discards `locale`, and `route_voice_turn` accepts `measured_wer` from its caller on every turn. No governed record of measured WER per language and test set exists. The benchmarks' "STT" scenarios pass a fixed `asr_wer` of 0.05 or 0.08 with text messages, so no audio, ASR model, or TTS model is involved. Dinka is therefore "approved" with a WER that has never been measured. The master prompt requires a language to launch on voice only after its WER on SSRA test sets meets the gate.
-- Fix: Planned for R2-J. A governed per-language WER record (language, WER, test set, date) with no approved languages until evidence exists, and benchmark reports that label speech scenarios as simulated.
-- Phase: R2-J · Owner: Voice and QA · Status: Open.
+- Fix: `VoiceWerEvidence` records language, WER, test set, measurement date, and utterance count. The governed `APPROVED_VOICE_WER_EVIDENCE` is empty, so `route_voice_turn` transfers every caller to an officer until SSRA approves a measurement (OQ-008). Missing, mismatched, non-finite, or negative evidence counts as no evidence. Tests and benchmarks inject labelled synthetic evidence. The benchmark generators describe speech scenarios as simulated in their docstrings and reports, add `speech_scenarios_simulated: true` to the JSON, and no longer list SunflowerASR as part of the stack. `tools/verify_phase_gates.py` asserts that no language is approved and adds OQ-008 to the Gate 4 blockers.
+- Verification: On the R2-I code, an unmeasured Dinka turn with a caller-supplied WER of 0.05 returned `STREAM_ASR`; after the fix it returns `WARM_TRANSFER_TO_OFFICER` with "no approved word-error-rate evidence for din (OQ-008)". All 300 and 6,000 simulated speech scenarios in the two benchmarks still route as designed. The committed benchmark reports predate this change and were not regenerated, because the SSRA GPU stack was not running.
+- Phase: R2-J · Owner: Voice and QA · Status: Fixed in R2-J (no language is approved for voice; evidence remains OQ-008).
 
 ### AUD-038 · S2 · Staff truthfulness · Officer briefs and transfer summaries misstate what happened
 
 - Location: `ssra_voice` `generate_officer_call_brief` and `route_voice_turn` warm-transfer summary.
-- Evidence: The brief is produced by keyword rules but labelled `model="ssra-sovereign/sunflower-qwen3.5-9b"`. It adds an open item, "confirm next filing/payment step", that no turn supports. It lists the first three assistant turns rather than the latest. It labels any caller who says "how" as confused. The transfer summary always says "caller pressed 0, WER exceeded, or low-confidence turns", whatever the actual reason.
-- Fix: Planned for R2-J: name the real producer, state only supported claims, use the latest turns, and give the actual transfer reasons.
-- Phase: R2-J · Owner: Voice · Status: Open.
+- Evidence: The brief is produced by keyword rules but labelled `model="ssra-sovereign/sunflower-qwen3.5-9b"`, which the staff console displays as its attribution. It adds an open item, "confirm next filing/payment step", that no turn supports. It lists the first three assistant turns rather than the latest. Keywords matched as substrings, so "Show me…" made a caller "confused". It invented sequence number 1 for turns without one. It truncated assistant turns to 140 characters *before* redaction, so a TIN that straddled the cut leaked its first five digits. The transfer summary always said "caller pressed 0, WER exceeded, or low-confidence turns", whatever the actual reason.
+- Fix: `model` is `None` for rule-built briefs, and the console shows "Built by keyword rules, not by a model". The brief lists the latest three assistant replies and gives the latest caller request as the open item. Keywords match whole words, and "how" was dropped. Turns without a valid sequence number carry no evidence link. Text is redacted before it is shortened. The opener no longer quotes the caller. The transfer summary lists only the reasons that applied.
+- Verification: The R2-I code leaked `10020` from `1002001234` in the boundary case and labelled "Show me my filing options" as confused; unit tests now cover both, plus the latest replies, the open item, missing sequence numbers, and each transfer reason.
+- Phase: R2-J · Owner: Voice and Staff Console · Status: Fixed in R2-J.
 
 ### AUD-039 · S2 · Legal data · Voice retention periods are invented
 
 - Location: `ssra_voice` `VoiceRetentionPolicy` (raw audio 24 h, transcripts 90 days, analytics 365 days).
 - Evidence: OQ-009 item 1 (statutory retention for voice recordings and transcripts) is open, but the values are hard-coded defaults.
-- Fix: Planned for R2-J: no retention value without an approved source; mark the policy pending OQ-009.
-- Phase: R2-J · Owner: Voice and SSRA Legal · Status: Open.
+- Fix: All three periods default to `None` (no approved period: keep nothing after the call), and the audit entry records `retention_status: "pending_oq_009"`. A policy that stores raw audio without an approved period raises an error.
+- Verification: Unit tests cover the defaults and the refused raw-audio policy.
+- Phase: R2-J · Owner: Voice and SSRA Legal · Status: Fixed in R2-J (periods remain OQ-009).
 
 ### AUD-040 · S3 · Privacy · The TTS phrase cache keeps audio of any text
 
 - Location: `ssra_voice` `TtsPhraseCache`.
 - Evidence: Every successfully synthesized phrase is cached in a shared in-memory LRU, including personal answers, which then outlive the call.
-- Fix: Planned for R2-J: cache only allow-listed fixed prompts, such as menus and fillers.
-- Phase: R2-J · Owner: Voice · Status: Open.
+- Fix: `TtsPhraseCache` stores audio only for phrases in `fixed_voice_prompts()` (the tool-wait fillers), or an explicit allow-list. Other text is synthesized and returned without being kept. The synthesizer is typed as `TtsSynthesizer`.
+- Verification: A personal PAYE answer synthesized twice is never served from cache; a filler is.
+- Phase: R2-J · Owner: Voice · Status: Fixed in R2-J.
 
 ### AUD-041 · S2 · Caller output · Spoken and SMS output can cut or add figures
 

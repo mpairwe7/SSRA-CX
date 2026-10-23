@@ -77,6 +77,7 @@ from ssra_security import (
 )
 from ssra_testing import AsgiTestClient, make_conversation_event
 from ssra_voice import (
+    VoiceWerEvidence,
     resolve_hf_voice_model_cache,
     route_voice_turn,
     synthesize_tts_speech_envelope,
@@ -200,11 +201,28 @@ def test_api_domain_and_endpoints_edge_cases() -> None:
         route_voice_turn(
             session_id="v1",
             locale=LocaleCode.EN,
-            measured_wer=0.05,
+            wer_evidence={
+                LocaleCode.EN: VoiceWerEvidence(
+                    locale=LocaleCode.EN,
+                    word_error_rate=0.05,
+                    test_set="synthetic-eval-fixture",
+                    measured_on=date(2026, 10, 24),
+                    utterance_count=200,
+                )
+            },
             recording_consent_granted=True,
             dtmf_digit="1",
         ).action
         == "DTMF_MENU"
+    )
+    assert (
+        route_voice_turn(
+            session_id="v1_unmeasured",
+            locale=LocaleCode.EN,
+            recording_consent_granted=True,
+            dtmf_digit="1",
+        ).action
+        == "WARM_TRANSFER_TO_OFFICER"
     )
     assert (
         verify_knowledge_release_gate(
@@ -1805,7 +1823,10 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     assert looks_like_valid_audio_bytes(b"<html>rate limited</html>" + b" " * 64) is False
     assert looks_like_valid_audio_bytes(b"RIFF") is False
 
-    tts_cache = TtsPhraseCache(max_entries=2)
+    tts_cache = TtsPhraseCache(
+        max_entries=2,
+        cacheable_phrases=frozenset({"Welcome to SSRA", "Phrase 2", "Phrase 3", "FAIL"}),
+    )
     synth_calls = 0
 
     def _fake_synth(txt: str, *, language: str, voice: str) -> TtsCachedAudio:
@@ -1850,6 +1871,13 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
     tts_cache.get_or_synthesize("FAIL", language="en", voice=None, synthesizer=_fake_synth)
     tts_cache.get_or_synthesize("FAIL", language="en", voice=None, synthesizer=_fake_synth)
     assert synth_calls == 5
+    tts_cache.get_or_synthesize(
+        "Not a fixed prompt", language="en", voice=None, synthesizer=_fake_synth
+    )
+    tts_cache.get_or_synthesize(
+        "Not a fixed prompt", language="en", voice=None, synthesizer=_fake_synth
+    )
+    assert synth_calls == 7
 
     mt_en = resolve_mt_and_tts_turn_plan(
         source_locale="en",

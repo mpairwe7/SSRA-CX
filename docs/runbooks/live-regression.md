@@ -55,7 +55,7 @@ Without URLs, the same suite runs in-process. `task up` sets `SSRA_RUNTIME_MODE=
 uv run python tools/run_1000_complex_ngrok_benchmark.py --ngrok-url http://127.0.0.1:18001
 ```
 
-The benchmark posts to `/v1/turns`, which the public BFF denies, so run it against the runtime directly or through a tunnel that points at the runtime. The report records the run date in `Africa/Juba` and whether a tunnel was used. It overwrites `evals/reports/complex-1000-ngrok-benchmark-report.*`; commit those files only as deliberate evidence.
+The benchmark posts to `/v1/turns`, which the public BFF denies, so run it against the runtime directly or through a tunnel that points at the runtime. The report records the run date in `Africa/Juba` and whether a tunnel was used. It overwrites `evals/reports/complex-1000-ngrok-benchmark-report.*`; commit those files only as deliberate evidence. Its `STT` and `TTS` scenarios are simulated: they send text and use synthetic word-error-rate evidence, and no audio is transcribed or synthesized. Never cite them as ASR, TTS, or voice-launch evidence.
 
 ## Evidence
 

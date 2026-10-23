@@ -145,12 +145,13 @@
   1. Who in SSRA Legal/Communications owns final approval of the multilingual tax termbase (`ai/termbase/`) and the 600+ Phase 1 golden eval items (300 `en`, 150 `ar`, 150 `pga`)?
   2. What orthographic convention should be used as primary for Juba Arabic (`pga`) in text channels (Latin script vs. Arabic script variants)?
   3. Who reviews the public web interface strings? As of 2026-10-23 (AUD-020), the web shell shows interface text only for `en`, `pga`, and `ar`; the five Phase 4 locales show English with a notice. The current Latin-script `pga` landing subtitle contains one Arabic-script word (`الموظفين`); a qualified reviewer should correct it rather than an engineer.
+  4. Who approves voice launch evidence? As of 2026-10-24 (AUD-037), `ssra_voice.APPROVED_VOICE_WER_EVIDENCE` is empty, so no language runs on voice and callers are transferred to an officer. Each entry needs a measured WER on a named SSRA test set, its date, and its utterance count.
 
 ### OQ-009 — Legal Retention, Taxpayer Secrecy & Fiscal Calendar Confirmation
 - **Blocks:** Phase 1
 - **Context:** Constitution Article 22, NRA Act 2016 (as amended 2023), Taxation Act 2009, Cybercrimes Provisional Order 2021, and the planned 2026 Data Protection Bill govern privacy and secrecy.
 - **Specific Questions for SSRA Legal:**
-  1. Confirm the statutory retention periods for conversation logs, voice recordings, case attachments, and `AuditEvent` WORM archives.
+  1. Confirm the statutory retention periods for conversation logs, voice recordings, case attachments, and `AuditEvent` WORM archives. Until then, `ssra_voice.VoiceRetentionPolicy` has no periods (keep nothing after the call) and refuses to store raw audio (AUD-039).
   2. Confirm the exact statutory wording required for AI transparency disclosure and voice recording consent. Until then, the public web composer shows interim English wording (AUD-021): "SSRA Assist is an automated AI assistant and can make mistakes. Check answers against the cited sources. Don’t enter your TIN, phone number, or passwords in this public chat."
   3. Confirm the fiscal year dates (1 July to 30 June) and statutory filing/payment deadlines per tax type for the initial `TaxFact` seed registry.
 

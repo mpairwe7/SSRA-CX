@@ -2,8 +2,57 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from ssra_core import LocaleCode
-from ssra_voice import ASR_MODEL_BY_LOCALE, is_voice_language_approved, route_voice_turn
+from ssra_voice import (
+    ASR_MODEL_BY_LOCALE,
+    VoiceWerEvidence,
+    is_voice_language_approved,
+    route_voice_turn,
+)
+
+
+def _synthetic_wer(locale: LocaleCode, wer: float) -> dict[LocaleCode, VoiceWerEvidence]:
+    """Return synthetic launch evidence for one language; no real measurement exists (OQ-008)."""
+    return {
+        locale: VoiceWerEvidence(
+            locale=locale,
+            word_error_rate=wer,
+            test_set="synthetic-unit-test-set",
+            measured_on=date(2026, 10, 24),
+            utterance_count=200,
+        )
+    }
+
+
+def test_voice_language_gate_requires_governed_evidence() -> None:
+    """No language is approved without evidence, and the transfer summary states the real reasons."""
+    assert is_voice_language_approved(LocaleCode.EN) is False
+    assert is_voice_language_approved(LocaleCode.PGA, _synthetic_wer(LocaleCode.PGA, 0.12)) is True
+    assert is_voice_language_approved(LocaleCode.PGA, _synthetic_wer(LocaleCode.DIN, 0.05)) is False
+    assert (
+        is_voice_language_approved(LocaleCode.DIN, _synthetic_wer(LocaleCode.DIN, float("nan")))
+        is False
+    )
+
+    unmeasured = route_voice_turn(
+        session_id="v_none", locale=LocaleCode.EN, recording_consent_granted=False
+    )
+    assert unmeasured.action == "WARM_TRANSFER_TO_OFFICER"
+    assert unmeasured.warm_transfer_summary == (
+        "Warm transfer from IVR (en): no approved word-error-rate evidence for en (OQ-008)."
+    )
+    pressed_zero = route_voice_turn(
+        session_id="v_zero",
+        locale=LocaleCode.EN,
+        recording_consent_granted=False,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
+        dtmf_digit="0",
+    )
+    assert pressed_zero.warm_transfer_summary == (
+        "Warm transfer from IVR (en): caller pressed 0 for an officer."
+    )
 
 
 class _SyntheticAttemptStore:
@@ -30,23 +79,26 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     d1 = route_voice_turn(
         session_id="v_01",
         locale=LocaleCode.PGA,
-        measured_wer=0.09,
+        wer_evidence=_synthetic_wer(LocaleCode.PGA, 0.09),
         recording_consent_granted=False,
     )
     assert d1.action == "STREAM_ASR"
     assert d1.recording_enabled is False
 
     # Language exceeding WER gate (> 0.12) warm-transfers to an officer with AI summary
-    assert is_voice_language_approved(LocaleCode.DIN, 0.18) is False
+    assert is_voice_language_approved(LocaleCode.DIN, _synthetic_wer(LocaleCode.DIN, 0.18)) is False
     d2 = route_voice_turn(
         session_id="v_02",
         locale=LocaleCode.DIN,
-        measured_wer=0.18,
+        wer_evidence=_synthetic_wer(LocaleCode.DIN, 0.18),
         recording_consent_granted=True,
     )
     assert d2.action == "WARM_TRANSFER_TO_OFFICER"
     assert d2.recording_enabled is True
-    assert d2.warm_transfer_summary is not None
+    assert d2.warm_transfer_summary == (
+        "Warm transfer from IVR (din): din word-error rate 0.18 on synthetic-unit-test-set "
+        "is above the 0.12 gate."
+    )
 
     # Low utterance confidence (< 0.75) shifts to DTMF menu; 2 consecutive strikes warm-transfer
     from ssra_voice import (
@@ -57,7 +109,7 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     d_low = route_voice_turn(
         session_id="v_03",
         locale=LocaleCode.EN,
-        measured_wer=0.05,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
         recording_consent_granted=False,
         utterance_confidence=0.60,
         consecutive_low_confidence_turns=1,
@@ -67,7 +119,7 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     d_clarify = route_voice_turn(
         session_id="v_03_clarify",
         locale=LocaleCode.DIN,
-        measured_wer=0.05,
+        wer_evidence=_synthetic_wer(LocaleCode.DIN, 0.05),
         recording_consent_granted=False,
         utterance_confidence=0.65,
         consecutive_low_confidence_turns=1,
@@ -78,7 +130,7 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     d_strike2 = route_voice_turn(
         session_id="v_04",
         locale=LocaleCode.EN,
-        measured_wer=0.05,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
         recording_consent_granted=False,
         utterance_confidence=0.55,
         consecutive_low_confidence_turns=2,
@@ -305,6 +357,41 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
     )
     assert brief.sentiment == "distressed"
     assert brief.turns_covered == 2
+    assert brief.model is None
+    assert brief.still_open[0].text == "Latest caller request: My account is blocked and urgent"
+    assert brief.still_open[0].turn_seqs == [1]
+
+    long_call = generate_officer_call_brief(
+        call_id="call_04",
+        turns=[
+            {"speaker": "caller", "text": "Show me my filing options", "seq": 1},
+            {"speaker": "assistant", "text": "Reply one.", "seq": 2},
+            {"speaker": "assistant", "text": "Reply two.", "seq": 3},
+            {"speaker": "assistant", "text": "Reply three.", "seq": 4},
+            {"speaker": "assistant", "text": "Reply four.", "seq": 5},
+            {"speaker": "caller", "text": "My TIN is 1002001234 and nobody helps", "seq": 6},
+        ],
+        transfer_reason="Caller asked for an officer",
+    )
+    assert [c.turn_seqs for c in long_call.ai_already_said] == [[3], [4], [5]]
+    boundary = generate_officer_call_brief(
+        call_id="call_06",
+        turns=[
+            {"speaker": "caller", "text": "What is my TIN?", "seq": 1},
+            {"speaker": "assistant", "text": "x" * 134 + " 1002001234 is on file.", "seq": 2},
+        ],
+        transfer_reason="Caller asked for an officer",
+    )
+    assert all("10020" not in c.text for c in boundary.ai_already_said)
+    assert long_call.sentiment == "calm"
+    assert "1002001234" not in long_call.still_open[0].text
+    assert all("filing/payment" not in c.text for c in long_call.still_open)
+    unsequenced = generate_officer_call_brief(
+        call_id="call_05",
+        turns=[{"speaker": "caller", "text": "Hello"}],
+        transfer_reason="Caller asked for an officer",
+    )
+    assert unsequenced.caller_goal.turn_seqs == []
 
     brief_frust = generate_officer_call_brief(
         call_id="call_02",
@@ -411,21 +498,28 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         )
 
     cache = TtsPhraseCache(max_entries=2)
+    filler = get_localized_tool_wait_filler(LocaleCode.EN)
     r1 = cache.get_or_synthesize(
-        "Hello",
+        filler,
         language="en",
         voice="ssra_eng_0001",
         synthesizer=_mock_synth,
     )
     assert r1.backend == "mms"
     r2 = cache.get_or_synthesize(
-        "Hello",
+        filler,
         language="en",
         voice="ssra_eng_0001",
         synthesizer=_mock_synth,
     )
     assert r2.backend == "mms+cache"
     assert r2.latency_ms == 0.0
+    personal = "Your PAYE for this month is 25,000 SSP."
+    for _ in range(2):
+        r_personal = cache.get_or_synthesize(
+            personal, language="en", voice="ssra_eng_0001", synthesizer=_mock_synth
+        )
+        assert r_personal.backend == "mms"
 
     aud_entry = build_voice_consent_audit_entry(
         event_type="recording_start",

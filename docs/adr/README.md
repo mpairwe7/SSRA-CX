@@ -4,7 +4,7 @@ Every architectural decision with a real reversal cost is recorded here before i
 
 ---
 
-## ADR Catalog (ADR-001 to ADR-024)
+## ADR Catalog (ADR-001 to ADR-025)
 
 | ID | Title | One-Line Problem Statement | Status | Reversal Cost |
 |---|---|---|---|---|
@@ -32,3 +32,4 @@ Every architectural decision with a real reversal cost is recorded here before i
 | **[ADR-022](./0022-sast-dast-trivy-trufflehog-cicd-modelling-pipeline.md)** | 6-Stage DevSecOps CI/CD Modelling Pipeline, Polyglot SAST, Live In-Process ASGI DAST, Trivy & Dual-Engine Secret Scanning | How do we model and enforce a high-assurance DevSecOps pipeline covering SAST, DAST, Trivy SCA/IaC/SBOM, Frontend assurance, and Gitleaks + TruffleHog v3 secret scanning while defending against scanner supply-chain compromises? | Accepted (repository safety baseline) | Low–Medium |
 | **[ADR-023](./0023-public-chat-render-boundary-and-truthful-failure-states.md)** | Public Chat Render Boundary & Truthful Failure States | How do we stop the served public chat from showing invented facts, dead action controls, or misleading failure states? | Accepted (repository safety baseline) | Medium |
 | **[ADR-024](./0024-voice-identity-step-up-and-carryover-fail-closed.md)** | Voice Identity Step-Up & Carryover Tokens Fail Closed | How do we stop a phone call from binding a taxpayer without verified identity, or resuming a goal with a forged token? | Accepted (repository safety baseline) | High |
+| **[ADR-025](./0025-voice-launch-evidence-and-truthful-call-records.md)** | Voice Launch Evidence & Truthful Call Records | How do we stop a language going live on voice without measured WER, and keep officer briefs and voice records truthful? | Accepted (repository safety baseline) | Medium |
