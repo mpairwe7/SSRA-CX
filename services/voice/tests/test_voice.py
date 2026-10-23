@@ -399,6 +399,28 @@ def test_voice_asr_model_selection_wer_gate_and_warm_transfer() -> None:
         transfer_reason="Error check",
     )
     assert brief_frust.sentiment == "frustrated"
+    assert (
+        generate_officer_call_brief(
+            call_id="call_02b",
+            turns=[
+                {
+                    "speaker": "caller",
+                    "text": "I keep getting errors and this is frustrating",
+                    "seq": 1,
+                }
+            ],
+            transfer_reason="Error check",
+        ).sentiment
+        == "frustrated"
+    )
+    assert (
+        generate_officer_call_brief(
+            call_id="call_02c",
+            turns=[{"speaker": "caller", "text": "There is a seizure notice", "seq": 1}],
+            transfer_reason="Seizure notice",
+        ).sentiment
+        == "distressed"
+    )
 
     brief_conf = generate_officer_call_brief(
         call_id="call_03",

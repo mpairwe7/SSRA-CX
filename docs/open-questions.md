@@ -1,6 +1,6 @@
 # SSRA Assist — Open Questions Register (`docs/open-questions.md`)
 
-**Last Updated:** 2026-10-22
+**Last Updated:** 2026-10-24
 **Governance Rule:** Never invent South Sudan tax law, rates, deadlines, penalties, fees, exchange rates, endpoints, or data formats. Whenever an upstream capability, legal rule, or operational parameter is unconfirmed by SSRA, log it here as `OQ-###`, define a clean port interface, build a synthetic mock adapter, and enforce the safest runtime fallback (abstain and offer human handoff).
 
 ---

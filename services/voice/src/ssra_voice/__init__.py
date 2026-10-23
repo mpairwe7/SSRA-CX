@@ -400,9 +400,9 @@ class OfficerCallBrief:
     recommended_officer_action: str = "Review verified e-Tax context and confirm next step"
 
 
-_DISTRESS_WORDS_RE = re.compile(r"\b(?:urgent|blocked|seized|distress(?:ed)?)\b")
-_FRUSTRATION_WORDS_RE = re.compile(r"\b(?:error|failed|frustrated|wrong)\b")
-_CONFUSION_WORDS_RE = re.compile(r"\b(?:confused|confusing|understand)\b")
+_DISTRESS_WORDS_RE = re.compile(r"\b(?:urgent(?:ly)?|blocked|seiz(?:ed|ure)|distress(?:ed)?)\b")
+_FRUSTRATION_WORDS_RE = re.compile(r"\b(?:errors?|fail(?:ed|s|ing)|frustrat(?:ed|ing)|wrong)\b")
+_CONFUSION_WORDS_RE = re.compile(r"\b(?:confus(?:ed|ing)|understand)\b")
 
 
 def _turn_seqs(turn: dict[str, Any] | None) -> list[int]:
