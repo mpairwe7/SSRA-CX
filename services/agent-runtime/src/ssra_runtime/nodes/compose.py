@@ -166,6 +166,129 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             ),
         }
 
+    # 3b. Customs Duty Estimate (`estimate_duties`) & Tariff Lookup (`lookup_tariff`)
+    duty_art = next((a for a in artifacts if a.tool == "estimate_duties"), None)
+    if duty_art is not None:
+        sc = duty_art.structured_content
+        cit = Citation(
+            id="cit_customs_act",
+            snapshot_version="2026.10.1",
+            doc_title="Customs Service Act 2013 & Financial Act 2024/2025 Tariff Schedule",
+            section_anchor="Part-V-Sec-12-Customs-Valuation-FX",
+            effective_from="2024-12-02",
+            url="https://customs.eservices.gov.ss/",
+        )
+        cif_usd = str(sc["cif_value_usd"])
+        fx_rate = str(sc["boss_official_fx_rate_ssp_per_usd"])
+        cif_ssp = str(sc["customs_value_ssp"])
+        duty_rate = str(sc["duty_rate_percent"])
+        duty_ssp = str(sc["estimated_duty_ssp"])
+        numbers = [
+            NumericClaim(
+                value=cif_usd,
+                unit=NumericUnit.USD,
+                source_ref=f"{duty_art.id}.cif_value_usd",
+            ),
+            NumericClaim(
+                value=fx_rate,
+                unit=NumericUnit.SSP,
+                source_ref=f"{duty_art.id}.boss_official_fx_rate_ssp_per_usd",
+            ),
+            NumericClaim(
+                value=cif_ssp,
+                unit=NumericUnit.SSP,
+                source_ref=f"{duty_art.id}.customs_value_ssp",
+            ),
+            NumericClaim(
+                value=duty_rate,
+                unit=NumericUnit.PERCENT,
+                source_ref=f"{duty_art.id}.duty_rate_percent",
+            ),
+            NumericClaim(
+                value=duty_ssp,
+                unit=NumericUnit.SSP,
+                source_ref=f"{duty_art.id}.estimated_duty_ssp",
+            ),
+        ]
+        text = (
+            f"ESTIMATE ONLY: For HS {sc['hs_code']} with CIF value {cif_usd} USD "
+            f"(converted at official Bank of South Sudan rate {fx_rate} SSP/USD = {cif_ssp} SSP), "
+            f"the customs duty at {duty_rate}% is {duty_ssp} SSP. "
+            f"Remit exclusively through https://etax.nra.gov.ss/ into designated commercial banks."
+        )
+        return {
+            "citations": [cit],
+            "answer": Answer(
+                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
+                citations=[cit],
+                numbers=numbers,
+                ui_component=GenerativeUIComponent(
+                    name=GenerativeUIComponentName.CALCULATOR_FORM,
+                    props={
+                        "calculator_type": "CUSTOMS_DUTY",
+                        **sc,
+                    },
+                )
+                if capabilities.rich_ui
+                else None,
+                is_estimate=True,
+                abstained=False,
+            ),
+        }
+
+    tariff_art = next((a for a in artifacts if a.tool == "lookup_tariff"), None)
+    if tariff_art is not None:
+        sc = tariff_art.structured_content
+        cit = Citation(
+            id="cit_customs_tariff",
+            snapshot_version="2026.10.1",
+            doc_title="Customs Service Act 2013 & Financial Act 2024/2025 Tariff Schedule",
+            section_anchor="Part-V-Sec-12-Customs-Valuation-FX",
+            effective_from="2024-12-02",
+            url="https://customs.eservices.gov.ss/",
+        )
+        duty_rate = str(sc["duty_rate_percent"])
+        excise_rate = str(sc["excise_rate_percent"])
+        fx_rate = str(sc["boss_official_fx_rate_ssp_per_usd"])
+        numbers = [
+            NumericClaim(
+                value=duty_rate,
+                unit=NumericUnit.PERCENT,
+                source_ref=f"{tariff_art.id}.duty_rate_percent",
+            ),
+            NumericClaim(
+                value=excise_rate,
+                unit=NumericUnit.PERCENT,
+                source_ref=f"{tariff_art.id}.excise_rate_percent",
+            ),
+            NumericClaim(
+                value=fx_rate,
+                unit=NumericUnit.SSP,
+                source_ref=f"{tariff_art.id}.boss_official_fx_rate_ssp_per_usd",
+            ),
+        ]
+        text = (
+            f"HS {sc['hs_code']} ({sc['description']}): Published customs duty rate is {duty_rate}% "
+            f"and excise tax rate is {excise_rate}% (official BoSS exchange rate: {fx_rate} SSP/USD). "
+            f"Declarations are filed via https://customs.eservices.gov.ss/ and paid via https://etax.nra.gov.ss/."
+        )
+        return {
+            "citations": [cit],
+            "answer": Answer(
+                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
+                citations=[cit],
+                numbers=numbers,
+                ui_component=GenerativeUIComponent(
+                    name=GenerativeUIComponentName.CITATION_LIST,
+                    props={"citations": [cit.model_dump(mode="json")], "tariff": sc},
+                )
+                if capabilities.rich_ui
+                else None,
+                is_estimate=False,
+                abstained=False,
+            ),
+        }
+
     # 4. Official channel verification (`PaymentInstructionsCard`)
     verify_art = next(
         (a for a in artifacts if a.tool in ("verify_payment_account", "verify_sender")),

@@ -1308,3 +1308,156 @@ def test_ssra_agentic_cx_eq_language_state_goal_planner_and_4tier_memory() -> No
         client.get("/v1/memory/sub_taxpayer_amina_01", headers=mem_hdr).json()["recent_episodes"]
         == []
     )
+
+
+def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i18n() -> None:
+    """Verify 4-phase South Sudan business flow fixes: 7 WHT categories, Arabic-Indic digits, 17-channel anti-scam, customs T0 tools, and localized guided journeys."""
+    import pytest
+    from ssra_core import SSRAError
+    from ssra_runtime.field_officer import FieldOfficerAssistRequest, execute_field_officer_assist
+    from ssra_runtime.graphs.guided_journey import get_guided_journey_steps
+
+    rt = SSRAConversationRuntime()
+
+    # 1. All 7 Financial Act 2024/2025 Withholding Tax categories route to exact statutory rates
+    wht_cases = [
+        (
+            "Calculate withholding tax on 1,000,000 SSP for a non-resident government contractor",
+            "government_contractors_non_resident",
+            "20",
+            "200000",
+        ),
+        (
+            "Calculate withholding tax on 1,000,000 SSP for a resident government contractor",
+            "government_contractors_resident",
+            "15",
+            "150000",
+        ),
+        (
+            "Estimate WHT on 1,000,000 SSP for technical fees and consultancy",
+            "technical_fees",
+            "15",
+            "150000",
+        ),
+        (
+            "Calculate withholding tax on 500,000 SSP for mobile money dealer commission",
+            "mobile_money_commissions",
+            "10",
+            "50000",
+        ),
+        (
+            "Calculate WHT on 800,000 SSP for end of service benefits (EOSB)",
+            "end_of_service_benefits",
+            "10",
+            "80000",
+        ),
+        (
+            "Calculate withholding tax on 600,000 SSP rent payment to landlord",
+            "rent",
+            "10",
+            "60000",
+        ),
+        (
+            "Calculate withholding tax on 1,000,000 SSP",
+            "goods_and_services",
+            "10",
+            "100000",
+        ),
+    ]
+    for query_txt, expected_cat, expected_rate, expected_wht in wht_cases:
+        turn = rt.run_turn(make_conversation_event(query_txt))
+        assert turn.answer.abstained is False
+        assert turn.artifacts[0].tool == "calculate_withholding_estimate"
+        sc = turn.artifacts[0].structured_content
+        assert sc["category"] == expected_cat
+        assert sc["rate_percent"] == expected_rate
+        assert sc["withholding_tax_ssp"] == expected_wht
+
+    # 2. Arabic-Indic digit extraction for PAYE and WHT
+    ar_paye = rt.run_turn(
+        make_conversation_event(
+            "كم ضريبة الدخل PAYE على راتب شهري ٤٠٠٬٠٠٠ SSP؟", locale=LocaleCode.AR
+        )
+    )
+    assert ar_paye.artifacts[0].tool == "calculate_paye_estimate"
+    assert ar_paye.artifacts[0].structured_content["gross_monthly_ssp"] == "400000"
+    assert ar_paye.artifacts[0].structured_content["estimated_tax_ssp"] == "52500"
+
+    ar_wht = rt.run_turn(
+        make_conversation_event(
+            "احسب ضريبة الاستقطاع لمقاول أجنبي غير مقيم بمبلغ ١٬٠٠٠٬٠٠٠ SSP",
+            locale=LocaleCode.AR,
+        )
+    )
+    assert ar_wht.artifacts[0].tool == "calculate_withholding_estimate"
+    assert (
+        ar_wht.artifacts[0].structured_content["category"] == "government_contractors_non_resident"
+    )
+    assert ar_wht.artifacts[0].structured_content["withholding_tax_ssp"] == "200000"
+
+    # 3. Anti-impersonation: verify_sender (email, +211 phone, SMS sender ID) & verify_payment_account (official domains)
+    sender_email_turn = rt.run_turn(
+        make_conversation_event("Please verify sender support@nra.gov.ss — is this really SSRA?")
+    )
+    assert sender_email_turn.artifacts[0].tool == "verify_sender"
+    assert sender_email_turn.artifacts[0].structured_content["status"] == "OFFICIAL_VERIFIED"
+
+    sender_phone_turn = rt.run_turn(
+        make_conversation_event("Verify sender +211 918806493 — is this an official SSRA phone?")
+    )
+    assert sender_phone_turn.artifacts[0].tool == "verify_sender"
+    assert sender_phone_turn.artifacts[0].structured_content["status"] == "OFFICIAL_VERIFIED"
+
+    sender_sms_turn = rt.run_turn(make_conversation_event("Verify sender ID from SSRA SMS"))
+    assert sender_sms_turn.artifacts[0].tool == "verify_sender"
+    assert sender_sms_turn.artifacts[0].structured_content["status"] == "OFFICIAL_VERIFIED"
+
+    customs_portal_turn = rt.run_turn(
+        make_conversation_event("Is https://customs.eservices.gov.ss/ an official SSRA channel?")
+    )
+    assert customs_portal_turn.artifacts[0].tool == "verify_payment_account"
+    assert customs_portal_turn.artifacts[0].structured_content["status"] == "OFFICIAL_VERIFIED"
+
+    tsa_turn = rt.run_turn(make_conversation_event("Verify account TSA-ETAX-BANK for tax payment"))
+    assert tsa_turn.artifacts[0].tool == "verify_payment_account"
+    assert tsa_turn.artifacts[0].structured_content["status"] == "OFFICIAL_VERIFIED"
+
+    # 4. Conversational T0 Customs Duty Estimation (`estimate_duties`) & Tariff Lookup (`lookup_tariff`)
+    cust_est_turn = rt.run_turn(
+        make_conversation_event("Estimate customs duty for HS 8703.23 with CIF 10,000 USD")
+    )
+    assert cust_est_turn.answer.abstained is False
+    assert cust_est_turn.artifacts[0].tool == "estimate_duties"
+    assert cust_est_turn.artifacts[0].structured_content["estimated_duty_ssp"] == "9000000"
+    assert cust_est_turn.answer.is_estimate is True
+
+    cust_tariff_turn = rt.run_turn(
+        make_conversation_event("What is the customs tariff rate for HS 2203.00?")
+    )
+    assert cust_tariff_turn.answer.abstained is False
+    assert cust_tariff_turn.artifacts[0].tool == "lookup_tariff"
+    assert cust_tariff_turn.artifacts[0].structured_content["duty_rate_percent"] == "35"
+    assert cust_tariff_turn.artifacts[0].structured_content["excise_rate_percent"] == "50"
+
+    # Field officer invalid task_type validation
+    with pytest.raises(SSRAError) as bad_fo_exc:
+        execute_field_officer_assist(
+            FieldOfficerAssistRequest(
+                officer_id="off_nimule_01",
+                task_type="UNKNOWN_TASK",
+            ),
+            gateway=rt.gateway,
+            audit_ledger=rt.audit_ledger,
+        )
+    assert bad_fo_exc.value.status_code == 400
+
+    # 5. Localized Guided Journeys (en, ar, pga)
+    for journey_intent in (
+        IntentName.GUIDED_TIN_REGISTRATION,
+        IntentName.GUIDED_TCC,
+        IntentName.GUIDED_FILING_AND_PAYMENT,
+    ):
+        for loc in (LocaleCode.EN, LocaleCode.AR, LocaleCode.PGA):
+            steps = get_guided_journey_steps(journey_intent, loc)
+            assert len(steps) >= 2
+            assert all(s.official_portal == "https://etax.nra.gov.ss/" for s in steps)

@@ -96,9 +96,25 @@ def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> Non
     """Verify deterministic USSD 182-char menu, SMS follow-up, STOP/START consent, and channel middleware."""
     client = AsgiTestClient(create_channel_gateway_app())
 
-    for opt in ("", "1", "2", "3", "4", "9", "0", "99"):
-        screen = render_ussd_screen(session_id="ussd_01", ussd_input=opt)
-        assert len(screen.screen_text) <= USSD_MAX_CHARS
+    for opt in ("", "1", "2", "3", "4", "5", "9", "1*9", "2*9", "5*9", "0", "99"):
+        for u_loc in ("en", "pga"):
+            screen = render_ussd_screen(session_id="ussd_01", ussd_input=opt, locale=u_loc)
+            assert len(screen.screen_text) <= USSD_MAX_CHARS
+
+    # Multi-step topic-specific SMS follow-up (e.g. 1*9 -> TIN Registration, 5*9 -> Customs)
+    r_tin_sms = render_ussd_screen(session_id="ussd_01", ussd_input="1*9", locale="en")
+    assert r_tin_sms.send_sms_followup is True
+    assert "TIN Registration" in r_tin_sms.screen_text
+
+    r_cust_pga = render_ussd_screen(session_id="ussd_01", ussd_input="5*9", locale="pga")
+    assert r_cust_pga.send_sms_followup is True
+    assert "Jamarik" in r_cust_pga.screen_text
+
+    r_timeout_pga = render_ussd_screen(
+        session_id="ussd_01", ussd_input="1", elapsed_seconds=150, locale="pga"
+    )
+    assert r_timeout_pga.response_type == "END"
+    assert len(r_timeout_pga.screen_text) <= USSD_MAX_CHARS
 
     # Option 9 triggers SMS follow-up
     r_sms = client.post(

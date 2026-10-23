@@ -957,12 +957,18 @@ function renderPwaShellHtml(locale, nonce) {
           inner += '<ul class="gen-periods-list">' + props.periods.map((p) =>
             "<li><strong>" + escapeHtml(p.period || p.tax_type || "Period") + ":</strong> " + escapeHtml(p.status || "FILED") + " (Due: " + escapeHtml(p.due_date || "15th CAT") + ")</li>"
           ).join("") + "</ul>";
+        } else if (props.last_filed_period !== undefined) {
+          inner += '<div class="gen-summary-md"><strong>Filing Status:</strong> ' + escapeHtml(props.filing_status || "COMPLIANT") + " · <strong>Last Filed Period:</strong> " + escapeHtml(props.last_filed_period) + "</div>";
         }
         if (props.prn || props.approved_banks) {
           inner += '<div class="gen-summary-md"><strong>Payment Reference (PRN):</strong> <code>' + escapeHtml(props.prn || "PRN-PENDING") + "</code> · <strong>Cash-Free Policy:</strong> Pay only at approved commercial banks via https://etax.nra.gov.ss/</div>";
+        } else if (props.status && props.guidance) {
+          inner += '<div class="gen-summary-md"><strong>' + escapeHtml(props.status) + ":</strong> " + escapeHtml(props.guidance) + "</div>";
         }
-        if (props.estimated_tax_ssp !== undefined || props.net_pay_ssp !== undefined || props.withholding_tax_ssp !== undefined) {
-          inner += '<div class="gen-summary-lg"><strong>Estimated Tax:</strong> ' + escapeHtml(props.estimated_tax_ssp || props.withholding_tax_ssp || "") + " SSP" + (props.net_pay_ssp ? " · <strong>Net Pay:</strong> " + escapeHtml(props.net_pay_ssp) + " SSP" : "") + "</div>";
+        if (props.estimated_tax_ssp !== undefined || props.net_pay_ssp !== undefined || props.net_monthly_ssp !== undefined || props.withholding_tax_ssp !== undefined || props.estimated_duty_ssp !== undefined) {
+          const estTax = props.estimated_tax_ssp || props.withholding_tax_ssp || props.estimated_duty_ssp || "";
+          const netVal = props.net_pay_ssp || props.net_monthly_ssp || props.net_payable_ssp || "";
+          inner += '<div class="gen-summary-lg"><strong>Estimated Tax:</strong> ' + escapeHtml(estTax) + " SSP" + (netVal ? " · <strong>Net Amount:</strong> " + escapeHtml(netVal) + " SSP" : "") + "</div>";
         }
         if (props.queue || props.reason || props.case_id) {
           inner += '<div class="gen-summary-md"><strong>SSRA Officer AssistanceQueue:</strong> ' + escapeHtml(props.queue || "Domestic Taxes Desk") + (props.case_id ? " · <strong>Case ID:</strong> <code>" + escapeHtml(props.case_id) + "</code>" : "") + " · <strong>Duty Hours:</strong> Mon–Fri 08:00–17:00 CAT (Africa/Juba)</div>";
