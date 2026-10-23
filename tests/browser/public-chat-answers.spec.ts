@@ -100,3 +100,15 @@ test("copy reports failure truthfully and thread ids are unguessable", async ({ 
     expect(response.status()).toBe(400);
   }
 });
+
+test("a reply still in progress is never saved to the device", async ({ page }) => {
+  const composer = page.getByRole("textbox", { name: "Ask SSRA Assist" });
+  await composer.fill("synthetic-scenario:slow");
+  await composer.press("Enter");
+  await expect(page.locator("article[aria-busy='true']")).toHaveCount(1);
+  await page.locator("#theme-toggle-btn").click();
+  const stored = await page.evaluate(() => localStorage.getItem("ssra-chat-store-v2") ?? "");
+  expect(stored).not.toContain("Preparing an answer");
+  expect(stored).not.toContain('"pending"');
+});
+

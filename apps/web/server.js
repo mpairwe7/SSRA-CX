@@ -865,7 +865,7 @@ function renderPwaShellHtml(locale, nonce) {
               isAuthenticated: false,
               updatedAtMs: Number.isFinite(c.updatedAtMs) ? c.updatedAtMs : null,
               turns: (c.turns || [])
-                .filter((t) => !t.meta?.tier || t.meta.tier === "T0")
+                .filter((t) => (!t.meta?.tier || t.meta.tier === "T0") && t.meta?.kind !== "pending")
                 .map((t) => ({
                   role: t.role,
                   content: scrubPiiForStorage(t.content),

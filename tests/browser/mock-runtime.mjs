@@ -148,6 +148,9 @@ const server = http.createServer(async (req, res) => {
           traceparent: req.headers.traceparent ?? null,
         },
       });
+      if (body.message === "synthetic-scenario:slow") {
+        await new Promise((resolve) => setTimeout(resolve, 3_000));
+      }
       if (body.message === "synthetic-scenario:drop-connection") {
         req.socket.destroy();
         return;
