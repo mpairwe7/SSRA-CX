@@ -5,6 +5,11 @@
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
+## 0.11 [R2-E Language Honesty, AI Disclosure, and Low Bandwidth](./audit/phase-R2-E-inclusion-low-bandwidth-report.md) (2026-10-23)
+
+- Fixed AUD-020 to AUD-022. Only the reviewed `en`, `pga`, and `ar` interface strings ship. Phase 4 locales show English with `lang="en"` and a notice, and the interface no longer advertises Dinka. A persistent AI, accuracy, and identifier disclosure appears under the composer, with interim wording under OQ-009. Device history can be turned off. Low-data mode removes blur, backgrounds, and motion. There is a no-script path, `/healthz` no longer exposes internal URLs, and Brotli quality 5 replaces quality 4, whose output was larger than gzip.
+- Six new rendered tests fail on the R2-D code. The suite passes (26 tests). Served `/en` is 24,442 bytes Brotli. Recorded a `pga` string defect under OQ-008 item 3 and the interim disclosure under OQ-009 item 2. ADR-011 has a 2026-10-23 update.
+
 ## 0.10 [R2-D Accessible Public Chat Interaction](./audit/phase-R2-D-accessible-interaction-report.md) (2026-10-23)
 
 - Fixed the public-chat parts of AUD-018 and AUD-019. Replies are announced through a separate status region instead of a rewritten live transcript, and the composer status stays visible on phones. The account panel uses the APG disclosure pattern and Settings uses the tabs pattern. A modal stack makes the background inert and returns focus. In-page dialogs replace `prompt` and `confirm`, and every purge asks for confirmation. False shortcut hints were removed. Light-theme offline status reaches 6.35:1, the theme follows system and contrast preferences, `forced-colors` is supported, and speech output uses the interface language.

@@ -10,7 +10,8 @@
  * - Deterministic Offline Statutory Resilience Pack (`Part-IV-Sec-18-PAYE`, WHT, `etax.nra.gov.ss` verifier, SSRA Office Directory)
  *   + Network Information API 2G `lowDataMode` auto-detection
  * - All 7 Generative UI Card renderers (`BalanceCard`, `FilingStatusTimeline`, `PaymentInstructionsCard`, `CalculatorForm`,
- *   `CitationList`, `ConfirmActionSheet`, `HandoffCard`) + 8-locale live UI dictionary (`en`, `pga`, `ar` RTL, `din`, `nus`, `bfa`, `zne`, `shk`)
+ *   `CitationList`, `ConfirmActionSheet`, `HandoffCard`) + reviewed UI strings for `en`, `pga`, and `ar` (RTL); the other
+ *   roadmap locales (`din`, `nus`, `bfa`, `zne`, `shk`) show English with a notice until reviewed (OQ-008)
  */
 
 import crypto from "node:crypto";
@@ -33,6 +34,9 @@ const INTERNAL_RUNTIME_URL = (
 ).replace(/\/$/, "");
 
 const SUPPORTED_LOCALES = new Set(["en", "pga", "ar", "din", "nus", "bfa", "zne", "shk"]);
+// Interface text exists only for the Phase 1 locales. Other locales show English until a
+// qualified reviewer approves their strings (OQ-008), so the page language stays accurate.
+const REVIEWED_UI_LOCALES = new Set(["en", "pga", "ar"]);
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
 const VALID_OPAQUE_HEADER_RE = /^[\x21-\x7e]{1,128}$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "DELETE", "OPTIONS"]);
@@ -141,7 +145,12 @@ function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
   const buf = Buffer.from(bodyStr, "utf-8");
   if (buf.length > 512 && acceptsEncoding(acceptEnc, "br")) {
     const compressed = zlib.brotliCompressSync(buf, {
-      params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 },
+      // Quality 5 measured 6.8% smaller than quality 4 on this page for about 0.5 ms more CPU;
+      // quality 4 was larger than gzip level 6.
+      params: {
+        [zlib.constants.BROTLI_PARAM_QUALITY]: 5,
+        [zlib.constants.BROTLI_PARAM_SIZE_HINT]: buf.length,
+      },
     });
     res.writeHead(statusCode, {
       ...headers,
@@ -166,9 +175,10 @@ function sendBodyWithCompression(req, res, statusCode, headers, bodyStr) {
 }
 
 function renderPwaShellHtml(locale, nonce) {
-  const dir = locale === "ar" ? "rtl" : "ltr";
+  const uiLocale = REVIEWED_UI_LOCALES.has(locale) ? locale : "en";
+  const dir = uiLocale === "ar" ? "rtl" : "ltr";
   const rawHtml = `<!DOCTYPE html>
-<html lang="${locale}" dir="${dir}" data-theme="dark">
+<html lang="${uiLocale}" dir="${dir}" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -512,6 +522,10 @@ function renderPwaShellHtml(locale, nonce) {
     .composer-hint { flex: 1; min-width: 0; font-size: 0.8rem; color: var(--text-1); }
     .composer-hint:empty { display: none; }
     .composer-keys { font-size: 0.75rem; color: var(--text-2); }
+    .composer-disclosure { margin: 0.45rem 0.4rem 0; font-size: 0.75rem; line-height: 1.45; color: var(--text-2); text-align: center; }
+    .rail-device-note { margin: 0 0.85rem 0.35rem; font-size: 0.75rem; line-height: 1.4; color: var(--text-2); }
+    .locale-notice { margin: 0.75rem auto 0; max-width: 820px; width: calc(100% - 2rem); padding: 0.6rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid rgba(251, 191, 36, 0.45); background: var(--surface-2); color: var(--text-0); font-size: 0.84rem; line-height: 1.45; }
+    .noscript-note { position: fixed; inset: auto 1rem 1rem 1rem; z-index: 200; margin: 0; padding: 1rem; border: 2px solid var(--ssra-gold); border-radius: var(--radius-md); background: var(--bg-1); color: var(--text-0); }
     .acct-pop-note { margin: 0; padding: 4px 8px; font-size: 0.78rem; color: var(--text-2); line-height: 1.45; }
     .confirm-modal { max-width: 440px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 1.25rem 1.4rem; display: flex; flex-direction: column; gap: 0.75rem; }
     .confirm-modal-field { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.86rem; color: var(--text-1); }
@@ -531,6 +545,15 @@ function renderPwaShellHtml(locale, nonce) {
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: var(--text-3); }
     :focus-visible { outline: 3px solid var(--ssra-gold); outline-offset: 2px; }
     .composer-textarea:focus-visible, .search-input:focus-visible { outline: 3px solid var(--ssra-gold) !important; outline-offset: 2px; box-shadow: 0 0 0 3px var(--ssra-gold); }
+    /* Low-data mode and reduced transparency drop blur, decorative backgrounds, shadows and motion. */
+    :root[data-low-data="true"] body::before { background: var(--bg-0); }
+    :root[data-low-data="true"] *, :root[data-low-data="true"] *::before, :root[data-low-data="true"] *::after {
+      backdrop-filter: none !important; box-shadow: none !important; animation: none !important; transition: none !important;
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      body::before { background: var(--bg-0); }
+      *, *::before, *::after { backdrop-filter: none !important; }
+    }
     @media (forced-colors: active) {
       .send-btn, .rail-new-btn, .icon-btn, .turn-act-btn, .landing-chip, .bubble, .gen-ui-card, .meta-pill, .citation-pill, .status-badge, .composer-box { border: 1px solid CanvasText; }
       .status-dot { forced-color-adjust: none; background: CanvasText; box-shadow: none; }
@@ -546,6 +569,7 @@ function renderPwaShellHtml(locale, nonce) {
 <body>
   <div class="ssra-flag-ribbon" aria-hidden="true"></div>
   <a class="skip-link" href="#main-content">Skip to main content</a>
+  <noscript><p class="noscript-note">SSRA Assist needs JavaScript to answer questions. For SSRA tax services, use the official e-Tax portal: https://etax.nra.gov.ss/</p></noscript>
 
   <div id="ssra-app-shell" class="app-shell chatv2" data-sidebar="open" data-mobile-rail="closed" data-locale="${locale}">
     <div id="rail-mobile-backdrop" class="rail-mobile-backdrop" aria-hidden="true"></div>
@@ -569,6 +593,7 @@ function renderPwaShellHtml(locale, nonce) {
         <span>${ICONS.plus} New Conversation</span>
       </button>
 
+      <p id="rail-device-note" class="rail-device-note">Conversations are saved on this device only.</p>
       <nav id="rail-conv-list" class="rail-list" aria-label="Saved conversations"></nav>
 
       <!-- AccountRail Footer & Upward Popover Menu -->
@@ -603,21 +628,26 @@ function renderPwaShellHtml(locale, nonce) {
         </div>
         <div class="header-right">
           <button type="button" id="open-call-btn" class="icon-btn call-btn" aria-label="Open voice input options">${ICONS.mic} Voice input</button>
-          <select id="locale-select" class="icon-btn" aria-label="Select language">
-            <option value="en" ${locale === "en" ? "selected" : ""}>English (en)</option>
-            <option value="pga" ${locale === "pga" ? "selected" : ""}>Juba Arabic (pga)</option>
-            <option value="ar" ${locale === "ar" ? "selected" : ""}>العربية (ar)</option>
-            <option value="din" ${locale === "din" ? "selected" : ""}>Thuɔŋjäŋ Dinka (din)</option>
-            <option value="nus" ${locale === "nus" ? "selected" : ""}>Thok Naath Nuer (nus)</option>
-            <option value="bfa" ${locale === "bfa" ? "selected" : ""}>Bari (bfa)</option>
-            <option value="zne" ${locale === "zne" ? "selected" : ""}>Pazande (zne)</option>
-            <option value="shk" ${locale === "shk" ? "selected" : ""}>Dhøg Cøllø Shilluk (shk)</option>
+          <select id="locale-select" class="icon-btn" aria-label="Language">
+            <optgroup label="Available">
+              <option value="en" ${locale === "en" ? "selected" : ""}>English (en)</option>
+              <option value="pga" ${locale === "pga" ? "selected" : ""}>Juba Arabic (pga)</option>
+              <option value="ar" ${locale === "ar" ? "selected" : ""}>العربية (ar)</option>
+            </optgroup>
+            <optgroup label="Not yet reviewed (interface in English)">
+              <option value="din" ${locale === "din" ? "selected" : ""}>Thuɔŋjäŋ Dinka (din)</option>
+              <option value="nus" ${locale === "nus" ? "selected" : ""}>Thok Naath Nuer (nus)</option>
+              <option value="bfa" ${locale === "bfa" ? "selected" : ""}>Bari (bfa)</option>
+              <option value="zne" ${locale === "zne" ? "selected" : ""}>Pazande (zne)</option>
+              <option value="shk" ${locale === "shk" ? "selected" : ""}>Dhøg Cøllø Shilluk (shk)</option>
+            </optgroup>
           </select>
           <button type="button" id="theme-toggle-btn" class="icon-btn">${ICONS.moon} Dark</button>
         </div>
       </header>
 
       <main id="main-content" class="app-content" tabindex="-1">
+        <p id="locale-notice" class="locale-notice is-hidden" role="status"></p>
         <!-- Landing Hero State -->
         <div id="landing-view" class="landing">
           <div class="landing-brand">
@@ -647,10 +677,6 @@ function renderPwaShellHtml(locale, nonce) {
               <span class="ldv2-cat">Scam &amp; Channel Check</span>
               <span class="landing-chip-text">Is this really SSRA? Verify https://etax.nra.gov.ss/</span>
             </button>
-            <button type="button" class="landing-chip" data-prompt="Waraga de Cuɔk de Wëu (TCC) në SSRA paguot?">
-              <span class="ldv2-cat">Thuɔŋjäŋ (Dinka)</span>
-              <span class="landing-chip-text">Waraga de Cuɔk de Wëu (TCC) në SSRA paguot?</span>
-            </button>
             <button type="button" class="landing-chip" data-prompt="Kif ana aml tasjil ta TIN fi SSRA?">
               <span class="ldv2-cat">Juba Arabic (pga)</span>
               <span class="landing-chip-text">Kif ana aml tasjil ta TIN fi SSRA?</span>
@@ -672,7 +698,7 @@ function renderPwaShellHtml(locale, nonce) {
         <div class="composer-dock">
           <form id="ssra-chat-form" class="composer-box">
             <label for="ssra-chat-input" class="sr-only">Ask SSRA Assist</label>
-            <textarea id="ssra-chat-input" class="composer-textarea" rows="1" required placeholder="Ask anything about SSRA taxes, TIN, PAYE, TCC, or customs in English, Arabic, Juba Arabic, or Dinka..."></textarea>
+            <textarea id="ssra-chat-input" class="composer-textarea" rows="1" required placeholder="Ask about SSRA taxes, TIN, PAYE, TCC, or customs in English, Arabic, or Juba Arabic…"></textarea>
             <div class="composer-toolbar">
               <div class="composer-tools-left">
                 <button type="button" id="voice-dictate-btn" class="icon-btn" title="Voice typing uses your browser's speech recognition" aria-label="Voice typing">
@@ -686,6 +712,7 @@ function renderPwaShellHtml(locale, nonce) {
               </div>
             </div>
           </form>
+          <p class="composer-disclosure" lang="en">SSRA Assist is an automated AI assistant and can make mistakes. Check answers against the cited sources. Don’t enter your TIN, phone number, or passwords in this public chat.</p>
         </div>
       </main>
     </div>
@@ -783,12 +810,12 @@ function renderPwaShellHtml(locale, nonce) {
         el.innerHTML = ttPolicy ? ttPolicy.createHTML(htmlStr) : htmlStr;
       }
 
-      // 8-Locale South Sudan UI Dictionary (FE-G5)
+      // FE-G5: reviewed Phase 1 interface strings only (OQ-008). Other locales fall back to English.
       const LOCALE_UI_STRINGS = {
         en: {
           headline: "How can I help with your South Sudan taxes today?",
           subtitle: "Ask about TIN registration, PAYE, TCC, customs, or e-Tax. Answers cite approved sources when available. If a source cannot be confirmed, SSRA Assist will say so and offer staff help.",
-          placeholder: "Ask anything about SSRA taxes, TIN, PAYE, TCC, or customs in English, Arabic, Juba Arabic, or Dinka...",
+          placeholder: "Ask about SSRA taxes, TIN, PAYE, TCC, or customs in English, Arabic, or Juba Arabic…",
         },
         pga: {
           headline: "Kif ana agdar asaidu inta fi darayib ta South Sudan al-yom?",
@@ -799,31 +826,6 @@ function renderPwaShellHtml(locale, nonce) {
           headline: "كيف يمكنني مساعدتك في ضرائب جنوب السودان اليوم؟",
           subtitle: "اسأل عن تسجيل الرقم الضريبي أو PAYE أو شهادة الامتثال أو الجمارك أو e-Tax. تذكر الإجابات المصادر المعتمدة عند توفرها. إذا تعذر تأكيد المصدر، سنوضح ذلك ونقترح التواصل مع موظف.",
           placeholder: "اسأل عن الرقم الضريبي TIN أو ضريبة الدخل PAYE أو شهادة الامتثال TCC أو الجمارك...",
-        },
-        din: {
-          headline: "Ba kony yin këdë në wëu ke ajuiɛɛr (SSRA / NRA) në Paguot Thudän akölë?",
-          subtitle: "Wël ke lööŋ ke SSRA në gät de TIN, akuën de PAYE ku WHT, Waraga de Cuɔk de Wëu (TCC), ku ajuiɛɛr de الثغور (Nimule).",
-          placeholder: "Thiëc në Thuɔŋjäŋ në wëu ke TIN, PAYE, TCC, tëdë ke Jamarik...",
-        },
-        nus: {
-          headline: "Ba konyi ɛŋu kɛ luɔt SSRA / NRA kä Paguot Thudän walɛ?",
-          subtitle: "Gör TIN, akuën PAYE kɛnɛ WHT, ku Waraga TCC kä etax.nra.gov.ss.",
-          placeholder: "Thiëc kä Thok Naath (Nuer) kɛ TIN, PAYE, TCC...",
-        },
-        bfa: {
-          headline: "Nan konyo iyesi ko SSRA / NRA pajak ti South Sudan?",
-          subtitle: "TIN registration, PAYE & WHT calculators, ko Tax Compliance Certificate (TCC).",
-          placeholder: "Tiya ko Bari نشت TIN, PAYE, TCC...",
-        },
-        zne: {
-          headline: "Wai rengba mi ka undo ro na marã ngbii SSRA / NRA areme?",
-          subtitle: "TIN, PAYE, WHT, na Waraga TCC rogo etax.nra.gov.ss.",
-          placeholder: "Mo sanahe rogo Pazande tipa TIN, PAYE, TCC...",
-        },
-        shk: {
-          headline: "A konyi yi ngo ki SSRA / NRA pajak pa Paguot Thudän?",
-          subtitle: "TIN, PAYE, WHT, ki TCC e-Tax portal (etax.nra.gov.ss).",
-          placeholder: "Peny ki Dhøg Cøllø (Shilluk)...",
         },
       };
 
@@ -840,6 +842,7 @@ function renderPwaShellHtml(locale, nonce) {
       const hintEl = document.getElementById("composer-hint");
       const acctTrigger = document.getElementById("acct-rail-trigger");
       const acctPopover = document.getElementById("acct-popover");
+      const SELECTABLE_LOCALES = new Set(Array.from(localeSelect?.options || [], (option) => option.value));
 
       // Detect 2G / Save-Data network condition (FE-G4)
       const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -858,6 +861,7 @@ function renderPwaShellHtml(locale, nonce) {
         themeChosen: false,
         lowDataMode: autoLowData,
         autoNarrate: false,
+        saveHistory: true,
         settingsTab: "general",
         conversations: [],
         activeId: null,
@@ -872,6 +876,7 @@ function renderPwaShellHtml(locale, nonce) {
             locale: saved.locale || state.locale,
             lowDataMode: saved.lowDataMode ?? state.lowDataMode,
             autoNarrate: Boolean(saved.autoNarrate),
+            saveHistory: saved.saveHistory !== false,
             conversations: saved.conversations.filter((c) => !c.isAuthenticated),
           };
         }
@@ -913,7 +918,8 @@ function renderPwaShellHtml(locale, nonce) {
               theme: state.themeChosen ? state.theme : null,
               lowDataMode: state.lowDataMode,
               autoNarrate: state.autoNarrate,
-              conversations: publicOnlyConvs,
+              saveHistory: state.saveHistory,
+              conversations: state.saveHistory ? publicOnlyConvs : [],
             }),
           );
         } catch {}
@@ -926,17 +932,26 @@ function renderPwaShellHtml(locale, nonce) {
       }
 
       function applyLocaleStrings(loc) {
-        state.locale = SUPPORTED_LOCALE_SET.has(loc) ? loc : "en";
-        document.documentElement.lang = state.locale;
-        document.documentElement.dir = state.locale === "ar" ? "rtl" : "ltr";
-        const dict = LOCALE_UI_STRINGS[state.locale] || LOCALE_UI_STRINGS.en;
+        state.locale = SELECTABLE_LOCALES.has(loc) ? loc : "en";
+        const uiLocale = LOCALE_UI_STRINGS[state.locale] ? state.locale : "en";
+        document.documentElement.lang = uiLocale;
+        document.documentElement.dir = uiLocale === "ar" ? "rtl" : "ltr";
+        if (localeSelect) localeSelect.value = state.locale;
+        const notice = document.getElementById("locale-notice");
+        if (notice) {
+          const name = localeSelect?.selectedOptions?.[0]?.textContent || state.locale;
+          notice.textContent = uiLocale === state.locale
+            ? ""
+            : "Interface text in " + name + " hasn’t been reviewed yet, so it is shown in English. SSRA Assist hasn’t been tested in this language; for checked answers, ask in English, Arabic, or Juba Arabic.";
+          notice.classList.toggle("is-hidden", uiLocale === state.locale);
+        }
+        const dict = LOCALE_UI_STRINGS[uiLocale];
         const hEl = document.getElementById("landing-headline");
         const sEl = document.getElementById("landing-subtitle");
         if (hEl) hEl.textContent = dict.headline;
         if (sEl) sEl.textContent = dict.subtitle;
         if (input) input.placeholder = dict.placeholder;
       }
-      const SUPPORTED_LOCALE_SET = new Set(Object.keys(LOCALE_UI_STRINGS));
       applyLocaleStrings(state.locale);
 
       function applyTheme(t) {
@@ -1202,6 +1217,12 @@ function renderPwaShellHtml(locale, nonce) {
 
       function renderApp() {
         const activeConv = state.conversations.find((c) => c.id === state.activeId) || null;
+        const deviceNote = document.getElementById("rail-device-note");
+        if (deviceNote) {
+          deviceNote.textContent = state.saveHistory
+            ? "Conversations are saved on this device only. On a shared device, delete them in Settings."
+            : "Conversations are not saved. They disappear when you close or reload this page.";
+        }
         if (convListEl) {
           if (state.conversations.length === 0) {
             setSafeHtml(
@@ -1690,12 +1711,13 @@ function renderPwaShellHtml(locale, nonce) {
         if (!txt || !badge) return;
         const offline = navigator.onLine === false;
         const lowData = !offline && state.lowDataMode;
+        document.documentElement.setAttribute("data-low-data", String(Boolean(state.lowDataMode)));
         badge.setAttribute("data-connection", offline ? "offline" : lowData ? "low-data" : "available");
         txt.textContent = offline
           ? "Offline · reconnect to get current guidance"
           : lowData
-            ? "Low-data mode · network available"
-            : "Network available · citations shown with answers";
+            ? "Low-data mode · online"
+            : "Online";
       }
       window.addEventListener("online", syncNetworkStatusBadge);
       window.addEventListener("offline", syncNetworkStatusBadge);
@@ -1861,11 +1883,12 @@ function renderPwaShellHtml(locale, nonce) {
             '<p><a href="https://etax.nra.gov.ss/" rel="noopener noreferrer">Sign in through the official e-Tax portal</a> for personal services.</p>'
           );
         } else if (state.settingsTab === "privacy") {
-          if (settingsTitleEl) settingsTitleEl.textContent = "Privacy, Shared-Device Hygiene & Right to Erasure";
+          if (settingsTitleEl) settingsTitleEl.textContent = "Privacy on this device";
           setSafeHtml(
             settingsBodyEl,
-            "<p><strong>Shared-Device Protection:</strong> Only anonymous <code>T0</code> public turns are saved locally; <code>T1</code>/<code>T2</code> turns and TINs are scrubbed automatically.</p>" +
+            "<p>Only public questions and answers are saved, and only on this device. Numbers that look like a TIN or phone number are hidden before saving.</p>" +
             '<div class="settings-actions-row">' +
+              '<button type="button" id="toggle-history-btn" class="icon-btn">' + ICONS.history + (state.saveHistory ? " Save conversations on this device: ON" : " Save conversations on this device: OFF") + "</button>" +
               '<button type="button" id="purge-local-btn" class="icon-btn danger-text-btn">' + ICONS.trash + " Clear saved conversations on this device</button>" +
             "</div>"
           );
@@ -1924,6 +1947,14 @@ function renderPwaShellHtml(locale, nonce) {
           syncNetworkStatusBadge();
           renderSettingsTabContent("general");
           document.getElementById("toggle-lowdata-btn")?.focus();
+          return;
+        }
+        if (e.target.closest("#toggle-history-btn")) {
+          state.saveHistory = !state.saveHistory;
+          saveState();
+          renderApp();
+          renderSettingsTabContent("privacy");
+          document.getElementById("toggle-history-btn")?.focus();
           return;
         }
         if (e.target.closest("#toggle-narrate-btn")) {
@@ -2153,8 +2184,6 @@ const server = http.createServer(async (req, res) => {
       JSON.stringify({
         status: "ok",
         service: "ssra-web",
-        internal_api_url: INTERNAL_API_URL,
-        internal_runtime_url: INTERNAL_RUNTIME_URL,
       }),
     );
     return;
@@ -2166,6 +2195,11 @@ const server = http.createServer(async (req, res) => {
       JSON.stringify({
         name: "SSRA Assist — South Sudan Revenue Authority",
         short_name: "SSRA Assist",
+        description: "Public AI assistant for general South Sudan Revenue Authority tax guidance.",
+        id: "/",
+        lang: "en",
+        dir: "ltr",
+        scope: "/",
         start_url: "/en",
         display: "standalone",
         background_color: "#091310",

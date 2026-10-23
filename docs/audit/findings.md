@@ -213,8 +213,9 @@ These findings came from a code and rendered-browser review of `apps/web/server.
 - Evidence: Phase 1 locales are `en`, `pga`, and `ar` (`packages/i18n/src/index.ts` `PHASE1_LOCALES`). The other five dictionaries contain script mixing, for example Arabic script inside the Bari and Dinka strings. The Juba Arabic subtitle also contains an Arabic-script word inside Latin-script text. The placeholder invites questions "in … Dinka", and a Dinka sample prompt is offered, although the Phase 1 evaluation set covers only `en`, `ar`, and `pga`.
 - Standard: OQ-008; master prompt invariant 2 (no improvised legal or tax content).
 - Impact: Users may receive interface text that a qualified reviewer has not approved, and may expect evaluated support for languages that have none.
-- Fix: Planned for R2-E. Phase 4 locales will fall back to English interface text with an explicit notice. Advertised languages will match the evaluated set. The `pga` string defect goes to OQ-008 reviewers.
-- Phase: R2-E · Owner: Frontend and SSRA Communications · Status: Open.
+- Fix: R2-E keeps interface strings only for `en`, `pga`, and `ar`. The other five locales stay selectable in a "Not yet reviewed (interface in English)" group, show English text with `lang="en"`, and display a notice that the language has not been reviewed or tested. The placeholder and sample prompts no longer advertise Dinka. The `pga` script defect is recorded under OQ-008 item 3 for a qualified reviewer.
+- Verification: A rendered test covers `/din` (page `lang="en"`, notice, option group, no Dinka prompt or placeholder) and switching to `ar` (`lang="ar"`, RTL, notice hidden).
+- Phase: R2-E · Owner: Frontend and SSRA Communications · Status: Fixed in R2-E for the web shell; reviewed translations remain open under OQ-008.
 
 ### AUD-021 · S3 · AI transparency and privacy · No persistent AI or accuracy notice at the composer
 
@@ -222,8 +223,9 @@ These findings came from a code and rendered-browser review of `apps/web/server.
 - Evidence: The page title says "AI Assistant", but no notice next to the composer says that answers are AI-generated, can be wrong, and should be checked against cited sources. No notice warns against typing a TIN or phone number. The fact that history is saved on the device is shown only in Settings.
 - Standard: OQ-009 item 2 (statutory AI disclosure wording); EU AI Act Article 50(1), used as a comparative benchmark only; GOV.UK Chat practice ("AI can make mistakes", check sources).
 - Impact: First-time and shared-device users may over-trust answers or disclose identifiers in an anonymous channel.
-- Fix: Planned for R2-E. The interim wording will be labelled pending OQ-009 approval.
-- Phase: R2-E · Owner: Frontend and SSRA Legal · Status: Open.
+- Fix: R2-E adds a persistent disclosure under the composer (AI assistant, can make mistakes, check cited sources, do not enter a TIN, phone number, or password). It is marked `lang="en"` because no reviewed translation exists. The rail states where conversations are saved, and Settings → Privacy can turn off device history. The wording is interim and recorded under OQ-009 item 2.
+- Verification: Rendered tests assert the disclosure, the device note, and that turning off history leaves no stored conversations after a reload.
+- Phase: R2-E · Owner: Frontend and SSRA Legal · Status: Fixed in R2-E with interim wording; statutory wording open under OQ-009.
 
 ### AUD-022 · S3 · Low-bandwidth and resilience · Low-data mode does not reduce rendering cost; no no-script path
 
@@ -231,8 +233,9 @@ These findings came from a code and rendered-browser review of `apps/web/server.
 - Evidence: Low-data mode changes a request flag and badge text, but `backdrop-filter` blur, layered gradients, shadows, and animations remain. These are costly on low-end Android GPUs. There is no `<noscript>` content. `/healthz` returns the internal API and runtime URLs. With the same served page, Brotli quality 4 produced 22,901 bytes against 22,777 bytes for gzip level 6, and the server prefers Brotli.
 - Standard: ADR-011; master prompt low-bandwidth budget; OWASP ASVS v5.0.0 V13 (unintended information disclosure).
 - Impact: Slower and less stable rendering on constrained devices, no fallback when scripts are blocked, and internal topology disclosure.
-- Fix: Planned for R2-E. Measure before and after changing compression.
-- Phase: R2-E · Owner: Frontend · Status: Open.
+- Fix: R2-E: low-data mode (and `prefers-reduced-transparency`) removes blur, decorative backgrounds, shadows, and motion. Added a `<noscript>` path to the official portal. `/healthz` returns only `status` and `service`. Brotli quality 5 with a size hint replaces quality 4 in both Node servers. On the served `/en` page this measured 24,234 bytes against 26,011 bytes at quality 4 and 25,809 bytes for gzip level 6, at about 1.75 ms against 1.26 ms per compression. Quality 9 cost 16.5 ms.
+- Verification: Rendered tests cover low-data computed styles, the no-script note with JavaScript disabled, and the `/healthz` keys.
+- Phase: R2-E · Owner: Frontend · Status: Fixed in R2-E. Real low-end Android and 2G measurements remain open.
 
 ### AUD-023 · S3 · Dashboard truthfulness · Preview navigation describes unavailable capabilities as current
 

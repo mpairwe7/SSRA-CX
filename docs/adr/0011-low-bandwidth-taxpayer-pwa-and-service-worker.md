@@ -46,3 +46,12 @@ Option 2 remains a future implementation option; it is not adopted in the curren
 ## 6. Reversal Cost & Migration Path
 
 - **Reversal Cost:** Low–Medium. If Serwist's native Turbopack integration offers measurable benefits later, `public/sw.js` can be replaced via standard Service Worker registration update semantics.
+
+## 7. Update (2026-10-23): Current Node BFF behaviour
+
+These changes apply to the running `apps/web/server.js` shell. They do not adopt the deferred service-worker option above. See [AUD-022](../audit/findings.md#aud-022--s3--low-bandwidth-and-resilience--low-data-mode-does-not-reduce-rendering-cost-no-no-script-path).
+
+- Low-data mode sets `data-low-data` on the document, which removes `backdrop-filter` blur, decorative background gradients, shadows, animations, and transitions. `prefers-reduced-transparency: reduce` removes the blur and decorative backgrounds too (Chromium 118 and later; not Safari).
+- A `<noscript>` note points to the official e-Tax portal.
+- Both Node servers compress HTML with Brotli quality 5 and a size hint. On the served `/en` page: 24,234 bytes at quality 5, 26,011 bytes at quality 4, and 25,809 bytes for gzip level 6. Each page embeds a per-request CSP nonce, so compressed output cannot be cached; quality 9 (16.5 ms) was rejected for that reason.
+
