@@ -10,8 +10,8 @@
 |---|---:|---|
 | S0 | 0 | None |
 | S1 | 4 | AUD-001, AUD-002, AUD-003, AUD-014 |
-| S2 | 15 | AUD-004 through AUD-012, AUD-015, AUD-016, AUD-018, AUD-019, AUD-020, AUD-024 |
-| S3 | 5 | AUD-013, AUD-017, AUD-021, AUD-022, AUD-023 |
+| S2 | 19 | AUD-004 through AUD-012, AUD-015, AUD-016, AUD-018, AUD-019, AUD-020, AUD-024, AUD-025, AUD-026, AUD-029, AUD-030 |
+| S3 | 10 | AUD-013, AUD-017, AUD-021, AUD-022, AUD-023, AUD-027, AUD-028, AUD-031, AUD-032, AUD-033 |
 
 ### AUD-001 · S1 · Runtime durability · Conversation state is process-local
 
@@ -259,4 +259,81 @@ These findings came from a code and rendered-browser review of `apps/web/server.
 - Fix: Extend the registry under ADR-005, with schema, contract codegen, renderer, and rendered tests, if customs estimates need a card. Add a runtime contract test that validates every emitted `ui_component` against the registry schemas.
 - Verification: A rendered test asserts that an unregistered calculator type renders no amount card.
 - Phase: R2 · Owner: Agent runtime and Frontend · Status: Open. Mitigated in public chat by ADR-023.
+
+## Accessibility, adaptability, responsiveness, and performance audit (2026-10-24)
+
+Evidence comes from Lighthouse 12.8.2 (Apache-2.0, run from a verified local cache as an external tool, not a repository dependency) against the live GPU profile, plus a Playwright lab audit against loopback copies of the same merged servers (`f9c8861`). That audit covered ten viewports, WCAG text spacing, 200 % text, Event Timing under 4× and 6× CPU slowdown, emulated 2G and 3G, and back/forward cache. Lighthouse scored 100 in all four categories for every page tested. The findings below are what the default load audit does not exercise. See [the R2-G report](./phase-R2-G-adaptive-layout-report.md).
+
+### AUD-025 · S2 · Truthful state · Saved conversations never appeared after a reload
+
+- Location: `apps/web/server.js` inline script (no initial `renderApp()` call, present since before `a30d9ee`).
+- Evidence: A conversation seeded in `localStorage` survived the reload, but the rail rendered zero rows and no empty state until the user sent a message. The rail note says that conversations are saved on this device.
+- Standard: Master prompt invariant 10; WCAG 2.2 SC 3.2.4 (consistent identification of features).
+- Impact: Returning users could not reach their saved history, which also makes the device-history controls misleading.
+- Fix: Render once at the end of start-up.
+- Verification: A rendered test seeds a conversation, reloads, and expects the row. It fails on `f9c8861`.
+- Phase: R2-G · Owner: Frontend · Status: Fixed in R2-G.
+
+### AUD-026 · S2 · Mobile reflow · Phone layout rules were overridden by the base stylesheet
+
+- Location: `apps/web/server.js` CSS. The `@media (max-width: 640px)` block preceded the base rules of equal specificity.
+- Evidence: At 320×568 the header wrapped to 173 px, the composer dock took 238 px, and the transcript got 157 px (28 %). On a 568×320 landscape phone the transcript got 40 px (13 %). At 320 px, which is also 400 % zoom on a 1280 px screen, the language selector sat off-screen and, because `body` does not scroll, could not be reached. At 360 px with 200 % text, the voice, language, and theme controls went off-screen. The scam-check sample prompt's URL did not wrap.
+- Standard: WCAG 2.2 SC 1.4.10 Reflow, 1.4.4 Resize Text, and 1.4.12 Text Spacing.
+- Impact: Phone users, particularly in landscape or with larger text, lost most of the conversation area and could not change language.
+- Fix: Responsive rules now follow the base rules. Phones use a two-row grid header with icon-only controls that keep their accessible names. Screens shorter than 500 px scroll the whole column. Long strings wrap.
+- Verification: The header is 107 px at 320 px and 360 px, and the transcript area is 44 % at 320×568 and 57 % at 360×740. Landscape uses a full-height scrolling column. The lab audit finds no off-screen control, text-spacing, or 200 %-text failure on either surface. Seven rendered tests fail on `f9c8861`; two pass on both and guard sizes that already worked.
+- Phase: R2-G · Owner: Frontend · Status: Fixed in R2-G.
+
+### AUD-027 · S3 · Accessibility · Staff mobile menu button failed Label in Name
+
+- Location: `packages/ui/ops-console.js` `#mobile-ops-nav-btn`.
+- Evidence: Lighthouse `label-content-name-mismatch` scored 0. The visible text "Menu" was not part of the accessible name "Open preview navigation". The audit is unweighted, so the accessibility score remained 100.
+- Standard: WCAG 2.2 SC 2.5.3 Label in Name.
+- Fix: The accessible name is the visible "Menu", and `aria-expanded` carries the state. The audit now reports no mismatch.
+- Phase: R2-G · Owner: Frontend · Status: Fixed in R2-G.
+
+### AUD-028 · S3 · Adaptability · No on-screen keyboard or browser theme adaptation
+
+- Location: `apps/web/server.js` `<head>`.
+- Evidence: The viewport meta did not opt into `interactive-widget=resizes-content`. Since Chrome 108 on Android, the keyboard resizes only the visual viewport by default, which can cover a bottom-docked composer. There was no `theme-color`.
+- Fix: Added `interactive-widget=resizes-content` and light and dark `theme-color` values, which follow the chosen theme. Browsers without support ignore both.
+- Verification: A rendered test checks the viewport meta and the theme colour after a theme change. On-screen keyboard behaviour needs real-device confirmation.
+- Phase: R2-G · Owner: Frontend · Status: Fixed in R2-G; device confirmation open.
+
+### AUD-029 · S2 · Interaction performance · Long conversations exceed the INP threshold
+
+- Location: `apps/web/server.js` `renderApp()`, which rewrites the whole transcript on every update.
+- Evidence: With 80 synthetic turns, the worst interaction took 272 ms at 4× and 344 ms at 6× CPU slowdown. With 6 turns it took 64 ms and 88 ms. The Core Web Vitals "good" INP threshold is 200 ms.
+- Fix: Planned for R2-H: incremental transcript updates and `content-visibility: auto` on message rows, measured before and after.
+- Phase: R2-H · Owner: Frontend · Status: Open.
+
+### AUD-030 · S2 · DOM XSS hardening · Trusted Types are created but not enforced
+
+- Location: `apps/web/server.js` and `apps/console/server.js` CSP.
+- Evidence: Lighthouse `trusted-types-xss` reported (severity High) that no CSP Trusted Types directive was found. Both pages create a policy, but without `require-trusted-types-for 'script'` any DOM sink still accepts a string. Trusted Types is supported in Chrome 83, Firefox 148, and Safari 26.
+- Fix: Planned for R2-H: enforce Trusted Types with named policies, including a script-URL policy for the service worker.
+- Phase: R2-H · Owner: Frontend and Security · Status: Open.
+
+### AUD-031 · S3 · Regression tooling · Live smoke suite asserts behaviour the fail-closed policy forbids
+
+- Location: `tools/smoke_test_stack.py` (public status and section 8).
+- Evidence: Against the live stack on 2026-10-23, the suite failed at its first assertion. It expects `200` from `/v1/admin/public-status`, which correctly returns RFC 9457 `503`. It also sends client-supplied staff IDs to takeover, hand-back, and feature-flag routes, which correctly return `403`, as `services/api/tests/test_route_matrix.py` requires. With those expectations corrected, the rest of the suite passed. The 1,000-scenario benchmark generator also hard-codes the report date and labels direct runtime calls "over Ngrok".
+- Fix: Planned for the next tooling pull request: align the smoke expectations with the route matrix, and make the benchmark report record its real date and target.
+- Phase: R2 · Owner: QA · Status: Open.
+
+### AUD-032 · S3 · Adaptability · A saved locale overrides the locale in the URL
+
+- Location: `apps/web/server.js` state initialisation.
+- Evidence: After a visit to `/en`, opening `/ar` in the same browser showed English and left-to-right text. The server renders `lang="ar"`, but the saved preference then replaces it.
+- Impact: Shared links to a language version do not open in that language for returning users.
+- Fix: Proposed: let an explicit locale path win, and update the saved preference.
+- Phase: R2 · Owner: Frontend · Status: Open.
+
+### AUD-033 · S3 · Answer relevance · An out-of-scope question received unrelated grounded guidance
+
+- Location: Agent runtime retrieval and abstention (observed through the live BFF).
+- Evidence: "Can you book me a flight to Nairobi?" returned e-Tax filing-manual guidance with one approved source, instead of an out-of-scope response or handoff.
+- Impact: A cited but irrelevant answer can look authoritative.
+- Fix: Runtime owner to review relevance thresholds and out-of-scope detection; add an evaluation case.
+- Phase: R2 · Owner: Agent runtime · Status: Open.
 

@@ -5,6 +5,11 @@
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
+## 0.13 [R2-G Adaptive Layout, Reflow, and Saved History](./audit/phase-R2-G-adaptive-layout-report.md) (2026-10-24)
+
+- Audited accessibility, adaptability, mobile responsiveness, Lighthouse, and loading performance. Lighthouse 12.8.2 scored 100 in all four categories for the public and staff pages on the live stack. A Playwright lab audit covered ten viewports, text spacing, 200 % text, CPU-throttled interaction latency, 2G and 3G, and back/forward cache, and found AUD-025 to AUD-033.
+- Fixed AUD-025 (saved conversations never rendered after a reload), AUD-026 (phone rules overridden by the base stylesheet, so a 173 px header, a 40 px landscape transcript, and an unreachable language selector at 320 px), AUD-027 (Label in Name), and AUD-028 (`interactive-widget` and `theme-color`). The transcript area at 320×568 grew from 28 % to 44 %, and short landscape screens now scroll the whole column. Nine rendered tests were added (seven fail on `f9c8861`); the suite passes with 40 tests.
+
 ## 0.12 [R2-F Staff Console Preview Accessibility and Truthfulness](./audit/phase-R2-F-staff-console-report.md) (2026-10-23)
 
 - Fixed the staff-console parts of AUD-018 and AUD-019, and AUD-023. The command palette follows the APG combobox pattern, and the account menu follows the menu-button keyboard model. The light-theme preview chip reaches 7.79:1, and the preview status uses the warning colour. Unused capability descriptions were removed, and the preview card renders on the server. Four new rendered tests fail on the R2-E code. The suite passes (30 tests).
