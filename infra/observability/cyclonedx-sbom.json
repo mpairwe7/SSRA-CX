@@ -153,9 +153,9 @@
     },
     {
       "name": "zod",
-      "purl": "pkg:npm/zod@4.6.5",
+      "purl": "pkg:npm/zod@4.6.7",
       "type": "library",
-      "version": "4.6.5"
+      "version": "4.6.7"
     },
     {
       "modelCard": {
