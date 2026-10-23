@@ -46,7 +46,8 @@ The test harness must not use credentials, live taxpayer/staff data, real tax fi
 | Public chat through BFF | A visible synthetic answer; canonical anonymous request body; client-supplied authorization and subject headers never reach the synthetic runtime. |
 | Public answer rendering | Cards never fill missing values; personal and action cards show a sign-in notice; unregistered components render nothing; no confirmation control; estimates need an approved source; no internal telemetry labels. |
 | Public failure states | `503`, `429` with `Retry-After`, HTML `500`, and a dropped upstream each show a specific plain-language state with no raw body; the draft is restored; `Try again` resends; malformed BFF bodies and thread identifiers return `400`. |
-| Public client integrity | A rejected clipboard write reports failure; new thread identifiers are 128-bit random hex. |
+| Public client integrity | A rejected clipboard write reports failure; new thread identifiers are 128-bit random hex; an in-progress reply is never saved to the device. |
+| Public accessibility semantics | Replies are announced through a separate status region, not the transcript; the composer status is visible on phones; the account panel is a disclosure that Escape closes; Settings tabs follow the APG keyboard model; dialogs make the page inert and return focus; rename, delete, and clear use in-page dialogs with Cancel focused; only working shortcuts are shown; light-theme offline status reaches 4.5:1; speech uses the interface language. |
 | Direct protected routes | Direct, percent-encoded, and encoded-separator `/v1` paths remain denied or rejected. |
 | Public mobile rail | 320 CSS-pixel reflow, minimum target size, reduced motion, inert-state synchronization, visible focus, and Escape focus return. |
 | Arabic and constrained network | `lang=ar` and RTL layout, explicit low-data mode, offline safe fallback, and preserved composer draft. |

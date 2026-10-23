@@ -302,7 +302,7 @@ function renderPwaShellHtml(locale, nonce) {
       .status-badge { display: none; }
       .landing { padding: 1rem 0.85rem 1.5rem; gap: 0.9rem; justify-content: flex-start; }
       .landing-prompts { grid-template-columns: minmax(0, 1fr); }
-      .composer-hint { display: none; }
+      .composer-keys { display: none; }
     }
 
     /* ── chatv2 Sidebar (ConversationRail + AccountRail from FinalYearProject) ── */
@@ -340,12 +340,13 @@ function renderPwaShellHtml(locale, nonce) {
     .rail-new-btn:hover { transform: translateY(-1px); }
 
     .rail-section-label {
-      padding: 0.55rem 1rem 0.22rem; font-size: 0.68rem; font-weight: 700;
+      padding: 0.55rem 1rem 0.22rem; font-size: 0.75rem; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3);
     }
     .rail-list { flex: 1; overflow-y: auto; padding: 0.2rem 0.55rem; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; }
 
     /* 1-line conversation row with hover actions (chatv2/sidebar.css pattern) */
+    .rail-group { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
     .rail-row {
       position: relative; display: flex; align-items: center; justify-content: space-between;
       border-radius: var(--radius-sm); border: 1px solid transparent;
@@ -387,13 +388,9 @@ function renderPwaShellHtml(locale, nonce) {
       background: var(--grad-primary); color: #fff; font-weight: 800; font-size: 0.74rem;
       display: grid; place-items: center; flex: none;
     }
-    .acct-dot {
-      position: absolute; right: -2px; bottom: -2px; width: 8px; height: 8px;
-      border-radius: 50%; background: var(--success); border: 2px solid var(--bg-0);
-    }
     .acct-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .acct-name { font-size: 0.8rem; font-weight: 700; color: var(--text-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .acct-sub { font-size: 0.69rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .acct-sub { font-size: 0.75rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     .acct-popover {
       position: absolute; bottom: calc(100% + 8px); left: 0.65rem; right: 0.65rem;
@@ -402,7 +399,7 @@ function renderPwaShellHtml(locale, nonce) {
       gap: 3px; z-index: 60;
     }
     .acct-popover.open { display: flex; }
-    .acct-pop-section { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); padding: 4px 8px 2px; }
+    .acct-pop-section { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); padding: 4px 8px 2px; }
     .acct-pop-item {
       min-height: 44px; padding: 8px; border-radius: 7px; border: none; background: transparent;
       color: var(--text-1); font-size: 0.78rem; font-family: inherit; cursor: pointer;
@@ -424,6 +421,8 @@ function renderPwaShellHtml(locale, nonce) {
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }
     .status-badge[data-connection="offline"] { background: rgba(218, 18, 26, 0.12); border-color: rgba(218, 18, 26, 0.45); color: #ffb2b5; }
     .status-badge[data-connection="offline"] .status-dot { background: #ff6269; box-shadow: 0 0 8px #ff6269; }
+    :root[data-theme="light"] .status-badge[data-connection="offline"] { color: #991B1B; }
+    :root[data-theme="light"] .status-badge[data-connection="offline"] .status-dot { background: #991B1B; box-shadow: none; }
     .status-badge[data-connection="low-data"] { background: rgba(244, 196, 48, 0.12); border-color: rgba(244, 196, 48, 0.45); color: var(--ssra-gold); }
     .status-badge[data-connection="low-data"] .status-dot { background: var(--ssra-gold); box-shadow: 0 0 8px var(--ssra-gold); }
 
@@ -437,7 +436,7 @@ function renderPwaShellHtml(locale, nonce) {
     .landing-prompts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.65rem; width: 100%; }
     .landing-chip { min-height: 64px; padding: 0.8rem 0.95rem; border-radius: var(--radius-md); background: var(--surface-1); border: 1px solid var(--border-1); color: var(--text-1); text-align: start; cursor: pointer; display: flex; flex-direction: column; gap: 0.28rem; transition: all 0.15s ease; text-decoration: none; }
     .landing-chip:hover { background: var(--surface-2); border-color: var(--ssra-teal-light); transform: translateY(-2px); box-shadow: var(--shadow-md); }
-    .ldv2-cat { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ssra-gold); }
+    .ldv2-cat { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ssra-gold); }
     .landing-chip-text { font-size: 0.85rem; font-weight: 500; color: var(--text-0); line-height: 1.35; }
 
     /* Chat Stream Area */
@@ -451,7 +450,7 @@ function renderPwaShellHtml(locale, nonce) {
     .bubble.user { background: var(--grad-user); border: 1px solid rgba(244, 196, 48, 0.35); color: var(--text-0); border-bottom-right-radius: 6px; }
     .bubble.assistant { background: var(--surface-2); border: 1px solid var(--border-1); color: var(--text-0); border-bottom-left-radius: 6px; box-shadow: var(--shadow-md); width: 100%; }
     .turn-meta-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin-bottom: 0.55rem; font-size: 0.74rem; color: var(--text-2); }
-    .meta-pill { padding: 0.18rem 0.55rem; border-radius: var(--radius-pill); background: var(--surface-3); border: 1px solid var(--border-1); font-weight: 600; font-size: 0.71rem; }
+    .meta-pill { padding: 0.18rem 0.55rem; border-radius: var(--radius-pill); background: var(--surface-3); border: 1px solid var(--border-1); font-weight: 600; font-size: 0.75rem; }
     .meta-pill.verified { color: var(--success); border-color: rgba(52, 211, 153, 0.35); }
     .meta-pill.caution { color: var(--warning); border-color: rgba(251, 191, 36, 0.45); }
 
@@ -460,7 +459,7 @@ function renderPwaShellHtml(locale, nonce) {
     .gen-ui-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ssra-gold); margin-bottom: 0.55rem; display: flex; align-items: center; justify-content: space-between; }
     .ssra-guided-steps { margin: 0.4rem 0; padding-inline-start: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.88rem; }
     .ssra-citation-badges { list-style: none; padding: 0; margin: 0.65rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
-    .citation-pill { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); background: rgba(7, 137, 48, 0.14); border: 1px solid rgba(46, 204, 113, 0.35); color: var(--ssra-teal-light); font-size: 0.74rem; font-weight: 600; }
+    .citation-pill { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); background: rgba(7, 137, 48, 0.14); border: 1px solid rgba(46, 204, 113, 0.35); color: var(--ssra-teal-light); font-size: 0.78rem; font-weight: 600; }
     .citation-link { color: inherit; text-underline-offset: 2px; }
     .gen-ui-card.is-warning { border-color: rgba(251, 191, 36, 0.55); }
     .gen-ui-card p { margin: 0.35rem 0 0; font-size: 0.88rem; line-height: 1.5; }
@@ -499,18 +498,24 @@ function renderPwaShellHtml(locale, nonce) {
     .settings-modal { max-width: 680px; width: 100%; min-height: 380px; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: grid; grid-template-columns: 185px 1fr; overflow: hidden; }
     @media (max-width: 640px) { .settings-modal { grid-template-columns: 1fr; } }
     .settings-tabs { background: var(--surface-1); border-inline-end: 1px solid var(--border-1); padding: 1rem 0.6rem; display: flex; flex-direction: column; gap: 4px; }
-    .settings-tab-btn { padding: 8px 12px; border-radius: 8px; border: none; background: transparent; color: var(--text-2); font: inherit; font-size: 0.83rem; font-weight: 600; text-align: start; cursor: pointer; }
+    .settings-tablist { display: flex; flex-direction: column; gap: 4px; }
+    .settings-tab-btn { min-height: 44px; padding: 8px 12px; border-radius: 8px; border: none; background: transparent; color: var(--text-2); font: inherit; font-size: 0.83rem; font-weight: 600; text-align: start; cursor: pointer; }
     .settings-tab-btn.active { background: var(--surface-3); color: var(--text-0); }
     .settings-pane { padding: 1.25rem 1.4rem; display: flex; flex-direction: column; gap: 0.85rem; }
 
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
     .is-hidden { display: none !important; }
     .rail-brand-sub { font-size: 0.68rem; color: var(--text-2); font-weight: 500; }
-    .rail-kbd { font-size: 0.68rem; opacity: 0.8; font-family: var(--font-mono); }
     .acct-pop-hr { border: 0; border-top: 1px solid var(--border-0); margin: 3px 0; }
     .acct-chevron { color: var(--text-3); font-size: 0.75rem; }
     .active-conv-title { font-weight: 700; font-size: 0.9rem; color: var(--text-0); }
-    .composer-hint { font-size: 0.75rem; color: var(--text-2); }
+    .composer-hint { flex: 1; min-width: 0; font-size: 0.8rem; color: var(--text-1); }
+    .composer-hint:empty { display: none; }
+    .composer-keys { font-size: 0.75rem; color: var(--text-2); }
+    .acct-pop-note { margin: 0; padding: 4px 8px; font-size: 0.78rem; color: var(--text-2); line-height: 1.45; }
+    .confirm-modal { max-width: 440px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 1.25rem 1.4rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .confirm-modal-field { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.86rem; color: var(--text-1); }
+    .confirm-modal-input { min-height: 44px; padding: 0.5rem 0.7rem; border-radius: var(--radius-sm); border: 1px solid var(--border-2); background: var(--surface-1); color: var(--text-0); font: inherit; }
     .call-modal-title { margin: 0; color: var(--text-0); font-size: 1.25rem; }
     .call-transcript-live { margin: 0; font-size: 0.9rem; color: var(--text-1); min-height: 2.5rem; }
     .call-prompts-row { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
@@ -526,6 +531,11 @@ function renderPwaShellHtml(locale, nonce) {
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: var(--text-3); }
     :focus-visible { outline: 3px solid var(--ssra-gold); outline-offset: 2px; }
     .composer-textarea:focus-visible, .search-input:focus-visible { outline: 3px solid var(--ssra-gold) !important; outline-offset: 2px; box-shadow: 0 0 0 3px var(--ssra-gold); }
+    @media (forced-colors: active) {
+      .send-btn, .rail-new-btn, .icon-btn, .turn-act-btn, .landing-chip, .bubble, .gen-ui-card, .meta-pill, .citation-pill, .status-badge, .composer-box { border: 1px solid CanvasText; }
+      .status-dot { forced-color-adjust: none; background: CanvasText; box-shadow: none; }
+      :focus-visible { outline-color: Highlight; }
+    }
     @media (prefers-reduced-motion: reduce) {
       .rail-wrap { transition: none !important; }
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -557,23 +567,22 @@ function renderPwaShellHtml(locale, nonce) {
 
       <button type="button" id="new-chat-btn" class="rail-new-btn">
         <span>${ICONS.plus} New Conversation</span>
-        <kbd class="rail-kbd">Ctrl+N</kbd>
       </button>
 
-      <div id="rail-conv-list" class="rail-list" role="list"></div>
+      <nav id="rail-conv-list" class="rail-list" aria-label="Saved conversations"></nav>
 
       <!-- AccountRail Footer & Upward Popover Menu -->
       <div class="rail-footer">
-        <div id="acct-popover" class="acct-popover" role="menu" aria-label="Account and privacy menu">
-          <div class="acct-pop-section" role="presentation">Public conversation</div>
-          <p class="acct-pop-item" role="presentation">Personal balances and filing records require secure sign-in.</p>
-          <a href="https://etax.nra.gov.ss/" class="acct-pop-item" role="menuitem" rel="noopener noreferrer"><span>Open official e-Tax portal</span><span>${ICONS.arrowUpRight}</span></a>
-          <hr class="acct-pop-hr" role="separator" />
-          <button type="button" id="open-settings-btn" class="acct-pop-item" role="menuitem"><span>${ICONS.settings} Settings &amp; Privacy</span><span>Ctrl+,</span></button>
+        <div id="acct-popover" class="acct-popover">
+          <div class="acct-pop-section">Public conversation</div>
+          <p class="acct-pop-note">Personal balances and filing records require secure sign-in.</p>
+          <a href="https://etax.nra.gov.ss/" class="acct-pop-item" rel="noopener noreferrer"><span>Open official e-Tax portal</span><span>${ICONS.arrowUpRight}</span></a>
+          <hr class="acct-pop-hr" />
+          <button type="button" id="open-settings-btn" class="acct-pop-item"><span>${ICONS.settings} Settings &amp; Privacy</span></button>
         </div>
 
-        <button type="button" id="acct-rail-trigger" class="acct-rail-trigger" aria-expanded="false" aria-haspopup="menu" aria-controls="acct-popover">
-          <div class="acct-avatar"><span id="acct-badge-text">PV</span><span class="acct-dot"></span></div>
+        <button type="button" id="acct-rail-trigger" class="acct-rail-trigger" aria-expanded="false" aria-controls="acct-popover">
+          <div class="acct-avatar"><span id="acct-badge-text">PV</span></div>
           <div class="acct-meta">
             <span class="acct-name" id="acct-name-text">Public chat</span>
             <span class="acct-sub" id="acct-sub-text">No account details are shown here</span>
@@ -604,8 +613,7 @@ function renderPwaShellHtml(locale, nonce) {
             <option value="zne" ${locale === "zne" ? "selected" : ""}>Pazande (zne)</option>
             <option value="shk" ${locale === "shk" ? "selected" : ""}>Dhøg Cøllø Shilluk (shk)</option>
           </select>
-          <button type="button" id="theme-toggle-btn" class="icon-btn" title="Switch color theme">${ICONS.moon} Dark</button>
-          <button type="button" id="clear-chat-btn" class="icon-btn" aria-label="Delete all saved conversations on this device">${ICONS.trash} Clear all</button>
+          <button type="button" id="theme-toggle-btn" class="icon-btn">${ICONS.moon} Dark</button>
         </div>
       </header>
 
@@ -656,8 +664,9 @@ function renderPwaShellHtml(locale, nonce) {
 
         <!-- Active Conversation Message List -->
         <div id="chat-view" class="chat-area is-hidden" aria-label="Chat conversation">
-          <div id="ssra-chat-messages" class="message-list" role="log" aria-live="polite"></div>
+          <div id="ssra-chat-messages" class="message-list" aria-label="Conversation messages"></div>
         </div>
+        <div id="chat-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
         <!-- Floating Composer Dock -->
         <div class="composer-dock">
@@ -666,10 +675,11 @@ function renderPwaShellHtml(locale, nonce) {
             <textarea id="ssra-chat-input" class="composer-textarea" rows="1" required placeholder="Ask anything about SSRA taxes, TIN, PAYE, TCC, or customs in English, Arabic, Juba Arabic, or Dinka..."></textarea>
             <div class="composer-toolbar">
               <div class="composer-tools-left">
-                <button type="button" id="voice-dictate-btn" class="icon-btn" title="Voice Dictation (Whisper-SALT / Speech API)" aria-label="Voice Dictation">
+                <button type="button" id="voice-dictate-btn" class="icon-btn" title="Voice typing uses your browser's speech recognition" aria-label="Voice typing">
                   ${ICONS.mic} <span class="composer-waveform" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
                 </button>
-                <span id="composer-hint" class="composer-hint" role="status" aria-live="polite">Enter to send · Shift+Enter for newline · Ctrl+K search</span>
+                <span id="composer-hint" class="composer-hint" role="status" aria-live="polite"></span>
+                <span class="composer-keys">Enter to send · Shift+Enter for a new line · Ctrl+K to search</span>
               </div>
               <div class="composer-tools-right">
                 <button type="submit" id="ssra-chat-submit" class="send-btn">${ICONS.send} Send</button>
@@ -708,14 +718,16 @@ function renderPwaShellHtml(locale, nonce) {
   <!-- Tabbed SettingsDialog Modal (SettingsDialog.tsx pattern) -->
   <div id="settings-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Settings">
     <div class="settings-modal">
-      <div class="settings-tabs" role="tablist" aria-label="Settings categories">
-        <div class="settings-heading" role="presentation">Settings</div>
-        <button type="button" class="settings-tab-btn active" role="tab" aria-selected="true" data-settings-tab="general">General &amp; Theme</button>
-        <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="voice">Voice &amp; Speech</button>
-        <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="profile">Taxpayer Profile</button>
-        <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="privacy">Privacy &amp; Erasure</button>
+      <div class="settings-tabs">
+        <div class="settings-heading">Settings</div>
+        <div class="settings-tablist" role="tablist" aria-label="Settings categories" aria-orientation="vertical">
+          <button type="button" id="settings-tab-general" class="settings-tab-btn active" role="tab" aria-selected="true" aria-controls="settings-pane" tabindex="0" data-settings-tab="general">General &amp; Theme</button>
+          <button type="button" id="settings-tab-voice" class="settings-tab-btn" role="tab" aria-selected="false" aria-controls="settings-pane" tabindex="-1" data-settings-tab="voice">Voice &amp; Speech</button>
+          <button type="button" id="settings-tab-profile" class="settings-tab-btn" role="tab" aria-selected="false" aria-controls="settings-pane" tabindex="-1" data-settings-tab="profile">Taxpayer Profile</button>
+          <button type="button" id="settings-tab-privacy" class="settings-tab-btn" role="tab" aria-selected="false" aria-controls="settings-pane" tabindex="-1" data-settings-tab="privacy">Privacy &amp; Erasure</button>
+        </div>
       </div>
-      <div class="settings-pane" role="tabpanel">
+      <div id="settings-pane" class="settings-pane" role="tabpanel" aria-labelledby="settings-tab-general">
         <div class="settings-pane-head">
           <h2 id="settings-pane-title" class="settings-pane-title">General &amp; Appearance</h2>
           <button type="button" id="close-settings-btn" class="icon-btn">${ICONS.close} Close</button>
@@ -723,6 +735,22 @@ function renderPwaShellHtml(locale, nonce) {
         <div id="settings-pane-body" class="settings-pane-body"></div>
       </div>
     </div>
+  </div>
+
+  <!-- In-page confirmation and rename dialog (replaces window.prompt / window.confirm) -->
+  <div id="confirm-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-message">
+    <form id="confirm-modal-form" class="confirm-modal">
+      <h2 id="confirm-modal-title" class="settings-pane-title"></h2>
+      <p id="confirm-modal-message" class="settings-pane-body"></p>
+      <label id="confirm-modal-field" class="confirm-modal-field is-hidden">
+        <span>Conversation name</span>
+        <input id="confirm-modal-input" class="confirm-modal-input" type="text" maxlength="64" autocomplete="off" />
+      </label>
+      <div class="settings-actions-row">
+        <button type="button" id="confirm-modal-cancel" class="icon-btn">Cancel</button>
+        <button type="submit" id="confirm-modal-ok" class="icon-btn"></button>
+      </div>
+    </form>
   </div>
 
   <script nonce="${nonce}">
@@ -820,9 +848,14 @@ function renderPwaShellHtml(locale, nonce) {
       );
 
       const STORAGE_KEY = "ssra-chat-store-v2";
+      function systemTheme() {
+        if (window.matchMedia?.("(prefers-contrast: more)")?.matches) return "high-contrast";
+        return window.matchMedia?.("(prefers-color-scheme: light)")?.matches ? "light" : "dark";
+      }
       let state = {
         locale: shell?.dataset.locale || "en",
-        theme: "dark",
+        theme: systemTheme(),
+        themeChosen: false,
         lowDataMode: autoLowData,
         autoNarrate: false,
         settingsTab: "general",
@@ -835,6 +868,7 @@ function renderPwaShellHtml(locale, nonce) {
           state = {
             ...state,
             theme: saved.theme || state.theme,
+            themeChosen: Boolean(saved.theme),
             locale: saved.locale || state.locale,
             lowDataMode: saved.lowDataMode ?? state.lowDataMode,
             autoNarrate: Boolean(saved.autoNarrate),
@@ -876,7 +910,7 @@ function renderPwaShellHtml(locale, nonce) {
             STORAGE_KEY,
             JSON.stringify({
               locale: state.locale,
-              theme: state.theme,
+              theme: state.themeChosen ? state.theme : null,
               lowDataMode: state.lowDataMode,
               autoNarrate: state.autoNarrate,
               conversations: publicOnlyConvs,
@@ -910,18 +944,19 @@ function renderPwaShellHtml(locale, nonce) {
         document.documentElement.setAttribute("data-theme", t);
         const btn = document.getElementById("theme-toggle-btn");
         if (btn) {
-          setSafeHtml(
-            btn,
-            t === "dark"
-              ? ICONS.moon + " Dark"
-              : t === "light"
-                ? ICONS.sun + " Light"
-                : ICONS.contrast + " Contrast",
-          );
+          const label = t === "dark" ? "Dark" : t === "light" ? "Light" : "High contrast";
+          setSafeHtml(btn, (t === "dark" ? ICONS.moon : t === "light" ? ICONS.sun : ICONS.contrast) + " " + label);
+          btn.setAttribute("aria-label", "Colour theme: " + label + ". Change theme");
         }
         saveState();
       }
-      applyTheme(state.theme || "dark");
+      applyTheme(state.theme);
+      // Until the user picks a theme, follow later system colour or contrast changes.
+      ["(prefers-color-scheme: light)", "(prefers-contrast: more)"].forEach((query) => {
+        window.matchMedia?.(query)?.addEventListener?.("change", () => {
+          if (!state.themeChosen) applyTheme(systemTheme());
+        });
+      });
 
       // Offline fallback abstains, says whether the question was sent, and never cites a source.
       function computeOfflineResilienceAnswer(text, opts = {}) {
@@ -1096,7 +1131,7 @@ function renderPwaShellHtml(locale, nonce) {
 
       function renderConvRow(c) {
         const active = c.id === state.activeId ? " active" : "";
-        return '<div class="rail-row' + active + '" role="listitem">' +
+        return '<li class="rail-row' + active + '">' +
           '<button type="button" class="rail-item" data-conv-id="' + escapeHtml(c.id) + '" aria-label="Open conversation: ' + escapeHtml(c.title) + '"' + (active ? ' aria-current="true"' : "") + '>' +
             (c.pinned ? ICONS.pin + " " : ICONS.messageSquare + " ") + escapeHtml(c.title) +
           "</button>" +
@@ -1105,7 +1140,7 @@ function renderPwaShellHtml(locale, nonce) {
             '<button type="button" class="rail-act-mini" data-rename-conv="' + escapeHtml(c.id) + '" aria-label="Rename conversation: ' + escapeHtml(c.title) + '" title="Rename conversation">' + ICONS.edit + "</button>" +
             '<button type="button" class="rail-act-mini" data-del-conv="' + escapeHtml(c.id) + '" aria-label="Delete conversation: ' + escapeHtml(c.title) + '" title="Delete conversation">' + ICONS.trash + "</button>" +
           "</div>" +
-        "</div>";
+        "</li>";
       }
 
       function focusRailAction(attribute, conversationId) {
@@ -1171,11 +1206,11 @@ function renderPwaShellHtml(locale, nonce) {
           if (state.conversations.length === 0) {
             setSafeHtml(
               convListEl,
-              '<div class="rail-empty-hint" role="listitem">No saved conversations yet. Start a conversation to keep it on this device.</div>',
+              '<p class="rail-empty-hint">No saved conversations yet. Start a conversation to keep it on this device.</p>',
             );
           } else {
             const html = groupConversationRows(state.conversations).map(([label, rows]) =>
-              '<h2 class="rail-section-label">' + escapeHtml(label) + "</h2>" + rows.map(renderConvRow).join("")
+              '<h2 class="rail-section-label">' + escapeHtml(label) + '</h2><ul class="rail-group">' + rows.map(renderConvRow).join("") + "</ul>"
             ).join("");
             setSafeHtml(convListEl, html);
           }
@@ -1190,13 +1225,24 @@ function renderPwaShellHtml(locale, nonce) {
           if (activeTitleEl) activeTitleEl.textContent = activeConv.title;
           if (msgList) {
             setSafeHtml(msgList, activeConv.turns.map(renderTurnHtml).join(""));
-            msgList.scrollTop = msgList.scrollHeight;
+            const lastTurn = msgList.lastElementChild;
+            msgList.scrollTop =
+              lastTurn && lastTurn.offsetHeight > msgList.clientHeight
+                ? lastTurn.offsetTop - msgList.offsetTop - 8
+                : msgList.scrollHeight;
           }
         }
       }
 
       let activeTurnAbortController = null;
       const TURN_TIMEOUT_MS = 30000;
+
+      const SPEECH_LANGS = { en: "en", ar: "ar" };
+      function speechUtterance(text) {
+        const utterance = new SpeechSynthesisUtterance(cleanTextForSpeech(text));
+        if (SPEECH_LANGS[state.locale]) utterance.lang = SPEECH_LANGS[state.locale];
+        return utterance;
+      }
 
       function cleanTextForSpeech(raw) {
         return String(raw || "")
@@ -1235,6 +1281,20 @@ function renderPwaShellHtml(locale, nonce) {
         return "Something went wrong at SSRA Assist, so your question wasn’t answered. You can try again.";
       }
 
+      const announcer = document.getElementById("chat-announcer");
+      function announce(message) {
+        if (!announcer) return;
+        announcer.textContent = "";
+        window.setTimeout(() => {
+          announcer.textContent = message;
+        }, 60);
+      }
+      function announceReply(reply) {
+        const text = String(reply.content || "");
+        const summary = text.length > 280 ? text.slice(0, 277) + "…" : text;
+        announce((reply.meta?.kind === "failure" ? "Not answered. " : "Answer received. ") + summary);
+      }
+
       function restoreDraft(text) {
         if (!input || input.value.trim()) return false;
         input.value = text;
@@ -1264,15 +1324,18 @@ function renderPwaShellHtml(locale, nonce) {
 
         if (navigator.onLine === false) {
           const offline = computeOfflineResilienceAnswer(trimmed);
-          conv.turns.push({ role: "assistant", content: offline.content, meta: offline.meta });
+          const offlineReply = { role: "assistant", content: offline.content, meta: offline.meta };
+          conv.turns.push(offlineReply);
           restoreDraft(trimmed);
           saveState();
           renderApp();
+          announceReply(offlineReply);
           return;
         }
 
         conv.turns.push({ role: "assistant", content: "Preparing an answer…", meta: { tier: "T0", kind: "pending" } });
         renderApp();
+        announce("Preparing an answer.");
 
         const payload = {
           message: trimmed,
@@ -1335,7 +1398,7 @@ function renderPwaShellHtml(locale, nonce) {
             };
             if (state.autoNarrate && "speechSynthesis" in window) {
               window.speechSynthesis.cancel();
-              window.speechSynthesis.speak(new SpeechSynthesisUtterance(cleanTextForSpeech(replyText)));
+              window.speechSynthesis.speak(speechUtterance(replyText));
             }
           }
         } catch (err) {
@@ -1363,6 +1426,7 @@ function renderPwaShellHtml(locale, nonce) {
         }
         saveState();
         renderApp();
+        announceReply(reply);
       }
 
       submitBtn?.addEventListener("click", (e) => {
@@ -1418,28 +1482,39 @@ function renderPwaShellHtml(locale, nonce) {
         if (renBtn) {
           const cid = renBtn.getAttribute("data-rename-conv");
           const c = state.conversations.find((x) => x.id === cid);
-          if (c) {
-            const nextTitle = window.prompt("Rename conversation:", c.title);
-            if (nextTitle && nextTitle.trim()) {
-              c.title = nextTitle.trim().slice(0, 64);
-              saveState();
-              renderApp();
-              focusRailAction("data-rename-conv", cid);
-            }
-          }
+          if (!c) return;
+          askInPage({
+            title: "Rename conversation",
+            message: "Conversation names are saved only on this device.",
+            confirmLabel: "Save name",
+            value: c.title,
+          }).then((nextTitle) => {
+            if (typeof nextTitle !== "string" || !nextTitle.trim()) return;
+            c.title = nextTitle.trim().slice(0, 64);
+            saveState();
+            renderApp();
+            focusRailAction("data-rename-conv", cid);
+          });
           return;
         }
         const delBtn = e.target.closest("[data-del-conv]");
         if (delBtn) {
           const cid = delBtn.getAttribute("data-del-conv");
-          if (!window.confirm("Delete this saved conversation from this device? This cannot be undone.")) return;
-          state.conversations = state.conversations.filter((x) => x.id !== cid);
-          if (state.activeId === cid) state.activeId = state.conversations[0]?.id || null;
-          saveState();
-          renderApp();
-          const nextConversation = convListEl?.querySelector(".rail-item");
-          if (nextConversation) nextConversation.focus();
-          else document.getElementById("new-chat-btn")?.focus();
+          askInPage({
+            title: "Delete this conversation?",
+            message: "It will be removed from this device. This cannot be undone.",
+            confirmLabel: "Delete conversation",
+            destructive: true,
+          }).then((confirmed) => {
+            if (confirmed !== true) return;
+            state.conversations = state.conversations.filter((x) => x.id !== cid);
+            if (state.activeId === cid) state.activeId = state.conversations[0]?.id || null;
+            saveState();
+            renderApp();
+            const nextConversation = convListEl?.querySelector(".rail-item");
+            if (nextConversation) nextConversation.focus();
+            else document.getElementById("new-chat-btn")?.focus();
+          });
           return;
         }
         const btn = e.target.closest("[data-conv-id]");
@@ -1464,6 +1539,7 @@ function renderPwaShellHtml(locale, nonce) {
           if (!conv || !retryText || activeTurnAbortController || conv.turns[index - 1]?.role !== "user") return;
           conv.turns.splice(index - 1, 2);
           if (input && input.value.trim() === retryText) input.value = "";
+          input?.focus();
           sendTurn(retryText);
           return;
         }
@@ -1474,7 +1550,7 @@ function renderPwaShellHtml(locale, nonce) {
             setSafeHtml(speakBtn, ICONS.speaker + " Listen");
             return;
           }
-          const u = new SpeechSynthesisUtterance(cleanTextForSpeech(speakBtn.getAttribute("data-speak") || ""));
+          const u = speechUtterance(speakBtn.getAttribute("data-speak") || "");
           u.onend = () => { setSafeHtml(speakBtn, ICONS.speaker + " Listen"); };
           setSafeHtml(speakBtn, ICONS.stop + " Stop Audio");
           window.speechSynthesis.speak(u);
@@ -1539,16 +1615,6 @@ function renderPwaShellHtml(locale, nonce) {
         input?.focus();
       });
 
-      document.getElementById("clear-chat-btn")?.addEventListener("click", () => {
-        if (!window.confirm("Delete all saved conversations from this device? This cannot be undone.")) return;
-        state.conversations = [];
-        state.activeId = null;
-        dispatchSwLogoutPurge();
-        saveState();
-        renderApp();
-        input?.focus();
-      });
-
       const railAsideEl = document.querySelector(".rail-wrap");
       const focusAfterRailStateSync = (target) => {
         if (!target || typeof target.focus !== "function") return;
@@ -1608,6 +1674,7 @@ function renderPwaShellHtml(locale, nonce) {
 
       document.getElementById("theme-toggle-btn")?.addEventListener("click", () => {
         const next = state.theme === "dark" ? "light" : state.theme === "light" ? "high-contrast" : "dark";
+        state.themeChosen = true;
         applyTheme(next);
       });
 
@@ -1634,29 +1701,92 @@ function renderPwaShellHtml(locale, nonce) {
       window.addEventListener("offline", syncNetworkStatusBadge);
       syncNetworkStatusBadge();
 
-      // AccountRail Popover
+      // AccountRail disclosure: Escape or leaving the footer closes it.
+      function setAcctPopover(open, returnFocus) {
+        acctPopover?.classList.toggle("open", open);
+        acctTrigger?.setAttribute("aria-expanded", String(open));
+        if (!open && returnFocus) acctTrigger?.focus();
+      }
       acctTrigger?.addEventListener("click", (e) => {
         e.stopPropagation();
-        const open = acctPopover?.classList.toggle("open");
-        acctTrigger.setAttribute("aria-expanded", String(Boolean(open)));
+        setAcctPopover(!acctPopover?.classList.contains("open"), false);
       });
       document.addEventListener("click", (e) => {
-        if (!e.target.closest(".rail-footer")) {
-          acctPopover?.classList.remove("open");
-          acctTrigger?.setAttribute("aria-expanded", "false");
-        }
+        if (!e.target.closest(".rail-footer")) setAcctPopover(false, false);
       });
-      // Modal focus restoration (FE-G6)
-      let modalReturnFocusEl = null;
-      function closeAllModals() {
-        document.getElementById("search-modal-backdrop")?.classList.remove("open");
-        document.getElementById("settings-modal-backdrop")?.classList.remove("open");
-        document.getElementById("call-modal-backdrop")?.classList.remove("open");
-        if (modalReturnFocusEl && typeof modalReturnFocusEl.focus === "function") {
-          modalReturnFocusEl.focus();
-          modalReturnFocusEl = null;
-        }
+      document.querySelector(".rail-footer")?.addEventListener("focusout", (e) => {
+        if (!(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) setAcctPopover(false, false);
+      });
+
+      // Modal stack (FE-G6): the page behind an open dialog is inert, Escape closes the
+      // top dialog, and focus returns to the control that opened it.
+      const modalStack = [];
+      function syncModalInert() {
+        shell?.toggleAttribute("inert", modalStack.length > 0);
+        modalStack.forEach((entry, i) => entry.backdrop.toggleAttribute("inert", i < modalStack.length - 1));
       }
+      function openModal(backdrop, focusTarget, returnFocusEl) {
+        if (!backdrop || modalStack.some((entry) => entry.backdrop === backdrop)) return;
+        modalStack.push({ backdrop, returnFocusEl: returnFocusEl || document.activeElement, onClose: null });
+        backdrop.classList.add("open");
+        syncModalInert();
+        focusTarget?.focus();
+      }
+      function closeTopModal() {
+        const entry = modalStack.pop();
+        if (!entry) return;
+        entry.backdrop.classList.remove("open");
+        entry.backdrop.removeAttribute("inert");
+        syncModalInert();
+        entry.onClose?.();
+        if (entry.returnFocusEl?.isConnected && !entry.returnFocusEl.closest("[inert]")) entry.returnFocusEl.focus();
+      }
+      function closeAllModals() {
+        while (modalStack.length > 0) closeTopModal();
+      }
+
+      // In-page confirmation and rename dialog. Resolves true, the entered text, or null.
+      const confirmBackdrop = document.getElementById("confirm-modal-backdrop");
+      const confirmField = document.getElementById("confirm-modal-field");
+      const confirmInput = document.getElementById("confirm-modal-input");
+      const confirmOk = document.getElementById("confirm-modal-ok");
+      let resolveConfirm = null;
+      function askInPage({ title, message, confirmLabel, value, destructive }) {
+        return new Promise((resolve) => {
+          const wantsText = typeof value === "string";
+          document.getElementById("confirm-modal-title").textContent = title;
+          document.getElementById("confirm-modal-message").textContent = message;
+          if (confirmOk) {
+            confirmOk.textContent = confirmLabel;
+            confirmOk.classList.toggle("danger-outline-btn", Boolean(destructive));
+          }
+          confirmField?.classList.toggle("is-hidden", !wantsText);
+          if (confirmInput) confirmInput.value = wantsText ? value : "";
+          resolveConfirm = resolve;
+          openModal(confirmBackdrop, wantsText ? confirmInput : document.getElementById("confirm-modal-cancel"));
+          const entry = modalStack[modalStack.length - 1];
+          if (entry?.backdrop === confirmBackdrop) {
+            entry.onClose = () => {
+              const pending = resolveConfirm;
+              resolveConfirm = null;
+              pending?.(null);
+            };
+          }
+          if (wantsText) confirmInput?.select();
+        });
+      }
+      document.getElementById("confirm-modal-form")?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const pending = resolveConfirm;
+        resolveConfirm = null;
+        const result = confirmField?.classList.contains("is-hidden") ? true : confirmInput?.value || "";
+        closeTopModal();
+        pending?.(result);
+      });
+      document.getElementById("confirm-modal-cancel")?.addEventListener("click", closeTopModal);
+      confirmBackdrop?.addEventListener("click", (e) => {
+        if (e.target === confirmBackdrop) closeTopModal();
+      });
 
       // ConversationSearch Modal (Ctrl+K)
       const searchBackdrop = document.getElementById("search-modal-backdrop");
@@ -1676,13 +1806,9 @@ function renderPwaShellHtml(locale, nonce) {
         setSafeHtml(searchResults, html);
       }
       function openSearchModal() {
-        modalReturnFocusEl = document.activeElement;
-        searchBackdrop?.classList.add("open");
-        if (searchInput) {
-          searchInput.value = "";
-          renderSearchModalList();
-          searchInput.focus();
-        }
+        if (searchInput) searchInput.value = "";
+        renderSearchModalList();
+        openModal(searchBackdrop, searchInput);
       }
       document.getElementById("rail-search-btn")?.addEventListener("click", openSearchModal);
       searchBackdrop?.addEventListener("click", (e) => {
@@ -1707,6 +1833,7 @@ function renderPwaShellHtml(locale, nonce) {
       const settingsBackdrop = document.getElementById("settings-modal-backdrop");
       const settingsTitleEl = document.getElementById("settings-pane-title");
       const settingsBodyEl = document.getElementById("settings-pane-body");
+      const settingsPaneEl = document.getElementById("settings-pane");
 
       function renderSettingsTabContent(tabId) {
         state.settingsTab = tabId || "general";
@@ -1714,6 +1841,8 @@ function renderPwaShellHtml(locale, nonce) {
           const isAct = btn.getAttribute("data-settings-tab") === state.settingsTab;
           btn.classList.toggle("active", isAct);
           btn.setAttribute("aria-selected", String(isAct));
+          btn.tabIndex = isAct ? 0 : -1;
+          if (isAct) settingsPaneEl?.setAttribute("aria-labelledby", btn.id);
         });
         if (state.settingsTab === "voice") {
           if (settingsTitleEl) settingsTitleEl.textContent = "Voice typing & reading";
@@ -1753,13 +1882,32 @@ function renderPwaShellHtml(locale, nonce) {
       }
 
       document.getElementById("open-settings-btn")?.addEventListener("click", () => {
-        modalReturnFocusEl = acctTrigger;
-        acctPopover?.classList.remove("open");
+        setAcctPopover(false, false);
         renderSettingsTabContent("general");
-        settingsBackdrop?.classList.add("open");
-        settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]')?.focus();
+        openModal(settingsBackdrop, settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]'), acctTrigger);
       });
       document.getElementById("close-settings-btn")?.addEventListener("click", closeAllModals);
+      // APG tabs: arrow keys, Home and End move and select; only the selected tab is in the Tab order.
+      document.querySelector(".settings-tablist")?.addEventListener("keydown", (e) => {
+        const tabs = Array.from(document.querySelectorAll("[data-settings-tab]"));
+        const current = tabs.indexOf(document.activeElement);
+        if (current < 0) return;
+        const forward = e.key === "ArrowDown" || e.key === "ArrowRight";
+        const backward = e.key === "ArrowUp" || e.key === "ArrowLeft";
+        const next = forward
+          ? (current + 1) % tabs.length
+          : backward
+            ? (current - 1 + tabs.length) % tabs.length
+            : e.key === "Home"
+              ? 0
+              : e.key === "End"
+                ? tabs.length - 1
+                : -1;
+        if (next < 0) return;
+        e.preventDefault();
+        renderSettingsTabContent(tabs[next].getAttribute("data-settings-tab"));
+        tabs[next].focus();
+      });
       settingsBackdrop?.addEventListener("click", (e) => {
         if (e.target === settingsBackdrop) {
           closeAllModals();
@@ -1775,21 +1923,32 @@ function renderPwaShellHtml(locale, nonce) {
           saveState();
           syncNetworkStatusBadge();
           renderSettingsTabContent("general");
+          document.getElementById("toggle-lowdata-btn")?.focus();
           return;
         }
         if (e.target.closest("#toggle-narrate-btn")) {
           state.autoNarrate = !state.autoNarrate;
           saveState();
           renderSettingsTabContent("voice");
+          document.getElementById("toggle-narrate-btn")?.focus();
           return;
         }
         if (e.target.closest("#purge-local-btn")) {
-          state.conversations = [];
-          state.activeId = null;
-          dispatchSwLogoutPurge();
-          saveState();
-          renderApp();
-          closeAllModals();
+          askInPage({
+            title: "Delete all saved conversations?",
+            message: "Every conversation saved on this device will be removed. This cannot be undone.",
+            confirmLabel: "Delete all",
+            destructive: true,
+          }).then((confirmed) => {
+            if (confirmed !== true) return;
+            state.conversations = [];
+            state.activeId = null;
+            dispatchSwLogoutPurge();
+            saveState();
+            renderApp();
+            closeAllModals();
+            input?.focus();
+          });
         }
       });
 
@@ -1813,8 +1972,7 @@ function renderPwaShellHtml(locale, nonce) {
       }
 
       window.addEventListener("keydown", (e) => {
-        const openModals = document.querySelectorAll(".modal-backdrop.open");
-        const openModal = openModals.length > 0 ? openModals[openModals.length - 1] : null;
+        const openModal = modalStack[modalStack.length - 1]?.backdrop || null;
         if (openModal && e.key === "Tab") {
           trapModalTabFocus(e, openModal);
           return;
@@ -1822,16 +1980,20 @@ function renderPwaShellHtml(locale, nonce) {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
           e.preventDefault();
           if (searchBackdrop?.classList.contains("open")) closeAllModals();
-          else openSearchModal();
+          else if (!openModal) openSearchModal();
         } else if (e.key === "Escape") {
           if (openModal) {
-            closeAllModals();
+            closeTopModal();
+          } else if (acctPopover?.classList.contains("open")) {
+            setAcctPopover(false, true);
           } else if (shell?.getAttribute("data-mobile-rail") === "open") {
             shell.setAttribute("data-mobile-rail", "closed");
             syncMobileRailA11y(true);
           }
         }
       });
+
+      const callBackdrop = document.getElementById("call-modal-backdrop");
 
       // Voice Dictation (Web Speech API)
       document.getElementById("voice-dictate-btn")?.addEventListener("click", () => {
@@ -1843,35 +2005,33 @@ function renderPwaShellHtml(locale, nonce) {
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) {
           if (hintEl) hintEl.textContent = "Voice typing is unavailable in this browser. Type your question instead.";
-          modalReturnFocusEl = document.getElementById("voice-dictate-btn");
-          document.getElementById("call-modal-backdrop")?.classList.add("open");
-          document.getElementById("close-call-btn")?.focus();
+          openModal(callBackdrop, document.getElementById("close-call-btn"));
           return;
         }
         const rec = new SR();
         rec.lang = speechLocale;
-        if (hintEl) hintEl.textContent = "Listening... speak your tax question";
+        if (hintEl) hintEl.textContent = "Listening… speak your question.";
         rec.onresult = (ev) => {
           const transcript = ev.results?.[0]?.[0]?.transcript || "";
           if (transcript && input) {
             input.value = (input.value ? input.value + " " : "") + transcript;
           }
-          if (hintEl) hintEl.textContent = "Enter to send · Shift+Enter for newline · Ctrl+K search";
+          if (hintEl) hintEl.textContent = transcript ? "Voice text added. Check it before you send." : "";
         };
         rec.onerror = () => {
-          if (hintEl) hintEl.textContent = "Enter to send · Shift+Enter for newline · Ctrl+K search";
+          if (hintEl) hintEl.textContent = "Voice typing stopped. Type your question instead.";
         };
         rec.start();
       });
 
-      // AI Call Receptionist Modal
-      const callBackdrop = document.getElementById("call-modal-backdrop");
+      // Voice input options dialog
       document.getElementById("open-call-btn")?.addEventListener("click", (e) => {
-        modalReturnFocusEl = e.currentTarget;
-        callBackdrop?.classList.add("open");
-        document.getElementById("close-call-btn")?.focus();
+        openModal(callBackdrop, document.getElementById("close-call-btn"), e.currentTarget);
       });
       document.getElementById("close-call-btn")?.addEventListener("click", closeAllModals);
+      callBackdrop?.addEventListener("click", (e) => {
+        if (e.target === callBackdrop) closeAllModals();
+      });
       document.querySelectorAll(".call-sample-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
           const q = btn.getAttribute("data-voice-q");

@@ -193,8 +193,9 @@ These findings came from a code and rendered-browser review of `apps/web/server.
 - Evidence: Each update rewrites the whole `role="log"` live region. The composer status line is `display: none` at 640 px or less, which hides "draft restored" messages on phones. The account popover declares `role="menu"` without menu keyboard support. Settings tabs have no arrow-key model or `aria-controls`. The staff palette input has no `combobox` role, `aria-expanded`, or `aria-activedescendant`. Rename and delete use `window.prompt` and `window.confirm`. Clearing from Settings has no confirmation. `Ctrl+N` and `Ctrl+,` are advertised but not implemented.
 - Standard: WCAG 2.2 SC 1.3.1, 2.1.1, 3.2.4, 4.1.2, 4.1.3; WAI-ARIA APG combobox, tabs, and disclosure patterns.
 - Impact: Screen-reader users get repeated or missing announcements and cannot operate some controls predictably.
-- Fix: Planned for R2-D (public chat) and R2-F (staff console).
-- Phase: R2-D, R2-F · Owner: Frontend · Status: Open.
+- Fix: R2-D (public chat). The transcript is no longer a live region; a separate polite status region announces "Preparing an answer", "Answer received", and "Not answered". The composer status stays visible at every width, and the keyboard tips hide on small screens. The account panel uses the disclosure pattern and closes on Escape or when focus leaves it. Settings tabs follow the APG model (roving `tabindex`, arrow keys, Home and End, `aria-controls`, a labelled tabpanel). A modal stack makes the page inert behind dialogs and returns focus. An in-page dialog replaces `prompt` and `confirm`, with Cancel focused by default. Clearing from Settings asks for confirmation. False shortcut hints were removed. Conversation groups are lists under headings. Speech output uses the interface language.
+- Verification: `tests/browser/public-chat-a11y.spec.ts` (8 tests) fails on the R2-C code and passes after R2-D.
+- Phase: R2-D, R2-F · Owner: Frontend · Status: Public chat fixed in R2-D; staff command palette and account menu open for R2-F.
 
 ### AUD-019 · S2 · Accessibility · Light-theme status text fails contrast; preview status is styled as healthy
 
@@ -202,8 +203,9 @@ These findings came from a code and rendered-browser review of `apps/web/server.
 - Evidence: Computed contrast in the light theme: offline status 1.31:1; preview chip 1.64:1 on white; preview banner heading 1.45:1. The "Preview only · no authenticated staff session" pill uses the success colour.
 - Standard: WCAG 2.2 SC 1.4.3 (4.5:1) and SC 1.4.1; master prompt invariant 10.
 - Impact: The two most important status messages are unreadable in light theme, and a non-operational state looks healthy.
-- Fix: Planned for R2-D (public chat) and R2-F (staff console).
-- Phase: R2-D, R2-F · Owner: Frontend · Status: Open.
+- Fix: R2-D sets the light-theme offline text to `#991B1B` (6.35:1 on the badge background), follows the system colour scheme and `prefers-contrast: more` until the user chooses, adds `forced-colors` borders and focus colours, and raises small labels to at least 12 px. The console colours are planned for R2-F.
+- Verification: A rendered test computes the offline status contrast in the light theme and requires at least 4.5:1.
+- Phase: R2-D, R2-F · Owner: Frontend · Status: Public chat fixed in R2-D; staff console open for R2-F.
 
 ### AUD-020 · S2 · Language governance · UI publishes unreviewed strings for Phase 4 locales
 

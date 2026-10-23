@@ -44,7 +44,9 @@ test("public chat renders a safe answer through the subject-stripping BFF", asyn
   await expect(composer).toBeVisible();
   await composer.fill("Synthetic public guidance question");
   await composer.press("Enter");
-  await expect(page.getByText("Synthetic browser verification response.")).toBeVisible();
+  await expect(
+    page.locator("#ssra-chat-messages").getByText("Synthetic browser verification response."),
+  ).toBeVisible();
 
   const [captured] = await getRuntimeRequests(request);
   expect(captured?.body).toMatchObject({
@@ -203,7 +205,7 @@ test("Arabic direction, low-data mode, and offline fallback remain explicit", as
 
     await page.getByRole("button", { name: "Open conversations" }).click();
     await page.locator("#acct-rail-trigger").click();
-    await page.getByRole("menuitem", { name: /Settings & Privacy/ }).click();
+    await page.getByRole("button", { name: /Settings & Privacy/ }).click();
     const lowDataToggle = page.locator("#toggle-lowdata-btn");
     await expect(lowDataToggle).toBeVisible();
     await lowDataToggle.click();
