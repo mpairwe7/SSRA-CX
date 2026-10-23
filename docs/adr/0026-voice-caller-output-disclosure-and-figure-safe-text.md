@@ -14,6 +14,15 @@ The spoken-figure guard read only ASCII-style digit runs. It accepted "valid for
 
 No call started with an AI disclosure, barge-in only set a flag, and a Whisper transcript of silence would have been answered.
 
+## Options Considered
+
+1. **Fix each adapter's slice separately.** Each channel would keep its own copy of sentence splitting and the GSM-7 table, which had already drifted. Rejected.
+2. **Allow more SMS segments so nothing is cut.** This hides cost and still needs a rule for the longest answers. Rejected as the default; the per-language budget is left to OQ-007.
+3. **One shared fitting module in `ssra_core` that drops whole sentences and never ends on a number (chosen).**
+4. **Spelled-out numbers:** reject any number word (rejected: "one of the forms" would fail), ignore them (rejected: "twelve (3) months" passes), or parse English number words into values and check them like digits (chosen; other languages are a recorded residual).
+5. **Call opening:** a passive "this call may be recorded" notice (rejected: it is opt-out), or a separate AI disclosure followed by an explicit keypad opt-in (chosen).
+6. **Barge-in:** stop playback only, or cancel generation only (both rejected: one leaves stale audio, the other stale work), or always both together (chosen).
+
 ## Decision
 
 1. **One fitting rule for channel text.** `ssra_core.channel_text` owns sentence splitting, SMS segment counting, and `fit_text`. Text is shortened by dropping whole sentences from the end. Only when no sentence fits are whole words dropped, never ending on a number, and shortened text ends with "...". Adapters no longer slice strings.
