@@ -36,6 +36,8 @@ const SUPPORTED_LOCALES = new Set(["en", "pga", "ar", "din", "nus", "bfa", "zne"
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
 const VALID_OPAQUE_HEADER_RE = /^[\x21-\x7e]{1,128}$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "DELETE", "OPTIONS"]);
+// Mirrors the runtime's thread-id rule so malformed ids fail here with a 400.
+const SAFE_THREAD_ID_RE = /^[A-Za-z0-9_:-]{1,128}$/;
 
 function createTraceparent(existing) {
   if (typeof existing === "string" && /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/.test(existing)) {
@@ -450,9 +452,8 @@ function renderPwaShellHtml(locale, nonce) {
     .bubble.assistant { background: var(--surface-2); border: 1px solid var(--border-1); color: var(--text-0); border-bottom-left-radius: 6px; box-shadow: var(--shadow-md); width: 100%; }
     .turn-meta-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin-bottom: 0.55rem; font-size: 0.74rem; color: var(--text-2); }
     .meta-pill { padding: 0.18rem 0.55rem; border-radius: var(--radius-pill); background: var(--surface-3); border: 1px solid var(--border-1); font-weight: 600; font-size: 0.71rem; }
-    .meta-pill.tier { color: var(--ssra-gold); border-color: rgba(244, 196, 48, 0.35); }
     .meta-pill.verified { color: var(--success); border-color: rgba(52, 211, 153, 0.35); }
-    .meta-pill.eq { color: var(--ssra-teal-light); }
+    .meta-pill.caution { color: var(--warning); border-color: rgba(251, 191, 36, 0.45); }
 
     /* Generative UI Cards */
     .gen-ui-card { margin-top: 0.85rem; padding: 0.95rem 1.1rem; border-radius: var(--radius-md); background: var(--surface-1); border: 1px solid var(--border-2); }
@@ -460,7 +461,14 @@ function renderPwaShellHtml(locale, nonce) {
     .ssra-guided-steps { margin: 0.4rem 0; padding-inline-start: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.88rem; }
     .ssra-citation-badges { list-style: none; padding: 0; margin: 0.65rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
     .citation-pill { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); background: rgba(7, 137, 48, 0.14); border: 1px solid rgba(46, 204, 113, 0.35); color: var(--ssra-teal-light); font-size: 0.74rem; font-weight: 600; }
-    .confirm-btn { min-height: 44px; margin-top: 0.65rem; padding: 0.55rem 1rem; border-radius: var(--radius-sm); background: var(--grad-gold); color: #091310; font-weight: 700; border: none; cursor: pointer; font-size: 0.84rem; }
+    .citation-link { color: inherit; text-underline-offset: 2px; }
+    .gen-ui-card.is-warning { border-color: rgba(251, 191, 36, 0.55); }
+    .gen-ui-card p { margin: 0.35rem 0 0; font-size: 0.88rem; line-height: 1.5; }
+    .gen-kv { margin: 0.45rem 0 0; display: grid; gap: 0.3rem; }
+    .gen-kv > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 0.75rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border-0); font-size: 0.88rem; }
+    .gen-kv dt { color: var(--text-2); }
+    .gen-kv dd { margin: 0; font-weight: 700; color: var(--text-0); font-variant-numeric: tabular-nums; }
+    .gen-estimate-note { font-weight: 600; color: var(--warning); }
     .turn-actions { display: flex; align-items: center; gap: 0.45rem; margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid var(--border-0); }
     .turn-act-btn { min-height: 44px; padding: 0.25rem 0.75rem; border-radius: 6px; background: var(--surface-1); border: 1px solid var(--border-0); color: var(--text-2); font-size: 0.74rem; cursor: pointer; }
     .turn-act-btn:hover { color: var(--text-0); border-color: var(--border-1); }
@@ -514,12 +522,6 @@ function renderPwaShellHtml(locale, nonce) {
     .settings-pane-title { margin: 0; color: var(--text-0); font-size: 1.05rem; }
     .settings-pane-body { font-size: 0.86rem; color: var(--text-2); line-height: 1.55; }
     .settings-actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
-    .gen-resumable { margin-top: 0.45rem; font-size: 0.8rem; color: var(--ssra-gold); }
-    .gen-summary-lg { font-size: 0.9rem; }
-    .gen-summary-md { font-size: 0.86rem; }
-    .gen-periods-list { margin: 0.4rem 0; padding-inline-start: 1.2rem; font-size: 0.85rem; }
-    .gen-confirm-box { margin-top: 0.55rem; padding: 0.65rem; border-radius: 8px; background: rgba(244, 196, 48, 0.1); border: 1px solid rgba(244, 196, 48, 0.35); }
-    .gen-confirm-title { font-size: 0.84rem; font-weight: 600; color: var(--ssra-gold); }
     .turn-content-text { white-space: pre-wrap; }
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: var(--text-3); }
     :focus-visible { outline: 3px solid var(--ssra-gold); outline-offset: 2px; }
@@ -863,7 +865,7 @@ function renderPwaShellHtml(locale, nonce) {
               isAuthenticated: false,
               updatedAtMs: Number.isFinite(c.updatedAtMs) ? c.updatedAtMs : null,
               turns: (c.turns || [])
-                .filter((t) => !t.meta?.tier || t.meta.tier === "T0")
+                .filter((t) => (!t.meta?.tier || t.meta.tier === "T0") && t.meta?.kind !== "pending")
                 .map((t) => ({
                   role: t.role,
                   content: scrubPiiForStorage(t.content),
@@ -921,8 +923,8 @@ function renderPwaShellHtml(locale, nonce) {
       }
       applyTheme(state.theme || "dark");
 
-      // Offline fallback abstains, preserves request uncertainty, and does not cite a snapshot.
-      function computeOfflineResilienceAnswer(text) {
+      // Offline fallback abstains, says whether the question was sent, and never cites a source.
+      function computeOfflineResilienceAnswer(text, opts = {}) {
         const q = String(text || "").toLowerCase();
         const isCalcOrRate =
           q.includes("paye") ||
@@ -933,104 +935,163 @@ function renderPwaShellHtml(locale, nonce) {
           q.includes("duty") ||
           q.includes("tariff") ||
           q.includes("cif");
+        const status = opts.sent
+          ? "The connection dropped before SSRA Assist replied, so your question may not have been answered."
+          : "You’re offline, so your question wasn’t sent.";
         return {
-          content: isCalcOrRate
-            ? "The connection was lost before SSRA Assist confirmed a response. I can’t tell whether your request completed. Check with SSRA staff before repeating a consequential request. I can’t calculate or confirm tax figures while offline. You can also visit the official SSRA / NRA e-Tax portal: https://etax.nra.gov.ss/."
-            : "The connection was lost before SSRA Assist confirmed a response. I can’t tell whether your request completed. Check with SSRA staff before repeating a consequential request. Reconnect to continue, or visit the official SSRA / NRA e-Tax portal: https://etax.nra.gov.ss/.",
+          content:
+            status +
+            " You can send it again when you’re connected." +
+            (isCalcOrRate ? " I can’t calculate or confirm tax figures while offline." : ""),
           meta: {
             tier: "T0",
-            intent: isCalcOrRate ? "offline_calculator_abstention" : "offline_resilience_guidance",
+            kind: "failure",
             outcome_verified: false,
             citations: [],
+            retry_text: String(text || "").trim(),
           },
         };
       }
 
-      // FE-G5: Render all 7 Generative UI Card types
-      function renderGenerativeCard(ui, pendingConfirmation, threadId) {
-        if (!ui && !pendingConfirmation) return "";
-        const cardName = ui?.name || "ConfirmActionSheet";
-        const props = ui?.props || {};
-        let inner = "";
+      // Public chat is anonymous (T0), so it renders only the public Generative UI
+      // components. Every displayed prop is checked; a missing value is never filled in.
+      const PUBLIC_UI_COMPONENTS = new Set(["CitationList", "CalculatorForm", "PaymentInstructionsCard", "HandoffCard"]);
+      const SIGN_IN_UI_COMPONENTS = new Set(["BalanceCard", "FilingStatusTimeline", "ConfirmActionSheet"]);
+      const OFFICIAL_PORTAL = "https://etax.nra.gov.ss/";
+      const SIGN_IN_NOTICE = "Personal tax records and account actions aren’t available in this public chat. Sign in through the official e-Tax portal: " + OFFICIAL_PORTAL;
 
-        if (Array.isArray(props.guided_steps) && props.guided_steps.length > 0) {
-          inner += '<ol class="ssra-guided-steps">' + props.guided_steps.map((s) =>
-            "<li><strong>" + escapeHtml(s.title || ("Step " + s.step_number)) + ":</strong> " + escapeHtml(s.instruction || s.detail || "") + "</li>"
-          ).join("") + "</ol>";
-        }
-        if (props.resumable_workflow) {
-          inner += '<div class="gen-resumable">' + ICONS.history + " Resumable Journey Paused: <strong>" + escapeHtml(props.resumable_workflow.journey_intent) + "</strong> (Step " + escapeHtml(props.resumable_workflow.current_step) + " of " + escapeHtml(props.resumable_workflow.total_steps) + ")</div>";
-        }
-        if (props.total_outstanding_ssp !== undefined) {
-          inner += '<div class="gen-summary-lg"><strong>Outstanding Balance:</strong> ' + escapeHtml(props.total_outstanding_ssp) + " SSP · <strong>Filing Status:</strong> " + escapeHtml(props.filing_status || "COMPLIANT") + "</div>";
-        }
-        if (Array.isArray(props.periods) && props.periods.length > 0) {
-          inner += '<ul class="gen-periods-list">' + props.periods.map((p) =>
-            "<li><strong>" + escapeHtml(p.period || p.tax_type || "Period") + ":</strong> " + escapeHtml(p.status || "FILED") + " (Due: " + escapeHtml(p.due_date || "15th CAT") + ")</li>"
-          ).join("") + "</ul>";
-        } else if (props.last_filed_period !== undefined) {
-          inner += '<div class="gen-summary-md"><strong>Filing Status:</strong> ' + escapeHtml(props.filing_status || "COMPLIANT") + " · <strong>Last Filed Period:</strong> " + escapeHtml(props.last_filed_period) + "</div>";
-        }
-        if (props.prn || props.approved_banks) {
-          inner += '<div class="gen-summary-md"><strong>Payment Reference (PRN):</strong> <code>' + escapeHtml(props.prn || "PRN-PENDING") + "</code> · <strong>Cash-Free Policy:</strong> Pay only at approved commercial banks via https://etax.nra.gov.ss/</div>";
-        } else if (props.status && props.guidance) {
-          inner += '<div class="gen-summary-md"><strong>' + escapeHtml(props.status) + ":</strong> " + escapeHtml(props.guidance) + "</div>";
-        }
-        if (props.estimated_tax_ssp !== undefined || props.net_pay_ssp !== undefined || props.net_monthly_ssp !== undefined || props.withholding_tax_ssp !== undefined || props.estimated_duty_ssp !== undefined) {
-          const isDuty = !props.estimated_tax_ssp && !props.withholding_tax_ssp && props.estimated_duty_ssp !== undefined;
-          const estTax = props.estimated_tax_ssp || props.withholding_tax_ssp || props.estimated_duty_ssp || "";
-          const netVal = props.net_pay_ssp || props.net_monthly_ssp || props.net_payable_ssp || "";
-          inner += '<div class="gen-summary-lg"><strong>' + (isDuty ? "Estimated Customs Duty:" : "Estimated Tax:") + "</strong> " + escapeHtml(estTax) + " SSP" + (netVal ? " · <strong>Net Amount:</strong> " + escapeHtml(netVal) + " SSP" : "") + "</div>";
-        }
-        if (props.queue || props.reason || props.case_id) {
-          inner += '<div class="gen-summary-md"><strong>SSRA Officer AssistanceQueue:</strong> ' + escapeHtml(props.queue || "Domestic Taxes Desk") + (props.case_id ? " · <strong>Case ID:</strong> <code>" + escapeHtml(props.case_id) + "</code>" : "") + " · <strong>Duty Hours:</strong> Mon–Fri 08:00–17:00 CAT (Africa/Juba)</div>";
-        }
-        if (pendingConfirmation && pendingConfirmation.token) {
-          inner += '<div class="gen-confirm-box">' +
-            '<div class="gen-confirm-title">Action Confirmation Required (T2): ' + escapeHtml(pendingConfirmation.summary_text) + "</div>" +
-            '<button type="button" class="confirm-btn" data-confirm-token="' + escapeHtml(pendingConfirmation.token) + '" data-idem-key="' + escapeHtml(pendingConfirmation.idempotency_key) + '" data-thread-id="' + escapeHtml(threadId) + '">' + ICONS.check + " Confirm &amp; Execute " + escapeHtml(pendingConfirmation.tool) + "</button>" +
-          "</div>";
-        }
-        return '<div class="gen-ui-card" role="region" aria-label="' + escapeHtml(cardName) + '">' +
-          '<div class="gen-ui-title"><span>' + ICONS.sparkles + " " + escapeHtml(cardName) + "</span></div>" +
-          inner +
-        "</div>";
+      function isFilledText(value) {
+        return typeof value === "string" && value.trim().length > 0;
       }
 
-      function renderTurnHtml(turn) {
+      function cardHtml(title, body, tone) {
+        return '<div class="gen-ui-card' + (tone ? " is-" + tone : "") + '" role="group" aria-label="' + escapeHtml(title) + '">' +
+          '<div class="gen-ui-title">' + escapeHtml(title) + "</div>" + body + "</div>";
+      }
+
+      function definitionRows(rows) {
+        const filled = rows.filter(([, value]) => isFilledText(value));
+        return filled.length
+          ? '<dl class="gen-kv">' + filled.map(([label, value]) => "<div><dt>" + escapeHtml(label) + "</dt><dd>" + escapeHtml(value) + "</dd></div>").join("") + "</dl>"
+          : "";
+      }
+
+      function renderGuidedSteps(steps) {
+        if (!Array.isArray(steps) || steps.length === 0) return "";
+        const valid = steps.every(
+          (s) => s && Number.isInteger(s.step_number) && s.step_number >= 1 && isFilledText(s.title) && isFilledText(s.instruction),
+        );
+        if (!valid) return "";
+        return '<ol class="ssra-guided-steps">' + steps.map((s) =>
+          "<li><strong>" + escapeHtml(s.title) + ":</strong> " + escapeHtml(s.instruction) + "</li>"
+        ).join("") + "</ol>";
+      }
+
+      function renderCalculatorCard(p, citationCount) {
+        const hasPaye = p.estimated_tax_ssp !== undefined;
+        const hasWht = p.withholding_tax_ssp !== undefined;
+        const type = hasWht ? "WHT" : hasPaye ? "PAYE" : null;
+        if (p.is_estimate !== true || !type || (hasPaye && hasWht)) return "";
+        if (p.calculator_type !== undefined && p.calculator_type !== type) return "";
+        if (!isFilledText(type === "WHT" ? p.withholding_tax_ssp : p.estimated_tax_ssp)) return "";
+        if (citationCount < 1) {
+          return cardHtml("Estimate unavailable", "<p>An estimate can’t be shown because no approved source came with it.</p>", "warning");
+        }
+        const rows = type === "WHT"
+          ? [["Gross payment (SSP)", p.gross_amount_ssp], ["Rate (%)", p.rate_percent], ["Withholding tax (SSP)", p.withholding_tax_ssp], ["Net payable (SSP)", p.net_payable_ssp]]
+          : [["Gross monthly pay (SSP)", p.gross_monthly_ssp], ["Estimated PAYE (SSP)", p.estimated_tax_ssp], ["Net monthly pay (SSP)", p.net_monthly_ssp]];
+        return cardHtml(
+          type === "WHT" ? "Withholding tax estimate" : "PAYE estimate",
+          '<p class="gen-estimate-note">Estimate only. It is not an official assessment.</p>' + definitionRows(rows),
+        );
+      }
+
+      function renderPaymentCheckCard(p) {
+        const official = p.status === "OFFICIAL_VERIFIED";
+        if ((!official && p.status !== "UNVERIFIED_OR_SCAM") || !isFilledText(p.identifier) || !isFilledText(p.guidance) || p.official_portal !== OFFICIAL_PORTAL) {
+          return "";
+        }
+        return cardHtml(
+          official ? "Official SSRA channel" : "Not a confirmed SSRA channel",
+          definitionRows([["Checked", p.identifier]]) + "<p>" + escapeHtml(p.guidance) + "</p><p>Official e-Tax portal: " + OFFICIAL_PORTAL + "</p>",
+          official ? "" : "warning",
+        );
+      }
+
+      function renderPublicCard(ui, citationCount) {
+        if (!ui || typeof ui.name !== "string") return "";
+        if (SIGN_IN_UI_COMPONENTS.has(ui.name)) return cardHtml("Secure sign-in needed", "<p>" + escapeHtml(SIGN_IN_NOTICE) + "</p>");
+        const p = ui.props && typeof ui.props === "object" ? ui.props : null;
+        if (!PUBLIC_UI_COMPONENTS.has(ui.name) || !p) return "";
+        if (ui.name === "CitationList") {
+          const steps = renderGuidedSteps(p.guided_steps);
+          return steps ? cardHtml("Steps", steps) : "";
+        }
+        if (ui.name === "CalculatorForm") return renderCalculatorCard(p, citationCount);
+        if (ui.name === "PaymentInstructionsCard") return renderPaymentCheckCard(p);
+        if (!isFilledText(p.reason)) return "";
+        return cardHtml(
+          "SSRA staff help",
+          "<p>An SSRA officer needs to answer this question. SSRA Assist can’t confirm officer availability or contact hours here.</p>" +
+            "<p>For SSRA contact information, use the official e-Tax portal: " + OFFICIAL_PORTAL + "</p>",
+        );
+      }
+
+      function renderCitations(citations) {
+        if (!Array.isArray(citations) || citations.length === 0) return "";
+        return '<ul class="ssra-citation-badges" aria-label="Approved sources">' + citations.map((c) => {
+          const label = [c?.doc_title, c?.section_anchor].filter(isFilledText).join(" · ") || "Source";
+          const detail = [
+            isFilledText(c?.effective_from) ? "effective from " + c.effective_from : "",
+            isFilledText(c?.snapshot_version) ? "version " + c.snapshot_version : "",
+          ].filter(Boolean).join(", ");
+          const text = ICONS.bookOpen + " " + escapeHtml(label) + (detail ? " (" + escapeHtml(detail) + ")" : "");
+          const href = typeof c?.url === "string" && c.url.startsWith("https://") ? c.url : "";
+          return '<li class="citation-pill">' + (href ? '<a class="citation-link" href="' + escapeHtml(href) + '" rel="noopener noreferrer">' + text + "</a>" : text) + "</li>";
+        }).join("") + "</ul>";
+      }
+
+      function renderTrustPills(meta) {
+        if (meta.kind === "failure") return '<div class="turn-meta-bar"><span class="meta-pill caution">' + ICONS.alertTriangle + " Not answered</span></div>";
+        const count = Array.isArray(meta.citations) ? meta.citations.length : 0;
+        const pills = [
+          count > 0
+            ? '<span class="meta-pill verified">' + ICONS.bookOpen + " " + count + (count === 1 ? " approved source" : " approved sources") + "</span>"
+            : '<span class="meta-pill caution">No source cited</span>',
+        ];
+        if (meta.outcome_verified === false) pills.push('<span class="meta-pill caution">Not fully verified</span>');
+        if (meta.is_estimate === true) pills.push('<span class="meta-pill">Estimate</span>');
+        return '<div class="turn-meta-bar">' + pills.join("") + "</div>";
+      }
+
+      function renderTurnHtml(turn, index) {
         if (turn.role === "user") {
           return '<article class="message-row message-row-user"><div class="bubble user">' + escapeHtml(turn.content) + "</div></article>";
         }
         const meta = turn.meta || {};
-        const pills = [];
-        if (meta.tier) pills.push('<span class="meta-pill tier">Tier ' + escapeHtml(meta.tier) + "</span>");
-        if (meta.intent) pills.push('<span class="meta-pill">' + escapeHtml(meta.intent) + "</span>");
-        if (meta.outcome_verified) pills.push('<span class="meta-pill verified">' + ICONS.shieldCheck + " Provenance Verified</span>");
-        if (meta.recommended_tone && meta.recommended_tone !== "standard_clear") {
-          pills.push('<span class="meta-pill eq">EQ: ' + escapeHtml(meta.recommended_tone) + "</span>");
+        if (meta.kind === "pending") {
+          return '<article class="message-row message-row-assistant" aria-busy="true"><div class="bubble assistant"><div class="turn-content-text">' + escapeHtml(turn.content) + "</div></div></article>";
         }
-        if (meta.elapsed_ms) pills.push("<span>Thought for " + escapeHtml(meta.elapsed_ms) + "ms</span>");
-
-        const citationsHtml = Array.isArray(meta.citations) && meta.citations.length > 0
-          ? '<ul class="ssra-citation-badges">' + meta.citations.map((c) =>
-              '<li class="citation-pill">' + ICONS.bookOpen + " " + escapeHtml(c.section_anchor || c.doc_title || c.id || "Approved source") + (c.snapshot_version ? " (" + escapeHtml(c.snapshot_version) + ")" : "") + "</li>"
-            ).join("") + "</ul>"
-          : "";
+        const citationCount = Array.isArray(meta.citations) ? meta.citations.length : 0;
+        const actions = meta.kind === "failure"
+          ? (isFilledText(meta.retry_text) ? '<button type="button" class="turn-act-btn" data-retry-turn="' + index + '">' + ICONS.refresh + " Try again</button>" : "")
+          : '<button type="button" class="turn-act-btn" data-speak="' + escapeHtml(turn.content) + '">' + ICONS.speaker + " Listen</button>" +
+            '<button type="button" class="turn-act-btn" data-copy="' + escapeHtml(turn.content) + '">' + ICONS.copy + " Copy</button>" +
+            (isFilledText(meta.thread_id)
+              ? '<button type="button" class="turn-act-btn" data-csat="5" data-thread-id="' + escapeHtml(meta.thread_id) + '">' + ICONS.thumbUp + " Helpful</button>" +
+                '<button type="button" class="turn-act-btn" data-csat="1" data-thread-id="' + escapeHtml(meta.thread_id) + '">' + ICONS.thumbDown + " Not helpful</button>"
+              : "");
 
         return '<article class="message-row message-row-assistant">' +
           '<div class="bubble assistant">' +
-            (pills.length ? '<div class="turn-meta-bar">' + pills.join("") + "</div>" : "") +
+            renderTrustPills(meta) +
             '<div class="turn-content-text">' + escapeHtml(turn.content) + "</div>" +
-            renderGenerativeCard(meta.ui_component, meta.pending_confirmation, meta.thread_id) +
-            citationsHtml +
-            '<div class="turn-actions">' +
-              '<button type="button" class="turn-act-btn" data-speak="' + escapeHtml(turn.content) + '">' + ICONS.speaker + " Listen</button>" +
-              '<button type="button" class="turn-act-btn" data-copy="' + escapeHtml(turn.content) + '">' + ICONS.copy + " Copy</button>" +
-              '<button type="button" class="turn-act-btn" data-csat="5" data-thread-id="' + escapeHtml(meta.thread_id || state.activeId || "thr_web") + '">' + ICONS.thumbUp + " Helpful</button>" +
-              '<button type="button" class="turn-act-btn" data-csat="1" data-thread-id="' + escapeHtml(meta.thread_id || state.activeId || "thr_web") + '">' + ICONS.thumbDown + " Report</button>" +
-            "</div>" +
+            (meta.kind === "failure" ? "" : renderPublicCard(meta.ui_component, citationCount)) +
+            (meta.needs_sign_in || meta.pending_confirmation ? cardHtml("Secure sign-in needed", "<p>" + escapeHtml(SIGN_IN_NOTICE) + "</p>") : "") +
+            renderCitations(meta.citations) +
+            (actions ? '<div class="turn-actions">' + actions + "</div>" : "") +
           "</div>" +
-        '</article>';
+        "</article>";
       }
 
       function renderConvRow(c) {
@@ -1135,6 +1196,7 @@ function renderPwaShellHtml(locale, nonce) {
       }
 
       let activeTurnAbortController = null;
+      const TURN_TIMEOUT_MS = 30000;
 
       function cleanTextForSpeech(raw) {
         return String(raw || "")
@@ -1144,7 +1206,42 @@ function renderPwaShellHtml(locale, nonce) {
           .trim();
       }
 
-      async function sendTurn(text, opts = {}) {
+      function newThreadId() {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        return "thr_web_" + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      }
+
+      function failureTurn(content, retryText) {
+        return {
+          role: "assistant",
+          content,
+          meta: { tier: "T0", kind: "failure", outcome_verified: false, citations: [], retry_text: retryText },
+        };
+      }
+
+      // Describe only what the HTTP status tells us; never show a raw error body.
+      function describeHttpFailure(status, retryAfter) {
+        if (status === 429) {
+          const seconds = Number.parseInt(String(retryAfter || ""), 10);
+          return "Too many questions were sent in a short time, so this one wasn’t answered. " +
+            (Number.isFinite(seconds) && seconds > 0 ? "Wait " + seconds + " seconds, then try again." : "Wait a moment, then try again.");
+        }
+        if (status === 413) return "Your message is too long to send. Shorten it and try again.";
+        if (status === 400 || status === 422) return "SSRA Assist couldn’t read this request, so it wasn’t answered. Edit your message and try again.";
+        if (status === 401 || status === 403) return "This request isn’t available in public chat. " + SIGN_IN_NOTICE;
+        if (status === 503) return "SSRA Assist isn’t available right now, so your question wasn’t answered. Try again later, or use the official e-Tax portal: " + OFFICIAL_PORTAL;
+        if (status === 502 || status === 504) return "SSRA Assist didn’t reply in time, so your question may not have been answered. You can try again.";
+        return "Something went wrong at SSRA Assist, so your question wasn’t answered. You can try again.";
+      }
+
+      function restoreDraft(text) {
+        if (!input || input.value.trim()) return false;
+        input.value = text;
+        return true;
+      }
+
+      async function sendTurn(text) {
         if (activeTurnAbortController) return;
         const trimmed = String(text || "").trim();
         if (!trimmed) return;
@@ -1152,7 +1249,7 @@ function renderPwaShellHtml(locale, nonce) {
         let conv = state.conversations.find((c) => c.id === state.activeId);
         if (!conv) {
           conv = {
-            id: "thr_web_" + Date.now().toString(36),
+            id: newThreadId(),
             title: trimmed.slice(0, 48),
             pinned: false,
             isAuthenticated: false,
@@ -1164,89 +1261,108 @@ function renderPwaShellHtml(locale, nonce) {
         }
         conv.updatedAtMs = Date.now();
         conv.turns.push({ role: "user", content: trimmed });
-        conv.turns.push({ role: "assistant", content: "Searching SSRA statutory corpus & verifying numeric provenance..." });
+
+        if (navigator.onLine === false) {
+          const offline = computeOfflineResilienceAnswer(trimmed);
+          conv.turns.push({ role: "assistant", content: offline.content, meta: offline.meta });
+          restoreDraft(trimmed);
+          saveState();
+          renderApp();
+          return;
+        }
+
+        conv.turns.push({ role: "assistant", content: "Preparing an answer…", meta: { tier: "T0", kind: "pending" } });
         renderApp();
 
-        const endpoint = "/api/turns";
-        const headers = {
-          "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true",
-        };
         const payload = {
           message: trimmed,
-          thread_id: opts.threadId || conv.id,
+          thread_id: conv.id,
           locale: state.locale,
           channel: "web",
           low_data_mode: Boolean(state.lowDataMode),
           auth_level: "ANONYMOUS",
           subject_ref: null,
-          confirmation_token: opts.confirmationToken || null,
-          idempotency_key: opts.idempotencyKey || null,
         };
 
-        const t0 = performance.now();
-        activeTurnAbortController = new AbortController();
+        const controller = new AbortController();
+        activeTurnAbortController = controller;
+        let timedOut = false;
+        const timeoutId = window.setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, TURN_TIMEOUT_MS);
         if (submitBtn) {
           submitBtn.type = "button";
           setSafeHtml(submitBtn, ICONS.stop + " Stop");
         }
+        let reply;
         try {
-          const res = await fetch(endpoint, {
+          const res = await fetch("/api/turns", {
             method: "POST",
-            headers,
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify(payload),
-            signal: activeTurnAbortController.signal,
+            signal: controller.signal,
           });
-          const data = await res.json();
-          const elapsed = Math.round(performance.now() - t0);
-          const replyText = data?.answer?.segments?.map((s) => s.text).join(" ") || data?.detail || JSON.stringify(data);
-          conv.turns[conv.turns.length - 1] = {
-            role: "assistant",
-            content: replyText,
-            meta: {
-              tier: data?.tier,
-              intent: data?.intent?.intent,
-              outcome_verified: data?.outcome_verified,
-              recommended_tone: data?.affective_state?.recommended_tone,
-              ui_component: data?.answer?.ui_component,
-              pending_confirmation: data?.pending_confirmation,
-              citations: data?.citations || data?.answer?.citations || [],
-              thread_id: data?.thread_id || conv.id,
-              elapsed_ms: elapsed,
-            },
-          };
-          if (state.autoNarrate && "speechSynthesis" in window) {
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(new SpeechSynthesisUtterance(cleanTextForSpeech(replyText)));
+          let data = null;
+          if ((res.headers.get("content-type") || "").includes("json")) {
+            try {
+              data = await res.json();
+            } catch {
+              data = null;
+            }
+          }
+          const segments = Array.isArray(data?.answer?.segments) ? data.answer.segments : [];
+          const replyText = segments.map((s) => (typeof s?.text === "string" ? s.text : "")).join(" ").trim();
+          if (!res.ok) {
+            reply = failureTurn(describeHttpFailure(res.status, res.headers.get("retry-after")), trimmed);
+          } else if (!replyText) {
+            reply = failureTurn("SSRA Assist sent a reply it couldn’t display, so your question wasn’t answered. You can try again.", trimmed);
+          } else {
+            const answerCitations = Array.isArray(data.answer.citations) ? data.answer.citations : [];
+            reply = {
+              role: "assistant",
+              content: replyText,
+              meta: {
+                tier: typeof data.tier === "string" ? data.tier : "T0",
+                kind: "answer",
+                outcome_verified: typeof data.outcome_verified === "boolean" ? data.outcome_verified : null,
+                is_estimate: data.answer.is_estimate === true,
+                ui_component: data.answer.ui_component || null,
+                needs_sign_in: Boolean(data.pending_confirmation),
+                citations: answerCitations.length > 0 ? answerCitations : Array.isArray(data.citations) ? data.citations : [],
+                thread_id: typeof data.thread_id === "string" ? data.thread_id : conv.id,
+              },
+            };
+            if (state.autoNarrate && "speechSynthesis" in window) {
+              window.speechSynthesis.cancel();
+              window.speechSynthesis.speak(new SpeechSynthesisUtterance(cleanTextForSpeech(replyText)));
+            }
           }
         } catch (err) {
-          if (err && err.name === "AbortError") {
-            conv.turns[conv.turns.length - 1] = {
-              role: "assistant",
-              content:
-                "[Client request stopped. Server execution status is unknown; please check your status or recent activity before retrying any consequential action.]",
-              meta: { tier: "T0", intent: "user_cancelled", outcome_verified: false },
-            };
+          if (err && err.name === "AbortError" && !timedOut) {
+            reply = failureTurn("You stopped this answer before it arrived.", trimmed);
+          } else if (timedOut) {
+            reply = failureTurn(describeHttpFailure(504), trimmed);
           } else {
-            // The server may have received the request before the connection failed.
-            const offlineAns = computeOfflineResilienceAnswer(trimmed);
-            conv.turns[conv.turns.length - 1] = {
-              role: "assistant",
-              content: offlineAns.content,
-              meta: offlineAns.meta,
-            };
-            if (input && !input.value.trim()) input.value = trimmed;
-            if (hintEl) hintEl.textContent = "Connection interrupted. Draft restored; request completion may be unknown.";
+            const offline = computeOfflineResilienceAnswer(trimmed, { sent: true });
+            reply = { role: "assistant", content: offline.content, meta: offline.meta };
           }
         } finally {
+          window.clearTimeout(timeoutId);
           activeTurnAbortController = null;
           if (submitBtn) {
             submitBtn.type = "submit";
             setSafeHtml(submitBtn, ICONS.send + " Send");
           }
-          saveState();
-          renderApp();
         }
+        conv.turns[conv.turns.length - 1] = reply;
+        if (reply.meta?.kind === "failure" && hintEl) {
+          hintEl.textContent = restoreDraft(trimmed)
+            ? "Not answered. Your message is back in the box."
+            : "Not answered.";
+        }
+        saveState();
+        renderApp();
       }
 
       submitBtn?.addEventListener("click", (e) => {
@@ -1340,16 +1456,15 @@ function renderPwaShellHtml(locale, nonce) {
       });
 
       msgList?.addEventListener("click", (e) => {
-        const confirmBtn = e.target.closest("[data-confirm-token]");
-        if (confirmBtn) {
-          const token = confirmBtn.getAttribute("data-confirm-token");
-          const idem = confirmBtn.getAttribute("data-idem-key");
-          const tid = confirmBtn.getAttribute("data-thread-id");
-          sendTurn("Confirm action execution", {
-            confirmationToken: token,
-            idempotencyKey: idem,
-            threadId: tid,
-          });
+        const retryBtn = e.target.closest("[data-retry-turn]");
+        if (retryBtn) {
+          const conv = state.conversations.find((c) => c.id === state.activeId);
+          const index = Number(retryBtn.getAttribute("data-retry-turn"));
+          const retryText = conv?.turns[index]?.meta?.retry_text;
+          if (!conv || !retryText || activeTurnAbortController || conv.turns[index - 1]?.role !== "user") return;
+          conv.turns.splice(index - 1, 2);
+          if (input && input.value.trim() === retryText) input.value = "";
+          sendTurn(retryText);
           return;
         }
         const speakBtn = e.target.closest("[data-speak]");
@@ -1366,15 +1481,24 @@ function renderPwaShellHtml(locale, nonce) {
           return;
         }
         const copyBtn = e.target.closest("[data-copy]");
-        if (copyBtn && navigator.clipboard) {
-          navigator.clipboard.writeText(copyBtn.getAttribute("data-copy") || "");
-          setSafeHtml(copyBtn, ICONS.check + " Copied");
+        if (copyBtn) {
+          const showCopyResult = (copied) =>
+            setSafeHtml(copyBtn, copied ? ICONS.check + " Copied" : ICONS.alertTriangle + " Copy failed");
+          if (!navigator.clipboard?.writeText) {
+            showCopyResult(false);
+            return;
+          }
+          navigator.clipboard.writeText(copyBtn.getAttribute("data-copy") || "").then(
+            () => showCopyResult(true),
+            () => showCopyResult(false),
+          );
           return;
         }
         const csatBtn = e.target.closest("[data-csat]");
         if (csatBtn) {
           const csatScore = Number(csatBtn.getAttribute("data-csat")) || 5;
-          const convId = csatBtn.getAttribute("data-thread-id") || state.activeId || "thr_web";
+          const convId = csatBtn.getAttribute("data-thread-id");
+          if (!convId) return;
           const reason = csatScore >= 4 ? "ACCURATE" : "MISSING_INFO";
           csatBtn.disabled = true;
           fetch("/v1/analytics/feedback", {
@@ -1391,14 +1515,12 @@ function renderPwaShellHtml(locale, nonce) {
               setSafeHtml(
                 csatBtn,
                 res.ok
-                  ? csatScore >= 4
-                    ? ICONS.check + " Helpful"
-                    : ICONS.check + " Flagged for Audit"
-                  : ICONS.alertTriangle + " Retry",
+                  ? ICONS.check + " Feedback sent"
+                  : ICONS.alertTriangle + " Not sent · try again",
               );
             })
             .catch(() => {
-              setSafeHtml(csatBtn, ICONS.alertTriangle + " Retry");
+              setSafeHtml(csatBtn, ICONS.alertTriangle + " Not sent · try again");
             })
             .finally(() => {
               csatBtn.disabled = false;
@@ -1778,8 +1900,28 @@ async function readRequestBody(req) {
   return Buffer.concat(chunks).toString("utf-8");
 }
 
+class InvalidTurnRequestError extends Error {}
+
+// Pass through only the content type and a delta-seconds Retry-After from upstream.
+function upstreamResponseHeaders(upstream, fallbackContentType) {
+  const headers = { "Content-Type": upstream.headers.get("content-type") ?? fallbackContentType };
+  const retryAfter = upstream.headers.get("retry-after")?.trim();
+  if (retryAfter && /^\d{1,6}$/.test(retryAfter)) headers["Retry-After"] = retryAfter;
+  return headers;
+}
+
 function sanitizeBrowserTurnBody(rawBodyStr) {
   const parsed = JSON.parse(rawBodyStr);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new InvalidTurnRequestError("INVALID_TURN_BODY");
+  }
+  if (
+    parsed.thread_id !== undefined &&
+    parsed.thread_id !== null &&
+    (typeof parsed.thread_id !== "string" || !SAFE_THREAD_ID_RE.test(parsed.thread_id))
+  ) {
+    throw new InvalidTurnRequestError("INVALID_THREAD_ID");
+  }
   return JSON.stringify({
     message: typeof parsed.message === "string" ? parsed.message : "",
     locale: typeof parsed.locale === "string" ? parsed.locale : "en",
@@ -2004,7 +2146,7 @@ const server = http.createServer(async (req, res) => {
       });
       const text = await upstream.text();
       res.writeHead(upstream.status, {
-        "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+        ...upstreamResponseHeaders(upstream, "application/json"),
         ...secHeaders,
       });
       res.end(text);
@@ -2012,7 +2154,7 @@ const server = http.createServer(async (req, res) => {
       const code =
         err instanceof Error && err.message === "PAYLOAD_TOO_LARGE"
           ? 413
-          : err instanceof SyntaxError
+          : err instanceof SyntaxError || err instanceof InvalidTurnRequestError
             ? 400
             : 502;
       res.writeHead(code, { "Content-Type": "application/json", ...secHeaders });
@@ -2063,7 +2205,7 @@ const server = http.createServer(async (req, res) => {
         const code =
           err instanceof Error && err.message === "PAYLOAD_TOO_LARGE"
             ? 413
-            : err instanceof SyntaxError
+            : err instanceof SyntaxError || err instanceof InvalidTurnRequestError
               ? 400
               : 502;
         res.writeHead(code, { "Content-Type": "application/json", ...secHeaders });

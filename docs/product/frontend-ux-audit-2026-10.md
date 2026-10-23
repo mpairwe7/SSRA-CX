@@ -69,6 +69,47 @@
 - Five clean browser-suite runs passed (25 rendered test executions). See [the R2-B report](../audit/phase-R2-B-browser-flow-report.md) and [the browser-flow runbook](../runbooks/browser-flow-assurance.md).
 - The suite does not use live taxpayer/staff data, tax values, credentials, or provider endpoints. It provides no production-readiness or phase-exit claim.
 
+## Re-audit 2026-10-23
+
+**Scope:** The served public chat (`apps/web/server.js`) and staff preview dashboards (`packages/ui/ops-console.js`, `apps/console/server.js`) at commit `a30d9ee`.
+**Method:** Code review, then reproduction in Chromium against a loopback synthetic scenario runtime, plus computed WCAG contrast for the theme tokens. No taxpayer data, credentials, or live endpoints were used. Each gap below was reproduced before it was recorded.
+
+### Gaps found
+
+| ID | Severity | Gap | Phase |
+|---|---|---|---|
+| [AUD-014](../audit/findings.md#aud-014--s1--grounded-ui--served-chat-renderer-bypasses-the-closed-component-registry-and-invents-missing-facts) | S1 | The served renderer bypassed the Zod registry. It filled missing props with invented facts: `COMPLIANT`, `FILED`, `Due: 15th`, `Mon–Fri 08:00–17:00`, a queue name, and a payment-policy line. It also rendered unregistered components. The runtime sends `HandoffCard` with only a `reason` on anonymous abstentions, so the invented hours reached public users. | R2-C |
+| [AUD-015](../audit/findings.md#aud-015--s2--truthful-state--failed-turns-show-raw-error-bodies-or-misreport-the-cause) | S2 | Raw error JSON and `detail` text were shown as answers. An HTML `500` was reported as a lost connection. `Retry-After` was dropped, and there was no retry control. | R2-C |
+| [AUD-016](../audit/findings.md#aud-016--s2--truthful-state--public-chat-shows-controls-and-metadata-it-cannot-back) | S2 | A confirmation button appeared that the BFF can never honour. Tier, intent, affect, and timing labels were shown to taxpayers. `Provenance Verified` came from a default-true flag. Copy and feedback overstated their results. | R2-C |
+| [AUD-017](../audit/findings.md#aud-017--s3--session-hygiene--public-thread-identifiers-are-guessable) | S3 | Conversation identifiers were derived from timestamps. | R2-C |
+| [AUD-018](../audit/findings.md#aud-018--s2--accessibility--announcements-and-widget-semantics-fall-short-of-wcag-22-and-aria-apg-patterns) | S2 | The whole message log was re-announced on every update, and the status line was hidden on phones. Menu, tab, and combobox semantics were incomplete. The UI used native `prompt` and `confirm`, offered an unconfirmed purge, and advertised shortcuts that do nothing. | R2-D, R2-F |
+| [AUD-019](../audit/findings.md#aud-019--s2--accessibility--light-theme-status-text-fails-contrast-preview-status-is-styled-as-healthy) | S2 | In light theme, offline status contrast is 1.31:1 and the console "Preview only" label is 1.45–1.64:1. The preview state is styled as healthy green. | R2-D, R2-F |
+| [AUD-020](../audit/findings.md#aud-020--s2--language-governance--ui-publishes-unreviewed-strings-for-phase-4-locales) | S2 | Unreviewed, script-mixed interface strings ship for five Phase 4 locales. Dinka support is advertised without evaluation. | R2-E |
+| [AUD-021](../audit/findings.md#aud-021--s3--ai-transparency-and-privacy--no-persistent-ai-or-accuracy-notice-at-the-composer) | S3 | There is no AI or accuracy notice at the composer, and no warning against entering identifiers in public chat. | R2-E |
+| [AUD-022](../audit/findings.md#aud-022--s3--low-bandwidth-and-resilience--low-data-mode-does-not-reduce-rendering-cost-no-no-script-path) | S3 | Low-data mode does not reduce rendering cost. There is no `<noscript>` path, `/healthz` leaks internal URLs, and Brotli quality 4 is larger than gzip for this page. | R2-E |
+| [AUD-023](../audit/findings.md#aud-023--s3--dashboard-truthfulness--preview-navigation-describes-unavailable-capabilities-as-current) | S3 | Preview navigation describes live calls, live flags, and seal proofs that do not exist. | R2-F |
+
+### Phased remediation (2026-10-23)
+
+Each phase is one pull request. Each pull request includes rendered tests that fail on the previous code.
+
+1. **R2-C: Truthful answers (implemented in this branch).** Close the public render boundary to public registered components with no defaults. Remove the confirmation control from anonymous chat. Show plain-language trust cues and citations that carry their effective date. Show truthful failure states with retry and draft restoration. Forward `Retry-After`. Use 128-bit thread identifiers, and return `400` for malformed BFF input.
+2. **R2-D: Accessible interaction (public chat).** Render the log incrementally, with a separate polite status region. Keep the status line visible on phones. Use the disclosure pattern for the account popover and the APG tabs pattern for Settings. Replace `prompt` and `confirm` with an in-page `<dialog>` opened by `showModal()`. Confirm every purge. Remove false shortcut hints. Fix light-theme status contrast. Add `forced-colors` support. Set speech language from the locale.
+3. **R2-E: Language honesty, disclosure, and low-bandwidth.** Phase 4 locales use English interface text with a notice, and advertised languages match the evaluated set. Add AI, accuracy, and identifier warnings, with wording labelled pending OQ-009. Low-data mode and `prefers-reduced-transparency` remove blur, gradients, and animation. Add a `<noscript>` path, remove internal URLs from `/healthz`, and choose a measured compression setting.
+4. **R2-F: Staff dashboards.** Apply the APG combobox pattern to the command palette. The account menu closes on Escape and returns focus. Make light-theme preview labels readable and style the preview state as a warning. Describe destinations as planned capabilities, and render the preview state on the server.
+
+Still open after these phases: moderated research with taxpayers and staff, assistive-technology testing (NVDA, JAWS, TalkBack, VoiceOver), low-end Android and real 2G testing, reviewed `pga`, `ar`, and Phase 4 translations (OQ-008), statutory disclosure wording (OQ-009), contact-centre hours and channels (OQ-010 and OQ-011), staff identity (OQ-014), analytics provenance (OQ-013), and an approved automated accessibility scanner (OQ-012).
+
+### Standards and research checked on 2026-10-23
+
+- [WCAG 2.2](https://www.w3.org/TR/WCAG22/) remains the normative baseline. [WCAG 3.0](https://www.w3.org/TR/wcag-3.0/) is still a Working Draft, and W3C advises against citing it as a requirement.
+- [WAI-ARIA APG combobox pattern](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/): an editable combobox keeps DOM focus on the input, sets `aria-expanded` and `aria-controls`, and moves `aria-activedescendant` across `option` elements with `aria-selected`.
+- Practitioner guidance on streaming chat interfaces ([Atlassian Rovo issue ROVO-978](https://jira.atlassian.com/browse/ROVO-978); [accessible streaming chat UI](https://azukiazusa.dev/en/blog/accessible-streaming-chat-ui)) recommends a separate live region that announces short state changes, such as "response ready", instead of making the transcript itself a live region. No WCAG criterion addresses streaming text directly; SC 4.1.3 Status Messages is the closest. These are secondary sources, so R2-D still requires screen-reader testing.
+- [GOV.UK Chat app design (GDS, 19 August 2026)](https://insidegovuk.blog.gov.uk/2026/08/19/designing-gov-uk-chat-for-the-gov-uk-app/): tells users up front that "AI can make mistakes", links each answer to its source, avoids imagery that overstates capability, and keeps the input usable at larger text sizes.
+- EU AI Act Article 50(1) requires disclosure, from the first interaction, that a user is talking to an AI system. It applied from 2 August 2026; the Commission's guidelines are non-binding. South Sudan is not bound by it. It is used here only as a comparative benchmark until OQ-009 sets the required wording.
+- [MDN: `HTMLDialogElement.closedBy`](https://developer.mozilla.org/docs/Web/API/HTMLDialogElement/closedBy) is not Baseline, and Safari does not support it. R2-D uses `showModal()` and handles backdrop dismissal explicitly.
+- [Chrome: `prefers-reduced-transparency`](https://developer.chrome.com/blog/css-prefers-reduced-transparency) is supported from Chromium 118 but not in Safari. R2-E therefore also ties the same reduction to the explicit low-data setting.
+
 ## Standards and research checked on 2026-10-21
 
 - [W3C Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) — normative accessibility baseline. Relevant criteria include reflow at 320 CSS pixels, keyboard focus visibility/not obscured, target size, and consistent help. The project’s 44px control target is a design target that exceeds the WCAG 2.2 AA minimum for most controls; it does not by itself prove conformance.
