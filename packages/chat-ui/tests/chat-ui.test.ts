@@ -424,9 +424,12 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
       language: "pga",
       languageName: "Juba Arabic",
       languageSource: "auto",
+      recording: false,
     });
     expect(preCall.viewMode).toBe("pre_call_consent");
     expect(preCall.languageChip.chipLabel).toBe("Juba Arabic · auto");
+    expect(preCall.statusPillTone).toBe("not_started");
+    expect(preCall.speakingWith).toBe("none");
 
     const liveCall = buildCallReceptionistScreen({
       status: "ai",
@@ -434,11 +437,24 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
       language: "pga",
       languageName: "Juba Arabic",
       languageSource: "override",
+      recording: true,
     });
     expect(liveCall.viewMode).toBe("live_call");
     expect(liveCall.formattedDuration).toBe("01:15");
     expect(liveCall.languageChip.chipLabel).toBe("Juba Arabic · chosen");
     expect(liveCall.canRequestOfficer).toBe(true);
+    expect(liveCall.speakingWith).toBe("automated_assistant");
+    expect(liveCall.recordingIndicator).toBe(true);
+    const officerCall = buildCallReceptionistScreen({
+      status: "on_hold",
+      durationSeconds: 200,
+      language: "en",
+      languageName: "English",
+      languageSource: "auto",
+      recording: false,
+    });
+    expect(officerCall.speakingWith).toBe("officer");
+    expect(officerCall.recordingIndicator).toBe(false);
 
     // Playback wins ties over mic input so speaker echo never flickers the orb to listening
     const orbSpeaking = computeCallOrbFrame({
@@ -458,7 +474,8 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
       inputLevel: 0.8,
       outputLevel: 0.8,
     });
-    expect(orbReduced.mode).toBe("idle");
+    // Reduced motion stops the animation but still reports who has the floor.
+    expect(orbReduced.mode).toBe("speaking");
     expect(orbReduced.smoothedLevel).toBe(0);
 
     expect(

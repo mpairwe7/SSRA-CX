@@ -9,6 +9,7 @@ import math
 import os
 import re
 import time
+import unicodedata
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -16,13 +17,26 @@ from datetime import date
 from types import MappingProxyType
 from typing import Any, Literal, Protocol
 
-from ssra_core import LocaleCode, McpErrorCode, SSRAError
+from ssra_core import (
+    MAX_SPOKEN_SENTENCES,
+    LocaleCode,
+    McpErrorCode,
+    SSRAError,
+    compose_spoken_reply,
+    count_sms_segments,
+    fit_text,
+    sms_encoding,
+)
+from ssra_core import split_sentences as split_tts_sentences
 from ssra_security import redact_pii
 
 # Launch a language on voice only after its word-error rate on SSRA test sets meets the gate (<= 0.12)
 MAX_VOICE_WER_GATE: float = 0.12
 MIN_UTTERANCE_ASR_CONFIDENCE: float = 0.75
-MAX_VOICE_SPOKEN_SENTENCES: int = 3
+MAX_VOICE_SPOKEN_SENTENCES: int = MAX_SPOKEN_SENTENCES
+# The SMS follow-up budget is 160 characters: one GSM-7 segment, or up to three UCS-2 segments
+# (Arabic). The result reports the real encoding and segment count; the per-language segment budget
+# is for SSRA's channel owners (OQ-007).
 MAX_SMS_CONTINUATION_CHARS: int = 160
 
 # CVE-2026-54233: Cap decoded float32 PCM output at 15.36 MB (120s @ 16kHz mono float32) to prevent OPUS decompression bombs
@@ -61,8 +75,11 @@ class VoiceSessionDecision:
     asr_engine: str
     tts_engine: str
     recording_enabled: bool
-    action: str  # STREAM_ASR | DTMF_MENU | WARM_TRANSFER_TO_OFFICER
+    action: str  # STREAM_ASR | CLARIFY_INTENT_SPOKEN | DTMF_MENU | WARM_TRANSFER_TO_OFFICER
     warm_transfer_summary: str | None = None
+    # True when the caller talked over the assistant: stop playback and cancel the reply being generated.
+    cancel_active_reply: bool = False
+    asr_rejected_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -225,6 +242,48 @@ def is_voice_language_approved(
     return _wer_gate_failure(locale, evidence) is None
 
 
+@dataclass(frozen=True)
+class WhisperSegmentSignals:
+    """Per-segment signals reported by Whisper-family decoders."""
+
+    no_speech_prob: float
+    avg_logprob: float
+    compression_ratio: float
+
+
+# openai/whisper `transcribe()` defaults. A segment is silence when no_speech_prob > 0.6 and
+# avg_logprob < -1.0, and unreliable when compression_ratio > 2.4 (repetition) or avg_logprob < -1.0.
+WHISPER_NO_SPEECH_THRESHOLD: float = 0.6
+WHISPER_LOGPROB_THRESHOLD: float = -1.0
+WHISPER_COMPRESSION_RATIO_THRESHOLD: float = 2.4
+
+
+def assess_whisper_segment(
+    signals: WhisperSegmentSignals,
+) -> Literal["accept", "no_speech", "unreliable"]:
+    """Classify a transcript so text Whisper invents on silence or noise never reaches the runtime."""
+    values = (signals.no_speech_prob, signals.avg_logprob, signals.compression_ratio)
+    if not all(math.isfinite(value) for value in values):
+        return "unreliable"
+    if (
+        signals.no_speech_prob > WHISPER_NO_SPEECH_THRESHOLD
+        and signals.avg_logprob < WHISPER_LOGPROB_THRESHOLD
+    ):
+        return "no_speech"
+    if (
+        signals.compression_ratio > WHISPER_COMPRESSION_RATIO_THRESHOLD
+        or signals.avg_logprob < WHISPER_LOGPROB_THRESHOLD
+    ):
+        return "unreliable"
+    return "accept"
+
+
+_ASR_REJECTION_REASONS: dict[str, str] = {
+    "no_speech": "no speech detected",
+    "unreliable": "transcript is unreliable (repetition or low log-probability)",
+}
+
+
 def route_voice_turn(
     *,
     session_id: str,
@@ -236,9 +295,18 @@ def route_voice_turn(
     utterance_confidence: float = 0.95,
     consecutive_low_confidence_turns: int = 0,
     enable_spoken_clarify_gate: bool = False,
+    whisper_signals: WhisperSegmentSignals | None = None,
 ) -> VoiceSessionDecision:
-    """Route a voice turn across ASR, spoken ClarifyGate, hybrid DTMF disambiguation, and progressive warm transfer."""
-    _ = barge_in_detected
+    """Route a voice turn across ASR, spoken ClarifyGate, hybrid DTMF disambiguation, and progressive warm transfer.
+
+    A barge-in sets ``cancel_active_reply`` on every decision. A Whisper transcript judged silent or
+    unreliable is never streamed to the runtime; the caller gets the keypad menu instead.
+    """
+    asr_verdict = (
+        assess_whisper_segment(whisper_signals) if whisper_signals is not None else "accept"
+    )
+    asr_rejected_reason = _ASR_REJECTION_REASONS.get(asr_verdict)
+    effective_confidence = utterance_confidence if asr_verdict == "accept" else 0.0
     asr_engine = ASR_MODEL_BY_LOCALE[locale]
     tts_engine = TTS_MODEL_BY_LOCALE[locale]
 
@@ -260,6 +328,8 @@ def route_voice_turn(
             asr_engine=asr_engine,
             tts_engine=tts_engine,
             recording_enabled=recording_consent_granted,
+            cancel_active_reply=barge_in_detected,
+            asr_rejected_reason=asr_rejected_reason,
             action="WARM_TRANSFER_TO_OFFICER",
             warm_transfer_summary=(
                 f"Warm transfer from IVR ({locale.value}): {'; '.join(transfer_reasons)}."
@@ -269,7 +339,7 @@ def route_voice_turn(
     should_clarify = (
         enable_spoken_clarify_gate
         and dtmf_digit is None
-        and 0.60 <= utterance_confidence < MIN_UTTERANCE_ASR_CONFIDENCE
+        and 0.60 <= effective_confidence < MIN_UTTERANCE_ASR_CONFIDENCE
         and consecutive_low_confidence_turns <= 1
     )
     if should_clarify:
@@ -279,16 +349,20 @@ def route_voice_turn(
             asr_engine=asr_engine,
             tts_engine=tts_engine,
             recording_enabled=recording_consent_granted,
+            cancel_active_reply=barge_in_detected,
+            asr_rejected_reason=asr_rejected_reason,
             action="CLARIFY_INTENT_SPOKEN",
         )
 
-    if dtmf_digit is not None or utterance_confidence < MIN_UTTERANCE_ASR_CONFIDENCE:
+    if dtmf_digit is not None or effective_confidence < MIN_UTTERANCE_ASR_CONFIDENCE:
         return VoiceSessionDecision(
             session_id=session_id,
             locale=locale,
             asr_engine=asr_engine,
             tts_engine=tts_engine,
             recording_enabled=recording_consent_granted,
+            cancel_active_reply=barge_in_detected,
+            asr_rejected_reason=asr_rejected_reason,
             action="DTMF_MENU",
         )
 
@@ -298,6 +372,8 @@ def route_voice_turn(
         asr_engine=asr_engine,
         tts_engine=tts_engine,
         recording_enabled=recording_consent_granted,
+        cancel_active_reply=barge_in_detected,
+        asr_rejected_reason=asr_rejected_reason,
         action="STREAM_ASR",
     )
 
@@ -744,13 +820,6 @@ def resolve_tts_voice(locale: str, requested_voice: str | None = None) -> str | 
     return TTS_DEFAULT_VOICE[loc]
 
 
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-_ABBREV_PROTECT_RE = re.compile(
-    r"\b(Sec|Reg|Art|No|Vol|Ch|Pt|Dr|Mr|Mrs|Ms)\.\s+",
-    flags=re.IGNORECASE,
-)
-
-
 @dataclass(frozen=True)
 class VADConfig:
     """Energy-based Voice Activity Detection thresholds (`voice_stream.py`)."""
@@ -772,15 +841,18 @@ class VADConfig:
         return presets.get(sensitivity.lower(), presets["medium"])
 
 
-def split_tts_sentences(text: str) -> list[str]:
-    """Split reply text into sentence chunks while preserving statutory abbreviations (`Sec. 18`, `Reg. 1.21`)."""
-    cleaned = text.strip()
-    if not cleaned:
-        return []
-    protected = _ABBREV_PROTECT_RE.sub(r"\1<DOT> ", cleaned)
-    return [
-        s.replace("<DOT>", ".").strip() for s in _SENTENCE_SPLIT_RE.split(protected) if s.strip()
-    ]
+@dataclass(frozen=True)
+class BargeInDirective:
+    """What the media pipeline must do when the caller talks over the assistant.
+
+    Stopping playback alone would leave a stale reply being generated, and cancelling generation
+    alone would leave buffered audio playing, so both are always set together.
+    """
+
+    stop_playback: bool
+    cancel_generation: bool
+    flush_queued_audio: bool
+    interrupted_at_sentence_index: int | None
 
 
 class VoiceStreamSession:
@@ -798,12 +870,34 @@ class VoiceStreamSession:
         self.unspoken_sentences: list[str] = []
         self.speculative_prefetches: list[str] = []
 
-    def trigger_barge_in(self, *, sentence_index: int | None = None) -> None:
-        """Cancel active TTS playback immediately (<80ms) on caller barge-in and record interrupt index."""
+    def trigger_barge_in(
+        self,
+        *,
+        sentence_index: int | None = None,
+        speech_ms: int | None = None,
+        prompt_interruptible: bool = True,
+    ) -> BargeInDirective | None:
+        """Handle the caller talking over the assistant.
+
+        Speech shorter than the VAD minimum (a cough or "mm") and speech over a prompt that may not
+        be interrupted, such as the AI disclosure, are ignored and return None. Otherwise playback
+        stops, the reply being generated is cancelled, and queued audio is dropped. Omit
+        ``speech_ms`` only when the media layer has already confirmed the interruption.
+        """
+        if not prompt_interruptible:
+            return None
+        if speech_ms is not None and speech_ms < self.vad.min_speech_duration_ms:
+            return None
         if sentence_index is None:
             self.barge_in_cancelled = True
         else:
             self.interrupted_at_sentence_index = max(0, sentence_index)
+        return BargeInDirective(
+            stop_playback=True,
+            cancel_generation=True,
+            flush_queued_audio=True,
+            interrupted_at_sentence_index=self.interrupted_at_sentence_index,
+        )
 
     def reset_barge_in(self) -> None:
         """Reset per-turn barge-in interruption state before streaming the next reply."""
@@ -1229,25 +1323,40 @@ def verify_voice_dtmf_step_up(
     )
 
 
+_SMS_SENDER_LABEL = "SSRA Assist (automated):"
+_SMS_PORTAL_REFERENCE = "Ref: https://etax.nra.gov.ss/"
+
+
 def build_voice_spoken_turn_and_sms_followup(
     *,
     reply_text: str,
     citation_anchor: str | None = None,
     is_estimate: bool = False,
+    max_sms_chars: int = MAX_SMS_CONTINUATION_CHARS,
 ) -> dict[str, Any]:
-    """Cap spoken reply at <= 3 sentences with explicit estimate framing and generate a <= 160-char SMS continuation receipt."""
-    sentences = split_tts_sentences(reply_text)[:MAX_VOICE_SPOKEN_SENTENCES]
-    spoken = " ".join(sentences)
-    if is_estimate and "estimate" not in spoken.lower():
-        spoken = f"Estimate only. {spoken}"
-    anchor_suffix = f" ({citation_anchor})" if citation_anchor else ""
-    sms_raw = f"SSRA OFFICIAL: {spoken}{anchor_suffix} Ref: https://etax.nra.gov.ss/"
-    sms_text = sms_raw[:MAX_SMS_CONTINUATION_CHARS]
+    """Speak at most three whole sentences, framed as an estimate when it is one, and build the SMS follow-up.
+
+    The SMS says it is automated, keeps the citation and portal reference, and drops whole
+    sentences from the end until it fits, so a figure is never cut. The estimate framing comes
+    first and is never dropped while a figure is kept. The real encoding and segment count are
+    returned so the cost of a UCS-2 (Arabic) message is visible.
+    """
+    spoken = compose_spoken_reply(reply_text, is_estimate=is_estimate)
+    citation = f"({citation_anchor})" if citation_anchor else ""
+    sms = fit_text(
+        spoken.text,
+        fits=lambda candidate: len(candidate) <= max_sms_chars,
+        prefix=_SMS_SENDER_LABEL,
+        suffix=f"{citation} {_SMS_PORTAL_REFERENCE}".strip(),
+    )
     return {
-        "spoken_text": spoken,
-        "sentence_count": len(sentences),
+        "spoken_text": spoken.text,
+        "sentence_count": spoken.kept_sentences,
         "is_estimate": is_estimate,
-        "sms_continuation_text": sms_text,
+        "sms_continuation_text": sms.text,
+        "sms_encoding": sms_encoding(sms.text),
+        "sms_segments": count_sms_segments(sms.text),
+        "sms_shortened": sms.kept_sentences < sms.total_sentences,
     }
 
 
@@ -1271,9 +1380,71 @@ def get_localized_tool_wait_filler(locale: LocaleCode = LocaleCode.EN) -> str:
     return _TOOL_WAIT_FILLERS.get(locale, _TOOL_WAIT_FILLERS[LocaleCode.EN])
 
 
+# Interim English wording until SSRA approves the statutory disclosure and consent text (OQ-009
+# item 2). The disclosure mirrors the web disclosure (AUD-021). No reviewed translations exist, so
+# every language hears English and the prompt records that.
+_CALL_AI_DISCLOSURE_EN = (
+    "You are speaking with SSRA Assist, an automated AI assistant. It can make mistakes. "
+    "To ask for an SSRA officer at any time, press 0."
+)
+_CALL_RECORDING_CONSENT_EN = (
+    "SSRA would like to record this call. Press 1 to allow recording, "
+    "or press 2 to continue without recording."
+)
+# Reviewed translations of (disclosure, recording consent) by language. None exist yet (OQ-008, OQ-009).
+_REVIEWED_OPENING_PROMPTS: Mapping[LocaleCode, tuple[str, str]] = MappingProxyType({})
+
+
+@dataclass(frozen=True)
+class VoicePrompt:
+    prompt_id: Literal["ai_disclosure", "recording_consent"]
+    text: str
+    spoken_locale: LocaleCode
+    interruptible_by_speech: bool
+    wording_approved: bool
+
+
+def build_call_opening_prompts(locale: LocaleCode, *, recording_offered: bool) -> list[VoicePrompt]:
+    """Return what every caller hears first: the AI disclosure, then the recording request if offered.
+
+    Speech cannot interrupt the disclosure (keypad 0 still reaches an officer). Recording starts
+    only after the caller presses 1 (``resolve_recording_consent``).
+    """
+    reviewed = _REVIEWED_OPENING_PROMPTS.get(locale)
+    disclosure, consent = reviewed or (_CALL_AI_DISCLOSURE_EN, _CALL_RECORDING_CONSENT_EN)
+    spoken_locale = locale if reviewed else LocaleCode.EN
+    prompts = [
+        VoicePrompt(
+            prompt_id="ai_disclosure",
+            text=disclosure,
+            spoken_locale=spoken_locale,
+            interruptible_by_speech=False,
+            wording_approved=False,
+        )
+    ]
+    if recording_offered:
+        prompts.append(
+            VoicePrompt(
+                prompt_id="recording_consent",
+                text=consent,
+                spoken_locale=spoken_locale,
+                interruptible_by_speech=True,
+                wording_approved=False,
+            )
+        )
+    return prompts
+
+
+def resolve_recording_consent(dtmf_digit: str | None) -> bool:
+    """Recording needs an explicit keypad 1; any other key, or no answer, means no recording."""
+    return dtmf_digit == "1"
+
+
 def fixed_voice_prompts() -> frozenset[str]:
     """Return the fixed, non-personal prompts whose audio may be cached and reused across calls."""
-    return frozenset(_TOOL_WAIT_FILLERS.values())
+    return frozenset(
+        {*_TOOL_WAIT_FILLERS.values(), _CALL_AI_DISCLOSURE_EN, _CALL_RECORDING_CONSENT_EN}
+    )
 
 
 @dataclass(frozen=True)
@@ -1342,6 +1513,103 @@ def normalize_statutory_text_for_speech(text: str, locale: LocaleCode = LocaleCo
 
 
 _NUMERIC_TOKEN_RE = re.compile(r"(?<![\d.])\d+(?:\.\d+)?(?![\d.])")
+_THOUSANDS_COMMA_RE = re.compile(r"(?<=\d),(?=\d{3})")
+_WORD_TOKEN_RE = re.compile(r"[a-z]+|[^\sa-z]+")
+_NUMBER_WORDS: dict[str, int] = {
+    word: value
+    for value, word in enumerate(
+        "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
+        "fifteen sixteen seventeen eighteen nineteen".split()
+    )
+} | {
+    word: (index + 2) * 10
+    for index, word in enumerate("twenty thirty forty fifty sixty seventy eighty ninety".split())
+}
+_SCALE_WORDS: dict[str, int] = {
+    "hundred": 100,
+    "thousand": 1_000,
+    "million": 1_000_000,
+    "billion": 1_000_000_000,
+}
+# A lone "one" is a figure only before one of these ("one month"), not in "one of the forms".
+_QUANTITY_NOUNS: frozenset[str] = frozenset(
+    "day days week weeks month months year years hour hours minute minutes percent pound pounds "
+    "dollar dollars ssp usd time times".split()
+)
+
+
+def _ascii_digits(text: str) -> str:
+    """Map Arabic-Indic and other Unicode decimal digits to ASCII, with the Arabic separators."""
+    mapped: list[str] = []
+    for ch in text:
+        if ch.isdecimal() and not ch.isascii():
+            mapped.append(str(unicodedata.decimal(ch)))
+        elif ch == "\u066b":
+            mapped.append(".")
+        elif ch == "\u066c":
+            mapped.append(",")
+        else:
+            mapped.append(ch)
+    return "".join(mapped)
+
+
+def _continues_number(previous: str, word: str) -> bool:
+    if previous in _SCALE_WORDS:
+        return True
+    return 20 <= _NUMBER_WORDS.get(previous, 0) <= 90 and 1 <= _NUMBER_WORDS[word] <= 9
+
+
+def _number_phrase_value(phrase: list[str]) -> int:
+    total = 0
+    current = 0
+    for word in phrase:
+        if word in _NUMBER_WORDS:
+            current += _NUMBER_WORDS[word]
+        elif word == "hundred":
+            current = (current or 1) * 100
+        else:
+            total += (current or 1) * _SCALE_WORDS[word]
+            current = 0
+    return total + current
+
+
+def _spelled_number_values(text: str) -> set[str]:
+    """Return the values of English number words, such as "twenty five thousand" or "one month"."""
+    words = _WORD_TOKEN_RE.findall(text.lower().replace("-", " "))
+    values: set[str] = set()
+    phrase: list[str] = []
+
+    def flush(next_word: str | None) -> None:
+        if phrase and not (phrase == ["one"] and next_word not in _QUANTITY_NOUNS):
+            values.add(str(_number_phrase_value(phrase)))
+        phrase.clear()
+
+    for index, word in enumerate(words):
+        following = words[index + 1] if index + 1 < len(words) else None
+        if word in _NUMBER_WORDS:
+            if phrase and not _continues_number(phrase[-1], word):
+                flush(word)
+            phrase.append(word)
+        elif word in _SCALE_WORDS:
+            phrase.append(word)
+        elif word == "a" and not phrase and following in _SCALE_WORDS:
+            phrase.append("one")
+        elif word == "and" and phrase and following in _NUMBER_WORDS:
+            continue
+        else:
+            flush(word)
+    flush(None)
+    return values
+
+
+def _spoken_numeric_values(text: str) -> set[str]:
+    """Return every figure in text: digits in any script, and spelled-out English numbers."""
+    normalized = _THOUSANDS_COMMA_RE.sub("", _ascii_digits(text))
+    return set(_NUMERIC_TOKEN_RE.findall(normalized)) | _spelled_number_values(normalized)
+
+
+def _clean_figure(value: str) -> str:
+    return _ascii_digits(str(value)).replace(",", "").strip()
 
 
 def verify_spoken_figure_fidelity(
@@ -1351,17 +1619,19 @@ def verify_spoken_figure_fidelity(
     strict_no_extra_numbers: bool = False,
     allowed_context_numbers: list[str] | tuple[str, ...] = (),
 ) -> bool:
-    """Verify that every required `NumericClaim` value appears as an exact whole numeric token in the TTS-prepared text."""
-    spoken_tokens = set(_NUMERIC_TOKEN_RE.findall(re.sub(r"(?<=\d),(?=\d{3})", "", spoken_text)))
-    expected_clean = {
-        str(val).replace(",", "").strip() for val in expected_numeric_values if str(val).strip()
-    }
+    """Verify that every required `NumericClaim` value is spoken, and in strict mode that nothing else is.
+
+    Figures are read in any digit script and as spelled-out English numbers, so "twelve (3) months"
+    carries both 12 and 3. Number words in other languages are not yet read (AUD-041).
+    """
+    spoken_tokens = _spoken_numeric_values(spoken_text)
+    expected_clean = {_clean_figure(val) for val in expected_numeric_values if str(val).strip()}
     for clean_val in expected_clean:
         if clean_val not in spoken_tokens:
             return False
     if strict_no_extra_numbers:
         allowed_all = expected_clean | {
-            str(c).replace(",", "").strip() for c in allowed_context_numbers if str(c).strip()
+            _clean_figure(c) for c in allowed_context_numbers if str(c).strip()
         }
         if not spoken_tokens.issubset(allowed_all):
             return False
@@ -1645,11 +1915,16 @@ __all__ = [
     "MAX_COMPRESSED_AUDIO_BYTES",
     "MAX_DECODED_PCM_BYTES",
     "MAX_DTMF_STEP_UP_ATTEMPTS",
+    "MAX_SMS_CONTINUATION_CHARS",
     "MAX_VOICE_WER_GATE",
     "TTS_DEFAULT_VOICE",
     "TTS_MODEL_BY_LOCALE",
     "TTS_VOICE_CATALOG",
     "VOICE_EVENT_TYPES",
+    "WHISPER_COMPRESSION_RATIO_THRESHOLD",
+    "WHISPER_LOGPROB_THRESHOLD",
+    "WHISPER_NO_SPEECH_THRESHOLD",
+    "BargeInDirective",
     "BriefClaim",
     "CallLobbyManager",
     "CallToWebCarryover",
@@ -1666,11 +1941,15 @@ __all__ = [
     "TtsPhraseCache",
     "TtsSynthesizer",
     "VADConfig",
+    "VoicePrompt",
     "VoiceRetentionPolicy",
     "VoiceSessionDecision",
     "VoiceStreamSession",
     "VoiceWebSocketConcurrencyGuard",
     "VoiceWerEvidence",
+    "WhisperSegmentSignals",
+    "assess_whisper_segment",
+    "build_call_opening_prompts",
     "build_call_to_web_carryover",
     "build_chat_to_call_carryover",
     "build_voice_consent_audit_entry",
@@ -1686,6 +1965,7 @@ __all__ = [
     "resolve_edge_appliance_profile",
     "resolve_hf_voice_model_cache",
     "resolve_mt_and_tts_turn_plan",
+    "resolve_recording_consent",
     "resolve_tts_voice",
     "route_voice_turn",
     "select_hybrid_voice_execution_mode",

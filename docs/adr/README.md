@@ -4,7 +4,7 @@ Every architectural decision with a real reversal cost is recorded here before i
 
 ---
 
-## ADR Catalog (ADR-001 to ADR-025)
+## ADR Catalog (ADR-001 to ADR-026)
 
 | ID | Title | One-Line Problem Statement | Status | Reversal Cost |
 |---|---|---|---|---|
@@ -33,3 +33,4 @@ Every architectural decision with a real reversal cost is recorded here before i
 | **[ADR-023](./0023-public-chat-render-boundary-and-truthful-failure-states.md)** | Public Chat Render Boundary & Truthful Failure States | How do we stop the served public chat from showing invented facts, dead action controls, or misleading failure states? | Accepted (repository safety baseline) | Medium |
 | **[ADR-024](./0024-voice-identity-step-up-and-carryover-fail-closed.md)** | Voice Identity Step-Up & Carryover Tokens Fail Closed | How do we stop a phone call from binding a taxpayer without verified identity, or resuming a goal with a forged token? | Accepted (repository safety baseline) | High |
 | **[ADR-025](./0025-voice-launch-evidence-and-truthful-call-records.md)** | Voice Launch Evidence & Truthful Call Records | How do we stop a language going live on voice without measured WER, and keep officer briefs and voice records truthful? | Accepted (repository safety baseline) | Medium |
+| **[ADR-026](./0026-voice-caller-output-disclosure-and-figure-safe-text.md)** | Voice Caller Output, Disclosure & Figure-Safe Channel Text | How do we make sure callers know they are talking to an AI, consent to recording, can interrupt, and never receive a split figure by voice or SMS? | Accepted (repository safety baseline) | Medium |

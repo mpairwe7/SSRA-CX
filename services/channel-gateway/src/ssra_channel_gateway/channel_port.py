@@ -8,9 +8,15 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from ssra_core import Answer, ChannelCapabilities, ChannelName
+from ssra_core import (
+    Answer,
+    ChannelCapabilities,
+    ChannelName,
+    compose_spoken_reply,
+    compute_sms_segments,
+    fit_text,
+)
 
-from ssra_channel_gateway.main import compute_sms_segments
 from ssra_channel_gateway.ussd import USSD_MAX_CHARS
 from ssra_channel_gateway.whatsapp import ANTI_IMPERSONATION_VERIFICATION_FOOTER
 
@@ -83,12 +89,16 @@ class SmsChannelAdapter:
     )
 
     def format_outbound(self, answer: Answer) -> dict[str, Any]:
-        raw = " ".join(s.text for s in answer.segments)[: self.capabilities.max_len]
+        max_len = self.capabilities.max_len
+        fitted = fit_text(
+            " ".join(s.text for s in answer.segments),
+            fits=lambda candidate: len(candidate) <= max_len,
+        )
         return {
             "channel": self.channel.value,
             "transport": "smpp-http",
-            "text": raw,
-            "sms_metrics": compute_sms_segments(raw),
+            "text": fitted.text,
+            "sms_metrics": compute_sms_segments(fitted.text),
         }
 
 
@@ -148,11 +158,21 @@ class VoiceIvrChannelAdapter:
     )
 
     def format_outbound(self, answer: Answer) -> dict[str, Any]:
-        spoken = " ".join(s.text for s in answer.segments)[: self.capabilities.max_len]
+        """Speak at most three whole sentences, framed as an estimate when the answer is one.
+
+        The text is plain text, never SSML, so answer text cannot inject speech markup.
+        """
+        spoken = compose_spoken_reply(
+            " ".join(s.text for s in answer.segments),
+            is_estimate=answer.is_estimate,
+            max_chars=self.capabilities.max_len,
+        )
         return {
             "channel": self.channel.value,
             "transport": "sip-rtp-tts",
-            "ssml_or_text": spoken,
+            "ssml_or_text": spoken.text,
+            "content_type": "text/plain",
+            "omitted_sentences": spoken.total_sentences - spoken.kept_sentences,
         }
 
 

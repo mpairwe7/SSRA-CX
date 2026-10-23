@@ -5,6 +5,12 @@
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
 
+## 0.19 [R2-K What the Caller Hears and Receives](./audit/phase-R2-K-voice-caller-output-report.md) (2026-10-24)
+
+- Fixed AUD-041. A shared `ssra_core.channel_text` module now fits SMS, IVR, and voice text by whole sentences and never ends on a number; the SMS adapter used to send "Total due: 1,234,567 SSP" as "Total due: 1,2". The voice SMS follow-up keeps its citation, says it is automated, and reports its real GSM-7 or UCS-2 segment count. The IVR adapter speaks at most three sentences, frames estimates, and outputs plain text. The figure guard reads spelled-out English numbers and Arabic-Indic digits.
+- Fixed AUD-042, AUD-044, and AUD-045. Calls open with an AI disclosure and an opt-in recording request (interim wording, pending OQ-009). Barge-in stops playback and cancels generation together, and ignores short noises and the disclosure. Whisper output on silence or in a repetition loop never reaches the runtime. The call view model keeps who-has-the-floor under reduced motion and shows AI-or-officer and recording state.
+- Recorded AUD-046: the official CMS snapshot says TCCs are "valid for twelve (3) months", which SSRA must resolve. Also recorded AUD-047, an undeclared `ssra-security` dependency. See [ADR-026](./adr/0026-voice-caller-output-disclosure-and-figure-safe-text.md).
+
 ## 0.18 [R2-J Voice Launch Evidence and Truthful Call Records](./audit/phase-R2-J-voice-truthful-records-report.md) (2026-10-24)
 
 - Fixed AUD-037. Voice launch now requires governed WER evidence (`APPROVED_VOICE_WER_EVIDENCE`, empty until OQ-008 is answered) instead of a number passed on every turn, so every voice caller is transferred to an officer. The benchmark generators label their speech scenarios as simulated, and the phase-gate audit asserts that no language is approved.

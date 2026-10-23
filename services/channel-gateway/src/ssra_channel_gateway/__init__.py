@@ -1,5 +1,7 @@
 """SSRA Assist Channel Gateway package."""
 
+from ssra_core import compute_sms_segments
+
 from ssra_channel_gateway.channel_port import (
     CHANNEL_PORT_REGISTRY,
     ChannelPort,
@@ -15,7 +17,6 @@ from ssra_channel_gateway.main import (
     InboundChannelWebhook,
     UssdSessionRequest,
     app,
-    compute_sms_segments,
     create_channel_gateway_app,
     verify_webhook_hmac,
 )

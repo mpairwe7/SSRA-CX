@@ -1,5 +1,15 @@
 """SSRA Assist core library."""
 
+from ssra_core.channel_text import (
+    MAX_SPOKEN_SENTENCES,
+    FittedText,
+    compose_spoken_reply,
+    compute_sms_segments,
+    count_sms_segments,
+    fit_text,
+    sms_encoding,
+    split_sentences,
+)
 from ssra_core.clock import (
     JUBA_TZ,
     compute_monthly_filing_deadline,
@@ -72,6 +82,7 @@ from ssra_core.telemetry import (
 __all__ = [
     "JUBA_TZ",
     "KNOWN_FEATURE_FLAGS",
+    "MAX_SPOKEN_SENTENCES",
     "SCHEMA_BUNDLE_SHA256",
     "AffectiveSnapshot",
     "AgenticCxSpanAttributes",
@@ -93,6 +104,7 @@ __all__ = [
     "FeatureFlagEvaluation",
     "FeatureFlagRule",
     "FinOpsBudgetDecision",
+    "FittedText",
     "GenAISpanAttributes",
     "GenerativeUIComponent",
     "GenerativeUIComponentName",
@@ -115,9 +127,12 @@ __all__ = [
     "build_agentic_cx_span_attributes",
     "build_genai_span_attributes",
     "build_mcp_span_attributes",
+    "compose_spoken_reply",
     "compute_deterministic_flag_bucket",
     "compute_monthly_filing_deadline",
+    "compute_sms_segments",
     "configure_logging",
+    "count_sms_segments",
     "ensure_w3c_traceparent",
     "evaluate_channel_latency_slo",
     "evaluate_finops_turn_budget",
@@ -125,6 +140,7 @@ __all__ = [
     "execute_with_idempotent_retry",
     "expand_ssra_nra_synonyms",
     "fiscal_year_for_date",
+    "fit_text",
     "get_default_feature_flag_engine",
     "is_within_juba_office_hours",
     "juba_now",
@@ -132,5 +148,7 @@ __all__ = [
     "new_id",
     "new_uuid7",
     "normalise_authority_mentions",
+    "sms_encoding",
+    "split_sentences",
     "utc_now",
 ]

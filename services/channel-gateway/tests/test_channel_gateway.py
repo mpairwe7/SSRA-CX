@@ -273,3 +273,30 @@ def test_whatsapp_24h_service_window_and_template_consent_gate() -> None:
         port = get_channel_port(ch)
         formatted = port.format_outbound(sample_ans)
         assert formatted["channel"] == ch.value
+
+
+def test_sms_and_ivr_adapters_never_cut_a_figure() -> None:
+    """AUD-041: whole sentences within the channel limit; IVR speaks three, framed and plain text."""
+    from ssra_core import Answer, AnswerSegment, ChannelName
+
+    long_answer = Answer(
+        segments=[
+            AnswerSegment(text="Your PAYE for this month is 25,000 SSP. "),
+            AnswerSegment(
+                text="File the return through the e-Tax portal by the 15th day of the following month. "
+            ),
+            AnswerSegment(
+                text="Pay only through a designated bank. Keep the receipt. Never pay cash."
+            ),
+        ],
+        is_estimate=True,
+    )
+    sms = get_channel_port(ChannelName.SMS).format_outbound(long_answer)
+    assert len(sms["text"]) <= 160
+    assert sms["text"].endswith("...")
+    assert "25,000 SSP" in sms["text"]
+    ivr = get_channel_port(ChannelName.VOICE).format_outbound(long_answer)
+    assert ivr["content_type"] == "text/plain"
+    assert ivr["ssml_or_text"].startswith("Estimate only. Your PAYE for this month is 25,000 SSP.")
+    assert ivr["ssml_or_text"].endswith("Pay only through a designated bank.")
+    assert ivr["omitted_sentences"] == 2
