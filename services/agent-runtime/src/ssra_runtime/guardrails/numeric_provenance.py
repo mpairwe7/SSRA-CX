@@ -35,7 +35,7 @@ _SAFE_CONTEXT_PATTERNS: tuple[re.Pattern[str], ...] = (
         r"\s*(?:No\.?\s*)?[0-9IVX]+(?:[.\-/][0-9A-Za-z()]+)*(?:\s*(?:to|and|,|-|–)\s*[0-9IVX]+(?:[.\-/][0-9A-Za-z()]+)*)*",
         flags=re.IGNORECASE,
     ),
-    re.compile(r"\bHS\s*\d{2}\.\d{2}(?:\s*-\s*\d{2}\.\d{2})?\b", flags=re.IGNORECASE),
+    re.compile(r"\bHS\s*\d{2,4}\.\d{2}(?:\s*-\s*\d{2,4}\.\d{2})?\b", flags=re.IGNORECASE),
     re.compile(r"\b\d+-digit\b", flags=re.IGNORECASE),
     re.compile(r"\b10\+\s*persons\b", flags=re.IGNORECASE),
     re.compile(

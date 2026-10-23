@@ -92,10 +92,11 @@ def execute_knowledge_qa_subgraph(
 
     if intent_name == IntentName.CALCULATE_WITHHOLDING:
         gross = str(slots.get("amount_ssp", "1000000"))
+        wht_cat = str(slots.get("wht_category", "goods_and_services"))
         art = gateway.invoke_tool(
             server_name="tax-facts",
             tool_name="calculate_withholding_estimate",
-            arguments={"gross_amount_ssp": gross, "category": "goods_and_services"},
+            arguments={"gross_amount_ssp": gross, "category": wht_cat},
             auth_level=auth_level,
             subject_ref=subject_ref,
             budget=budget,
@@ -105,15 +106,52 @@ def execute_knowledge_qa_subgraph(
 
     if intent_name == IntentName.VERIFY_OFFICIAL_CHANNEL:
         candidate = str(slots.get("candidate_channel", "https://etax.nra.gov.ss/"))
-        art = gateway.invoke_tool(
-            server_name="official-channels",
-            tool_name="verify_payment_account",
-            arguments={"account_or_portal": candidate},
+        verif_mode = str(slots.get("verification_mode", "payment_account"))
+        if verif_mode == "sender":
+            art = gateway.invoke_tool(
+                server_name="official-channels",
+                tool_name="verify_sender",
+                arguments={"sender_id_or_url": candidate},
+                auth_level=auth_level,
+                subject_ref=subject_ref,
+                budget=budget,
+            )
+        else:
+            art = gateway.invoke_tool(
+                server_name="official-channels",
+                tool_name="verify_payment_account",
+                arguments={"account_or_portal": candidate},
+                auth_level=auth_level,
+                subject_ref=subject_ref,
+                budget=budget,
+            )
+        artifacts.append(art)
+        return {"artifacts": artifacts, "budget": budget}
+
+    # Customs HS code tariff lookup / duty estimate (T0 public customs tools)
+    hs_code = str(slots.get("hs_code", "")).strip()
+    if hs_code:
+        cif_usd = str(slots.get("cif_value_usd", "")).strip()
+        if cif_usd:
+            cust_art = gateway.invoke_tool(
+                server_name="customs",
+                tool_name="estimate_duties",
+                arguments={"hs_code": hs_code, "cif_value_usd": cif_usd},
+                auth_level=auth_level,
+                subject_ref=subject_ref,
+                budget=budget,
+            )
+            artifacts.append(cust_art)
+            return {"artifacts": artifacts, "budget": budget}
+        tariff_art = gateway.invoke_tool(
+            server_name="customs",
+            tool_name="lookup_tariff",
+            arguments={"hs_code": hs_code},
             auth_level=auth_level,
             subject_ref=subject_ref,
             budget=budget,
         )
-        artifacts.append(art)
+        artifacts.append(tariff_art)
         return {"artifacts": artifacts, "budget": budget}
 
     # Default: search published knowledge corpus

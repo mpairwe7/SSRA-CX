@@ -39,6 +39,11 @@ class FieldOfficerAssistResponse(BaseModel):
     audit_event_hash: str
 
 
+_ALLOWED_FIELD_OFFICER_TASKS = frozenset(
+    {"TARIFF_CHECK", "VERIFY_CHANNEL", "PAYE_CHECKLIST", "COMPLIANCE_CHECKLIST"}
+)
+
+
 def execute_field_officer_assist(
     req: FieldOfficerAssistRequest,
     *,
@@ -51,10 +56,23 @@ def execute_field_officer_assist(
             "Field-Officer Assist requires STAFF_PASSKEY authentication (WebAuthn passkey)",
             status_code=403,
         )
+    if req.task_type not in _ALLOWED_FIELD_OFFICER_TASKS:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"Unsupported Field-Officer task_type '{req.task_type}'; must be one of {sorted(_ALLOWED_FIELD_OFFICER_TASKS)}",
+            status_code=400,
+        )
 
     if req.task_type == "TARIFF_CHECK":
         hs = req.hs_code or "8703.23"
         cif = req.cif_value_usd or "10000"
+        tariff_art = gateway.invoke_tool(
+            server_name="customs",
+            tool_name="lookup_tariff",
+            arguments={"hs_code": hs},
+            auth_level=req.auth_level,
+            subject_ref=req.officer_id,
+        )
         art = gateway.invoke_tool(
             server_name="customs",
             tool_name="estimate_duties",
@@ -63,10 +81,11 @@ def execute_field_officer_assist(
             subject_ref=req.officer_id,
         )
         sc = art.structured_content
+        excise_pct = tariff_art.structured_content.get("excise_rate_percent", "0")
         guidance = (
             f"HS {sc['hs_code']} (CIF {sc['cif_value_usd']} USD @ official BoSS rate "
             f"{sc['boss_official_fx_rate_ssp_per_usd']} SSP/USD = {sc['customs_value_ssp']} SSP): "
-            f"Duty rate {sc['duty_rate_percent']}%, estimated duty {sc['estimated_duty_ssp']} SSP. "
+            f"Duty rate {sc['duty_rate_percent']}%, excise rate {excise_pct}%, estimated duty {sc['estimated_duty_ssp']} SSP. "
             f"Collect strictly via e-Tax bank remittance (March 2026 cash-free directive)."
         )
         legal_ref = "Customs Service Act 2013 & Financial Act 2024/2025 Tariff Schedule"

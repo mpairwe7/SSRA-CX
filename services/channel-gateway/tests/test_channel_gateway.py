@@ -96,9 +96,36 @@ def test_phase4_ussd_deterministic_menu_182_char_limit_and_sms_followup() -> Non
     """Verify deterministic USSD 182-char menu, SMS follow-up, STOP/START consent, and channel middleware."""
     client = AsgiTestClient(create_channel_gateway_app())
 
-    for opt in ("", "1", "2", "3", "4", "9", "0", "99"):
-        screen = render_ussd_screen(session_id="ussd_01", ussd_input=opt)
-        assert len(screen.screen_text) <= USSD_MAX_CHARS
+    for opt in ("", "1", "2", "3", "4", "5", "9", "1*9", "2*9", "5*9", "0", "99"):
+        for u_loc in ("en", "pga"):
+            screen = render_ussd_screen(session_id="ussd_01", ussd_input=opt, locale=u_loc)
+            assert len(screen.screen_text) <= USSD_MAX_CHARS
+
+    # Topic screens 1..5 stay open as CON for in-session *9 follow-up; 1*9 / 5*9 terminate with SMS delivery
+    for topic_opt in ("1", "2", "3", "4", "5"):
+        assert render_ussd_screen(session_id="ussd_01", ussd_input=topic_opt).response_type == "CON"
+
+    r_tin_sms = render_ussd_screen(session_id="ussd_01", ussd_input="1*9", locale="en")
+    assert r_tin_sms.send_sms_followup is True
+    assert r_tin_sms.response_type == "END"
+    assert (
+        r_tin_sms.screen_text
+        == "END Official TIN Registration link (https://etax.nra.gov.ss/) queued for SMS delivery."
+    )
+
+    r_cust_pga = render_ussd_screen(session_id="ussd_01", ussd_input="5*9", locale="pga")
+    assert r_cust_pga.send_sms_followup is True
+    assert r_cust_pga.response_type == "END"
+    assert (
+        r_cust_pga.screen_text
+        == "END Rabit Jamarik ($500) (https://customs.eservices.gov.ss/) jahiz li irsal bil SMS li raqamak."
+    )
+
+    r_timeout_pga = render_ussd_screen(
+        session_id="ussd_01", ussd_input="1", elapsed_seconds=150, locale="pga"
+    )
+    assert r_timeout_pga.response_type == "END"
+    assert len(r_timeout_pga.screen_text) <= USSD_MAX_CHARS
 
     # Option 9 triggers SMS follow-up
     r_sms = client.post(
