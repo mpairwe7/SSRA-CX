@@ -120,7 +120,38 @@ def build_execution_plan(
             steps=[f"single.{intent.intent.value}"],
             tier=tier,
         )
+    if intent.intent == IntentName.VERIFY_OFFICIAL_CHANNEL:
+        verif_step = (
+            "official-channels.verify_sender"
+            if intent.slots.get("verification_mode") == "sender"
+            else "official-channels.verify_payment_account"
+        )
+        return Plan(subgraph=selected_subgraph, steps=[verif_step], tier=tier)
+    if intent.intent == IntentName.KNOWLEDGE_QA and intent.slots.get("hs_code"):
+        cust_step = (
+            "customs.estimate_duties"
+            if intent.slots.get("cif_value_usd")
+            else "customs.lookup_tariff"
+        )
+        return Plan(subgraph=selected_subgraph, steps=[cust_step], tier=tier)
     steps = detect_compound_self_service_steps(canonical_query, intent.intent)
+    if intent.intent == IntentName.GET_FILING_STATUS and intent.slots.get(
+        "include_customs_declaration"
+    ):
+        lower_q = canonical_query.lower()
+        also_wants_filing = any(
+            k in lower_q for k in ("filing status", "did my return", "return status", "last filed")
+        )
+        if also_wants_filing:
+            if "customs.get_declaration_status" not in steps:
+                steps.insert(0, "customs.get_declaration_status")
+        else:
+            steps = [
+                "customs.get_declaration_status" if s == "ledger.get_filing_status" else s
+                for s in steps
+            ]
+            if "customs.get_declaration_status" not in steps:
+                steps.insert(0, "customs.get_declaration_status")
     return Plan(
         subgraph=selected_subgraph,
         steps=steps[:MAX_PLAN_STEPS],

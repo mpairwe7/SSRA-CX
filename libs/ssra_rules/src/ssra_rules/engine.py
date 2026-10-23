@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -96,6 +97,14 @@ def _format_decimal(amount: Decimal) -> str:
     return format(q.normalize(), "f")
 
 
+@functools.lru_cache(maxsize=4)
+def _load_cached_tax_facts(target: Path) -> tuple[tuple[TaxFactContract, ...], str]:
+    raw = yaml.safe_load(target.read_text(encoding="utf-8"))
+    snapshot_version = str(raw.get("snapshot_version", "2026.10.1"))
+    facts = tuple(TaxFactContract.model_validate(item) for item in raw.get("facts", []))
+    return facts, snapshot_version
+
+
 class TaxFactsRegistry:
     """Loads and queries versioned TaxFact records with effective-date & non-overlap validation."""
 
@@ -134,11 +143,9 @@ class TaxFactsRegistry:
 
     @classmethod
     def from_yaml_file(cls, path: Path | None = None) -> TaxFactsRegistry:
-        target = path or _DEFAULT_SEED_FILE
-        raw = yaml.safe_load(target.read_text(encoding="utf-8"))
-        snapshot_version = str(raw.get("snapshot_version", "2026.10.1"))
-        facts = [TaxFactContract.model_validate(item) for item in raw.get("facts", [])]
-        return cls(facts=facts, snapshot_version=snapshot_version)
+        target = (path or _DEFAULT_SEED_FILE).resolve()
+        facts, snapshot_version = _load_cached_tax_facts(target)
+        return cls(facts=list(facts), snapshot_version=snapshot_version)
 
     @property
     def snapshot_version(self) -> str:

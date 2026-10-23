@@ -18,7 +18,10 @@ from ssra_core import (
 from ssra_runtime import SSRAConversationRuntime, create_runtime_app
 from ssra_runtime.gateway_server import create_agentgateway_app
 from ssra_runtime.graphs import build_minimal_complaint_ticket, get_guided_journey_steps
-from ssra_runtime.guardrails import validate_numeric_provenance
+from ssra_runtime.guardrails import (
+    validate_numeric_provenance,
+    verify_no_cross_subject_or_unmasked_pii,
+)
 from ssra_testing import AsgiTestClient, make_conversation_event
 
 
@@ -172,6 +175,9 @@ def test_t2_write_triggers_confirmation_interrupt_and_executes_after_token() -> 
     assert turn2.pending_confirmation is None
     assert any(a.tool == "book_appointment" for a in turn2.artifacts)
     assert "CONFIRMED" in turn2.answer.segments[0].text
+    assert verify_no_cross_subject_or_unmasked_pii(
+        "Appointment appt_019a1111-2222-7333-8444-123456789012 at office JUBA_HQ is CONFIRMED."
+    ).passed
 
     # Deterministic HELP keyword, T1 filing_status & tcc_status, T2 create_case, and preference hydration
     help_turn = runtime.run_turn(make_conversation_event("HELP", channel=ChannelName.SMS))
@@ -1406,7 +1412,14 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
         make_conversation_event("Verify sender +211 918806493 — is this an official SSRA phone?")
     )
     assert sender_phone_turn.artifacts[0].tool == "verify_sender"
+    assert sender_phone_turn.artifacts[0].structured_content["identifier"] == "+211 918806493"
     assert sender_phone_turn.artifacts[0].structured_content["status"] == "OFFICIAL_VERIFIED"
+
+    scam_phone_turn = rt.run_turn(
+        make_conversation_event("Verify sender +211 912999999 — is this an official SSRA phone?")
+    )
+    assert scam_phone_turn.artifacts[0].tool == "verify_sender"
+    assert scam_phone_turn.artifacts[0].structured_content["status"] == "UNVERIFIED_OR_SCAM"
 
     sender_sms_turn = rt.run_turn(make_conversation_event("Verify sender ID from SSRA SMS"))
     assert sender_sms_turn.artifacts[0].tool == "verify_sender"
@@ -1448,8 +1461,62 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     )
     assert cust_tariff_turn.answer.abstained is False
     assert cust_tariff_turn.artifacts[0].tool == "lookup_tariff"
+    assert cust_tariff_turn.plan is not None
+    assert cust_tariff_turn.plan.steps == ["customs.lookup_tariff"]
     assert cust_tariff_turn.artifacts[0].structured_content["duty_rate_percent"] == "35"
     assert cust_tariff_turn.artifacts[0].structured_content["excise_rate_percent"] == "50"
+
+    # Unknown HS code gracefully abstains and offers HandoffCard (Principle 1)
+    unknown_hs_turn = rt.run_turn(
+        make_conversation_event("What is the customs tariff rate for HS 9999.99?")
+    )
+    assert unknown_hs_turn.answer.abstained is True
+    assert unknown_hs_turn.artifacts == []
+
+    # Authenticated T1 Customs Declaration Status (`customs.get_declaration_status`)
+    anon_dec_turn = rt.run_turn(
+        make_conversation_event("Check my customs declaration status at Nimule"),
+        auth_level=AuthLevel.ANONYMOUS,
+    )
+    assert anon_dec_turn.policy_decision == "STEP_UP"
+    assert anon_dec_turn.artifacts == []
+
+    auth_dec_turn = rt.run_turn(
+        make_conversation_event("Check my customs declaration status at Nimule"),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_deng_02",
+    )
+    assert auth_dec_turn.policy_decision == "ALLOW"
+    assert auth_dec_turn.answer.abstained is False
+    assert auth_dec_turn.plan is not None
+    assert auth_dec_turn.plan.steps == ["customs.get_declaration_status"]
+    assert auth_dec_turn.artifacts[0].tool == "get_declaration_status"
+    assert "SSD-NIM-2026-••89" in auth_dec_turn.answer.segments[0].text
+    assert "3250000" in auth_dec_turn.answer.segments[0].text
+
+    compound_dec_tcc = rt.run_turn(
+        make_conversation_event(
+            "Check my filing status, my customs declaration status at Nimule, and check my TCC status"
+        ),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_deng_02",
+    )
+    assert compound_dec_tcc.plan is not None
+    assert "customs.get_declaration_status" in compound_dec_tcc.plan.steps
+    assert "tcc.get_tcc_status" in compound_dec_tcc.plan.steps
+
+    default_wht_turn = rt.run_turn(make_conversation_event("Please calculate withholding tax"))
+    assert default_wht_turn.artifacts[0].tool == "calculate_withholding_estimate"
+
+    fallback_verify_turn = rt.run_turn(make_conversation_event("Cash collector demanded money"))
+    assert fallback_verify_turn.artifacts[0].tool == "verify_payment_account"
+
+    tax_dec_turn = rt.run_turn(
+        make_conversation_event("What is my tax declaration status?"),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_deng_02",
+    )
+    assert tax_dec_turn.artifacts[0].tool == "get_filing_status"
 
     # Field officer invalid task_type validation
     with pytest.raises(SSRAError) as bad_fo_exc:

@@ -24,7 +24,7 @@ _DEFAULT_FLAGS_FILE = Path(__file__).resolve().parents[4] / "ai" / "policies" / 
 _DEFAULT_SHARED_OVERRIDE_PATH = Path(
     os.environ.get(
         "SSRA_FEATURE_FLAGS_OVERRIDE_FILE",
-        str(Path(tempfile.gettempdir()) / "ssra_feature_flag_overrides.json"),
+        "/tmp/ssra_feature_flag_overrides.json",  # noqa: S108 — local tmpfs path matching docker-compose.gpu.yml
     )
 )
 
@@ -298,11 +298,14 @@ class FeatureFlagEngine:
         sig = hmac.new(self.salt.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
         envelope = {"overrides": overrides_dict, "hmac_sha256": sig}
         serialized_envelope = json.dumps(envelope, sort_keys=True)
-        tmp_path = self.shared_override_path.with_name(
-            f".{self.shared_override_path.name}.{os.getpid()}.tmp"
+        fd, tmp_name = tempfile.mkstemp(
+            dir=self.shared_override_path.parent,
+            prefix=f".{self.shared_override_path.name}.",
+            suffix=".tmp",
         )
-        tmp_path.write_text(serialized_envelope, encoding="utf-8")
-        tmp_path.chmod(0o600)
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(serialized_envelope)
         os.replace(tmp_path, self.shared_override_path)
         self._override_content_digest = hashlib.sha256(
             serialized_envelope.encode("utf-8")

@@ -16,6 +16,10 @@ _UNMASKED_PASSPORT_RE = re.compile(
 _OFFICIAL_HELPDESK_NUMBERS_RE = re.compile(
     r"\+211[\s-]*(?:918[\s-]*806[\s-]*493|912[\s-]*388[\s-]*318|919[\s-]*382[\s-]*390|917[\s-]*803[\s-]*637|921[\s-]*058[\s-]*043)\b"
 )
+_PREFIXED_UUID_RE = re.compile(
+    r"\b(?:[a-z]+_)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+    flags=re.IGNORECASE,
+)
 _UNMASKED_PHONE_SS_RE = re.compile(
     r"(?:\+211[\s-]?(?:9[0-9](?:[\s-]?[0-9]){7})\b|\b09[12578](?:[\s-]?[0-9]){7}\b)"
 )
@@ -50,7 +54,7 @@ def verify_no_cross_subject_or_unmasked_pii(
 ) -> PiiGuardResult:
     """Verify model output contains zero unmasked TINs, National IDs, personal +211 phones, secrets, or cross-subject masked TINs."""
     normalised = _normalise_unicode_digits(text)
-    scrubbed_helpdesk = _OFFICIAL_HELPDESK_NUMBERS_RE.sub("", normalised)
+    scrubbed_helpdesk = _PREFIXED_UUID_RE.sub("", _OFFICIAL_HELPDESK_NUMBERS_RE.sub("", normalised))
     if _LEAKED_SECRET_RE.search(scrubbed_helpdesk):
         return PiiGuardResult(
             passed=False,

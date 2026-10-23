@@ -112,6 +112,8 @@ def _detect_withholding_category(lower: str) -> str:
 def _extract_official_channel_candidate(text: str, lower: str) -> tuple[str, str]:
     """Extract the candidate identifier and verification mode ('sender' vs 'payment_account')."""
     is_sender_query = "verify sender" in lower or "sender id" in lower or "sms from" in lower
+    if "[redacted_email]" in lower or "+211•••••••" in text:
+        return "unverified-sender-contact", "sender"
     email_match = _EMAIL_RE.search(text)
     if email_match:
         return email_match.group(1), "sender"
@@ -121,11 +123,6 @@ def _extract_official_channel_candidate(text: str, lower: str) -> tuple[str, str
     domain_match = _DOMAIN_CANDIDATE_RE.search(text)
     if domain_match:
         raw_dom = domain_match.group(1).rstrip(".,;:)]")
-        host_only = (
-            raw_dom.lower().removeprefix("https://").removeprefix("http://").split("/", 1)[0]
-        )
-        if host_only == "etax.nra.gov.ss":
-            return "https://etax.nra.gov.ss/", "sender" if is_sender_query else "payment_account"
         return raw_dom, "sender" if is_sender_query else "payment_account"
     if "tsa-etax-bank" in lower:
         return "TSA-ETAX-BANK", "payment_account"
@@ -302,7 +299,28 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
             language=locale,
             confidence=0.98,
         )
-    if any(w in lower for w in ("my filing status", "did my return go through")):
+    has_customs_declaration_cue = any(
+        w in lower
+        for w in (
+            "my customs declaration",
+            "customs declaration status",
+            "my nimule declaration",
+            "nimule declaration status",
+        )
+    )
+    if (
+        any(
+            w in lower
+            for w in (
+                "my filing status",
+                "did my return go through",
+                "my tax declaration status",
+            )
+        )
+        or has_customs_declaration_cue
+    ):
+        if has_customs_declaration_cue:
+            slots["include_customs_declaration"] = True
         return Intent(
             intent=IntentName.GET_FILING_STATUS,
             slots=slots,

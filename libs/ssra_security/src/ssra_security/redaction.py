@@ -18,6 +18,17 @@ _TIN_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+# Official published SSRA helpdesk subscriber numbers (+211 918806493, +211 912388318, etc.)
+_OFFICIAL_SSRA_HELPDESK_SUBSCRIBERS: frozenset[str] = frozenset(
+    {
+        "918806493",
+        "912388318",
+        "919382390",
+        "917803637",
+        "921058043",
+    }
+)
+
 # South Sudan phone numbers: +2119XXXXXXXX or 09[12578]XXXXXXX
 _PHONE_SS_RE = re.compile(
     r"(?:\+211[\s-]?(?:9\d)[\s-]?\d{3}[\s-]?\d{2}(\d{2})|\b09[12578][\s-]?\d{3}[\s-]?\d{2}(\d{2})\b)"
@@ -93,6 +104,9 @@ def redact_pii(text: str) -> RedactionResult:
     out = _PASSPORT_SS_RE.sub(_replace_passport, out)
 
     def _replace_phone(match: re.Match[str]) -> str:
+        digits = "".join(ch for ch in match.group(0) if ch.isdigit())
+        if digits.startswith("211") and digits[3:] in _OFFICIAL_SSRA_HELPDESK_SUBSCRIBERS:
+            return match.group(0)
         tags.append("PHONE_SS_211")
         last2 = match.group(1) or match.group(2) or "••"
         return f"+211•••••••{last2}"
@@ -100,6 +114,9 @@ def redact_pii(text: str) -> RedactionResult:
     out = _PHONE_SS_RE.sub(_replace_phone, out)
 
     def _replace_tin(match: re.Match[str]) -> str:
+        digits = "".join(ch for ch in match.group(0) if ch.isdigit())
+        if digits in _OFFICIAL_SSRA_HELPDESK_SUBSCRIBERS:
+            return match.group(0)
         tags.append("SSRA_TIN")
         return f"••••{match.group(1)}"
 
