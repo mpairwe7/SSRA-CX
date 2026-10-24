@@ -6,6 +6,7 @@ from typing import Any
 
 from ssra_core import AuthLevel, IntentName, LocaleCode, SSRAError
 
+from ssra_runtime.nodes.verifier import verify_plan_outcomes
 from ssra_runtime.schemas import ToolArtifact
 from ssra_runtime.state import ConversationGraphState
 from ssra_runtime.tools import GovernedMcpGatewayClient
@@ -74,6 +75,9 @@ def execute_knowledge_qa_subgraph(
     budget = state.get("budget")
     artifacts: list[ToolArtifact] = list(state.get("artifacts", []))
 
+    plan = state.get("plan")
+    failed_steps: list[str] = []
+
     if intent_name == IntentName.OUT_OF_SCOPE:
         return {"artifacts": artifacts, "budget": budget}
 
@@ -88,7 +92,57 @@ def execute_knowledge_qa_subgraph(
             budget=budget,
         )
         artifacts.append(art)
-        return {"artifacts": artifacts, "budget": budget}
+        if slots.get("compound_wht"):
+            wht_gross = str(slots.get("wht_amount_ssp") or slots.get("amount_ssp", "1000000"))
+            wht_cat = str(slots.get("wht_category", "goods_and_services"))
+            try:
+                wht_art = gateway.invoke_tool(
+                    server_name="tax-facts",
+                    tool_name="calculate_withholding_estimate",
+                    arguments={"gross_amount_ssp": wht_gross, "category": wht_cat},
+                    auth_level=auth_level,
+                    subject_ref=subject_ref,
+                    budget=budget,
+                )
+                artifacts.append(wht_art)
+            except SSRAError:
+                failed_steps.append("tax-facts.calculate_withholding_estimate")
+        hs_code_comp = str(slots.get("hs_code", "")).strip()
+        if hs_code_comp:
+            cif_comp = str(slots.get("cif_value_usd", "")).strip()
+            try:
+                if cif_comp:
+                    artifacts.append(
+                        gateway.invoke_tool(
+                            server_name="customs",
+                            tool_name="estimate_duties",
+                            arguments={"hs_code": hs_code_comp, "cif_value_usd": cif_comp},
+                            auth_level=auth_level,
+                            subject_ref=subject_ref,
+                            budget=budget,
+                        )
+                    )
+                else:
+                    artifacts.append(
+                        gateway.invoke_tool(
+                            server_name="customs",
+                            tool_name="lookup_tariff",
+                            arguments={"hs_code": hs_code_comp},
+                            auth_level=auth_level,
+                            subject_ref=subject_ref,
+                            budget=budget,
+                        )
+                    )
+            except SSRAError:
+                failed_steps.append(
+                    "customs.estimate_duties" if cif_comp else "customs.lookup_tariff"
+                )
+        verif = verify_plan_outcomes(plan, artifacts, failed_steps=failed_steps)
+        return {
+            "artifacts": artifacts,
+            "budget": budget,
+            "outcome_verification": verif.model_dump(mode="json"),
+        }
 
     if intent_name == IntentName.CALCULATE_WITHHOLDING:
         gross = str(slots.get("amount_ssp", "1000000"))
@@ -102,7 +156,12 @@ def execute_knowledge_qa_subgraph(
             budget=budget,
         )
         artifacts.append(art)
-        return {"artifacts": artifacts, "budget": budget}
+        verif = verify_plan_outcomes(plan, artifacts, failed_steps=failed_steps)
+        return {
+            "artifacts": artifacts,
+            "budget": budget,
+            "outcome_verification": verif.model_dump(mode="json"),
+        }
 
     if intent_name == IntentName.VERIFY_OFFICIAL_CHANNEL:
         candidate = str(slots.get("candidate_channel", "https://etax.nra.gov.ss/"))
@@ -159,6 +218,13 @@ def execute_knowledge_qa_subgraph(
 
     # Default: search published knowledge corpus
     query = state.get("redacted_user_text") or state.get("raw_user_text", "SSRA eTax")
+    if slots.get("guided_step_number"):
+        guided_query_map = {
+            IntentName.GUIDED_TIN_REGISTRATION: "TIN registration e-Tax",
+            IntentName.GUIDED_TCC: "Tax Compliance Certificate TCC",
+            IntentName.GUIDED_FILING_AND_PAYMENT: "how to file and pay tax return e-Tax",
+        }
+        query = guided_query_map.get(intent_name, query)
     kn_art = gateway.invoke_tool(
         server_name="knowledge",
         tool_name="search_knowledge",

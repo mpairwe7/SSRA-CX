@@ -62,19 +62,74 @@ def _normalise_amount_token(raw_token: str) -> str:
     return cleaned or "0"
 
 
-def _extract_monetary_amount(scan_text: str) -> str | None:
-    """Extract a monetary amount, prioritizing explicit SSP/USD/CIF/$ tags and skipping calendar years (1900-2099)."""
-    tagged = _TAGGED_MONEY_RE.search(scan_text)
-    if tagged:
-        raw_val = tagged.group(1) or tagged.group(2)
+def _extract_all_monetary_amounts(scan_text: str) -> list[str]:
+    """Extract all monetary amounts in order of appearance, skipping calendar years (1900-2099)."""
+    amounts: list[str] = []
+    for match in _TAGGED_MONEY_RE.finditer(scan_text):
+        raw_val = match.group(1) or match.group(2)
         if raw_val:
-            return _normalise_amount_token(raw_val)
+            norm = _normalise_amount_token(raw_val)
+            if norm not in amounts:
+                amounts.append(norm)
     for match in _UNTAGGED_MONEY_RE.finditer(scan_text):
         tok = match.group(1)
         if "," not in tok and "." not in tok and len(tok) == 4 and 1900 <= int(tok) <= 2099:
             continue
-        return _normalise_amount_token(tok)
-    return None
+        norm = _normalise_amount_token(tok)
+        if norm not in amounts:
+            amounts.append(norm)
+    return amounts
+
+
+def _extract_monetary_amount(scan_text: str) -> str | None:
+    """Extract a monetary amount, prioritizing explicit SSP/USD/CIF/$ tags and skipping calendar years (1900-2099)."""
+    all_amounts = _extract_all_monetary_amounts(scan_text)
+    return all_amounts[0] if all_amounts else None
+
+
+def _has_explicit_wht_category_cue(lower: str) -> bool:
+    """Return True if the text explicitly names a statutory Withholding Tax category."""
+    return any(
+        w in lower
+        for w in (
+            "non-resident",
+            "non resident",
+            "foreign contractor",
+            "غير مقيم",
+            "مقاول أجنبي",
+            "government contractor",
+            "resident contractor",
+            "ministry contract",
+            "مقاول حكومي",
+            "technical fee",
+            "technical fees",
+            "technical service",
+            "management fee",
+            "professional fee",
+            "consultancy",
+            "consulting",
+            "رسوم فنية",
+            "استشارات",
+            "mobile money",
+            "m-gurush",
+            "mgurush",
+            "momo",
+            "dealer commission",
+            "عمولة المحفظة",
+            "end of service",
+            "eosb",
+            "gratuity",
+            "severance",
+            "نهاية الخدمة",
+            "rent",
+            "rental",
+            "landlord",
+            "lease",
+            "إيجار",
+            "ايجار",
+            "ijar",
+        )
+    )
 
 
 def _detect_withholding_category(lower: str) -> str:
@@ -290,24 +345,14 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
             confidence=0.98,
         )
 
-    # 5. PAYE calculator (T0)
-    if any(
+    # 5. PAYE calculator (T0) — also supports compound PAYE + WHT in the same turn (Toolathlon)
+    has_paye_cue = any(
         w in lower
         for w in ("paye", "salary tax", "income tax on", "dariba ta mahiya", "ضريبة الدخل")
     ) and (
         "amount_ssp" in slots or "calculate" in lower or "estimate" in lower or "how much" in lower
-    ):
-        if "amount_ssp" not in slots:
-            slots["amount_ssp"] = "250000"
-        return Intent(
-            intent=IntentName.CALCULATE_PAYE,
-            slots=slots,
-            language=locale,
-            confidence=0.98,
-        )
-
-    # 6. Withholding calculator (T0) — supports all 7 Financial Act 2024/2025 WHT categories
-    if any(
+    )
+    has_wht_cue = any(
         w in lower
         for w in (
             "withholding",
@@ -322,9 +367,30 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
         or "estimate" in lower
         or "احسب" in lower
         or "كم" in lower
-    ):
+    )
+    if has_paye_cue:
+        all_amounts = _extract_all_monetary_amounts(money_scan_text)
+        if "amount_ssp" not in slots:
+            slots["amount_ssp"] = "250000"
+            slots["amount_defaulted"] = True
+        if has_wht_cue:
+            slots["compound_wht"] = True
+            slots["wht_amount_ssp"] = (
+                all_amounts[1] if len(all_amounts) >= 2 else str(slots["amount_ssp"])
+            )
+            slots["wht_category"] = _detect_withholding_category(lower)
+        return Intent(
+            intent=IntentName.CALCULATE_PAYE,
+            slots=slots,
+            language=locale,
+            confidence=0.98,
+        )
+
+    # 6. Withholding calculator (T0) — supports all 7 Financial Act 2024/2025 WHT categories
+    if has_wht_cue:
         if "amount_ssp" not in slots:
             slots["amount_ssp"] = "1000000"
+            slots["amount_defaulted"] = True
         slots["wht_category"] = _detect_withholding_category(lower)
         return Intent(
             intent=IntentName.CALCULATE_WITHHOLDING,
@@ -440,6 +506,138 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
     )
 
 
+_STEP_CONTINUATION_RE = re.compile(
+    r"^\s*(?:next(?:\s+step)?|continue|proceed|resume|go\s+on|what(?:'s|\s+is)\s+next|step\s+([123]))\b",
+    re.IGNORECASE,
+)
+_ANAPHORIC_FOLLOWUP_RE = re.compile(
+    r"\b(?:what\s+if|what\s+about|how\s+about|and\s+for|instead|now\s+for|if\s+it\s+is|for\s+cif)\b",
+    re.IGNORECASE,
+)
+
+
+def _resolve_multiturn_followup(
+    *,
+    intent_obj: Intent,
+    routing_text: str,
+    prior_intent: str | None,
+    prior_slots: dict[str, Any],
+    workflow_stack: list[dict[str, Any]],
+) -> tuple[Intent, list[dict[str, Any]]]:
+    """Resolve multi-turn anaphoric slot carry-over and guided-journey step continuation (ADR-028)."""
+    lower = routing_text.translate(_ARABIC_DIGIT_TRANS).lower().strip()
+    updated_stack = [dict(c) for c in workflow_stack]
+
+    # 1. Guided journey step continuation ('next step', 'continue', 'step 2') on active workflow_stack
+    step_match = _STEP_CONTINUATION_RE.search(lower)
+    if step_match is not None and updated_stack:
+        top = updated_stack[-1]
+        j_intent_str = str(top.get("journey_intent", ""))
+        if j_intent_str in IntentName._value2member_map_:
+            cur_step = int(top.get("current_step", 1))
+            total_steps = int(top.get("total_steps", 2))
+            explicit_step = int(step_match.group(1)) if step_match.group(1) else 0
+            next_step = (
+                min(max(1, explicit_step), total_steps)
+                if explicit_step > 0
+                else min(cur_step + 1, total_steps)
+            )
+            top["current_step"] = next_step
+            top["status"] = "COMPLETED" if next_step >= total_steps else "ACTIVE"
+            new_slots = {**intent_obj.slots, "guided_step_number": next_step}
+            return (
+                intent_obj.model_copy(
+                    update={
+                        "intent": IntentName(j_intent_str),
+                        "slots": new_slots,
+                        "confidence": 0.97,
+                    }
+                ),
+                updated_stack,
+            )
+
+    # 2. If explicit CALCULATE_WITHHOLDING matched without a new amount, inherit prior amount_ssp
+    if (
+        intent_obj.intent == IntentName.CALCULATE_WITHHOLDING
+        and intent_obj.slots.get("amount_defaulted")
+        and "amount_ssp" in prior_slots
+    ):
+        inherited = {
+            **intent_obj.slots,
+            "amount_ssp": str(prior_slots["amount_ssp"]),
+            "amount_defaulted": False,
+        }
+        return intent_obj.model_copy(update={"slots": inherited}), updated_stack
+
+    # 3. Elliptical / anaphoric follow-ups when primary classification fell through to KNOWLEDGE_QA
+    if intent_obj.intent == IntentName.KNOWLEDGE_QA:
+        is_anaphoric = _ANAPHORIC_FOLLOWUP_RE.search(lower) is not None
+        has_wht_cat = _has_explicit_wht_category_cue(lower)
+
+        # 3a. Customs HS code carry-over when follow-up provides CIF value or asks about duty
+        if (
+            "hs_code" not in intent_obj.slots
+            and "hs_code" in prior_slots
+            and (
+                "cif_value_usd" in intent_obj.slots
+                or (
+                    is_anaphoric
+                    and any(w in lower for w in ("duty", "duties", "cif", "usd", "$", "tariff"))
+                )
+            )
+        ):
+            carried_slots = {**intent_obj.slots, "hs_code": str(prior_slots["hs_code"])}
+            return intent_obj.model_copy(update={"slots": carried_slots}), updated_stack
+
+        # 3b. Withholding Tax follow-up ('What if it is for technical fees?' or 'What if it is 3,000,000 SSP?')
+        if prior_intent == IntentName.CALCULATE_WITHHOLDING.value and (
+            has_wht_cat or (is_anaphoric and "amount_ssp" in intent_obj.slots)
+        ):
+            carried_amount = str(
+                intent_obj.slots.get("amount_ssp") or prior_slots.get("amount_ssp", "1000000")
+            )
+            carried_cat = (
+                _detect_withholding_category(lower)
+                if has_wht_cat
+                else str(prior_slots.get("wht_category", "goods_and_services"))
+            )
+            wht_slots = {
+                **intent_obj.slots,
+                "amount_ssp": carried_amount,
+                "wht_category": carried_cat,
+            }
+            return (
+                intent_obj.model_copy(
+                    update={
+                        "intent": IntentName.CALCULATE_WITHHOLDING,
+                        "slots": wht_slots,
+                        "confidence": 0.95,
+                    }
+                ),
+                updated_stack,
+            )
+
+        # 3c. PAYE Calculator follow-up ('What if it is 800,000 SSP?')
+        if (
+            prior_intent == IntentName.CALCULATE_PAYE.value
+            and is_anaphoric
+            and "amount_ssp" in intent_obj.slots
+            and "hs_code" not in intent_obj.slots
+            and not has_wht_cat
+        ):
+            return (
+                intent_obj.model_copy(
+                    update={
+                        "intent": IntentName.CALCULATE_PAYE,
+                        "confidence": 0.96,
+                    }
+                ),
+                updated_stack,
+            )
+
+    return intent_obj, updated_stack
+
+
 def understand_node(state: ConversationGraphState) -> dict[str, Any]:
     """Execute Stage 4 & 5: English-Router normalization, intent classification, tier lookup, and bounded goal planning."""
     # Microsoft agent-framework#8132: Preserve or promote restored intent/tier on AG-UI confirmation resume turns
@@ -493,7 +691,15 @@ def understand_node(state: ConversationGraphState) -> dict[str, Any]:
         )
         else text
     )
-    intent_obj = validate_inter_model_handoff(classify_intent_deterministic(routing_text, locale))
+    raw_intent = classify_intent_deterministic(routing_text, locale)
+    resolved_intent, updated_wf_stack = _resolve_multiturn_followup(
+        intent_obj=raw_intent,
+        routing_text=routing_text,
+        prior_intent=state.get("prior_intent"),
+        prior_slots=state.get("prior_slots") or {},
+        workflow_stack=list(state.get("workflow_stack") or []),
+    )
+    intent_obj = validate_inter_model_handoff(resolved_intent)
     merged_slots: dict[str, Any] = {**state.get("slots", {}), **intent_obj.slots}
     router_env = router_env.model_copy(update={"extracted_slots": dict(intent_obj.slots)})
 
@@ -517,6 +723,7 @@ def understand_node(state: ConversationGraphState) -> dict[str, Any]:
         "english_router_envelope": router_env,
         "intent": intent_obj,
         "slots": merged_slots,
+        "workflow_stack": updated_wf_stack,
         "tier": tier,
         "plan": plan,
     }

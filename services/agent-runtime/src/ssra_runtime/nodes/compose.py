@@ -74,11 +74,10 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             )
         }
 
-    # 2. PAYE Calculator response (`CalculatorForm` generative UI card)
+    # 2. PAYE Calculator response (`CalculatorForm` generative UI card) — including compound PAYE + WHT/Customs
     paye_art = next((a for a in artifacts if a.tool == "calculate_paye_estimate"), None)
     if paye_art is not None:
         sc = paye_art.structured_content
-        cit_id = citations[0].id if citations else "cit_paye_act"
         if not citations:
             citations = [
                 Citation(
@@ -103,10 +102,37 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             f"net monthly pay of {net} SSP. Monthly PAYE returns and bank payments via "
             f"https://etax.nra.gov.ss/ are due by day {due_day} of the following month (Africa/Juba time)."
         )
+        wht_comp = next((a for a in artifacts if a.tool == "calculate_withholding_estimate"), None)
+        if wht_comp is not None:
+            wsc = wht_comp.structured_content
+            wht_cit = Citation(
+                id="cit_wht_act",
+                snapshot_version=str(wsc.get("snapshot_version", "2026.10.1")),
+                doc_title="Taxation Act 2009 (as amended by Financial Act 2024/2025)",
+                section_anchor="Part-IX-Withholding-Tax",
+                effective_from="2024-07-01",
+                url="https://etax.nra.gov.ss/",
+            )
+            citations.append(wht_cit)
+            numbers.extend(NumericClaim.model_validate(n) for n in wsc.get("numeric_claims", []))
+            text += (
+                f" Additionally, for a gross payment of {wsc['gross_amount_ssp']} SSP ({wsc['category']}), "
+                f"the withholding tax at {wsc['rate_percent']}% is {wsc['withholding_tax_ssp']} SSP, "
+                f"with {wsc['net_payable_ssp']} SSP net payable."
+            )
+        wf_stack = state.get("workflow_stack") or []
+        if wf_stack and wf_stack[-1].get("status") != "COMPLETED" and capabilities.max_len >= 240:
+            paused_step = int(wf_stack[-1].get("current_step", 1))
+            text += f" (Guided journey paused at Step {paused_step} — reply 'continue' to resume.)"
         return {
             "citations": citations,
             "answer": Answer(
-                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit_id])],
+                segments=[
+                    AnswerSegment(
+                        text=text[: capabilities.max_len],
+                        citation_ids=[c.id for c in citations],
+                    )
+                ],
                 citations=citations,
                 numbers=numbers,
                 ui_component=GenerativeUIComponent(
@@ -351,12 +377,66 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             unit=NumericUnit.SSP,
             source_ref=f"{bal_art.id}.total_outstanding_ssp",
         )
+        cits_bal = [cit]
+        nums_bal = [num_claim]
         extra_clauses: list[str] = []
+        filing_comp = next((a for a in artifacts if a.tool == "get_filing_status"), None)
+        if filing_comp is not None:
+            fsc = filing_comp.structured_content
+            cits_bal.append(
+                Citation(
+                    id="cit_etax_filing",
+                    snapshot_version="2026.10.1",
+                    doc_title="SSRA National e-Tax Filing Record",
+                    section_anchor=f"Filing-{fsc.get('tin_masked', tin_masked)}",
+                    effective_from=str(fsc.get("as_of", as_of)),
+                    url="https://etax.nra.gov.ss/",
+                )
+            )
+            extra_clauses.append(
+                f"Last filed period: {fsc.get('last_filed_period', 'N/A')} ({fsc.get('filing_status', sc['filing_status'])})."
+            )
+        dec_comp_bal = next((a for a in artifacts if a.tool == "get_declaration_status"), None)
+        if dec_comp_bal is not None:
+            dsc = dec_comp_bal.structured_content
+            d_ref = str(dsc["declaration_ref_masked"])
+            d_duty = str(dsc["assessed_duty_ssp"])
+            d_as_of = str(dsc["as_of"])
+            cits_bal.append(
+                Citation(
+                    id="cit_ecustoms_declaration",
+                    snapshot_version="2026.10.1",
+                    doc_title="SSRA National e-Customs Declaration Record",
+                    section_anchor=f"Customs-{d_ref}",
+                    effective_from=d_as_of,
+                    url="https://customs.eservices.gov.ss/",
+                )
+            )
+            nums_bal.append(
+                NumericClaim(
+                    value=d_duty,
+                    unit=NumericUnit.SSP,
+                    source_ref=f"{dec_comp_bal.id}.assessed_duty_ssp",
+                )
+            )
+            extra_clauses.append(
+                f"Customs declaration {d_ref} at {dsc['port_of_entry']}: {dsc['status']} "
+                f"(Assessed duty: {d_duty} SSP as of {d_as_of})."
+            )
         tcc_comp = next((a for a in artifacts if a.tool == "get_tcc_status"), None)
         if tcc_comp is not None:
-            extra_clauses.append(
-                f"TCC status: {tcc_comp.structured_content.get('tcc_status', 'UNKNOWN')}."
+            tsc = tcc_comp.structured_content
+            cits_bal.append(
+                Citation(
+                    id="cit_etax_tcc",
+                    snapshot_version="2026.10.1",
+                    doc_title="SSRA National e-Tax TCC Registry",
+                    section_anchor=f"TCC-{tsc.get('tin_masked', tin_masked)}",
+                    effective_from=str(tsc.get("as_of", as_of)),
+                    url="https://etax.nra.gov.ss/",
+                )
             )
+            extra_clauses.append(f"TCC status: {tsc.get('tcc_status', 'UNKNOWN')}.")
         verif = state.get("outcome_verification") or {}
         for note in verif.get("remediation_notes", []):
             extra_clauses.append(str(note))
@@ -373,11 +453,16 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             f"https://etax.nra.gov.ss/ into designated commercial banks.{suffix}"
         )
         return {
-            "citations": [cit],
+            "citations": cits_bal,
             "answer": Answer(
-                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
-                citations=[cit],
-                numbers=[num_claim],
+                segments=[
+                    AnswerSegment(
+                        text=text[: capabilities.max_len],
+                        citation_ids=[c.id for c in cits_bal],
+                    )
+                ],
+                citations=cits_bal,
+                numbers=nums_bal,
                 ui_component=GenerativeUIComponent(
                     name=GenerativeUIComponentName.BALANCE_CARD,
                     props={
@@ -709,6 +794,9 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             from ssra_runtime.graphs.guided_journey import get_guided_journey_steps
 
             steps = get_guided_journey_steps(intent_name, locale)
+            req_step = int((state.get("slots") or {}).get("guided_step_number", 1))
+            active_step_idx = min(max(1, req_step), len(steps))
+            ui_props["current_step"] = active_step_idx
             ui_props["guided_steps"] = [
                 {
                     "journey_id": s.journey_id,
@@ -720,6 +808,11 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
                 }
                 for s in steps
             ]
+            if req_step > 1 and steps:
+                chosen_step = steps[active_step_idx - 1]
+                content_text = (
+                    f"Step {chosen_step.step_number} ({chosen_step.title}) — {content_text}"
+                )
         wf_stack = state.get("workflow_stack") or []
         if wf_stack:
             ui_props["resumable_workflow"] = wf_stack[-1]

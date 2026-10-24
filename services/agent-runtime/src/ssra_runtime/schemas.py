@@ -29,6 +29,9 @@ class TurnBudget(BaseModel):
     max_tool_calls: int = 16
     tool_calls_used: int = 0
     max_wall_time_ms: int = 8000
+    max_identical_tool_calls: int = 2
+    tool_call_counts: dict[str, int] = Field(default_factory=dict)
+    memoized_read_artifacts: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class ToolArtifact(BaseModel):

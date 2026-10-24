@@ -132,3 +132,160 @@ def test_openbao_transit_encryption_and_otel_genai_attributes() -> None:
     assert span_attrs["gen_ai.system"] == "ssra.sovereign.vllm"
     assert span_attrs["ssra.channel"] == "whatsapp"
     assert span_attrs["ssra.cost.estimated_usd"] > 0.005
+
+
+def test_multiturn_anaphoric_slot_carryover_and_guided_journey_progression() -> None:
+    """ADR-028 Phase 1: Verify multi-turn slot carry-over (PAYE, WHT, Customs HS code) and guided journey progression."""
+    runtime = SSRAConversationRuntime()
+    thread_id = "thr_adr028_multiturn_01"
+
+    # 1. PAYE Turn 1 -> Anaphoric Turn 2 ('What if it is 800,000 SSP?')
+    t1 = runtime.run_turn(
+        make_conversation_event("Calculate PAYE on 300,000 SSP", thread_id=thread_id)
+    )
+    assert t1.intent is not None and t1.intent.intent == IntentName.CALCULATE_PAYE
+    t2 = runtime.run_turn(
+        make_conversation_event("What if it is 800,000 SSP?", thread_id=thread_id)
+    )
+    assert t2.intent is not None and t2.intent.intent == IntentName.CALCULATE_PAYE
+    assert "800000" in t2.answer.segments[0].text
+
+    # 2. Withholding Tax Turn 3 -> Category follow-up Turn 4 ('What if it is for technical fees?')
+    t3 = runtime.run_turn(
+        make_conversation_event(
+            "Calculate withholding tax on 2,000,000 SSP for rent",
+            thread_id=thread_id,
+        )
+    )
+    assert t3.intent is not None and t3.intent.intent == IntentName.CALCULATE_WITHHOLDING
+    t4 = runtime.run_turn(
+        make_conversation_event("What if it is for technical fees?", thread_id=thread_id)
+    )
+    assert t4.intent is not None and t4.intent.intent == IntentName.CALCULATE_WITHHOLDING
+    assert "2000000" in t4.answer.segments[0].text
+    assert "technical_fees" in t4.answer.segments[0].text
+
+    # 3. Customs HS code Turn 5 -> CIF follow-up Turn 6 without repeating HS code
+    t5 = runtime.run_turn(
+        make_conversation_event("What is the customs tariff for HS 8703.23?", thread_id=thread_id)
+    )
+    assert [f"{a.server}.{a.tool}" for a in t5.artifacts] == ["customs.lookup_tariff"]
+    t6 = runtime.run_turn(
+        make_conversation_event("What if CIF is $12,000 USD?", thread_id=thread_id)
+    )
+    assert [f"{a.server}.{a.tool}" for a in t6.artifacts] == ["customs.estimate_duties"]
+    assert "8703.23" in t6.answer.segments[0].text
+    assert "12000" in t6.answer.segments[0].text
+
+    # 4. Guided Journey Step 1 -> Mid-journey side question -> 'Next step' Step 2 -> 'Next step' Step 3
+    journey_thread = "thr_adr028_journey_01"
+    j1 = runtime.run_turn(
+        make_conversation_event("How do I register for a TIN?", thread_id=journey_thread)
+    )
+    assert j1.intent is not None and j1.intent.intent == IntentName.GUIDED_TIN_REGISTRATION
+    assert j1.answer.ui_component is not None
+    assert j1.answer.ui_component.props.get("current_step") == 1
+
+    # Mid-journey side question preserves workflow_stack and surfaces resumption cue
+    j_side = runtime.run_turn(
+        make_conversation_event("How much is PAYE on 400,000 SSP?", thread_id=journey_thread)
+    )
+    assert j_side.intent is not None and j_side.intent.intent == IntentName.CALCULATE_PAYE
+    assert "Guided journey paused at Step 1" in j_side.answer.segments[0].text
+
+    # 'Next step' advances to Step 2, then Step 3 (COMPLETED)
+    j2 = runtime.run_turn(make_conversation_event("Next step", thread_id=journey_thread))
+    assert j2.intent is not None and j2.intent.intent == IntentName.GUIDED_TIN_REGISTRATION
+    assert j2.answer.ui_component is not None
+    assert j2.answer.ui_component.props.get("current_step") == 2
+    assert "Step 2" in j2.answer.segments[0].text
+
+    j3 = runtime.run_turn(make_conversation_event("Continue", thread_id=journey_thread))
+    assert j3.answer.ui_component is not None
+    assert j3.answer.ui_component.props.get("current_step") == 3
+    assert j3.answer.ui_component.props["resumable_workflow"]["status"] == "COMPLETED"
+
+
+def test_toolathlon_compound_multi_tool_and_quiet_fault_loop_guards() -> None:
+    """ADR-028 Phase 2 & 3: Verify Toolathlon compound tool execution, read memoization, loop blocking, and quiet fault detection."""
+    from ssra_runtime.nodes.verifier import verify_plan_outcomes
+    from ssra_runtime.schemas import ToolArtifact, TurnBudget
+
+    runtime = SSRAConversationRuntime()
+
+    # 1. Compound T0 turn: PAYE + Withholding Tax executed and synthesized in a single turn
+    comp_t0 = runtime.run_turn(
+        make_conversation_event(
+            "Calculate PAYE on 500,000 SSP and withholding tax on 1,000,000 SSP for rent",
+            thread_id="thr_toolathlon_t0",
+        )
+    )
+    assert [f"{a.server}.{a.tool}" for a in comp_t0.artifacts] == [
+        "tax-facts.calculate_paye_estimate",
+        "tax-facts.calculate_withholding_estimate",
+    ]
+    assert "500000" in comp_t0.answer.segments[0].text
+    assert "1000000" in comp_t0.answer.segments[0].text
+    assert len(comp_t0.answer.citations) == 2
+
+    # 2. Compound T1 turn: Balance + Filing Status + Customs Declaration + TCC Status
+    comp_t1 = runtime.run_turn(
+        make_conversation_event(
+            "Check my balance, my filing status, my customs declaration status, and my TCC status",
+            thread_id="thr_toolathlon_t1",
+        ),
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_deng_02",
+    )
+    executed_tools = [f"{a.server}.{a.tool}" for a in comp_t1.artifacts]
+    assert "ledger.get_balance" in executed_tools
+    assert "ledger.get_filing_status" in executed_tools
+    assert "tcc.get_tcc_status" in executed_tools
+    assert "TCC status:" in comp_t1.answer.segments[0].text
+    assert "Last filed period:" in comp_t1.answer.segments[0].text
+
+    # 3. Turn-scoped read memoization on call #2 and TOOL_LOOP_DETECTED block on call #3
+    budget = TurnBudget()
+    a1 = runtime.gateway.invoke_tool(
+        server_name="tax-facts",
+        tool_name="get_tax_fact",
+        arguments={"key": "paye.filing.deadline_day"},
+        budget=budget,
+    )
+    a2 = runtime.gateway.invoke_tool(
+        server_name="tax-facts",
+        tool_name="get_tax_fact",
+        arguments={"key": "paye.filing.deadline_day"},
+        budget=budget,
+    )
+    assert a1.id == a2.id  # Memoized artifact returned on second identical read call
+    with pytest.raises(SSRAError, match="TOOL_LOOP_DETECTED"):
+        runtime.gateway.invoke_tool(
+            server_name="tax-facts",
+            tool_name="get_tax_fact",
+            arguments={"key": "paye.filing.deadline_day"},
+            budget=budget,
+        )
+
+    # 4. Quiet tool failure detection (arXiv:2610.10062) catches corrupted mathematical figures
+    corrupted_paye = ToolArtifact(
+        id="art_corrupt_01",
+        server="tax-facts",
+        tool="calculate_paye_estimate",
+        tier=RiskTier.T0,
+        structured_content={
+            "snapshot_version": "2026.10.1",
+            "gross_monthly_ssp": "500000",
+            "estimated_tax_ssp": "600000",  # Impossible: tax > gross
+            "net_monthly_ssp": "450000",
+            "effective_rate_percent": "120",
+        },
+        provenance={"snapshot_version": "2026.10.1"},
+        data_classification="PUBLIC",
+    )
+    verif = verify_plan_outcomes(None, [corrupted_paye])
+    assert verif.verified is False
+    assert (
+        "QUIET_FAULT_DETECTED:tax-facts.calculate_paye_estimate:PAYE_INVARIANT_VIOLATION"
+        in verif.blocker_codes
+    )

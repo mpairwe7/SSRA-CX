@@ -135,6 +135,28 @@ def build_execution_plan(
         )
         return Plan(subgraph=selected_subgraph, steps=[cust_step], tier=tier)
     steps = detect_compound_self_service_steps(canonical_query, intent.intent)
+    if intent.intent == IntentName.CALCULATE_PAYE:
+        if (
+            intent.slots.get("compound_wht")
+            and "tax-facts.calculate_withholding_estimate" not in steps
+        ):
+            steps.append("tax-facts.calculate_withholding_estimate")
+        if intent.slots.get("hs_code"):
+            cust_step = (
+                "customs.estimate_duties"
+                if intent.slots.get("cif_value_usd")
+                else "customs.lookup_tariff"
+            )
+            if cust_step not in steps:
+                steps.append(cust_step)
+    elif intent.intent == IntentName.CALCULATE_WITHHOLDING and intent.slots.get("hs_code"):
+        cust_step = (
+            "customs.estimate_duties"
+            if intent.slots.get("cif_value_usd")
+            else "customs.lookup_tariff"
+        )
+        if cust_step not in steps:
+            steps.append(cust_step)
     if intent.intent == IntentName.GET_FILING_STATUS and intent.slots.get(
         "include_customs_declaration"
     ):
