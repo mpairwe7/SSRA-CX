@@ -1730,3 +1730,45 @@ def test_multilingual_contact_url_pronunciation_and_receptionist_structuring() -
     # Single-sentence answer with no overflow and no officer offer
     short_turn = session.prepare_spoken_answer("Your return is filed on https://etax.nra.gov.ss/.")
     assert short_turn == "Your return is filed on e-tax dot n r a dot gov dot s s."
+
+    # Voice Speaker & Regional Dialect profiles across all 8 South Sudan languages
+    from ssra_voice import (
+        TTS_SPEAKER_PROFILES,
+        VOICE_SAMPLES_BY_LOCALE,
+        build_voice_catalogue_payload,
+        resolve_tts_speaker_profile,
+        synthesize_tts_speech_envelope,
+    )
+
+    assert len(VOICE_SAMPLES_BY_LOCALE) == 8
+    assert resolve_tts_speaker_profile("xx", None) is None
+    en_prof = resolve_tts_speaker_profile("en", "ssra_eng_0002")
+    assert en_prof is not None and en_prof.name == "Lado"
+    assert en_prof.dialect_code == "en-SS-EAC"
+    din_prof = resolve_tts_speaker_profile("din", "ssra_din_0003")
+    assert din_prof is not None and din_prof.name == "Nyanut"
+    assert din_prof.dialect_code == "din-Agar"
+
+    cat_payload = build_voice_catalogue_payload()
+    assert set(cat_payload["voices"].keys()) == {
+        "en",
+        "ar",
+        "pga",
+        "din",
+        "nus",
+        "bfa",
+        "zne",
+        "shk",
+    }
+    assert len(cat_payload["voices"]["en"]) == 3
+    assert cat_payload["voices"]["en"][0]["oq008_approved"] is False
+    assert len(TTS_SPEAKER_PROFILES) == 18
+
+    synth_env = synthesize_tts_speech_envelope(
+        text="PAYE is due by the 15th.",
+        locale=LocaleCode.EN,
+        voice="ssra_eng_0003",
+        recommended_tone="reassuring_step_by_step",
+    )
+    assert synth_env["speaker_name"] == "Akol"
+    assert synth_env["dialect_code"] == "en-SS-Civic"

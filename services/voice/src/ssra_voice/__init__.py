@@ -161,18 +161,26 @@ def synthesize_tts_speech_envelope(
         "empathetic_deescalation",
     ] = "standard_clear",
 ) -> dict[str, Any]:
-    """Build deterministic offline HuggingFace MMS-TTS / Orpheus synthesis envelope with locale-validated speaker tag and EQ prosody modulation."""
+    """Build deterministic offline HuggingFace MMS-TTS / Orpheus synthesis envelope with locale-validated speaker tag, dialect metadata, and EQ prosody modulation."""
     desc = resolve_hf_voice_model_cache(locale, hf_home=hf_home)
     resolved_voice = resolve_tts_voice(locale.value, voice)
-    speaking_rate = (
+    profile = resolve_tts_speaker_profile(locale.value, resolved_voice)
+    base_rate = (
         0.92 if recommended_tone in ("reassuring_step_by_step", "empathetic_deescalation") else 1.0
     )
+    speaking_rate = round(base_rate * (profile.rate_multiplier if profile else 1.0), 2)
     sentence_pause_ms = (
         350 if recommended_tone in ("reassuring_step_by_step", "empathetic_deescalation") else 200
     )
     return {
         "tts_model": desc.tts_repo_id,
         "voice": resolved_voice,
+        "speaker_name": profile.name if profile else "",
+        "dialect_code": profile.dialect_code if profile else locale.value,
+        "dialect_label": profile.dialect_label if profile else "",
+        "role": profile.role if profile else "",
+        "tone": profile.tone if profile else "",
+        "pitch_multiplier": profile.pitch_multiplier if profile else 1.0,
         "locale": locale.value,
         "hf_cache_dir": desc.hf_cache_dir,
         "local_files_only": desc.local_files_only,
@@ -794,19 +802,323 @@ def build_chat_to_call_carryover(
     )
 
 
-# Per-locale TTS Speaker Catalog (`test_sunbird_voice_selection.py` pattern):
+# Per-locale TTS Speaker & Regional Dialect Catalog (`test_sunbird_voice_selection.py` & `voices.ts` pattern):
 # Every default speaker is first in its own locale catalog, and every tag is unique & locale-scoped.
 TTS_VOICE_CATALOG: dict[str, tuple[str, ...]] = {
-    "en": ("ssra_eng_0001", "ssra_eng_0002"),
+    "en": ("ssra_eng_0001", "ssra_eng_0002", "ssra_eng_0003"),
     "ar": ("ssra_ara_0001", "ssra_ara_0002"),
     "pga": ("ssra_pga_0001", "ssra_pga_0002"),
-    "din": ("ssra_din_0001", "ssra_din_0002"),
+    "din": ("ssra_din_0001", "ssra_din_0002", "ssra_din_0003"),
     "nus": ("ssra_nus_0001", "ssra_nus_0002"),
     "bfa": ("ssra_bfa_0001", "ssra_bfa_0002"),
     "zne": ("ssra_zne_0001", "ssra_zne_0002"),
     "shk": ("ssra_shk_0001", "ssra_shk_0002"),
 }
 TTS_DEFAULT_VOICE: dict[str, str] = {loc: tags[0] for loc, tags in TTS_VOICE_CATALOG.items()}
+
+
+@dataclass(frozen=True)
+class VoiceSpeakerProfile:
+    """Speaker persona and regional dialect descriptor (`FinalYearProject` `voices.ts` parity)."""
+
+    voice_id: str
+    locale: str
+    name: str
+    role: str
+    dialect_code: str
+    dialect_label: str
+    tone: str
+    provider: Literal["orpheus_3b", "mms_tts"]
+    native: bool
+    is_default: bool
+    pitch_multiplier: float = 1.0
+    rate_multiplier: float = 1.0
+    bcp47_hint: str = "en-SS"
+
+
+VOICE_SAMPLES_BY_LOCALE: dict[str, str] = {
+    "en": "Welcome to SSRA Assist. PAYE returns are due by the 15th of the following month on e-tax dot n r a dot gov dot s s.",
+    "ar": "مرحباً بكم في مساعد هيئة الإيرادات بجنوب السودان. يُقدم إقرار ضريبة الدخل في اليوم الخامس عشر من الشهر التالي.",
+    "pga": "ahlan bik fi SSRA Assist. dariba ta PAYE lazim tudfa يوم 15 في الشهر الجاي.",
+    "din": "Bak ben tënë SSRA Assist. Ajul de PAYE aa yennë cool në nïn 15 de pɛɛi bɔ.",
+    "nus": "Bërɛ tënë SSRA Assist. Muthɔɔr PAYE la cäthɛ në চ্যাंग 15.",
+    "bfa": "Worun ti SSRA Assist. Kulya na PAYE rembu kode 15.",
+    "zne": "Mo ye ku SSRA Assist. Marã PAYEidu ni rame 15.",
+    "shk": "Wol yi SSRA Assist. Gin culu PAYE bedo nino 15.",
+}
+
+TTS_SPEAKER_PROFILES: dict[str, VoiceSpeakerProfile] = {
+    "ssra_eng_0001": VoiceSpeakerProfile(
+        voice_id="ssra_eng_0001",
+        locale="en",
+        name="Abuk",
+        role="Senior Taxpayer Services Specialist",
+        dialect_code="en-SS-Juba",
+        dialect_label="South Sudan English (Juba Standard)",
+        tone="Warm, Reassuring & Clear",
+        provider="orpheus_3b",
+        native=True,
+        is_default=True,
+        pitch_multiplier=1.02,
+        rate_multiplier=1.0,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_eng_0002": VoiceSpeakerProfile(
+        voice_id="ssra_eng_0002",
+        locale="en",
+        name="Lado",
+        role="Customs & Revenue Compliance Officer",
+        dialect_code="en-SS-EAC",
+        dialect_label="East African Regional English",
+        tone="Authoritative, Structured & Crisp",
+        provider="orpheus_3b",
+        native=True,
+        is_default=False,
+        pitch_multiplier=0.95,
+        rate_multiplier=0.98,
+        bcp47_hint="en-KE",
+    ),
+    "ssra_eng_0003": VoiceSpeakerProfile(
+        voice_id="ssra_eng_0003",
+        locale="en",
+        name="Akol",
+        role="e-Tax & Digital Filing Advisor",
+        dialect_code="en-SS-Civic",
+        dialect_label="South Sudan Civic English",
+        tone="Patient, Step-by-Step & Articulate",
+        provider="orpheus_3b",
+        native=True,
+        is_default=False,
+        pitch_multiplier=1.0,
+        rate_multiplier=0.95,
+        bcp47_hint="en-GB",
+    ),
+    "ssra_ara_0001": VoiceSpeakerProfile(
+        voice_id="ssra_ara_0001",
+        locale="ar",
+        name="Amira (أميرة)",
+        role="مستشارة خدمات المكلّفين (Senior Taxpayer Advisor)",
+        dialect_code="ar-SS-Nile",
+        dialect_label="Nile Valley / Sudanese Standard Arabic",
+        tone="واضح، رسمي ومطمئن (Clear, Official & Reassuring)",
+        provider="orpheus_3b",
+        native=True,
+        is_default=True,
+        pitch_multiplier=1.02,
+        rate_multiplier=1.0,
+        bcp47_hint="ar-SD",
+    ),
+    "ssra_ara_0002": VoiceSpeakerProfile(
+        voice_id="ssra_ara_0002",
+        locale="ar",
+        name="Tariq (طارق)",
+        role="ضابط الجمارك والامتثال الضريبي (Customs & Compliance Officer)",
+        dialect_code="ar-001-MSA",
+        dialect_label="Modern Standard Statutory Arabic",
+        tone="دقيق ومنظم (Precise & Structured)",
+        provider="orpheus_3b",
+        native=True,
+        is_default=False,
+        pitch_multiplier=0.95,
+        rate_multiplier=0.98,
+        bcp47_hint="ar-SA",
+    ),
+    "ssra_pga_0001": VoiceSpeakerProfile(
+        voice_id="ssra_pga_0001",
+        locale="pga",
+        name="Kiden",
+        role="Taxpayer Outreach & Market Advisor",
+        dialect_code="pga-Juba",
+        dialect_label="Juba Arabic (Central Equatoria)",
+        tone="Friendly, Natural & Accessible",
+        provider="orpheus_3b",
+        native=True,
+        is_default=True,
+        pitch_multiplier=1.02,
+        rate_multiplier=1.0,
+        bcp47_hint="ar-SD",
+    ),
+    "ssra_pga_0002": VoiceSpeakerProfile(
+        voice_id="ssra_pga_0002",
+        locale="pga",
+        name="Sebit",
+        role="Small Business & e-Tax Guide",
+        dialect_code="pga-Wau",
+        dialect_label="Juba Arabic (Wau / Bahr el Ghazal)",
+        tone="Steady, Practical & Direct",
+        provider="orpheus_3b",
+        native=True,
+        is_default=False,
+        pitch_multiplier=0.96,
+        rate_multiplier=0.97,
+        bcp47_hint="ar-SD",
+    ),
+    "ssra_din_0001": VoiceSpeakerProfile(
+        voice_id="ssra_din_0001",
+        locale="din",
+        name="Achai",
+        role="Raan Luɔi de Ajul (Lead Dinka Tax Advisor)",
+        dialect_code="din-Rek",
+        dialect_label="Thuɔŋjäŋ (Rek / Bahr el Ghazal)",
+        tone="Calm, Clear & Supportive",
+        provider="mms_tts",
+        native=True,
+        is_default=True,
+        pitch_multiplier=1.02,
+        rate_multiplier=1.0,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_din_0002": VoiceSpeakerProfile(
+        voice_id="ssra_din_0002",
+        locale="din",
+        name="Deng",
+        role="Raan Luɔi de Customs ku Biacara (Customs & Trade Officer)",
+        dialect_code="din-Bor",
+        dialect_label="Thuɔŋjäŋ (Bor / Jonglei)",
+        tone="Steady & Authoritative",
+        provider="mms_tts",
+        native=True,
+        is_default=False,
+        pitch_multiplier=0.95,
+        rate_multiplier=0.97,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_din_0003": VoiceSpeakerProfile(
+        voice_id="ssra_din_0003",
+        locale="din",
+        name="Nyanut",
+        role="Raan Kony de e-Tax (Regional Taxpayer Guide)",
+        dialect_code="din-Agar",
+        dialect_label="Thuɔŋjäŋ (Agar / Lakes)",
+        tone="Patient & Articulate",
+        provider="mms_tts",
+        native=True,
+        is_default=False,
+        pitch_multiplier=1.0,
+        rate_multiplier=0.96,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_nus_0001": VoiceSpeakerProfile(
+        voice_id="ssra_nus_0001",
+        locale="nus",
+        name="Nyaruach",
+        role="Raan Luɔi Muthɔɔr (Nuer Taxpayer Specialist)",
+        dialect_code="nus-West",
+        dialect_label="Thok Nath (Western / Bentiu)",
+        tone="Clear & Reassuring",
+        provider="mms_tts",
+        native=True,
+        is_default=True,
+        pitch_multiplier=1.02,
+        rate_multiplier=1.0,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_nus_0002": VoiceSpeakerProfile(
+        voice_id="ssra_nus_0002",
+        locale="nus",
+        name="Gatluak",
+        role="Raan Luɔi Customs (Border & Trade Advisor)",
+        dialect_code="nus-East",
+        dialect_label="Thok Nath (Lou / Eastern Jikany)",
+        tone="Firm & Structured",
+        provider="mms_tts",
+        native=True,
+        is_default=False,
+        pitch_multiplier=0.95,
+        rate_multiplier=0.98,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_bfa_0001": VoiceSpeakerProfile(
+        voice_id="ssra_bfa_0001",
+        locale="bfa",
+        name="Poni",
+        role="Ngutu lo Konyan (Bari Taxpayer Advisor)",
+        dialect_code="bfa-Juba",
+        dialect_label="Kutuk na Bari (Central Equatoria / Juba)",
+        tone="Warm & Clear",
+        provider="mms_tts",
+        native=True,
+        is_default=True,
+        pitch_multiplier=1.02,
+        rate_multiplier=1.0,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_bfa_0002": VoiceSpeakerProfile(
+        voice_id="ssra_bfa_0002",
+        locale="bfa",
+        name="Wani",
+        role="Ngutu lo Biacara ku Customs (Trade & Customs Officer)",
+        dialect_code="bfa-South",
+        dialect_label="Kutuk na Bari (Kakwa / Kajo-Keji)",
+        tone="Steady & Direct",
+        provider="mms_tts",
+        native=True,
+        is_default=False,
+        pitch_multiplier=0.96,
+        rate_multiplier=0.98,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_zne_0001": VoiceSpeakerProfile(
+        voice_id="ssra_zne_0001",
+        locale="zne",
+        name="Nagero",
+        role="Boro Undo Marã (Zande Taxpayer Specialist)",
+        dialect_code="zne-Yambio",
+        dialect_label="Pa Pazande (Yambio / Western Equatoria)",
+        tone="Gentle & Clear",
+        provider="mms_tts",
+        native=True,
+        is_default=True,
+        pitch_multiplier=1.02,
+        rate_multiplier=1.0,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_zne_0002": VoiceSpeakerProfile(
+        voice_id="ssra_zne_0002",
+        locale="zne",
+        name="Bage",
+        role="Boro Sunge Bagaa (Trade & Customs Guide)",
+        dialect_code="zne-Tambura",
+        dialect_label="Pa Pazande (Tambura)",
+        tone="Steady & Reliable",
+        provider="mms_tts",
+        native=True,
+        is_default=False,
+        pitch_multiplier=0.96,
+        rate_multiplier=0.98,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_shk_0001": VoiceSpeakerProfile(
+        voice_id="ssra_shk_0001",
+        locale="shk",
+        name="Ayak",
+        role="Jago Konyo (Shilluk Taxpayer Advisor)",
+        dialect_code="shk-Malakal",
+        dialect_label="Dhøg Cøllø (Malakal / Upper Nile)",
+        tone="Calm & Articulate",
+        provider="mms_tts",
+        native=True,
+        is_default=True,
+        pitch_multiplier=1.02,
+        rate_multiplier=1.0,
+        bcp47_hint="en-SS",
+    ),
+    "ssra_shk_0002": VoiceSpeakerProfile(
+        voice_id="ssra_shk_0002",
+        locale="shk",
+        name="Otti",
+        role="Jago Biacara (Trade & Compliance Officer)",
+        dialect_code="shk-Kodok",
+        dialect_label="Dhøg Cøllø (Kodok)",
+        tone="Structured & Clear",
+        provider="mms_tts",
+        native=True,
+        is_default=False,
+        pitch_multiplier=0.96,
+        rate_multiplier=0.98,
+        bcp47_hint="en-SS",
+    ),
+}
 
 
 def resolve_tts_voice(locale: str, requested_voice: str | None = None) -> str | None:
@@ -822,6 +1134,50 @@ def resolve_tts_voice(locale: str, requested_voice: str | None = None) -> str | 
     if requested_voice and requested_voice in catalog:
         return requested_voice
     return TTS_DEFAULT_VOICE[loc]
+
+
+def resolve_tts_speaker_profile(
+    locale: str, requested_voice: str | None = None
+) -> VoiceSpeakerProfile | None:
+    """Resolve the full `VoiceSpeakerProfile` (persona, regional dialect, prosody) for a locale and voice tag."""
+    resolved_tag = resolve_tts_voice(locale, requested_voice)
+    if resolved_tag is None:
+        return None
+    return TTS_SPEAKER_PROFILES.get(resolved_tag)
+
+
+def build_voice_catalogue_payload(
+    *,
+    wer_evidence: Mapping[LocaleCode, VoiceWerEvidence] = APPROVED_VOICE_WER_EVIDENCE,
+) -> dict[str, Any]:
+    """Build the `/v1/speech/voices` speaker and dialect catalogue with truthful `OQ-008` launch state."""
+    voices_by_locale: dict[str, list[dict[str, Any]]] = {}
+    for loc, tags in TTS_VOICE_CATALOG.items():
+        loc_enum = LocaleCode(loc)
+        oq008_ready = _wer_gate_failure(loc_enum, wer_evidence) is None
+        voices_by_locale[loc] = []
+        for tag in tags:
+            prof = TTS_SPEAKER_PROFILES[tag]
+            voices_by_locale[loc].append(
+                {
+                    "id": prof.voice_id,
+                    "name": prof.name,
+                    "role": prof.role,
+                    "dialect_code": prof.dialect_code,
+                    "dialect_label": prof.dialect_label,
+                    "tone": prof.tone,
+                    "provider": prof.provider,
+                    "native": prof.native,
+                    "default": prof.is_default,
+                    "available": True,
+                    "oq008_approved": oq008_ready,
+                    "sample_text": VOICE_SAMPLES_BY_LOCALE.get(loc, VOICE_SAMPLES_BY_LOCALE["en"]),
+                }
+            )
+    return {
+        "voices": voices_by_locale,
+        "samples": dict(VOICE_SAMPLES_BY_LOCALE),
+    }
 
 
 @dataclass(frozen=True)
@@ -3795,8 +4151,10 @@ __all__ = [
     "REPLY_FRAME_KINDS",
     "TTS_DEFAULT_VOICE",
     "TTS_MODEL_BY_LOCALE",
+    "TTS_SPEAKER_PROFILES",
     "TTS_VOICE_CATALOG",
     "VOICE_EVENT_TYPES",
+    "VOICE_SAMPLES_BY_LOCALE",
     "WHISPER_COMPRESSION_RATIO_THRESHOLD",
     "WHISPER_LOGPROB_THRESHOLD",
     "WHISPER_NO_SPEECH_THRESHOLD",
@@ -3827,6 +4185,7 @@ __all__ = [
     "VoicePrompt",
     "VoiceRetentionPolicy",
     "VoiceSessionDecision",
+    "VoiceSpeakerProfile",
     "VoiceStreamSession",
     "VoiceTurnOutcome",
     "VoiceWebSocketConcurrencyGuard",
@@ -3837,6 +4196,7 @@ __all__ = [
     "build_call_opening_prompts",
     "build_call_to_web_carryover",
     "build_chat_to_call_carryover",
+    "build_voice_catalogue_payload",
     "build_voice_consent_audit_entry",
     "build_voice_prosody_eq_metadata",
     "build_voice_spoken_turn_and_sms_followup",
@@ -3873,6 +4233,7 @@ __all__ = [
     "resolve_hf_voice_model_cache",
     "resolve_mt_and_tts_turn_plan",
     "resolve_recording_consent",
+    "resolve_tts_speaker_profile",
     "resolve_tts_voice",
     "route_voice_turn",
     "select_hybrid_voice_execution_mode",
