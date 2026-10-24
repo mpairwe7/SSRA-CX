@@ -635,3 +635,357 @@ export function structureCallReceptionistBlocks(text: string): readonly CallCapt
   }
   return blocks;
 }
+
+export interface VoiceSpeakerOption {
+  readonly id: string;
+  readonly locale: LocaleCode;
+  readonly name: string;
+  readonly role: string;
+  readonly dialectCode: string;
+  readonly dialectLabel: string;
+  readonly tone: string;
+  readonly provider: "orpheus_3b" | "mms_tts";
+  readonly native: boolean;
+  readonly isDefault: boolean;
+  readonly pitchMultiplier: number;
+  readonly rateMultiplier: number;
+  readonly bcp47Hint: string;
+}
+
+export const SSRA_VOICE_SAMPLES: Readonly<Record<LocaleCode, string>> = {
+  en: "Welcome to SSRA Assist. PAYE returns are due by the 15th of the following month on e-tax dot n r a dot gov dot s s.",
+  ar: "مرحباً بكم في مساعد هيئة الإيرادات بجنوب السودان. يُقدم إقرار ضريبة الدخل في اليوم الخامس عشر من الشهر التالي.",
+  pga: "ahlan bik fi SSRA Assist. dariba ta PAYE lazim tudfa يوم 15 في الشهر الجاي.",
+  din: "Bak ben tënë SSRA Assist. Ajul de PAYE aa yennë cool në nïn 15 de pɛɛi bɔ.",
+  nus: "Bërɛ tënë SSRA Assist. Muthɔɔr PAYE la cäthɛ në 15.",
+  bfa: "Worun ti SSRA Assist. Kulya na PAYE rembu kode 15.",
+  zne: "Mo ye ku SSRA Assist. Marã PAYE du ni rame 15.",
+  shk: "Wol yi SSRA Assist. Gin culu PAYE bedo nino 15.",
+};
+
+export const SSRA_VOICE_SPEAKER_CATALOG: Readonly<
+  Record<LocaleCode, readonly VoiceSpeakerOption[]>
+> = {
+  en: [
+    {
+      id: "ssra_eng_0001",
+      locale: "en",
+      name: "Abuk",
+      role: "Senior Taxpayer Services Specialist",
+      dialectCode: "en-SS-Juba",
+      dialectLabel: "South Sudan English (Juba Standard)",
+      tone: "Warm, Reassuring & Clear",
+      provider: "orpheus_3b",
+      native: true,
+      isDefault: true,
+      pitchMultiplier: 1.02,
+      rateMultiplier: 1.0,
+      bcp47Hint: "en-SS",
+    },
+    {
+      id: "ssra_eng_0002",
+      locale: "en",
+      name: "Lado",
+      role: "Customs & Revenue Compliance Officer",
+      dialectCode: "en-SS-EAC",
+      dialectLabel: "East African Regional English",
+      tone: "Authoritative, Structured & Crisp",
+      provider: "orpheus_3b",
+      native: true,
+      isDefault: false,
+      pitchMultiplier: 0.95,
+      rateMultiplier: 0.98,
+      bcp47Hint: "en-KE",
+    },
+    {
+      id: "ssra_eng_0003",
+      locale: "en",
+      name: "Akol",
+      role: "e-Tax & Digital Filing Advisor",
+      dialectCode: "en-SS-Civic",
+      dialectLabel: "South Sudan Civic English",
+      tone: "Patient, Step-by-Step & Articulate",
+      provider: "orpheus_3b",
+      native: true,
+      isDefault: false,
+      pitchMultiplier: 1.0,
+      rateMultiplier: 0.95,
+      bcp47Hint: "en-GB",
+    },
+  ],
+  ar: [
+    {
+      id: "ssra_ara_0001",
+      locale: "ar",
+      name: "Amira (أميرة)",
+      role: "مستشارة خدمات المكلّفين (Senior Taxpayer Advisor)",
+      dialectCode: "ar-SS-Nile",
+      dialectLabel: "Nile Valley / Sudanese Standard Arabic",
+      tone: "واضح، رسمي ومطمئن (Clear, Official & Reassuring)",
+      provider: "orpheus_3b",
+      native: true,
+      isDefault: true,
+      pitchMultiplier: 1.02,
+      rateMultiplier: 1.0,
+      bcp47Hint: "ar-SD",
+    },
+    {
+      id: "ssra_ara_0002",
+      locale: "ar",
+      name: "Tariq (طارق)",
+      role: "ضابط الجمارك والامتثال الضريبي (Customs & Compliance Officer)",
+      dialectCode: "ar-001-MSA",
+      dialectLabel: "Modern Standard Statutory Arabic",
+      tone: "دقيق ومنظم (Precise & Structured)",
+      provider: "orpheus_3b",
+      native: true,
+      isDefault: false,
+      pitchMultiplier: 0.95,
+      rateMultiplier: 0.98,
+      bcp47Hint: "ar-SA",
+    },
+  ],
+  pga: [
+    {
+      id: "ssra_pga_0001",
+      locale: "pga",
+      name: "Kiden",
+      role: "Taxpayer Outreach & Market Advisor",
+      dialectCode: "pga-Juba",
+      dialectLabel: "Juba Arabic (Central Equatoria)",
+      tone: "Friendly, Natural & Accessible",
+      provider: "orpheus_3b",
+      native: true,
+      isDefault: true,
+      pitchMultiplier: 1.02,
+      rateMultiplier: 1.0,
+      bcp47Hint: "ar-SD",
+    },
+    {
+      id: "ssra_pga_0002",
+      locale: "pga",
+      name: "Sebit",
+      role: "Small Business & e-Tax Guide",
+      dialectCode: "pga-Wau",
+      dialectLabel: "Juba Arabic (Wau / Bahr el Ghazal)",
+      tone: "Steady, Practical & Direct",
+      provider: "orpheus_3b",
+      native: true,
+      isDefault: false,
+      pitchMultiplier: 0.96,
+      rateMultiplier: 0.97,
+      bcp47Hint: "ar-SD",
+    },
+  ],
+  din: [
+    {
+      id: "ssra_din_0001",
+      locale: "din",
+      name: "Achai",
+      role: "Raan Luɔi de Ajul (Lead Dinka Tax Advisor)",
+      dialectCode: "din-Rek",
+      dialectLabel: "Thuɔŋjäŋ (Rek / Bahr el Ghazal)",
+      tone: "Calm, Clear & Supportive",
+      provider: "mms_tts",
+      native: true,
+      isDefault: true,
+      pitchMultiplier: 1.02,
+      rateMultiplier: 1.0,
+      bcp47Hint: "en-SS",
+    },
+    {
+      id: "ssra_din_0002",
+      locale: "din",
+      name: "Deng",
+      role: "Raan Luɔi de Customs ku Biacara (Customs & Trade Officer)",
+      dialectCode: "din-Bor",
+      dialectLabel: "Thuɔŋjäŋ (Bor / Jonglei)",
+      tone: "Steady & Authoritative",
+      provider: "mms_tts",
+      native: true,
+      isDefault: false,
+      pitchMultiplier: 0.95,
+      rateMultiplier: 0.97,
+      bcp47Hint: "en-SS",
+    },
+    {
+      id: "ssra_din_0003",
+      locale: "din",
+      name: "Nyanut",
+      role: "Raan Kony de e-Tax (Regional Taxpayer Guide)",
+      dialectCode: "din-Agar",
+      dialectLabel: "Thuɔŋjäŋ (Agar / Lakes)",
+      tone: "Patient & Articulate",
+      provider: "mms_tts",
+      native: true,
+      isDefault: false,
+      pitchMultiplier: 1.0,
+      rateMultiplier: 0.96,
+      bcp47Hint: "en-SS",
+    },
+  ],
+  nus: [
+    {
+      id: "ssra_nus_0001",
+      locale: "nus",
+      name: "Nyaruach",
+      role: "Raan Luɔi Muthɔɔr (Nuer Taxpayer Specialist)",
+      dialectCode: "nus-West",
+      dialectLabel: "Thok Nath (Western / Bentiu)",
+      tone: "Clear & Reassuring",
+      provider: "mms_tts",
+      native: true,
+      isDefault: true,
+      pitchMultiplier: 1.02,
+      rateMultiplier: 1.0,
+      bcp47Hint: "en-SS",
+    },
+    {
+      id: "ssra_nus_0002",
+      locale: "nus",
+      name: "Gatluak",
+      role: "Raan Luɔi Customs (Border & Trade Advisor)",
+      dialectCode: "nus-East",
+      dialectLabel: "Thok Nath (Lou / Eastern Jikany)",
+      tone: "Firm & Structured",
+      provider: "mms_tts",
+      native: true,
+      isDefault: false,
+      pitchMultiplier: 0.95,
+      rateMultiplier: 0.98,
+      bcp47Hint: "en-SS",
+    },
+  ],
+  bfa: [
+    {
+      id: "ssra_bfa_0001",
+      locale: "bfa",
+      name: "Poni",
+      role: "Ngutu lo Konyan (Bari Taxpayer Advisor)",
+      dialectCode: "bfa-Juba",
+      dialectLabel: "Kutuk na Bari (Central Equatoria / Juba)",
+      tone: "Warm & Clear",
+      provider: "mms_tts",
+      native: true,
+      isDefault: true,
+      pitchMultiplier: 1.02,
+      rateMultiplier: 1.0,
+      bcp47Hint: "en-SS",
+    },
+    {
+      id: "ssra_bfa_0002",
+      locale: "bfa",
+      name: "Wani",
+      role: "Ngutu lo Biacara ku Customs (Trade & Customs Officer)",
+      dialectCode: "bfa-South",
+      dialectLabel: "Kutuk na Bari (Kakwa / Kajo-Keji)",
+      tone: "Steady & Direct",
+      provider: "mms_tts",
+      native: true,
+      isDefault: false,
+      pitchMultiplier: 0.96,
+      rateMultiplier: 0.98,
+      bcp47Hint: "en-SS",
+    },
+  ],
+  zne: [
+    {
+      id: "ssra_zne_0001",
+      locale: "zne",
+      name: "Nagero",
+      role: "Boro Undo Marã (Zande Taxpayer Specialist)",
+      dialectCode: "zne-Yambio",
+      dialectLabel: "Pa Pazande (Yambio / Western Equatoria)",
+      tone: "Gentle & Clear",
+      provider: "mms_tts",
+      native: true,
+      isDefault: true,
+      pitchMultiplier: 1.02,
+      rateMultiplier: 1.0,
+      bcp47Hint: "en-SS",
+    },
+    {
+      id: "ssra_zne_0002",
+      locale: "zne",
+      name: "Bage",
+      role: "Boro Sunge Bagaa (Trade & Customs Guide)",
+      dialectCode: "zne-Tambura",
+      dialectLabel: "Pa Pazande (Tambura)",
+      tone: "Steady & Reliable",
+      provider: "mms_tts",
+      native: true,
+      isDefault: false,
+      pitchMultiplier: 0.96,
+      rateMultiplier: 0.98,
+      bcp47Hint: "en-SS",
+    },
+  ],
+  shk: [
+    {
+      id: "ssra_shk_0001",
+      locale: "shk",
+      name: "Ayak",
+      role: "Jago Konyo (Shilluk Taxpayer Advisor)",
+      dialectCode: "shk-Malakal",
+      dialectLabel: "Dhøg Cøllø (Malakal / Upper Nile)",
+      tone: "Calm & Articulate",
+      provider: "mms_tts",
+      native: true,
+      isDefault: true,
+      pitchMultiplier: 1.02,
+      rateMultiplier: 1.0,
+      bcp47Hint: "en-SS",
+    },
+    {
+      id: "ssra_shk_0002",
+      locale: "shk",
+      name: "Otti",
+      role: "Jago Biacara (Trade & Compliance Officer)",
+      dialectCode: "shk-Kodok",
+      dialectLabel: "Dhøg Cøllø (Kodok)",
+      tone: "Structured & Clear",
+      provider: "mms_tts",
+      native: true,
+      isDefault: false,
+      pitchMultiplier: 0.96,
+      rateMultiplier: 0.98,
+      bcp47Hint: "en-SS",
+    },
+  ],
+};
+
+export function getVoiceSpeakersForLocale(locale: LocaleCode): readonly VoiceSpeakerOption[] {
+  return SSRA_VOICE_SPEAKER_CATALOG[locale] ?? SSRA_VOICE_SPEAKER_CATALOG.en;
+}
+
+export function resolveVoiceSpeakerOption(
+  locale: LocaleCode,
+  requestedVoiceId?: string | null | undefined,
+): VoiceSpeakerOption {
+  const speakers = getVoiceSpeakersForLocale(locale);
+  if (requestedVoiceId) {
+    const match = speakers.find((s) => s.id === requestedVoiceId);
+    if (match) return match;
+  }
+  const fallback = speakers.find((s) => s.isDefault) ?? speakers[0];
+  if (fallback) return fallback;
+  return {
+    id: "ssra_eng_0001",
+    locale: "en",
+    name: "Abuk",
+    role: "Senior Taxpayer Services Specialist",
+    dialectCode: "en-SS-Juba",
+    dialectLabel: "South Sudan English (Juba Standard)",
+    tone: "Warm, Reassuring & Clear",
+    provider: "orpheus_3b",
+    native: true,
+    isDefault: true,
+    pitchMultiplier: 1.02,
+    rateMultiplier: 1.0,
+    bcp47Hint: "en-SS",
+  };
+}
+
+export function formatVoiceSpeakerDisplayName(voice: VoiceSpeakerOption, index: number): string {
+  return `Voice ${index + 1}: ${voice.name} — ${voice.role} (${voice.dialectLabel})`;
+}

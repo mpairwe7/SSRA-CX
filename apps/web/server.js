@@ -1790,11 +1790,60 @@ function renderPwaShellHtml(locale, nonce) {
       let callSpeechRateSlow = false;
       let voiceSilenceTimeoutMs = 1200;
       let lastHeardVoiceTranscript = "";
+      const VOICE_SPEAKERS_BY_LOCALE = {
+        en: [
+          { id: "ssra_eng_0001", name: "Abuk", dialect: "Juba Standard (en-SS)", tone: "Warm & Clear", pitch: 1.02, rate: 1.0, bcp47: "en-SS" },
+          { id: "ssra_eng_0002", name: "Lado", dialect: "East African Regional", tone: "Structured & Crisp", pitch: 0.95, rate: 0.98, bcp47: "en-KE" },
+          { id: "ssra_eng_0003", name: "Akol", dialect: "South Sudan Civic", tone: "Patient & Step-by-Step", pitch: 1.0, rate: 0.95, bcp47: "en-GB" }
+        ],
+        ar: [
+          { id: "ssra_ara_0001", name: "Amira (أميرة)", dialect: "Nile Valley / Sudanese Standard", tone: "Official & Reassuring", pitch: 1.02, rate: 1.0, bcp47: "ar-SD" },
+          { id: "ssra_ara_0002", name: "Tariq (طارق)", dialect: "Modern Standard Statutory", tone: "Precise & Structured", pitch: 0.95, rate: 0.98, bcp47: "ar-SA" }
+        ],
+        pga: [
+          { id: "ssra_pga_0001", name: "Kiden", dialect: "Juba Arabic (Central Equatoria)", tone: "Friendly & Natural", pitch: 1.02, rate: 1.0, bcp47: "ar-SD" },
+          { id: "ssra_pga_0002", name: "Sebit", dialect: "Juba Arabic (Wau / Bahr el Ghazal)", tone: "Steady & Direct", pitch: 0.96, rate: 0.97, bcp47: "ar-SD" }
+        ],
+        din: [
+          { id: "ssra_din_0001", name: "Achai", dialect: "Thuɔŋjäŋ (Rek / Bahr el Ghazal)", tone: "Calm & Supportive", pitch: 1.02, rate: 1.0, bcp47: "en-SS" },
+          { id: "ssra_din_0002", name: "Deng", dialect: "Thuɔŋjäŋ (Bor / Jonglei)", tone: "Steady & Authoritative", pitch: 0.95, rate: 0.97, bcp47: "en-SS" },
+          { id: "ssra_din_0003", name: "Nyanut", dialect: "Thuɔŋjäŋ (Agar / Lakes)", tone: "Patient & Articulate", pitch: 1.0, rate: 0.96, bcp47: "en-SS" }
+        ],
+        nus: [
+          { id: "ssra_nus_0001", name: "Nyaruach", dialect: "Thok Nath (Western / Bentiu)", tone: "Clear & Reassuring", pitch: 1.02, rate: 1.0, bcp47: "en-SS" },
+          { id: "ssra_nus_0002", name: "Gatluak", dialect: "Thok Nath (Lou / Eastern Jikany)", tone: "Firm & Structured", pitch: 0.95, rate: 0.98, bcp47: "en-SS" }
+        ],
+        bfa: [
+          { id: "ssra_bfa_0001", name: "Poni", dialect: "Kutuk na Bari (Central Equatoria)", tone: "Warm & Clear", pitch: 1.02, rate: 1.0, bcp47: "en-SS" },
+          { id: "ssra_bfa_0002", name: "Wani", dialect: "Kutuk na Bari (Kajo-Keji)", tone: "Steady & Direct", pitch: 0.96, rate: 0.98, bcp47: "en-SS" }
+        ],
+        zne: [
+          { id: "ssra_zne_0001", name: "Nagero", dialect: "Pa Pazande (Yambio)", tone: "Gentle & Clear", pitch: 1.02, rate: 1.0, bcp47: "en-SS" },
+          { id: "ssra_zne_0002", name: "Bage", dialect: "Pa Pazande (Tambura)", tone: "Steady & Reliable", pitch: 0.96, rate: 0.98, bcp47: "en-SS" }
+        ],
+        shk: [
+          { id: "ssra_shk_0001", name: "Ayak", dialect: "Dhøg Cøllø (Malakal / Upper Nile)", tone: "Calm & Articulate", pitch: 1.02, rate: 1.0, bcp47: "en-SS" },
+          { id: "ssra_shk_0002", name: "Otti", dialect: "Dhøg Cøllø (Kodok)", tone: "Structured & Clear", pitch: 0.96, rate: 0.98, bcp47: "en-SS" }
+        ]
+      };
+      const selectedVoiceByLocale = {};
+
+      function getActiveVoiceSpeaker(loc) {
+        const list = VOICE_SPEAKERS_BY_LOCALE[loc] || VOICE_SPEAKERS_BY_LOCALE.en;
+        const chosenId = selectedVoiceByLocale[loc];
+        return list.find((s) => s.id === chosenId) || list[0];
+      }
 
       function speechUtterance(text) {
         const utterance = new SpeechSynthesisUtterance(cleanTextForSpeech(text));
-        if (SPEECH_LANGS[state.locale]) utterance.lang = SPEECH_LANGS[state.locale];
-        utterance.rate = callSpeechRateSlow ? 0.82 : 1.0;
+        const spk = getActiveVoiceSpeaker(state.locale);
+        if (selectedVoiceByLocale[state.locale] && spk && spk.bcp47) {
+          utterance.lang = spk.bcp47;
+        } else if (SPEECH_LANGS[state.locale]) {
+          utterance.lang = SPEECH_LANGS[state.locale];
+        }
+        utterance.pitch = (spk && spk.pitch) || 1.0;
+        utterance.rate = (callSpeechRateSlow ? 0.82 : 1.0) * ((spk && spk.rate) || 1.0);
         return utterance;
       }
 
@@ -2585,6 +2634,24 @@ function renderPwaShellHtml(locale, nonce) {
                 "</button>",
             )
             .join("");
+          const spkList = VOICE_SPEAKERS_BY_LOCALE[state.locale] || VOICE_SPEAKERS_BY_LOCALE.en;
+          const activeSpk = getActiveVoiceSpeaker(state.locale);
+          const speakerButtonsHtml = spkList
+            .map(
+              (spk) =>
+                '<button type="button" role="radio" class="setv2-seg-btn" data-voice-speaker="' +
+                spk.id +
+                '" aria-checked="' +
+                String(activeSpk.id === spk.id) +
+                '">' +
+                spk.name +
+                " · " +
+                spk.dialect +
+                " (" +
+                spk.tone +
+                ")</button>",
+            )
+            .join("");
           setSafeHtml(
             settingsBodyEl,
             "<p>Voice typing uses your browser's speech recognition when available and currently supports English and Arabic only. Your browser may process audio outside SSRA. Auto-narration uses browser speech synthesis; available voices vary by device.</p>" +
@@ -2606,6 +2673,12 @@ function renderPwaShellHtml(locale, nonce) {
                 "<span>Send after a pause:</span>" +
                 '<div class="setv2-segmented">' +
                   pauseButtonsHtml +
+                "</div>" +
+              "</div>" +
+              '<div class="settings-actions-row" role="radiogroup" aria-label="Voice speaker and dialect">' +
+                "<span>Voice speaker & dialect (" + state.locale.toUpperCase() + "):</span>" +
+                '<div class="setv2-segmented">' +
+                  speakerButtonsHtml +
                 "</div>" +
               "</div>",
           );
@@ -2724,11 +2797,20 @@ function renderPwaShellHtml(locale, nonce) {
           document.getElementById("settings-voice-pace-btn")?.focus();
           return;
         }
+        const spkBtn = e.target.closest("[data-voice-speaker]");
+        if (spkBtn) {
+          const spkId = spkBtn.getAttribute("data-voice-speaker") || "";
+          selectedVoiceByLocale[state.locale] = spkId;
+          renderSettingsTabContent("voice");
+          document.querySelector('[data-voice-speaker="' + spkId + '"]')?.focus();
+          return;
+        }
         if (e.target.closest("#settings-voice-preview-btn")) {
+          const spk = getActiveVoiceSpeaker(state.locale);
           const sample =
             state.locale === "ar"
-              ? "مرحبا، أنا مساعد هيئة الإيرادات في جنوب السودان."
-              : "Hello, I am SSRA Assist. I can read tax answers aloud.";
+              ? "مرحبا، أنا " + spk.name + "، مساعد هيئة الإيرادات في جنوب السودان."
+              : "Hello, I am " + spk.name + " (" + spk.dialect + ") from SSRA Assist. I can read tax answers aloud.";
           speakAssistantReply(sample);
           return;
         }

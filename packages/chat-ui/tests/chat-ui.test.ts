@@ -26,7 +26,9 @@ import {
   evaluateSemanticEndpointing,
   evaluateVoiceTurnContinuation,
   formatDocType,
+  formatVoiceSpeakerDisplayName,
   GENERATIVE_UI_STORYBOOK_FIXTURES,
+  getVoiceSpeakersForLocale,
   groupConversationsByRecency,
   inspectOfficeZipClientPreflight,
   inspectPdfBytesClientPreflight,
@@ -49,7 +51,10 @@ import {
   resolveAdaptiveVoiceNetworkProfile,
   resolveCallControlDirective,
   resolveGenerativeUIComponent,
+  resolveVoiceSpeakerOption,
   SPEECH_RATE_SLOW,
+  SSRA_VOICE_SAMPLES,
+  SSRA_VOICE_SPEAKER_CATALOG,
   sanitizeAttachmentFilename,
   sanitizeCopilotReturnUrl,
   scrubDocumentTextForIndirectInjection,
@@ -847,6 +852,17 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(callBlocks[0]?.kind).toBe("paragraph");
     expect(callBlocks[1]?.kind).toBe("numbered_list");
     expect(callBlocks[2]?.kind).toBe("paragraph");
+
+    expect(Object.keys(SSRA_VOICE_SPEAKER_CATALOG)).toHaveLength(8);
+    expect(Object.keys(SSRA_VOICE_SAMPLES)).toHaveLength(8);
+    expect(getVoiceSpeakersForLocale("en")).toHaveLength(3);
+    expect(getVoiceSpeakersForLocale("din")).toHaveLength(3);
+    const lado = resolveVoiceSpeakerOption("en", "ssra_eng_0002");
+    expect(lado.name).toBe("Lado");
+    expect(lado.dialectCode).toBe("en-SS-EAC");
+    const fallbackAbuk = resolveVoiceSpeakerOption("en", "ssra_ara_0001");
+    expect(fallbackAbuk.name).toBe("Abuk");
+    expect(formatVoiceSpeakerDisplayName(lado, 1)).toContain("Voice 2: Lado");
 
     const narBar = buildNarrationBarView({
       active: true,
