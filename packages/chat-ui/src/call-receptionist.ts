@@ -404,3 +404,33 @@ export function resolveCallControlDirective(
     offerKey: String(state.pendingOffer || ""),
   };
 }
+
+const SPOKEN_CONTROL_MAX_WORDS = 8;
+const SPOKEN_REPEAT_RE =
+  /\b(?:repeat\s+that|say\s+that\s+again|could\s+you\s+repeat|pardon\s+me|what\s+did\s+you\s+say|أعد\s+ذلك|ممكن\s+تعيد)\b/i;
+const SPOKEN_SLOW_RE =
+  /\b(?:speak\s+slower|more\s+slowly|talk\s+slower|slow\s+down|تحدث\s+ببطء|تكلم\s+ببطء)\b/i;
+const SPOKEN_NORMAL_RE =
+  /\b(?:speak\s+(?:normally|faster)|normal\s+(?:speed|pace)|regular\s+(?:speed|pace)|talk\s+faster|سرعة\s+عادية)\b/i;
+const SPOKEN_MORE_RE = /\b(?:tell\s+me\s+more|more\s+detail|تفاصيل\s+أكثر)\b/i;
+const SPOKEN_HANGUP_RE =
+  /\b(?:hang\s+up|end\s+(?:the\s+)?call|disconnect|good[\s-]?bye|مع\s+السلامة|أنهي\s+المكالمة)\b/i;
+const SPOKEN_DONE_RE =
+  /^[\s,!.?]*(?:(?:ok|okay|thanks|thank\s+you|alright|great|no)[\s,!.?]+)?(?:that'?s\s+all|that\s+is\s+all|good[\s-]?bye|bye\s+bye|bye|i'?m\s+done)(?:[\s,!.?]+(?:for\s+(?:now|today)|thank\s+you|thanks|bye))?[\s,!.?]*$/i;
+
+/**
+ * Detect short spoken in-call receptionist controls (`brain.py` `_CONTROL_MAX_WORDS = 8` parity).
+ */
+export function detectSpokenCallControl(transcript: string): CallControlAction | "hangup" | null {
+  const clean = String(transcript || "").trim();
+  if (!clean) return null;
+  if (SPOKEN_DONE_RE.test(clean)) return "hangup";
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length > SPOKEN_CONTROL_MAX_WORDS) return null;
+  if (SPOKEN_HANGUP_RE.test(clean)) return "hangup";
+  if (SPOKEN_REPEAT_RE.test(clean)) return "repeat";
+  if (SPOKEN_SLOW_RE.test(clean)) return "slower";
+  if (SPOKEN_NORMAL_RE.test(clean)) return "normal_speed";
+  if (SPOKEN_MORE_RE.test(clean)) return "more_detail";
+  return null;
+}

@@ -1797,6 +1797,28 @@ class VoiceCallSession:
         self.risk_offer_made: bool = False
         self.queue_epoch: int = 0
         self.needs_callback: bool = False
+        self.spoken_review_rating: Literal["positive", "neutral", "negative", "unclear", ""] = ""
+        self._total_history_seq: int = 0
+
+    def _append_history_entry(
+        self,
+        speaker: Literal["caller", "assistant"],
+        text: str,
+        *,
+        interrupted: bool = False,
+    ) -> None:
+        self._total_history_seq += 1
+        redacted = redact_pii(text).redacted_text
+        entry: dict[str, Any] = {
+            "speaker": speaker,
+            "text": redacted,
+            "seq": self._total_history_seq,
+        }
+        if speaker == "assistant":
+            entry["interrupted"] = interrupted
+        self.history.append(entry)
+        if len(self.history) > 100:
+            self.history.pop(0)
 
     def set_pending_offer(
         self,
@@ -1872,6 +1894,17 @@ class VoiceCallSession:
         ],
     ) -> VoiceTurnOutcome:
         """Execute an explicit on-screen CallControlFrame / RequestCallbackFrame action (`brain.py`)."""
+        if self.phase == "ended":
+            return VoiceTurnOutcome(
+                session_id=self.session_id,
+                phase=self.phase,
+                turn_index=self.turn_index,
+                decision=None,
+                consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                heard_assistant_context=self.last_assistant_spoken_text,
+                speech_rate_slow=self.speech_rate_slow,
+                pending_offer=self.pending_offer,
+            )
         self.offer_interrupted = False
         if action == "request_callback":
             if self.phase == "transferred":
@@ -2006,14 +2039,7 @@ class VoiceCallSession:
         self.last_assistant_spoken_text = heard
         self.last_interrupted_unspoken_text = unspoken
         if heard:
-            self.history.append(
-                {
-                    "speaker": "assistant",
-                    "text": heard,
-                    "seq": len(self.history) + 1,
-                    "interrupted": bool(unspoken),
-                }
-            )
+            self._append_history_entry("assistant", heard, interrupted=bool(unspoken))
         return heard
 
     def _build_officer_transfer_decision(
@@ -2042,6 +2068,17 @@ class VoiceCallSession:
         whisper_signals: WhisperSegmentSignals | None = None,
     ) -> VoiceTurnOutcome:
         """Process one caller turn while preserving multi-turn continuity, echo suppression, and recovery."""
+        if self.phase == "ended":
+            return VoiceTurnOutcome(
+                session_id=self.session_id,
+                phase=self.phase,
+                turn_index=self.turn_index,
+                decision=None,
+                consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                heard_assistant_context=self.last_assistant_spoken_text,
+                speech_rate_slow=self.speech_rate_slow,
+                pending_offer=self.pending_offer,
+            )
         if dtmf_digit == "0":
             self.disclosure_playing = False
         if self.disclosure_playing and dtmf_digit is None:
@@ -2093,13 +2130,57 @@ class VoiceCallSession:
                     pending_offer=self.pending_offer,
                 )
 
-        if self.phase == "transferred" and dtmf_digit is None and is_callback_request(clean_tx):
-            return self.handle_call_control("request_callback")
+        if self.phase == "transferred" and dtmf_digit is None:
+            if is_callback_request(clean_tx):
+                return self.handle_call_control("request_callback")
+            if is_goodbye_request(clean_tx):
+                self.turn_index += 1
+                self.phase = "ended"
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=None,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                    control_action_applied="caller_voice_hangup",
+                    spoken_response_text="Thank you for calling SSRA Assist. Goodbye.",
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
+                )
+            self.turn_index += 1
+            return VoiceTurnOutcome(
+                session_id=self.session_id,
+                phase=self.phase,
+                turn_index=self.turn_index,
+                decision=None,
+                consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                heard_assistant_context=self.last_assistant_spoken_text,
+                control_action_applied="waiting_for_officer",
+                spoken_response_text="Please hold while we connect you to an SSRA officer, or say call me back.",
+                speech_rate_slow=self.speech_rate_slow,
+                pending_offer=self.pending_offer,
+            )
 
         # Resolve pending offer replies and spoken in-call receptionist controls (`brain.py` lines 783-895)
         if dtmf_digit is None and clean_tx:
             unheard = self.offer_interrupted
             offer, offer_reason, more_txt, offer_at_risk = self._take_pending_offer()
+            if offer == "review" and not unheard:
+                self.spoken_review_rating = classify_spoken_call_review(clean_tx)
+                self.turn_index += 1
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=None,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                    control_action_applied="review_recorded",
+                    spoken_response_text="Thank you for your feedback.",
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
+                )
             offer_reply = classify_pending_offer_reply(clean_tx, offer)
             if offer and offer_reply != "none" and unheard:
                 self.set_pending_offer(
@@ -2179,14 +2260,14 @@ class VoiceCallSession:
             if offer_at_risk and unheard:
                 self.risk_offer_made = False
 
-            if is_spoken_officer_request(clean_tx):
+            if is_spoken_officer_request(clean_tx) or is_tax_dispute(clean_tx):
+                is_dispute = is_tax_dispute(clean_tx) and not is_spoken_officer_request(clean_tx)
                 self.turn_index += 1
-                self.history.append(
-                    {"speaker": "caller", "text": clean_tx, "seq": len(self.history) + 1}
-                )
+                self._append_history_entry("caller", clean_tx)
                 self.begin_transfer_wait()
                 decision = self._build_officer_transfer_decision(
-                    "caller_requested", barge_in=assistant_speaking
+                    "tax_dispute_escalation" if is_dispute else "caller_requested",
+                    barge_in=assistant_speaking,
                 )
                 return VoiceTurnOutcome(
                     session_id=self.session_id,
@@ -2195,7 +2276,9 @@ class VoiceCallSession:
                     decision=decision,
                     consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
                     heard_assistant_context=self.last_assistant_spoken_text,
-                    control_action_applied="spoken_officer_request",
+                    control_action_applied=(
+                        "tax_dispute_escalation" if is_dispute else "spoken_officer_request"
+                    ),
                     speech_rate_slow=self.speech_rate_slow,
                     pending_offer=self.pending_offer,
                 )
@@ -2287,13 +2370,7 @@ class VoiceCallSession:
         self.turn_index += 1
         self.consecutive_low_confidence_turns = next_low_conf_count
         if clean_tx and asr_verdict == "accept":
-            self.history.append(
-                {
-                    "speaker": "caller",
-                    "text": clean_tx,
-                    "seq": len(self.history) + 1,
-                }
-            )
+            self._append_history_entry("caller", clean_tx)
         if decision.action == "WARM_TRANSFER_TO_OFFICER":
             self.begin_transfer_wait()
         return VoiceTurnOutcome(
@@ -2935,11 +3012,12 @@ def negotiate_low_bandwidth_voice_profile(
     eff_type = str(cfg.get("effective_type") or "").strip().lower()
     save_data = bool(cfg.get("save_data") or cfg.get("low_bandwidth"))
     raw_rtt = cfg.get("rtt_ms")
-    rtt_ms = (
+    rtt_candidate = (
         float(raw_rtt)
         if isinstance(raw_rtt, (int, float)) and not isinstance(raw_rtt, bool)
         else 0.0
     )
+    rtt_ms = max(0.0, rtt_candidate) if math.isfinite(rtt_candidate) else 0.0
 
     is_constrained = save_data or eff_type in ("slow-2g", "2g", "3g") or rtt_ms >= 600.0
     if not is_constrained:
@@ -2962,10 +3040,28 @@ def negotiate_low_bandwidth_voice_profile(
 
 _MULAW_MU: float = 255.0
 _LOG1P_MU: float = math.log1p(_MULAW_MU)
+_MULAW_DECODE_LUT: tuple[float, ...] = tuple(
+    (
+        (
+            -1.0
+            if ((b / _MULAW_MU) * 2.0 - 1.0) < 0.0
+            else (1.0 if ((b / _MULAW_MU) * 2.0 - 1.0) > 0.0 else 0.0)
+        )
+        * (1.0 / _MULAW_MU)
+        * (math.pow(1.0 + _MULAW_MU, abs((b / _MULAW_MU) * 2.0 - 1.0)) - 1.0)
+    )
+    for b in range(256)
+)
 
 
 def pcm16_16k_to_mulaw_8k(pcm16_bytes: bytes) -> bytes:
     """Downsample 16 kHz mono PCM16 to 8 kHz and encode as 8-bit ITU-T G.711 mu-law (`low_bandwidth.py`, 4x smaller)."""
+    if len(pcm16_bytes) > MAX_DECODED_PCM_BYTES:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"PCM16 input ({len(pcm16_bytes)} bytes) exceeds MAX_DECODED_PCM_BYTES ({MAX_DECODED_PCM_BYTES})",
+            status_code=413,
+        )
     if len(pcm16_bytes) < 4:
         return b""
     usable = len(pcm16_bytes) - (len(pcm16_bytes) % 2)
@@ -2982,15 +3078,14 @@ def pcm16_16k_to_mulaw_8k(pcm16_bytes: bytes) -> bytes:
 
 
 def mulaw_8k_to_pcm16_16k(mulaw_bytes: bytes) -> bytes:
-    """Decode 8-bit 8 kHz G.711 mu-law and linearly upsample to 16 kHz mono PCM16 (`low_bandwidth.py`)."""
+    """Decode 8-bit 8 kHz G.711 mu-law via 256-entry LUT and linearly upsample to 16 kHz mono PCM16 (`low_bandwidth.py`)."""
     if not mulaw_bytes:
         return b""
-    decoded_8k: list[float] = []
-    for byte_val in mulaw_bytes:
-        compressed = (byte_val / _MULAW_MU) * 2.0 - 1.0
-        sign = -1.0 if compressed < 0.0 else (1.0 if compressed > 0.0 else 0.0)
-        sample = sign * (1.0 / _MULAW_MU) * (math.pow(1.0 + _MULAW_MU, abs(compressed)) - 1.0)
-        decoded_8k.append(sample)
+    validate_audio_pcm_expansion_budget(
+        compressed_bytes=len(mulaw_bytes),
+        duration_seconds=max(0.001, len(mulaw_bytes) / 8000.0),
+    )
+    decoded_8k = [_MULAW_DECODE_LUT[b] for b in mulaw_bytes]
 
     upsampled: list[int] = []
     n = len(decoded_8k)
@@ -3023,6 +3118,13 @@ def mint_call_resume_ticket(
     now: float | None = None,
 ) -> str:
     """Mint a fail-closed HMAC-SHA256 single-use caller resume ticket for dropped mobile voice sockets (`low_bandwidth.py`)."""
+    ids_ok = (
+        bool(_SAFE_ID_RE.match(call_id))
+        and bool(_SAFE_ID_RE.match(conversation_id))
+        and (not user_id or bool(_SAFE_ID_RE.match(user_id)))
+    )
+    if not ids_ok:
+        raise ValueError("call_id, conversation_id, and user_id must match _SAFE_ID_RE")
     key = _carryover_signing_key(signing_salt)
     current = time.time() if now is None else now
     payload = {
@@ -3043,24 +3145,27 @@ def verify_call_resume_ticket(
     resume_ticket: str,
     *,
     expected_call_id: str = "",
+    expected_conversation_id: str = "",
     expected_user_id: str = "",
     signing_salt: str | None = None,
     now: float | None = None,
 ) -> dict[str, Any] | None:
     """Verify and consume a single-use caller resume ticket in constant time; returns claims or None (`low_bandwidth.py`)."""
-    if not resume_ticket or "." not in resume_ticket:
+    if not resume_ticket or "." not in resume_ticket or not resume_ticket.isascii():
         return None
     key = _carryover_signing_key(signing_salt)
     raw_body, sig = resume_ticket.rsplit(".", 1)
     expected_sig = hmac.new(key, raw_body.encode("ascii"), hashlib.sha256).hexdigest()[:32]
-    if not hmac.compare_digest(sig, expected_sig):
+    if not hmac.compare_digest(sig.encode("ascii"), expected_sig.encode("ascii")):
         return None
     payload = json.loads(base64.urlsafe_b64decode(raw_body.encode("ascii")).decode("utf-8"))
     current = time.time() if now is None else now
     exp_ts = float(payload.get("exp") or 0.0)
-    if exp_ts <= current:
+    if not math.isfinite(exp_ts) or exp_ts <= current:
         return None
     if expected_call_id and payload.get("cid") != expected_call_id:
+        return None
+    if expected_conversation_id and payload.get("conv") != expected_conversation_id:
         return None
     if expected_user_id and payload.get("uid") != expected_user_id:
         return None
@@ -3068,7 +3173,7 @@ def verify_call_resume_ticket(
     for old_nonce, old_exp in list(_CONSUMED_CALL_RESUME_NONCES.items()):
         if old_exp <= current:
             _CONSUMED_CALL_RESUME_NONCES.pop(old_nonce, None)
-    if nonce in _CONSUMED_CALL_RESUME_NONCES:
+    if len(nonce) < 8 or nonce in _CONSUMED_CALL_RESUME_NONCES:
         return None
     if len(_CONSUMED_CALL_RESUME_NONCES) >= _MAX_CONSUMED_CALL_RESUME_NONCES:
         _CONSUMED_CALL_RESUME_NONCES.popitem(last=False)
