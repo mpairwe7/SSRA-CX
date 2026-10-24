@@ -1772,3 +1772,10 @@ def test_multilingual_contact_url_pronunciation_and_receptionist_structuring() -
     )
     assert synth_env["speaker_name"] == "Akol"
     assert synth_env["dialect_code"] == "en-SS-Civic"
+
+    selected_prof = session.set_speaker_voice("ssra_eng_0002")
+    assert selected_prof.name == "Lado"
+    state_frame = session.build_call_state_frame()
+    assert state_frame["voice_id"] == "ssra_eng_0002"
+    assert state_frame["speaker_name"] == "Lado"
+    assert state_frame["dialect_code"] == "en-SS-EAC"

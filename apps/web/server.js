@@ -2800,7 +2800,12 @@ function renderPwaShellHtml(locale, nonce) {
         const spkBtn = e.target.closest("[data-voice-speaker]");
         if (spkBtn) {
           const spkId = spkBtn.getAttribute("data-voice-speaker") || "";
-          selectedVoiceByLocale[state.locale] = spkId;
+          const list = VOICE_SPEAKERS_BY_LOCALE[state.locale] || VOICE_SPEAKERS_BY_LOCALE.en;
+          if (list[0] && spkId === list[0].id) {
+            delete selectedVoiceByLocale[state.locale];
+          } else {
+            selectedVoiceByLocale[state.locale] = spkId;
+          }
           renderSettingsTabContent("voice");
           document.querySelector('[data-voice-speaker="' + spkId + '"]')?.focus();
           return;
