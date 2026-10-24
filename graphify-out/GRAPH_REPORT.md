@@ -1,6 +1,6 @@
 # SSRA Assist (`ssra-cx`) — Codebase Knowledge Graph Report (`graphify-out/GRAPH_REPORT.md`)
 
-**Generated:** 2026-10-16 · **Reconciled with source:** 2026-10-21
+**Generated:** 2026-10-16 · **Reconciled with source:** 2026-10-24
 **Governance (Section 19):** Read this graph report before broad file exploration. Contains zero secrets or taxpayer PII.
 
 ---
@@ -46,18 +46,18 @@ flowchart LR
 
 | Domain | Path | Key Exports / Responsibilities |
 |---|---|---|
-| **Master Spec & ADRs** | `docs/00-master-prompt.md`, `docs/adr/` | Single source of truth + `ADR-001` through `ADR-022` |
+| **Master Spec & ADRs** | `docs/00-master-prompt.md`, `docs/adr/` | Single source of truth + `ADR-001` through `ADR-028` |
 | **Contracts & Codegen** | `packages/contracts/`, `tools/codegen/` | `ConversationEvent`, `Intent`, `Answer`, `TaxFact`, `AffectiveSnapshot`, `EnglishRouterEnvelope`, `HandoffEnvelope`, OpenAPI 3.1 snapshot |
 | **Core & Clock** | `libs/ssra_core/` | `new_uuid7()`, `compute_monthly_filing_deadline()`, `Africa/Juba` (`UTC+02:00`), `FeatureFlagEngine` (`flags.py`), OTel GenAI & Agentic CX spans |
 | **Security & Crypto** | `libs/ssra_security/` | `TokenExchangeService` (RFC 8693), `ConfirmationTokenManager`, `redact_pii`, `OpenBaoTransitEncryptor`, `HashChainedAuditLedger` |
 | **Deterministic Rules** | `libs/ssra_rules/`, `knowledge/tax-facts/` | `TaxFactsRegistry`, `calculate_paye_estimate`, `calculate_withholding_estimate` |
 | **LLM & Degradation** | `libs/ssra_llm/`, `ai/` | `PromptRegistry` (`L0`–`L5` spotlighting), `SovereignModelRouter` (5-step ladder), `AnonymousT0SemanticCache` |
 | **MCP `2026-07-28`** | `libs/ssra_mcp/`, `mcp-servers/*` | `StatelessMcpServer` + 11 domain servers (`knowledge`, `tax-facts`, `official-channels`, `taxpayer`, `ledger`, `payments-info`, `tcc`, `customs`, `cases`, `appointments`, `notifications`) |
-| **Agent Runtime** | `services/agent-runtime/` | `SSRAConversationRuntime` (11-node LangGraph), `eq_detector.py`, `language_state.py`, `planner.py`, `verifier.py`, 4-tier `memory.py`, `numeric_provenance.py`, `streaming/agui.py` |
+| **Agent Runtime** | `services/agent-runtime/` | `SSRAConversationRuntime` (11-node LangGraph, multi-turn `prior_intent`/`prior_slots`/`workflow_stack` carry-over per `ADR-028`), `eq_detector.py`, `language_state.py`, `planner.py` (compound T0/T1 plans), `verifier.py` (`_detect_quiet_tool_fault` / `QUIET_FAULT_DETECTED`), `mcp_client.py` (turn-scoped read memoization, `TOOL_LOOP_DETECTED`, `bound_overlong_tool_output`), 4-tier `memory.py`, `numeric_provenance.py`, `streaming/agui.py` |
 | **Core API Monolith** | `services/api/` | 8 bounded contexts (`conversations`, `identity_link`, `cases`, `appointments`, `knowledge_admin`, `consent`, `analytics_api`, `admin`), `database.py`, `outbox.py` |
 | **Channel Gateway** | `services/channel-gateway/` | WhatsApp HMAC & 24h window (`whatsapp.py`), SMS GSM-7/UCS-2, USSD 182-char menu (`ussd.py`) |
-| **Workers & Voice** | `services/workers/`, `services/voice/` | Legal chunker (`ingestion.py`), SLA timers (`sla.py`), Temporal goal continuation (`continuation.py`), Whisper + Omnilingual ASR WER gate + EQ TTS prosody |
-| **Frontend Experience** | `apps/web/server.js`, `apps/console/server.js`, `packages/*` | Node BFF routes `/api/turns` and `/api/chat/stream`; browser direct `/v1/*` denied except feedback; public history is device-local T0; console is preview-only and staff data/action routes return 403 until trusted sessions are integrated |
+| **Workers & Voice** | `services/workers/`, `services/voice/` | Legal chunker (`ingestion.py`), SLA timers (`sla.py`), Temporal goal continuation (`continuation.py`), Whisper + Omnilingual ASR WER gate (`APPROVED_VOICE_WER_EVIDENCE`) + `VoiceCallSession` (`POST_TTS_ECHO_COOLDOWN_MS = 450`, `is_likely_tts_echo`, `is_backchannel_utterance` per `ADR-027`) + EQ TTS prosody |
+| **Frontend Experience** | `apps/web/server.js`, `apps/console/server.js`, `packages/*` | Node BFF routes `/api/turns` and `/api/chat/stream`; browser direct `/v1/*` denied except feedback; public history is device-local T0; includes `CallScreen` (`CallOrb`, `CallLanguageChip`, live caption thread, Mute/Officer/Callback/Hangup dock) and Main Chat Input voice/speech controls (`NarrationBar`, `.composer-active-recording`, `#composer-voicemode-btn`, `useVoiceEscape`); console is preview-only and staff data/action routes return 403 until trusted sessions are integrated |
 | **Persistence & deployment profiles** | `services/api/alembic/`, `services/api/src/ssra_api/database.py`, `infra/compose/` | PostgreSQL migration `0001` defines relational schema; runtime graph, several API repositories, and outbox staging are process-local; no identity OTP flow is active; ORM memory models lack tables in migration `0001`; GPU Compose adds Qdrant but omits `agentgateway`, Keycloak, and NATS from the general profile; production/DR Compose overlay adds WAL archiving and secret mounts but is not evidence of an active deployment |
 | **Evaluation Harness** | `evals/suites/`, `evals/redteam/` | 600-item Phase 1 golden dataset (`300 en`, `150 ar`, `150 pga`), trajectory/channel checks, OWASP `ASI01`–`ASI10` red-team |
 
