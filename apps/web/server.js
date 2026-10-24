@@ -873,6 +873,7 @@ function renderPwaShellHtml(locale, nonce) {
           <div class="acct-pop-section">Public conversation</div>
           <p class="acct-pop-note">Personal balances and filing records require secure sign-in.</p>
           <a href="https://etax.nra.gov.ss/" class="acct-pop-item" rel="noopener noreferrer"><span>Open official e-Tax portal</span><span>${ICONS.arrowUpRight}</span></a>
+          <button type="button" id="export-conv-report-btn" class="acct-pop-item" data-testid="export-conv-report-btn"><span>${ICONS.download} Download conversation report</span></button>
           <hr class="acct-pop-hr" />
           <button type="button" id="open-settings-btn" class="acct-pop-item"><span>${ICONS.settings} Settings &amp; Privacy</span></button>
         </div>
@@ -1200,6 +1201,11 @@ function renderPwaShellHtml(locale, nonce) {
       <section class="doc-modal-section" aria-label="Analysis status">
         <h3 class="doc-modal-section-title">Analysis &amp; Reconciliation Status (OQ-017)</h3>
         <p id="doc-modal-oq017-note" class="composer-attachment-privacy">Automated OCR extraction, malware scanning, and tax figure reconciliation are unavailable until SSRA approves OQ-017 providers and legal snapshot rules. Do not upload confidential taxpayer records in public chat.</p>
+        <p id="doc-modal-recon-note" class="composer-attachment-privacy is-hidden" data-testid="doc-modal-recon-note"></p>
+      </section>
+      <section id="doc-modal-copilot-section" class="doc-modal-section" aria-label="Portal Co-Pilot guidance">
+        <h3 id="doc-modal-copilot-title" class="doc-modal-section-title">SSRA Official e-Tax Co-Pilot Guidance</h3>
+        <ol id="doc-modal-copilot-steps" class="doc-modal-prompts-list" data-testid="doc-modal-copilot-steps"></ol>
       </section>
       <section class="doc-modal-section" aria-label="Suggested public questions">
         <h3 class="doc-modal-section-title">Suggested Public Questions</h3>
@@ -3874,6 +3880,25 @@ function renderPwaShellHtml(locale, nonce) {
                 errText = "Blocked by PDF security guard";
                 findings = pdfCheck.findings;
               }
+            } else if (lower.endsWith(".docx") || lower.endsWith(".xlsx")) {
+              const isZip =
+                uint8.byteLength >= 4 &&
+                uint8[0] === 0x50 &&
+                uint8[1] === 0x4b &&
+                uint8[2] === 0x03 &&
+                uint8[3] === 0x04;
+              const zipSample = new TextDecoder("latin1")
+                .decode(uint8.subarray(0, Math.min(uint8.byteLength, 256 * 1024)))
+                .toLowerCase();
+              if (!isZip || zipSample.includes("vbaproject.bin") || zipSample.includes("../")) {
+                status = "error";
+                errText = "Blocked by Office container guard";
+                findings = [
+                  zipSample.includes("vbaproject.bin")
+                    ? "Office container embeds vbaProject.bin macros (blocked)."
+                    : "Invalid or unsafe Office OpenXML ZIP container.",
+                ];
+              }
             }
           } catch {
             findings = ["Could not read file bytes for local preflight."];
@@ -3955,6 +3980,37 @@ function renderPwaShellHtml(locale, nonce) {
             )
             .join("");
           setSafeHtml(docModalPromptsEl, promptsHtml);
+        }
+        const copilotTitleEl = document.getElementById("doc-modal-copilot-title");
+        const copilotStepsEl = document.getElementById("doc-modal-copilot-steps");
+        if (copilotTitleEl) {
+          copilotTitleEl.textContent =
+            att.docType === "customs_declaration"
+              ? "SSRA TANCIS++ Customs Co-Pilot Steps"
+              : "SSRA Official e-Tax Co-Pilot Steps";
+        }
+        if (copilotStepsEl) {
+          const steps =
+            att.docType === "customs_declaration"
+              ? [
+                  "Confirm the 6-digit HS code and CIF valuation in USD on your commercial invoice.",
+                  "Submit the declaration through a licensed clearing agent in TANCIS++.",
+                ]
+              : [
+                  "Verify that you are on the official SSRA portal https://etax.nra.gov.ss/.",
+                  "Pay strictly through designated commercial banks remitting to the Treasury Single Account (TSA).",
+                ];
+          setSafeHtml(
+            copilotStepsEl,
+            steps
+              .map(
+                (st, idx) =>
+                  '<li class="doc-modal-prompt-btn"><span>' +
+                  escapeHtml(idx + 1 + ". " + st) +
+                  "</span></li>",
+              )
+              .join(""),
+          );
         }
         openModal(docModalBackdrop, document.getElementById("close-doc-modal-btn"), triggerEl || composerAddBtn);
       }
@@ -4043,6 +4099,41 @@ function renderPwaShellHtml(locale, nonce) {
       });
       docModalReportBtn?.addEventListener("click", () => {
         if (inspectingAttachmentId) downloadAttachmentReceipt(inspectingAttachmentId);
+      });
+
+      document.getElementById("export-conv-report-btn")?.addEventListener("click", () => {
+        setAcctPopover(false, false);
+        const activeConv = state.conversations.find((c) => c.id === state.activeId);
+        const turns = activeConv?.turns || [];
+        const lines = [
+          "========================================================================",
+          "SOUTH SUDAN REVENUE AUTHORITY (SSRA) — CONVERSATION & TAX SUMMARY REPORT",
+          "========================================================================",
+          "Conversation Title : " + (activeConv?.title || "New Conversation"),
+          "Thread ID          : " + (activeConv?.id || "local_session"),
+          "Turns Recorded     : " + turns.length,
+          "------------------------------------------------------------------------",
+        ];
+        turns.forEach((t, idx) => {
+          lines.push("[" + (idx + 1) + "] " + (t.role === "user" ? "Taxpayer" : "SSRA Assist (Automated)") + ":");
+          lines.push(String(t.content || ""));
+          lines.push("");
+        });
+        lines.push("------------------------------------------------------------------------");
+        lines.push("STATUTORY DISCLAIMER: Informational guidance only; verify on https://etax.nra.gov.ss/.");
+        lines.push("========================================================================");
+        try {
+          const blob = new Blob([lines.join("\\n")], { type: "text/plain;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "ssra_conversation_report.txt";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        } catch {}
+        if (hintEl) hintEl.textContent = "Conversation report downloaded.";
       });
 
       // Show saved conversations (or the empty state) as soon as the page loads.

@@ -3,10 +3,12 @@ import {
   AUDIO_SIGNIFIER_SPECS,
   buildCallReceptionistScreen,
   buildChatComposerState,
+  buildConversationReportExport,
   buildDocumentInspectionModalView,
   buildFloatingChatHeader,
   buildHumanSubtleMicrocopy,
   buildNarrationBarView,
+  buildPortalCopilotCardView,
   buildTruthfulAttachmentReportText,
   buildVoiceModeDockView,
   calculateOfflinePayeEstimate,
@@ -17,6 +19,7 @@ import {
   createRevealQueue,
   detectAttachmentKind,
   detectSpokenCallControl,
+  diagnoseSsraPortalScreenshot,
   EndOfTurnDetector,
   escapeHtmlStrict,
   evaluateCaptionScrollPin,
@@ -25,6 +28,7 @@ import {
   formatDocType,
   GENERATIVE_UI_STORYBOOK_FIXTURES,
   groupConversationsByRecency,
+  inspectOfficeZipClientPreflight,
   inspectPdfBytesClientPreflight,
   isBackchannelText,
   isCspSafeImagePreviewDataUrl,
@@ -40,12 +44,14 @@ import {
   PAUSE_SHOWN_FROM,
   POST_TTS_ECHO_COOLDOWN_MS,
   parseAguiSseStream,
+  reconcileClientDocumentText,
   renderGenerativeUICard,
   resolveAdaptiveVoiceNetworkProfile,
   resolveCallControlDirective,
   resolveGenerativeUIComponent,
   SPEECH_RATE_SLOW,
   sanitizeAttachmentFilename,
+  sanitizeCopilotReturnUrl,
   scrubDocumentTextForIndirectInjection,
   stripStepPrefix,
   VOICE_PAUSE_OPTIONS,
@@ -725,6 +731,65 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(modalView.quickPrompts).toEqual([]);
     expect(isCspSafeImagePreviewDataUrl("data:image/jpeg;base64,/9j/4AAQSkZJRg==")).toBe(true);
     expect(isCspSafeImagePreviewDataUrl("blob:https://assist.ssra.gov.ss/123")).toBe(false);
+
+    // Office OpenXML ZIP/macro preflight, client-side text reconciliation, portal screenshot troubleshooter, report export & PortalCopilotCard
+    expect(inspectOfficeZipClientPreflight(new Uint8Array([1, 2])).ok).toBe(false);
+    expect(
+      inspectOfficeZipClientPreflight(new TextEncoder().encode("PK\x03\x04clean_workbook.xml")).ok,
+    ).toBe(true);
+    const macroZip = inspectOfficeZipClientPreflight(
+      new TextEncoder().encode("PK\x03\x04xl/vbaProject.bin"),
+    );
+    expect(macroZip.ok).toBe(false);
+    expect(macroZip.hasMacros).toBe(true);
+
+    const reconVerified = reconcileClientDocumentText(
+      "Subtotal: SSP 1,000,000\nSales Tax: SSP 180,000\nTotal Payable: SSP 1,180,000",
+    );
+    expect(reconVerified.status).toBe("verified");
+    expect(reconVerified.oq017ClientOnly).toBe(true);
+
+    const reconDiscrepancy = reconcileClientDocumentText(
+      "Subtotal: USD 1,000\nWithholding Tax: USD 100\nNet Payable: USD 950",
+    );
+    expect(reconDiscrepancy.status).toBe("discrepancy_detected");
+
+    const shotDiag = diagnoseSsraPortalScreenshot({
+      filename: "etax_session_expired.png",
+      textSample: "Session expired — please login again",
+      docType: "portal_screenshot",
+    });
+    expect(shotDiag.isScreenshot).toBe(true);
+    expect(shotDiag.portalUrl).toBe("https://etax.nra.gov.ss/");
+    expect(shotDiag.steps.length).toBeGreaterThanOrEqual(2);
+
+    const convExport = buildConversationReportExport({
+      title: "PAYE Inquiry",
+      threadId: "thr_01",
+      turns: [
+        { role: "user", content: "My TIN is 1002001234 — what is PAYE?" },
+        {
+          role: "assistant",
+          content: "PAYE is due by day 15.",
+          citations: ["Part-II-Sec-10-PAYE"],
+        },
+      ],
+    });
+    expect(convExport.turnCount).toBe(2);
+    expect(convExport.integrityDigest).toHaveLength(16);
+    expect(convExport.reportText).toContain("••••1234");
+    expect(convExport.reportText).toContain("Part-II-Sec-10-PAYE");
+
+    expect(sanitizeCopilotReturnUrl("https://evil.example/phish")).toBe("https://etax.nra.gov.ss/");
+    expect(sanitizeCopilotReturnUrl("/en")).toBe("/en");
+    const copilotCard = buildPortalCopilotCardView({
+      cardType: "step_up_login",
+      title: "Submit ETAX-TCC-01",
+      portalUrl: "https://etax.nra.gov.ss/tcc",
+      fields: [{ name: "tin", label: "TIN", value: "1002001234", sensitive: true }],
+    });
+    expect(copilotCard.preservedSlotCount).toBe(1);
+    expect(copilotCard.fields[0]?.displayValue).toBe("••••1234");
 
     // EndOfTurnDetector, Vocal Acoustic Profile, Earcons & WCAG 2.2 SC 1.4.2 NarrationBar
     const silentSamples = new Float32Array(256);
