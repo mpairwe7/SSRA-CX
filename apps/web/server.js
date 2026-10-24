@@ -1796,7 +1796,7 @@ function renderPwaShellHtml(locale, nonce) {
         return String(raw || "")
           .replace(/\\s*\\[\\d+(?:\\s*[,;]\\s*\\d+)*\\](?!\\()/g, "")
           .replace(/\\[([^\\]]+)\\]\\([^\\)]+\\)/g, "$1")
-          .replace(/https?:\\/\\/etax\\.nra\\.gov\\.ss\\/?/gi, "e-tax dot n r a dot gov dot s s")
+          .replace(/\\bhttps?:\\/\\/etax\\.nra\\.gov\\.ss(?:\\/(?![^\\s]*@)[^\\s.,;:!?)]*)?(?=$|\\s|[,;:!?)](?=$|\\s)|\\.+(?=$|\\s))/gi, "e-tax dot n r a dot gov dot s s")
           .replace(/https?:\\/\\/\\S+/g, "web link")
           .replace(/••••(\\d{4})/g, (_, d) => "T I N ending in " + d.split("").join(" "))
           .replace(/\\bSec\\.\\s*(\\d+[A-Za-z]?)\\b/g, "Section $1")
@@ -3134,11 +3134,14 @@ function renderPwaShellHtml(locale, nonce) {
           stopActiveSpeechRecognition();
         }
         syncComposerRecordingUi();
-        if (input && input.value.trim()) {
-          const val = input.value;
-          input.value = "";
-          input.rows = 1;
-          sendTurn(val, { fromVoiceLoop: voiceContinuousActive });
+        const candidate = (input && input.value.trim()) || lastHeardVoiceTranscript.trim();
+        if (candidate) {
+          if (input) {
+            input.value = "";
+            input.rows = 1;
+          }
+          lastHeardVoiceTranscript = "";
+          sendTurn(candidate, { fromVoiceLoop: voiceContinuousActive });
         }
       });
       composerVoiceModeBtn?.addEventListener("click", () => {
@@ -3444,6 +3447,13 @@ function renderPwaShellHtml(locale, nonce) {
           lastHeardVoiceTranscript = transcript;
           if (voiceContinuousActive) {
             if (handleSpokenCallControl(transcript)) {
+              return;
+            }
+            if (voiceSilenceTimeoutMs === 0) {
+              if (input) {
+                input.value = (input.value ? input.value + " " : "") + transcript;
+              }
+              setVoiceStatus("Voice text ready. Tap Send to submit.");
               return;
             }
             setVoiceStatus('Heard: "' + transcript + '" — preparing answer…');

@@ -2433,10 +2433,14 @@ def select_hybrid_voice_execution_mode(
 
 _MASKED_TIN_SPEECH_RE = re.compile(r"••••(\d{4})")
 _SEC_ANCHOR_SPEECH_RE = re.compile(r"\bPart-([IVX]+)-Sec-(\d+)\b", flags=re.IGNORECASE)
+_OFFICIAL_ETAX_URL_SPEECH_RE = re.compile(
+    r"\bhttps?://etax\.nra\.gov\.ss(?:/(?![^\s]*@)[^\s.,;:!?)]*)?(?=$|\s|[,;:!?)](?=$|\s)|\.+(?=$|\s))",
+    flags=re.IGNORECASE,
+)
 
 
 def normalize_statutory_text_for_speech(text: str, locale: LocaleCode = LocaleCode.EN) -> str:
-    """Expand statutory anchors, masked TINs, and portal URLs for natural TTS pronunciation without altering numbers."""
+    """Expand statutory anchors, masked TINs, and verified official portal URLs for natural TTS pronunciation without altering numbers."""
     _ = locale
     out = _MASKED_TIN_SPEECH_RE.sub(
         lambda m: f"T I N ending in {' '.join(m.group(1))}",
@@ -2446,7 +2450,7 @@ def normalize_statutory_text_for_speech(text: str, locale: LocaleCode = LocaleCo
         lambda m: f"Part {m.group(1)}, Section {m.group(2)}",
         out,
     )
-    out = out.replace("https://etax.nra.gov.ss/", "e-tax dot n r a dot gov dot s s")
+    out = _OFFICIAL_ETAX_URL_SPEECH_RE.sub("e-tax dot n r a dot gov dot s s", out)
     return out
 
 
@@ -3212,6 +3216,7 @@ def clean_text_for_speech(text: str, locale: LocaleCode = LocaleCode.EN) -> str:
     out = _SPEECH_SEC_SHORTHAND_RE.sub(r"Section \1", out)
     out = _SPEECH_ART_SHORTHAND_RE.sub(r"Article \1", out)
     out = normalize_statutory_text_for_speech(out, locale=locale)
+    out = re.sub(r"\bhttps?://\S+", "web link", out, flags=re.IGNORECASE)
     return re.sub(r"\s+", " ", out).strip()
 
 
@@ -3403,24 +3408,28 @@ _EXPLICIT_LANG_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "pga",
         re.compile(
-            r"\b(?:speak\s+(?:in\s+)?juba\s+arabic|switch\s+to\s+juba\s+arabic|عربي\s+جوبا)\b",
+            r"\b(?:(?:speak|talk)\s+(?:in\s+)?juba\s+arabic|switch\s+to\s+juba\s+arabic|عربي\s+جوبا)\b",
             re.IGNORECASE,
         ),
     ),
     (
         "ar",
         re.compile(
-            r"\b(?:speak\s+(?:in\s+)?arabic|switch\s+to\s+arabic|in\s+arabic|تكلم\s+عربي|تحدث\s+بالعربية|بالعربي)\b",
+            r"\b(?:(?:speak|talk)\s+(?:in\s+)?arabic|switch\s+to\s+arabic|تكلم\s+عربي|تحدث\s+بالعربية)\b",
             re.IGNORECASE,
         ),
     ),
     (
         "en",
         re.compile(
-            r"\b(?:speak\s+(?:in\s+)?english|switch\s+to\s+english|in\s+english|تكلم\s+إنجليزي)\b",
+            r"\b(?:(?:speak|talk)\s+(?:in\s+)?english|switch\s+to\s+english|تكلم\s+إنجليزي)\b",
             re.IGNORECASE,
         ),
     ),
+)
+_LANG_NEGATION_PREFIX_RE = re.compile(
+    r"(?:\b(?:not|no|don'?t|do\s+not|never)|(?:لا|مش))[\s,;:—-]*$",
+    re.IGNORECASE,
 )
 
 
@@ -3433,6 +3442,9 @@ def detect_explicit_language_request(text: str) -> str | None:
     best_lang: str | None = None
     for lang_code, pattern in _EXPLICIT_LANG_PATTERNS:
         for match in pattern.finditer(clean):
+            prefix = clean[max(0, match.start() - 24) : match.start()]
+            if _LANG_NEGATION_PREFIX_RE.search(prefix):
+                continue
             if match.end() > best_end:
                 best_end = match.end()
                 best_lang = lang_code
