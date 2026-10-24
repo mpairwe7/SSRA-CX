@@ -1837,7 +1837,11 @@ function renderPwaShellHtml(locale, nonce) {
       function speechUtterance(text) {
         const utterance = new SpeechSynthesisUtterance(cleanTextForSpeech(text));
         const spk = getActiveVoiceSpeaker(state.locale);
-        utterance.lang = (spk && spk.bcp47) || SPEECH_LANGS[state.locale] || "en-SS";
+        if (selectedVoiceByLocale[state.locale] && spk && spk.bcp47) {
+          utterance.lang = spk.bcp47;
+        } else if (SPEECH_LANGS[state.locale]) {
+          utterance.lang = SPEECH_LANGS[state.locale];
+        }
         utterance.pitch = (spk && spk.pitch) || 1.0;
         utterance.rate = (callSpeechRateSlow ? 0.82 : 1.0) * ((spk && spk.rate) || 1.0);
         return utterance;
