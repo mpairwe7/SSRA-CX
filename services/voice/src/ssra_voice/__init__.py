@@ -3953,7 +3953,13 @@ def assess_spoken_clarification(
             else 1.0
         )
         probs_all.append(prob)
-        if not w_str or w_str.lower() in _CLARIFY_STOP_WORDS or not any(c.isalpha() for c in w_str):
+        should_skip_clarify = (
+            not w_str
+            or w_str.lower() in _CLARIFY_STOP_WORDS
+            or is_native_language_word(w_str, locale.value)
+            or not any(c.isalpha() for c in w_str)
+        )
+        if should_skip_clarify:
             continue
         if prob < threshold:
             low_content.append((prob, w_str))
@@ -3998,11 +4004,230 @@ class LanguageSwitchDecision:
     source: Literal["auto", "explicit", "override"] = "auto"
 
 
+_VOICE_ORTHO_FOLD_MAP: dict[str, str] = {
+    "ë": "e",
+    "ɛ": "e",
+    "ɔ": "o",
+    "ŋ": "ng",
+    "ö": "o",
+    "ä": "a",
+    "ï": "i",
+    "ü": "u",
+    "ã": "a",
+    "ø": "o",
+    "\u0331": "",
+    "\u0308": "",
+    "\u0303": "",
+}
+
+
+def _fold_voice_orthography(text: str) -> str:
+    nfc = unicodedata.normalize("NFC", text or "").lower()
+    return "".join(_VOICE_ORTHO_FOLD_MAP.get(ch, ch) for ch in nfc)
+
+
+_NATIVE_LEXICAL_WORDS_BY_LOCALE: dict[str, frozenset[str]] = {
+    "en": frozenset(
+        {
+            "what",
+            "when",
+            "where",
+            "how",
+            "much",
+            "salary",
+            "return",
+            "filing",
+            "deadline",
+            "certificate",
+            "register",
+            "balance",
+            "please",
+            "monthly",
+        }
+    ),
+    "ar": frozenset(
+        {
+            "ضريبة",
+            "الدخل",
+            "شهادة",
+            "الامتثال",
+            "الرقم",
+            "الضريبي",
+            "الجمارك",
+            "كيف",
+            "متى",
+            "كم",
+            "إقرار",
+            "تسجيل",
+        }
+    ),
+    "pga": frozenset(
+        {
+            "dariba",
+            "gurush",
+            "shunu",
+            "bita",
+            "anina",
+            "kif",
+            "tasjil",
+            "imtisal",
+            "shahada",
+            "gamarik",
+            "zol",
+            "bikun",
+            "بتاع",
+            "شنو",
+            "قروش",
+            "هسي",
+            "داير",
+        }
+    ),
+    "din": frozenset(
+        {
+            "ajul",
+            "wëu",
+            "weu",
+            "tënë",
+            "tene",
+            "bɛ̈ŋic",
+            "bengic",
+            "paguot",
+            "waraga",
+            "cuɔk",
+            "cuok",
+            "luɔi",
+            "luoi",
+            "namba",
+            "caar",
+            "yïn",
+            "yin",
+            "kekë",
+            "keke",
+            "thuɔŋjäŋ",
+            "thuongjang",
+        }
+    ),
+    "nus": frozenset(
+        {
+            "yiööth",
+            "yiooth",
+            "juäärä",
+            "juaara",
+            "cuɔl",
+            "cuol",
+            "muthɔɔr",
+            "muthoor",
+            "luak",
+            "ruacni",
+            "kä",
+            "ka",
+            "thok",
+            "naath",
+            "nath",
+        }
+    ),
+    "bfa": frozenset(
+        {
+            "kaser",
+            "lɔŋɔt",
+            "longot",
+            "banki",
+            "kutuk",
+            "bari",
+            "kulya",
+            "ngutu",
+            "ŋutu",
+            "silingi",
+            "tinan",
+        }
+    ),
+    "zne": frozenset(
+        {
+            "marã",
+            "mara",
+            "tumosi",
+            "dunduko",
+            "rogo",
+            "pazande",
+            "boro",
+            "sunge",
+            "undohe",
+            "fura",
+        }
+    ),
+    "shk": frozenset(
+        {
+            "cøøri",
+            "coori",
+            "ocul",
+            "jami",
+            "bëëne",
+            "beene",
+            "dhøg",
+            "dhog",
+            "cøllø",
+            "collo",
+            "kwop",
+            "jago",
+        }
+    ),
+}
+_VOICE_WORD_TOKEN_RE = re.compile(r"[\w\u0600-\u06FF']+", re.UNICODE)
+
+
+def is_native_language_word(word: str, locale: str) -> bool:
+    """Return True if *word* is a known native lexical/function word of *locale* (`language.py` `is_native_word`)."""
+    vocab = _NATIVE_LEXICAL_WORDS_BY_LOCALE.get((locale or "").lower())
+    if not vocab:
+        return False
+    low = unicodedata.normalize("NFC", word or "").strip().lower()
+    return low in vocab or _fold_voice_orthography(low) in vocab
+
+
+def lexical_language_hits(text: str) -> dict[str, int]:
+    """Count native lexical & function-word hits per language (`language.py` `lexical_hits`)."""
+    raw_words = _VOICE_WORD_TOKEN_RE.findall(unicodedata.normalize("NFC", text or "").lower())
+    folded_words = [_fold_voice_orthography(w) for w in raw_words]
+    counts: dict[str, int] = {}
+    for loc, vocab in _NATIVE_LEXICAL_WORDS_BY_LOCALE.items():
+        counts[loc] = sum(
+            1 for rw, fw in zip(raw_words, folded_words, strict=False) if rw in vocab or fw in vocab
+        )
+    return counts
+
+
+def fuse_language_vote(vote: LanguageVote, text_confidence: float = 0.80) -> LanguageVote:
+    """Fuse acoustic language-ID probabilities with transcript lexical evidence (`language.py` `fuse`).
+
+    When acoustic confidence is `< 0.80` on noisy 2G/3G audio and the transcript contains at least
+    2 words of a candidate language (strictly beating the runner-up), promote that language to
+    `text_confidence`.
+    """
+    if not vote.text or vote.confidence >= 0.80:
+        return vote
+    hits = lexical_language_hits(vote.text)
+    ranked = sorted(
+        ((n, lang) for lang, n in hits.items() if lang in vote.probs),
+        reverse=True,
+    )
+    if not ranked:
+        return vote
+    best_n, best_lang = ranked[0]
+    runner_up = ranked[1][0] if len(ranked) > 1 else 0
+    if best_n < 2 or best_n <= runner_up or best_lang == vote.top:
+        return vote
+    rest = max(0.0, 1.0 - text_confidence)
+    others = [lang for lang in vote.probs if lang != best_lang]
+    new_probs: dict[str, float] = {lang: round(rest / max(len(others), 1), 4) for lang in others}
+    new_probs[best_lang] = text_confidence
+    return LanguageVote(probs=new_probs, top=best_lang, speech_s=vote.speech_s, text=vote.text)
+
+
 _EXPLICIT_LANG_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "pga",
         re.compile(
-            r"\b(?:(?:speak|talk)\s+(?:in\s+)?juba\s+arabic|switch\s+to\s+juba\s+arabic|عربي\s+جوبا)\b",
+            r"\b(?:(?:speak|talk)\s+(?:in\s+)?(?:juba\s+arabic|arabi\s+juba)|switch\s+to\s+juba\s+arabic|عربي\s+جوبا)\b",
             re.IGNORECASE,
         ),
     ),
@@ -4010,6 +4235,41 @@ _EXPLICIT_LANG_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "ar",
         re.compile(
             r"\b(?:(?:speak|talk)\s+(?:in\s+)?arabic|switch\s+to\s+arabic|تكلم\s+عربي|تحدث\s+بالعربية)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "din",
+        re.compile(
+            r"\b(?:(?:speak|talk)\s+(?:in\s+)?(?:dinka|thuongjang)|switch\s+to\s+dinka|thuɔŋjäŋ|jam\s+në\s+thuɔŋjäŋ)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "nus",
+        re.compile(
+            r"\b(?:(?:speak|talk)\s+(?:in\s+)?(?:nuer|thok\s+na+th)|switch\s+to\s+nuer|thok\s+naath|ruacni\s+thok\s+na+th)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "bfa",
+        re.compile(
+            r"\b(?:(?:speak|talk)\s+(?:in\s+)?bari|switch\s+to\s+bari|kutuk\s+na\s+bari)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "zne",
+        re.compile(
+            r"\b(?:(?:speak|talk)\s+(?:in\s+)?(?:zande|pazande)|switch\s+to\s+zande|pa\s+pazande)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "shk",
+        re.compile(
+            r"\b(?:(?:speak|talk)\s+(?:in\s+)?(?:shilluk|dhog\s+collo)|switch\s+to\s+shilluk|dhøg\s+cøllø)\b",
             re.IGNORECASE,
         ),
     ),
@@ -4029,7 +4289,7 @@ _LANG_NEGATION_PREFIX_RE = re.compile(
 
 def detect_explicit_language_request(text: str) -> str | None:
     """Return the locale code explicitly requested in *text*, or None (`language.py` `detect_explicit_request`)."""
-    clean = (text or "").strip()
+    clean = unicodedata.normalize("NFC", text or "").strip()
     if not clean:
         return None
     best_end = -1
@@ -4052,13 +4312,23 @@ class CallLanguagePolicy:
         self,
         *,
         active: str = "en",
-        supported_languages: tuple[str, ...] = ("en", "ar", "pga"),
+        supported_languages: tuple[str, ...] = (
+            "en",
+            "ar",
+            "pga",
+            "din",
+            "nus",
+            "bfa",
+            "zne",
+            "shk",
+        ),
         min_speech_s: float = 1.5,
         switch_confidence: float = 0.90,
         hysteresis_confidence: float = 0.70,
         support_confidence: float = 0.50,
         hysteresis_turns: int = 2,
         hysteresis_window: int = 3,
+        text_confirm_words: int = 3,
     ) -> None:
         self.active = active
         self.supported_languages = supported_languages
@@ -4068,6 +4338,7 @@ class CallLanguagePolicy:
         self.support_confidence = support_confidence
         self.hysteresis_turns = hysteresis_turns
         self.hysteresis_window = hysteresis_window
+        self.text_confirm_words = text_confirm_words
         self.locked: bool = False
         self.override: str | None = None
         self.pending: list[LanguageVote] = []
@@ -4114,12 +4385,18 @@ class CallLanguagePolicy:
             return LanguageSwitchDecision("none", self.active, "unsupported_language")
 
         conf = vote.confidence
+        hits = lexical_language_hits(vote.text) if vote.text else {}
         # Code-switched tax loanword guard (EACL 2026 & language.py lines 314-337):
-        # When locked in Arabic ('ar' or 'pga'), an English acoustic vote caused by tax loanwords
-        # ("TIN", "PAYE", "TCC") while the transcript still contains Arabic script stays in the active locale.
+        # When locked in a non-English language ('ar', 'pga', 'din', 'nus', 'bfa', 'zne', 'shk'),
+        # an English acoustic vote caused by tax loanwords ("TIN", "PAYE", "TCC") while the
+        # transcript still contains Arabic script or native words of the active locale stays in the active locale.
         has_arabic_script = bool(re.search(r"[\u0600-\u06FF]", vote.text))
+        has_active_native_words = hits.get(self.active, 0) >= 1
         is_code_switched_loanword = (
-            self.locked and self.active in ("ar", "pga") and vote.top == "en" and has_arabic_script
+            self.locked
+            and self.active != "en"
+            and vote.top == "en"
+            and ((self.active in ("ar", "pga") and has_arabic_script) or has_active_native_words)
         )
         if is_code_switched_loanword:
             self.pending.clear()
@@ -4137,6 +4414,15 @@ class CallLanguagePolicy:
         if conf >= self.switch_confidence:
             self.pending.clear()
             return self._move(vote.top, "high_confidence", conf, "auto")
+
+        is_text_confirmed = (
+            conf >= self.hysteresis_confidence
+            and hits.get(vote.top, 0) >= self.text_confirm_words
+            and hits.get(self.active, 0) == 0
+        )
+        if is_text_confirmed:
+            self.pending.clear()
+            return self._move(vote.top, "text_confirmed", conf, "auto")
 
         self.pending.append(vote)
         if len(self.pending) > self.hysteresis_window:
@@ -4225,12 +4511,14 @@ __all__ = [
     "evaluate_live_call_risk",
     "fixed_voice_prompts",
     "format_case_reference",
+    "fuse_language_vote",
     "generate_officer_call_brief",
     "get_localized_tool_wait_filler",
     "is_backchannel_utterance",
     "is_callback_request",
     "is_goodbye_request",
     "is_likely_tts_echo",
+    "is_native_language_word",
     "is_normal_pace_request",
     "is_repeat_request",
     "is_slower_pace_request",
@@ -4238,6 +4526,7 @@ __all__ = [
     "is_tax_dispute",
     "is_voice_language_approved",
     "is_ws_origin_allowed",
+    "lexical_language_hits",
     "looks_like_valid_audio_bytes",
     "mint_call_resume_ticket",
     "mulaw_8k_to_pcm16_16k",

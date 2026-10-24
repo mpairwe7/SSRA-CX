@@ -25,33 +25,23 @@ from ssra_runtime.guardrails import (
     validate_numeric_provenance,
     verify_no_cross_subject_or_unmasked_pii,
 )
-from ssra_runtime.nodes.language_state import evaluate_language_state_transition
+from ssra_runtime.nodes.language_state import (
+    evaluate_language_state_transition,
+    fold_south_sudan_orthography,
+)
 from ssra_runtime.state import ConversationGraphState
 
 _WORD_SPLIT_RE = re.compile(r"[^\s,.;:!?()\"']+")
-
-
-def _has_marker_hit(lower_text: str, words: set[str], markers: tuple[str, ...]) -> bool:
-    """Return True if any single-word or multi-word language marker matches the input text."""
-    for m in markers:
-        if " " in m:
-            if m in lower_text:
-                return True
-        elif m in words:
-            return True
-    return False
-
-
-def detect_language(text: str, default_locale: LocaleCode = LocaleCode.EN) -> LocaleCode:
-    """Detect the primary South Sudan BCP-47 language (`en`, `pga`, `ar`, `din`, `nus`, `bfa`, `zne`, `shk`)."""
-    # 1. Detect Arabic script (U+0600..U+06FF)
-    if any("\u0600" <= ch <= "\u06ff" for ch in text):
-        return LocaleCode.AR
-    lower = text.lower()
-    words = set(_WORD_SPLIT_RE.findall(lower))
-
-    # 2. Juba Arabic (pga) Latin-script markers & code-switching (checked before Tier C)
-    pga_markers = (
+_PGA_ARABIC_SCRIPT_MARKERS: tuple[str, ...] = (
+    "بتاع",
+    "شنو",
+    "قروش",
+    "هسي",
+    "داير",
+    "عربي جوبا",
+)
+_LANGUAGE_MARKER_LEXICON: dict[LocaleCode, tuple[str, ...]] = {
+    LocaleCode.PGA: (
         "kif",
         "ta dariba",
         "dariba",
@@ -63,23 +53,102 @@ def detect_language(text: str, default_locale: LocaleCode = LocaleCode.EN) -> Lo
         "gamarik",
         "tasjil",
         "shahada ta imtisal",
-    )
-    if _has_marker_hit(lower, words, pga_markers):
-        return LocaleCode.PGA
+        "bita",
+        "anina",
+        "ashan",
+    ),
+    LocaleCode.DIN: (
+        "tënë",
+        "tene",
+        "wëu",
+        "weu",
+        "ajul",
+        "bɛ̈ŋic",
+        "bengic",
+        "paguot",
+        "thuɔŋjäŋ",
+        "thuongjang",
+        "namba de ajul",
+        "waraga de cuɔk",
+        "waraga de cuok",
+    ),
+    LocaleCode.NUS: (
+        "yiööth",
+        "yiooth",
+        "juäärä",
+        "juaara",
+        "cuɔl",
+        "cuol",
+        "gɔ̱r",
+        "thok naath",
+        "thok nath",
+        "muthɔɔr",
+        "muthoor",
+    ),
+    LocaleCode.BFA: (
+        "kaser",
+        "lɔŋɔt",
+        "longot",
+        "banki lo",
+        "kegga namba",
+        "kutuk na bari",
+        "namba lo kaser",
+    ),
+    LocaleCode.ZNE: (
+        "marã",
+        "tumosi",
+        "dunduko",
+        "rogo ssra",
+        "namba mara",
+        "waraga mara",
+        "pa pazande",
+        "pazande",
+    ),
+    LocaleCode.SHK: (
+        "cøøri",
+        "coori",
+        "ocul jami",
+        "bëëne",
+        "beene",
+        "dhøg",
+        "dhog collo",
+    ),
+}
 
-    # 3. Tier C Nilotic & Central Sudanic languages (whole-word / phrase matching)
-    if _has_marker_hit(lower, words, ("tënë", "wëu", "ajul", "bɛ̈ŋic", "paguot")):
-        return LocaleCode.DIN
-    if _has_marker_hit(lower, words, ("yiööth", "juäärä", "cuɔl", "gɔ̱r", "thok naath")):
-        return LocaleCode.NUS
-    if _has_marker_hit(lower, words, ("kaser", "lɔŋɔt", "banki lo", "kegga namba")):
-        return LocaleCode.BFA
-    if _has_marker_hit(lower, words, ("marã", "tumosi", "dunduko", "rogo ssra")):
-        return LocaleCode.ZNE
-    if _has_marker_hit(lower, words, ("cøøri", "ocul jami", "bëëne", "dhøg")):
-        return LocaleCode.SHK
 
-    return default_locale
+def score_language_candidates(text: str) -> dict[LocaleCode, int]:
+    """Count lexical & phrase marker matches across South Sudan languages (diacritic + ASCII-folded)."""
+    lower = (text or "").lower()
+    folded = fold_south_sudan_orthography(lower)
+    words = set(_WORD_SPLIT_RE.findall(lower)) | set(_WORD_SPLIT_RE.findall(folded))
+    scores: dict[LocaleCode, int] = {}
+    for loc, markers in _LANGUAGE_MARKER_LEXICON.items():
+        hits = 0
+        for m in markers:
+            if " " in m:
+                if m in lower or m in folded:
+                    hits += 2
+            elif m in words:
+                hits += 1
+        if hits > 0:
+            scores[loc] = hits
+    return scores
+
+
+def detect_language(text: str, default_locale: LocaleCode = LocaleCode.EN) -> LocaleCode:
+    """Detect the primary South Sudan BCP-47 language (`en`, `pga`, `ar`, `din`, `nus`, `bfa`, `zne`, `shk`)."""
+    # 1. Detect Arabic script (U+0600..U+06FF), disambiguating Juba Arabic (`pga`) from MSA (`ar`)
+    if any("\u0600" <= ch <= "\u06ff" for ch in text):
+        if any(m in text for m in _PGA_ARABIC_SCRIPT_MARKERS):
+            return LocaleCode.PGA
+        return LocaleCode.AR
+
+    scores = score_language_candidates(text)
+    if not scores:
+        return default_locale
+    # Pick highest-scoring language; ties preserve deterministic priority order in _LANGUAGE_MARKER_LEXICON
+    best_loc = max(scores.items(), key=lambda item: item[1])[0]
+    return best_loc
 
 
 def _safe_meta_int(val: Any, default: int = 0, *, max_val: int = 100) -> int:
