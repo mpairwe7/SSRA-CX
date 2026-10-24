@@ -343,14 +343,19 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(3);
   await page.locator("#close-call-btn").click();
 
-  // Main chat composer voice mode button couples with auto-narrate and Escape cancels recording (useVoiceEscape).
+  // Main chat composer voice mode button couples with auto-narrate, opens VoiceModeDock, and Escape cancels recording (useVoiceEscape).
   const voiceModeBtn = page.locator("#composer-voicemode-btn");
   await voiceModeBtn.click();
   await expect(voiceModeBtn).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#composer-recording-bar")).toBeVisible();
+  await expect(page.locator("#voice-mode-dock")).toBeVisible();
+  await expect(page.locator("#voice-mode-dock")).toHaveAttribute("data-phase", "listening");
+  await expect(page.locator("#voice-mode-dock")).toHaveAttribute("data-floor", "listening");
+  await expect(page.locator("#voice-dock-primary")).toHaveAttribute("data-action", "send");
   await page.keyboard.press("Escape");
   await expect(voiceModeBtn).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#composer-recording-bar")).toBeHidden();
+  await expect(page.locator("#voice-mode-dock")).toBeHidden();
 
   // Composer '+' attachment menu -> file attachment -> DocumentInspectionModal (OQ-017 truthful state) -> suggested prompt -> remove.
   await page.locator("#composer-add-btn").click();

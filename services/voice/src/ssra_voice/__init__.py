@@ -3181,6 +3181,370 @@ def verify_call_resume_ticket(
     return payload
 
 
+_SPEECH_CITATION_BRACKET_RE = re.compile(r"\s*\[\d+(?:\s*[,;]\s*\d+)*\](?!\()")
+_SPEECH_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^\)]+\)")
+_SPEECH_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
+_SPEECH_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+_SPEECH_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*|__([^_]+)__")
+_SPEECH_HEADER_BULLET_RE = re.compile(r"^\s*(?:#{1,6}|[-*+])\s+", re.MULTILINE)
+_SPEECH_SEC_SHORTHAND_RE = re.compile(r"\bSec\.\s*(\d+[A-Za-z]?)\b")
+_SPEECH_ART_SHORTHAND_RE = re.compile(r"\bArt\.\s*(\d+[A-Za-z]?)\b")
+_REDACTED_SPEECH_MAP: tuple[tuple[str, str], ...] = (
+    ("<TIN_REDACTED>", "redacted T I N"),
+    ("[REDACTED_TIN]", "redacted T I N"),
+    ("<PHONE_REDACTED>", "redacted phone number"),
+    ("[REDACTED_PHONE]", "redacted phone number"),
+    ("<EMAIL_REDACTED>", "redacted email address"),
+    ("[REDACTED_EMAIL]", "redacted email address"),
+)
+
+
+def clean_text_for_speech(text: str, locale: LocaleCode = LocaleCode.EN) -> str:
+    """Prepare markdown and statutory reply text for natural TTS synthesis (`speech_normalization.py` parity)."""
+    out = _SPEECH_CODE_BLOCK_RE.sub(" ", text or "")
+    out = _SPEECH_CITATION_BRACKET_RE.sub("", out)
+    out = _SPEECH_MD_LINK_RE.sub(r"\1", out)
+    out = _SPEECH_INLINE_CODE_RE.sub(r"\1", out)
+    out = _SPEECH_BOLD_RE.sub(lambda m: m.group(1) or m.group(2) or "", out)
+    out = _SPEECH_HEADER_BULLET_RE.sub("", out)
+    for marker, spoken_label in _REDACTED_SPEECH_MAP:
+        out = out.replace(marker, spoken_label)
+    out = _SPEECH_SEC_SHORTHAND_RE.sub(r"Section \1", out)
+    out = _SPEECH_ART_SHORTHAND_RE.sub(r"Article \1", out)
+    out = normalize_statutory_text_for_speech(out, locale=locale)
+    return re.sub(r"\s+", " ", out).strip()
+
+
+_SSRA_ASR_SURE_MISHEARS: dict[str, str] = {
+    "ttiimu": "TIN",
+    "tiimu": "TIN",
+    "ttimu": "TIN",
+    "timu": "TIN",
+    "ttini": "TIN",
+    "tiisiisii": "TCC",
+    "tisi": "TCC",
+    "piieewai": "PAYE",
+    "payi": "PAYE",
+    "etaksi": "e-Tax",
+    "itax": "e-Tax",
+    "nira": "NRA",
+    "inara": "NRA",
+    "esara": "SSRA",
+}
+_SSRA_ASR_CONTEXT_MISHEARS: dict[tuple[str, str], str] = {
+    ("from", "era"): "SSRA",
+    ("with", "era"): "SSRA",
+    ("at", "era"): "SSRA",
+    ("from", "ora"): "SSRA",
+}
+_CLARIFY_STOP_WORDS: frozenset[str] = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "can",
+        "do",
+        "does",
+        "for",
+        "from",
+        "how",
+        "i",
+        "in",
+        "is",
+        "it",
+        "me",
+        "my",
+        "of",
+        "on",
+        "or",
+        "the",
+        "to",
+        "what",
+        "when",
+        "where",
+        "who",
+        "why",
+        "with",
+        "you",
+        "your",
+        "um",
+        "uh",
+        "okay",
+        "ok",
+        "please",
+    }
+)
+
+
+def detect_ssra_entity_mishear(token: str, previous: str | None = None) -> str | None:
+    """Return canonical SSRA tax acronym for a known Whisper/ASR phonetic mishear (`clarify.py` `entity_mishear`)."""
+    tok = token.lower().strip(",.?!;:\"'()")
+    prev = (previous or "").lower().strip(",.?!;:\"'()")
+    ctx_hit = _SSRA_ASR_CONTEXT_MISHEARS.get((prev, tok))
+    if ctx_hit is not None:
+        return ctx_hit
+    return _SSRA_ASR_SURE_MISHEARS.get(tok)
+
+
+def repair_ssra_asr_entities(text: str) -> str:
+    """Repair known phonetic mishears of SSRA tax entities in an ASR transcript (`clarify.py` `repair_asr_entities`)."""
+    tokens = text.split()
+    if not tokens:
+        return ""
+    repaired: list[str] = []
+    for idx, tok in enumerate(tokens):
+        prev = tokens[idx - 1] if idx > 0 else None
+        canonical = detect_ssra_entity_mishear(tok, prev)
+        if canonical is not None:
+            stripped_right = tok.rstrip(",.?!;:\"'()")
+            suffix = tok[len(stripped_right) :]
+            repaired.append(f"{canonical}{suffix}")
+        else:
+            repaired.append(tok)
+    return " ".join(repaired)
+
+
+@dataclass(frozen=True)
+class SpokenClarifyDecision:
+    """Outcome of spoken `ClarifyGate` evaluation (`clarify.py` `ClarifyAction`)."""
+
+    action: Literal["none", "ask_term", "ask_repeat"]
+    candidate: str | None = None
+    target_word: str | None = None
+    prompt: str | None = None
+
+
+def assess_spoken_clarification(
+    text: str,
+    *,
+    words: list[dict[str, Any]] | None = None,
+    threshold: float = 0.65,
+    locale: LocaleCode = LocaleCode.EN,
+) -> SpokenClarifyDecision:
+    """Assess a caller utterance for misheard tax acronyms or low-confidence content words (`clarify.py`)."""
+    _ = locale
+    tokens = [w.strip(",.?!;:\"'()") for w in text.split() if w.strip(",.?!;:\"'()")]
+    for idx, tok in enumerate(tokens):
+        prev = tokens[idx - 1] if idx > 0 else None
+        misheard = detect_ssra_entity_mishear(tok, prev)
+        if misheard is not None:
+            return SpokenClarifyDecision(
+                action="ask_term",
+                candidate=misheard,
+                target_word=tok,
+                prompt=f"Excuse me, did you mean {misheard}?",
+            )
+
+    if not words:
+        return SpokenClarifyDecision(action="none")
+
+    low_content: list[tuple[float, str]] = []
+    probs_all: list[float] = []
+    for item in words:
+        w_str = str(item.get("word") or "").strip(",.?!;:\"'()")
+        raw_prob = item.get("prob", 1.0)
+        prob = (
+            float(raw_prob)
+            if isinstance(raw_prob, (int, float)) and not isinstance(raw_prob, bool)
+            else 1.0
+        )
+        probs_all.append(prob)
+        if not w_str or w_str.lower() in _CLARIFY_STOP_WORDS or not any(c.isalpha() for c in w_str):
+            continue
+        if prob < threshold:
+            low_content.append((prob, w_str))
+
+    if not low_content:
+        return SpokenClarifyDecision(action="none")
+
+    low_content.sort(key=lambda pair: pair[0])
+    lowest_word = low_content[0][1]
+    mean_prob = sum(probs_all) / len(probs_all)
+    if mean_prob < threshold + 0.10:
+        return SpokenClarifyDecision(
+            action="ask_repeat",
+            target_word=lowest_word,
+            prompt="Pardon me, could you repeat that part clearly?",
+        )
+    return SpokenClarifyDecision(action="none")
+
+
+@dataclass(frozen=True)
+class LanguageVote:
+    """Per-utterance acoustic + lexical language identification vote (`language.py`)."""
+
+    probs: Mapping[str, float]
+    top: str
+    speech_s: float
+    text: str = ""
+
+    @property
+    def confidence(self) -> float:
+        return float(self.probs.get(self.top, 0.0))
+
+
+@dataclass(frozen=True)
+class LanguageSwitchDecision:
+    """Decision from `CallLanguagePolicy.observe` (`language.py` `Decision`)."""
+
+    action: Literal["none", "switch", "lock"]
+    target: str
+    reason: str
+    confidence: float = 0.0
+    source: Literal["auto", "explicit", "override"] = "auto"
+
+
+_EXPLICIT_LANG_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "pga",
+        re.compile(
+            r"\b(?:speak\s+(?:in\s+)?juba\s+arabic|switch\s+to\s+juba\s+arabic|عربي\s+جوبا)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "ar",
+        re.compile(
+            r"\b(?:speak\s+(?:in\s+)?arabic|switch\s+to\s+arabic|in\s+arabic|تكلم\s+عربي|تحدث\s+بالعربية|بالعربي)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "en",
+        re.compile(
+            r"\b(?:speak\s+(?:in\s+)?english|switch\s+to\s+english|in\s+english|تكلم\s+إنجليزي)\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+def detect_explicit_language_request(text: str) -> str | None:
+    """Return the locale code explicitly requested in *text*, or None (`language.py` `detect_explicit_request`)."""
+    clean = (text or "").strip()
+    if not clean:
+        return None
+    best_end = -1
+    best_lang: str | None = None
+    for lang_code, pattern in _EXPLICIT_LANG_PATTERNS:
+        for match in pattern.finditer(clean):
+            if match.end() > best_end:
+                best_end = match.end()
+                best_lang = lang_code
+    return best_lang
+
+
+class CallLanguagePolicy:
+    """Hysteresis state machine over a call's active language (`language.py` `LanguagePolicy`)."""
+
+    def __init__(
+        self,
+        *,
+        active: str = "en",
+        supported_languages: tuple[str, ...] = ("en", "ar", "pga"),
+        min_speech_s: float = 1.5,
+        switch_confidence: float = 0.90,
+        hysteresis_confidence: float = 0.70,
+        support_confidence: float = 0.50,
+        hysteresis_turns: int = 2,
+        hysteresis_window: int = 3,
+    ) -> None:
+        self.active = active
+        self.supported_languages = supported_languages
+        self.min_speech_s = min_speech_s
+        self.switch_confidence = switch_confidence
+        self.hysteresis_confidence = hysteresis_confidence
+        self.support_confidence = support_confidence
+        self.hysteresis_turns = hysteresis_turns
+        self.hysteresis_window = hysteresis_window
+        self.locked: bool = False
+        self.override: str | None = None
+        self.pending: list[LanguageVote] = []
+        self.switch_count: int = 0
+
+    def _move(
+        self,
+        target: str,
+        reason: str,
+        confidence: float,
+        source: Literal["auto", "explicit", "override"],
+    ) -> LanguageSwitchDecision:
+        changed = target != self.active
+        self.active = target
+        self.locked = True
+        if changed:
+            self.switch_count += 1
+            return LanguageSwitchDecision("switch", target, reason, confidence, source)
+        return LanguageSwitchDecision("lock", target, reason, confidence, source)
+
+    def set_override(self, language: str) -> LanguageSwitchDecision:
+        """Lock the caller's on-screen language choice (`language.py` `set_override`)."""
+        if language not in self.supported_languages:
+            return LanguageSwitchDecision(
+                "none", self.active, "unsupported_language", source="override"
+            )
+        self.override = language
+        self.pending.clear()
+        return self._move(language, "ui_override", 1.0, "override")
+
+    def observe(self, vote: LanguageVote) -> LanguageSwitchDecision:
+        """Observe one utterance vote and return a hysteresis-governed language decision (`language.py`)."""
+        requested = detect_explicit_language_request(vote.text)
+        if requested is not None and requested in self.supported_languages:
+            if self.override is not None:
+                self.override = requested
+            self.pending.clear()
+            return self._move(requested, "explicit_request", 1.0, "explicit")
+        if self.override is not None:
+            return LanguageSwitchDecision("none", self.active, "override_locked", source="override")
+        if vote.speech_s < self.min_speech_s or not vote.top:
+            return LanguageSwitchDecision("none", self.active, "too_short")
+        if vote.top not in self.supported_languages:
+            return LanguageSwitchDecision("none", self.active, "unsupported_language")
+
+        conf = vote.confidence
+        # Code-switched tax loanword guard (EACL 2026 & language.py lines 314-337):
+        # When locked in Arabic ('ar' or 'pga'), an English acoustic vote caused by tax loanwords
+        # ("TIN", "PAYE", "TCC") while the transcript still contains Arabic script stays in the active locale.
+        has_arabic_script = bool(re.search(r"[\u0600-\u06FF]", vote.text))
+        is_code_switched_loanword = (
+            self.locked and self.active in ("ar", "pga") and vote.top == "en" and has_arabic_script
+        )
+        if is_code_switched_loanword:
+            self.pending.clear()
+            return LanguageSwitchDecision("none", self.active, "code_switched_loanword_guard", conf)
+
+        if not self.locked:
+            if conf >= self.hysteresis_confidence:
+                return self._move(vote.top, "first_content", conf, "auto")
+            return LanguageSwitchDecision("none", self.active, "weak_first_vote", conf)
+
+        if vote.top == self.active:
+            self.pending.clear()
+            return LanguageSwitchDecision("none", self.active, "same_language", conf)
+
+        if conf >= self.switch_confidence:
+            self.pending.clear()
+            return self._move(vote.top, "high_confidence", conf, "auto")
+
+        self.pending.append(vote)
+        if len(self.pending) > self.hysteresis_window:
+            self.pending.pop(0)
+        supporting = [
+            v for v in self.pending if v.top == vote.top and v.confidence >= self.support_confidence
+        ]
+        if len(supporting) >= self.hysteresis_turns:
+            avg_conf = round(sum(v.confidence for v in supporting) / len(supporting), 3)
+            self.pending.clear()
+            return self._move(vote.top, "hysteresis", avg_conf, "auto")
+        return LanguageSwitchDecision("none", self.active, "accumulating_hysteresis", conf)
+
+
 __all__ = [
     "APPROVED_VOICE_WER_EVIDENCE",
     "ASR_MODEL_BY_LOCALE",
@@ -3204,6 +3568,7 @@ __all__ = [
     "WHISPER_NO_SPEECH_THRESHOLD",
     "BargeInDirective",
     "BriefClaim",
+    "CallLanguagePolicy",
     "CallLobbyManager",
     "CallRiskEvaluation",
     "CallToWebCarryover",
@@ -3211,10 +3576,13 @@ __all__ = [
     "EdgeFieldApplianceProfile",
     "HfVoiceModelDescriptor",
     "HybridVoiceRouteDecision",
+    "LanguageSwitchDecision",
+    "LanguageVote",
     "LobbyCallEntry",
     "LowBandwidthVoiceProfile",
     "OfficerCallBrief",
     "OtpVerifier",
+    "SpokenClarifyDecision",
     "SpokenNumberVerbalization",
     "StepUpAttemptStore",
     "TtsCachedAudio",
@@ -3230,6 +3598,7 @@ __all__ = [
     "VoiceWebSocketConcurrencyGuard",
     "VoiceWerEvidence",
     "WhisperSegmentSignals",
+    "assess_spoken_clarification",
     "assess_whisper_segment",
     "build_call_opening_prompts",
     "build_call_to_web_carryover",
@@ -3239,7 +3608,10 @@ __all__ = [
     "build_voice_spoken_turn_and_sms_followup",
     "classify_pending_offer_reply",
     "classify_spoken_call_review",
+    "clean_text_for_speech",
     "compute_transfer_queue_position",
+    "detect_explicit_language_request",
+    "detect_ssra_entity_mishear",
     "evaluate_live_call_risk",
     "fixed_voice_prompts",
     "format_case_reference",
@@ -3262,6 +3634,7 @@ __all__ = [
     "negotiate_low_bandwidth_voice_profile",
     "normalize_statutory_text_for_speech",
     "pcm16_16k_to_mulaw_8k",
+    "repair_ssra_asr_entities",
     "resolve_edge_appliance_profile",
     "resolve_hf_voice_model_cache",
     "resolve_mt_and_tts_turn_plan",

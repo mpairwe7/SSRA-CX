@@ -665,6 +665,25 @@ function renderPwaShellHtml(locale, nonce) {
     .camera-video { width: 100%; max-height: 280px; border-radius: 10px; background: #000; object-fit: cover; }
     .voicemode-circle-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--surface-1); border: 1px solid var(--border-2); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
     .voicemode-circle-btn.is-active { background: rgba(7, 137, 48, 0.22); border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.28); color: #2ECC71; }
+    .voice-dock { --vd-floor: var(--border-1); display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; padding: 0.5rem 0.75rem; margin-bottom: 0.45rem; background: var(--bg-1); border: 1px solid var(--vd-floor); border-radius: 14px; box-shadow: var(--shadow-md); }
+    .voice-dock[data-floor="listening"] { --vd-floor: #2ECC71; }
+    .voice-dock[data-floor="thinking"] { --vd-floor: #FCDD09; }
+    .voice-dock[data-floor="speaking"] { --vd-floor: #0F3A6D; }
+    .voice-dock-status { display: flex; align-items: center; gap: 0.55rem; min-width: 0; flex: 1 1 180px; }
+    .voice-dock-orb-wrap { width: 34px; height: 34px; flex: none; display: grid; place-items: center; }
+    .voice-dock-orb-wrap .call-orb { width: 30px; height: 30px; }
+    .voice-dock-text { min-width: 0; flex: 1; text-align: start; }
+    .voice-dock-label { margin: 0; font-size: 0.82rem; font-weight: 700; color: var(--text-0); line-height: 1.25; }
+    .voice-dock-detail { margin: 1px 0 0; font-size: 0.76rem; color: var(--text-2); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .voice-dock-controls { display: inline-flex; align-items: center; gap: 0.35rem; flex: none; }
+    .voice-dock-end { min-height: 36px; padding: 0 0.7rem; border-radius: 999px; border: 1px solid var(--border-1); background: transparent; color: var(--text-1); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+    .voice-dock-btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-1); background: var(--surface-2); color: var(--text-0); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .voice-dock-primary { background: var(--grad-primary); color: #fff; border: none; }
+    .voice-dock-primary[data-action="send"] { background: #078930; }
+    .voice-dock-primary[data-action="stop"] { background: var(--danger); }
+    .setv2-segmented { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border-1); flex-wrap: wrap; }
+    .setv2-seg-btn { min-height: 34px; padding: 0 0.65rem; border-radius: 7px; border: none; background: transparent; color: var(--text-1); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+    .setv2-seg-btn[aria-checked="true"] { background: var(--surface-3); color: var(--text-0); }
     .send-btn { min-height: 44px; padding: 0 1rem; border-radius: var(--radius-pill); background: var(--grad-primary); color: #fff; border: none; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; }
     .send-btn:disabled { opacity: 0.48; cursor: not-allowed; }
     .composer-waveform { display: inline-flex; align-items: center; gap: 3px; height: 16px; }
@@ -959,6 +978,27 @@ function renderPwaShellHtml(locale, nonce) {
               <button type="button" id="narration-stop-btn" class="narration-btn" aria-label="Stop reading" aria-keyshortcuts="Escape">${ICONS.stop}</button>
             </div>
           </div>
+          <!-- Main Chat VoiceModeDock (VoiceModeDock.tsx & voice-dock.css pattern) -->
+          <section id="voice-mode-dock" class="voice-dock is-hidden" data-phase="idle" data-floor="idle" aria-label="Voice conversation controls" data-testid="voice-dock">
+            <div class="voice-dock-status">
+              <div class="voice-dock-orb-wrap" aria-hidden="true">
+                <div id="voice-dock-orb" class="call-orb" data-mode="idle">
+                  <span class="call-orb-core"></span>
+                  <span class="call-orb-halo"></span>
+                </div>
+              </div>
+              <div class="voice-dock-text">
+                <p id="voice-dock-label" class="voice-dock-label" data-testid="voice-dock-label">Listening…</p>
+                <p id="voice-dock-detail" class="voice-dock-detail" data-testid="voice-dock-detail">Speak your question — pauses send automatically.</p>
+              </div>
+            </div>
+            <div class="voice-dock-controls">
+              <button type="button" id="voice-dock-end" class="voice-dock-end" data-testid="voice-dock-end" aria-label="Exit voice mode">End</button>
+              <button type="button" id="voice-dock-mic-off" class="voice-dock-btn" data-testid="voice-dock-mic-off" aria-label="Cancel microphone listening" aria-keyshortcuts="Escape">${ICONS.micOff}</button>
+              <button type="button" id="voice-dock-pause" class="voice-dock-btn is-hidden" data-testid="voice-dock-pause" aria-label="Pause reading">${ICONS.pause}</button>
+              <button type="button" id="voice-dock-primary" class="voice-dock-btn voice-dock-primary" data-testid="voice-dock-primary" data-action="send" aria-label="Send voice turn now">${ICONS.check}</button>
+            </div>
+          </section>
           <form id="ssra-chat-form" class="composer-box">
             <!-- Composer Attachment Chips & Privacy Note (ChatInput.tsx pattern) -->
             <div id="composer-attachments" class="composer-attachments is-hidden" aria-label="Attached documents"></div>
@@ -1742,6 +1782,8 @@ function renderPwaShellHtml(locale, nonce) {
       let postTtsResumeTimer = null;
       let assistantCurrentlySpeaking = false;
       let callSpeechRateSlow = false;
+      let voiceSilenceTimeoutMs = 1200;
+      let lastHeardVoiceTranscript = "";
 
       function speechUtterance(text) {
         const utterance = new SpeechSynthesisUtterance(cleanTextForSpeech(text));
@@ -1752,7 +1794,13 @@ function renderPwaShellHtml(locale, nonce) {
 
       function cleanTextForSpeech(raw) {
         return String(raw || "")
+          .replace(/\\s*\\[\\d+(?:\\s*[,;]\\s*\\d+)*\\](?!\\()/g, "")
+          .replace(/\\[([^\\]]+)\\]\\([^\\)]+\\)/g, "$1")
+          .replace(/https?:\\/\\/etax\\.nra\\.gov\\.ss\\/?/gi, "e-tax dot n r a dot gov dot s s")
           .replace(/https?:\\/\\/\\S+/g, "web link")
+          .replace(/••••(\\d{4})/g, (_, d) => "T I N ending in " + d.split("").join(" "))
+          .replace(/\\bSec\\.\\s*(\\d+[A-Za-z]?)\\b/g, "Section $1")
+          .replace(/\\bArt\\.\\s*(\\d+[A-Za-z]?)\\b/g, "Article $1")
           .replace(/[*_\\x60#~>-]+/g, " ")
           .replace(/\\s+/g, " ")
           .trim();
@@ -2488,12 +2536,47 @@ function renderPwaShellHtml(locale, nonce) {
         });
         if (state.settingsTab === "voice") {
           if (settingsTitleEl) settingsTitleEl.textContent = "Voice typing & reading";
+          const pauseOpts = [
+            { value: 0, label: "Off" },
+            { value: 800, label: "0.8 s" },
+            { value: 1200, label: "1.2 s" },
+            { value: 2000, label: "2 s" },
+          ];
+          const pauseButtonsHtml = pauseOpts
+            .map(
+              (opt) =>
+                '<button type="button" role="radio" class="setv2-seg-btn" data-voice-pause="' +
+                opt.value +
+                '" aria-checked="' +
+                String(voiceSilenceTimeoutMs === opt.value) +
+                '">' +
+                opt.label +
+                "</button>",
+            )
+            .join("");
           setSafeHtml(
             settingsBodyEl,
             "<p>Voice typing uses your browser's speech recognition when available and currently supports English and Arabic only. Your browser may process audio outside SSRA. Auto-narration uses browser speech synthesis; available voices vary by device.</p>" +
-            '<div class="settings-actions-row">' +
-              '<button type="button" class="icon-btn" id="toggle-narrate-btn">' + (state.autoNarrate ? ICONS.speaker + " Auto-Narrate Replies: ON" : ICONS.speakerOff + " Auto-Narrate Replies: OFF") + "</button>" +
-            "</div>"
+              '<div class="settings-actions-row">' +
+                '<button type="button" class="icon-btn" id="toggle-narrate-btn">' +
+                  (state.autoNarrate ? ICONS.speaker + " Auto-Narrate Replies: ON" : ICONS.speakerOff + " Auto-Narrate Replies: OFF") +
+                "</button>" +
+                '<button type="button" class="icon-btn" id="settings-voice-pace-btn" aria-pressed="' +
+                  String(callSpeechRateSlow) +
+                '">' +
+                  (callSpeechRateSlow ? "Speech pace: Slower (0.82x)" : "Speech pace: Normal (1.0x)") +
+                "</button>" +
+                '<button type="button" class="icon-btn" id="settings-voice-preview-btn">' +
+                  ICONS.play +
+                  " Preview voice sample" +
+                "</button>" +
+              "</div>" +
+              '<div class="settings-actions-row" role="radiogroup" aria-label="Send after a pause">' +
+                "<span>Send after a pause:</span>" +
+                '<div class="setv2-segmented">' +
+                  pauseButtonsHtml +
+                "</div>" +
+              "</div>",
           );
         } else if (state.settingsTab === "profile") {
           if (settingsTitleEl) settingsTitleEl.textContent = "Personal e-Tax services";
@@ -2589,6 +2672,33 @@ function renderPwaShellHtml(locale, nonce) {
           syncVoiceModalButtons();
           renderSettingsTabContent("voice");
           document.getElementById("toggle-narrate-btn")?.focus();
+          return;
+        }
+        const pauseBtn = e.target.closest("[data-voice-pause]");
+        if (pauseBtn) {
+          voiceSilenceTimeoutMs = Number.parseInt(pauseBtn.getAttribute("data-voice-pause") || "1200", 10);
+          renderSettingsTabContent("voice");
+          settingsBackdrop?.querySelector('[data-voice-pause="' + voiceSilenceTimeoutMs + '"]')?.focus();
+          return;
+        }
+        if (e.target.closest("#settings-voice-pace-btn")) {
+          callSpeechRateSlow = !callSpeechRateSlow;
+          const paceBtn = document.getElementById("call-pace-btn");
+          if (paceBtn) {
+            paceBtn.classList.toggle("is-active", callSpeechRateSlow);
+            paceBtn.setAttribute("aria-pressed", String(callSpeechRateSlow));
+            paceBtn.textContent = callSpeechRateSlow ? "Normal pace" : "Slower pace";
+          }
+          renderSettingsTabContent("voice");
+          document.getElementById("settings-voice-pace-btn")?.focus();
+          return;
+        }
+        if (e.target.closest("#settings-voice-preview-btn")) {
+          const sample =
+            state.locale === "ar"
+              ? "مرحبا، أنا مساعد هيئة الإيرادات في جنوب السودان."
+              : "Hello, I am SSRA Assist. I can read tax answers aloud.";
+          speakAssistantReply(sample);
           return;
         }
         if (e.target.closest("#purge-local-btn")) {
@@ -2791,16 +2901,99 @@ function renderPwaShellHtml(locale, nonce) {
           );
         }
         const isThinking = Boolean(activeTurnAbortController);
+        const orbMode = assistantCurrentlySpeaking
+          ? "speaking"
+          : isThinking
+            ? "thinking"
+            : isListening
+              ? "listening"
+              : "idle";
         if (callOrbEl) {
           // Playback (speaking) wins ties over thinking and listening so speaker echo never flickers the orb.
-          const orbMode = assistantCurrentlySpeaking
-            ? "speaking"
+          callOrbEl.setAttribute("data-mode", orbMode);
+        }
+        const voiceDockEl = document.getElementById("voice-mode-dock");
+        const voiceDockOrbEl = document.getElementById("voice-dock-orb");
+        const voiceDockLabelEl = document.getElementById("voice-dock-label");
+        const voiceDockDetailEl = document.getElementById("voice-dock-detail");
+        const voiceDockPauseBtn = document.getElementById("voice-dock-pause");
+        const voiceDockMicOffBtn = document.getElementById("voice-dock-mic-off");
+        const voiceDockPrimaryBtn = document.getElementById("voice-dock-primary");
+        if (voiceDockEl) {
+          const showDock = Boolean(voiceContinuousActive) && !callBackdrop?.classList.contains("open");
+          voiceDockEl.classList.toggle("is-hidden", !showDock);
+          const dockPhase = assistantCurrentlySpeaking
+            ? narrationPaused
+              ? "paused"
+              : "speaking"
             : isThinking
               ? "thinking"
               : isListening
                 ? "listening"
                 : "idle";
-          callOrbEl.setAttribute("data-mode", orbMode);
+          voiceDockEl.setAttribute("data-phase", dockPhase);
+          voiceDockEl.setAttribute("data-floor", orbMode);
+          if (voiceDockOrbEl) voiceDockOrbEl.setAttribute("data-mode", orbMode);
+          if (voiceDockLabelEl) {
+            voiceDockLabelEl.textContent =
+              dockPhase === "paused"
+                ? "Paused"
+                : dockPhase === "speaking"
+                  ? "Speaking…"
+                  : dockPhase === "thinking"
+                    ? "Working on your answer…"
+                    : dockPhase === "listening"
+                      ? "Listening…"
+                      : "Voice mode ready";
+          }
+          if (voiceDockDetailEl) {
+            const isReadingPhase = dockPhase === "speaking" || dockPhase === "paused";
+            if (isReadingPhase) {
+              voiceDockDetailEl.setAttribute("aria-hidden", "true");
+            } else {
+              voiceDockDetailEl.removeAttribute("aria-hidden");
+            }
+            voiceDockDetailEl.textContent =
+              isReadingPhase
+                ? lastSpokenAssistantText || "Tap the microphone to interrupt and ask a follow-up."
+                : dockPhase === "thinking" && lastHeardVoiceTranscript
+                  ? 'You said: "' + lastHeardVoiceTranscript + '"'
+                  : voiceSilenceTimeoutMs > 0
+                    ? "Speak your question — pauses send automatically."
+                    : "Speak your question, then tap Send.";
+          }
+          voiceDockMicOffBtn?.classList.toggle("is-hidden", dockPhase !== "listening");
+          if (voiceDockPauseBtn) {
+            const canPause = dockPhase === "speaking" || dockPhase === "paused";
+            voiceDockPauseBtn.classList.toggle("is-hidden", !canPause);
+            voiceDockPauseBtn.setAttribute("aria-label", narrationPaused ? "Resume reading" : "Pause reading");
+            setSafeHtml(voiceDockPauseBtn, narrationPaused ? ICONS.play : ICONS.pause);
+          }
+          if (voiceDockPrimaryBtn) {
+            const action =
+              dockPhase === "listening"
+                ? "send"
+                : dockPhase === "thinking"
+                  ? "stop"
+                  : dockPhase === "speaking" || dockPhase === "paused"
+                    ? "interrupt"
+                    : "talk";
+            voiceDockPrimaryBtn.setAttribute("data-action", action);
+            voiceDockPrimaryBtn.setAttribute(
+              "aria-label",
+              action === "send"
+                ? "Send voice turn now"
+                : action === "stop"
+                  ? "Stop answer generation"
+                  : action === "interrupt"
+                    ? "Interrupt and speak"
+                    : "Start speaking",
+            );
+            setSafeHtml(
+              voiceDockPrimaryBtn,
+              action === "send" ? ICONS.check : action === "stop" ? ICONS.stop : ICONS.mic,
+            );
+          }
         }
         if (callStatusPillEl && callStatusLabelEl) {
           const curStatus = callStatusPillEl.getAttribute("data-status");
@@ -2964,6 +3157,37 @@ function renderPwaShellHtml(locale, nonce) {
         }
         voiceConsecutiveEmptyRetries = 0;
         startVoiceRecognition({ continuousLoop: true });
+      });
+
+      document.getElementById("voice-dock-end")?.addEventListener("click", () => {
+        voiceContinuousActive = false;
+        state.autoNarrate = false;
+        saveState();
+        if (activeTurnAbortController) activeTurnAbortController.abort();
+        stopActiveSpeechRecognition();
+        stopAssistantSpeechPlayback();
+        syncNarrationBar(false, "");
+        syncVoiceModalButtons();
+        setVoiceStatus("Voice conversation mode off.");
+      });
+      document.getElementById("voice-dock-mic-off")?.addEventListener("click", () => {
+        composerRecCancelBtn?.click();
+      });
+      document.getElementById("voice-dock-pause")?.addEventListener("click", () => {
+        narrationPauseBtn?.click();
+        syncComposerRecordingUi();
+      });
+      document.getElementById("voice-dock-primary")?.addEventListener("click", () => {
+        const act = document.getElementById("voice-dock-primary")?.getAttribute("data-action");
+        if (act === "send") {
+          composerRecConfirmBtn?.click();
+        } else if (act === "stop") {
+          if (activeTurnAbortController) activeTurnAbortController.abort();
+          syncComposerRecordingUi();
+        } else {
+          stopAssistantSpeechPlayback();
+          startVoiceRecognition({ continuousLoop: true });
+        }
       });
 
       callLangChipBtn?.addEventListener("click", () => {
@@ -3217,6 +3441,7 @@ function renderPwaShellHtml(locale, nonce) {
           }
           receivedTranscript = true;
           voiceConsecutiveEmptyRetries = 0;
+          lastHeardVoiceTranscript = transcript;
           if (voiceContinuousActive) {
             if (handleSpokenCallControl(transcript)) {
               return;
