@@ -295,7 +295,7 @@ def test_toolathlon_compound_multi_tool_and_quiet_fault_loop_guards() -> None:
         and wht_inherit.intent.intent == IntentName.CALCULATE_WITHHOLDING
     )
 
-    # Compound PAYE + Customs HS code in a single turn
+    # Compound PAYE + Customs HS code in a single turn synthesizes both PAYE and Customs Duty figures
     comp_paye_hs = runtime.run_turn(
         make_conversation_event(
             "Calculate PAYE on 400,000 SSP and customs duty for HS 8703.23 with CIF $10,000 USD",
@@ -303,6 +303,18 @@ def test_toolathlon_compound_multi_tool_and_quiet_fault_loop_guards() -> None:
         )
     )
     assert "customs.estimate_duties" in [f"{a.server}.{a.tool}" for a in comp_paye_hs.artifacts]
+    assert "9000000" in comp_paye_hs.answer.segments[0].text
+    assert any(c.id == "cit_customs_act" for c in comp_paye_hs.answer.citations)
+
+    # Reverse-order compound WHT + PAYE binds each amount to its own tax cue
+    rev_comp = runtime.run_turn(
+        make_conversation_event(
+            "Calculate withholding tax on 1,000,000 SSP for rent and PAYE on 500,000 SSP",
+            thread_id="thr_toolathlon_rev_t0",
+        )
+    )
+    assert rev_comp.artifacts[0].structured_content["gross_monthly_ssp"] == "500000"
+    assert rev_comp.artifacts[1].structured_content["gross_amount_ssp"] == "1000000"
 
     corrupted_paye = ToolArtifact(
         id="art_corrupt_01",

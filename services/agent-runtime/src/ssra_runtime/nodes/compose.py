@@ -153,6 +153,57 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
                 f"the withholding tax at {wsc['rate_percent']}% is {wsc['withholding_tax_ssp']} SSP, "
                 f"with {wsc['net_payable_ssp']} SSP net payable."
             )
+        duty_comp = next((a for a in artifacts if a.tool == "estimate_duties"), None)
+        if duty_comp is not None:
+            dsc = duty_comp.structured_content
+            citations.append(
+                Citation(
+                    id="cit_customs_act",
+                    snapshot_version="2026.10.1",
+                    doc_title="Customs Service Act 2013 & Financial Act 2024/2025 Tariff Schedule",
+                    section_anchor="Part-V-Sec-12-Customs-Valuation-FX",
+                    effective_from="2024-12-02",
+                    url="https://customs.eservices.gov.ss/",
+                )
+            )
+            c_usd = str(dsc["cif_value_usd"])
+            c_fx = str(dsc["boss_official_fx_rate_ssp_per_usd"])
+            c_ssp = str(dsc["customs_value_ssp"])
+            c_rate = str(dsc["duty_rate_percent"])
+            c_duty = str(dsc["estimated_duty_ssp"])
+            numbers.extend(
+                [
+                    NumericClaim(
+                        value=c_usd,
+                        unit=NumericUnit.USD,
+                        source_ref=f"{duty_comp.id}.cif_value_usd",
+                    ),
+                    NumericClaim(
+                        value=c_fx,
+                        unit=NumericUnit.SSP,
+                        source_ref=f"{duty_comp.id}.boss_official_fx_rate_ssp_per_usd",
+                    ),
+                    NumericClaim(
+                        value=c_ssp,
+                        unit=NumericUnit.SSP,
+                        source_ref=f"{duty_comp.id}.customs_value_ssp",
+                    ),
+                    NumericClaim(
+                        value=c_rate,
+                        unit=NumericUnit.PERCENT,
+                        source_ref=f"{duty_comp.id}.duty_rate_percent",
+                    ),
+                    NumericClaim(
+                        value=c_duty,
+                        unit=NumericUnit.SSP,
+                        source_ref=f"{duty_comp.id}.estimated_duty_ssp",
+                    ),
+                ]
+            )
+            text += (
+                f" For HS {dsc['hs_code']} with CIF {c_usd} USD (BoSS rate {c_fx} SSP/USD = {c_ssp} SSP), "
+                f"customs duty at {c_rate}% is {c_duty} SSP."
+            )
         wf_stack = state.get("workflow_stack") or []
         if wf_stack and wf_stack[-1].get("status") != "COMPLETED" and capabilities.max_len >= 240:
             paused_step = int(wf_stack[-1].get("current_step", 1))

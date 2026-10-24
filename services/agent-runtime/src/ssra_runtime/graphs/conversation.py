@@ -245,6 +245,17 @@ class SSRAConversationRuntime:
                 **prev_slots,
                 **{k: cur_slots[k] for k in _CARRYOVER_SLOT_KEYS if k in cur_slots},
             }
+            if (
+                isinstance(cur_intent, Intent)
+                and cur_intent.intent
+                in (
+                    IntentName.CALCULATE_PAYE,
+                    IntentName.CALCULATE_WITHHOLDING,
+                )
+                and "hs_code" not in cur_slots
+            ):
+                next_prior_slots.pop("hs_code", None)
+                next_prior_slots.pop("cif_value_usd", None)
             next_prior_intent = (
                 cur_intent.intent.value
                 if isinstance(cur_intent, Intent)

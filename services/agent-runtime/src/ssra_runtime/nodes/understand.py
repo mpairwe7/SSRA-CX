@@ -63,26 +63,31 @@ def _normalise_amount_token(raw_token: str) -> str:
 
 
 def _extract_all_monetary_amounts(scan_text: str) -> list[str]:
-    """Extract all monetary amounts in order of appearance, skipping calendar years (1900-2099)."""
-    amounts: list[str] = []
+    """Extract all monetary amounts in text-position order, skipping calendar years (1900-2099)."""
+    spans: list[tuple[int, int, str]] = []
     for match in _TAGGED_MONEY_RE.finditer(scan_text):
         raw_val = match.group(1) or match.group(2)
         if raw_val:
-            norm = _normalise_amount_token(raw_val)
-            if norm not in amounts:
-                amounts.append(norm)
+            spans.append((match.start(), match.end(), _normalise_amount_token(raw_val)))
     for match in _UNTAGGED_MONEY_RE.finditer(scan_text):
         tok = match.group(1)
         if "," not in tok and "." not in tok and len(tok) == 4 and 1900 <= int(tok) <= 2099:
             continue
-        norm = _normalise_amount_token(tok)
-        if norm not in amounts:
-            amounts.append(norm)
-    return amounts
+        s, e = match.start(), match.end()
+        if any(not (e <= ts or s >= te) for ts, te, _ in spans):
+            continue
+        spans.append((s, e, _normalise_amount_token(tok)))
+    spans.sort(key=lambda item: item[0])
+    return [val for _, _, val in spans]
 
 
 def _extract_monetary_amount(scan_text: str) -> str | None:
     """Extract a monetary amount, prioritizing explicit SSP/USD/CIF/$ tags and skipping calendar years (1900-2099)."""
+    tagged = _TAGGED_MONEY_RE.search(scan_text)
+    if tagged:
+        raw_val = tagged.group(1) or tagged.group(2)
+        if raw_val:
+            return _normalise_amount_token(raw_val)
     all_amounts = _extract_all_monetary_amounts(scan_text)
     return all_amounts[0] if all_amounts else None
 
@@ -322,9 +327,43 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
             slots["amount_defaulted"] = True
         if has_wht_cue:
             slots["compound_wht"] = True
-            slots["wht_amount_ssp"] = (
-                all_amounts[1] if len(all_amounts) >= 2 else str(slots["amount_ssp"])
+            paye_idx = min(
+                (
+                    lower.find(w)
+                    for w in (
+                        "paye",
+                        "salary tax",
+                        "income tax on",
+                        "dariba ta mahiya",
+                        "ضريبة الدخل",
+                    )
+                    if w in lower
+                ),
+                default=0,
             )
+            wht_idx = min(
+                (
+                    lower.find(w)
+                    for w in (
+                        "withholding",
+                        "wht",
+                        "ضريبة الاستقطاع",
+                        "الخصم من المنبع",
+                        "dariba ta wht",
+                    )
+                    if w in lower
+                ),
+                default=0,
+            )
+            if len(all_amounts) >= 2 and wht_idx < paye_idx:
+                slots["wht_amount_ssp"] = all_amounts[0]
+                slots["amount_ssp"] = all_amounts[1]
+            else:
+                if all_amounts:
+                    slots["amount_ssp"] = all_amounts[0]
+                slots["wht_amount_ssp"] = (
+                    all_amounts[1] if len(all_amounts) >= 2 else str(slots["amount_ssp"])
+                )
             slots["wht_category"] = _detect_withholding_category(lower)
         return Intent(
             intent=IntentName.CALCULATE_PAYE,
