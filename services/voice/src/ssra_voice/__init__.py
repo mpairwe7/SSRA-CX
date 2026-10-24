@@ -1537,10 +1537,11 @@ _HUMAN_REQUEST_RE = re.compile(
     re.IGNORECASE,
 )
 _HUMAN_WORD_RE = re.compile(
-    r"^\W*(?:(?:yes|yeah|ok(?:ay)?|please|نعم|أيوة)\W+)?"
-    r"(?:(?:i\s+(?:want|need)|give\s+me|can\s+i\s+(?:have|get))\s+)?(?:(?:a|an|the)\s+)?(?:real\s+)?"
+    r"^[\s,!.?]*(?:(?:yes|yeah|ok|okay|please|نعم|أيوة)[\s,!.?]+)?"
+    r"(?:(?:i\s+(?:want|need)|give\s+me|can\s+i\s+(?:have|get))\s+)?"
+    r"(?:(?:a|an|the)\s+)?(?:real\s+)?"
     r"(?:officer|agent|human|person|representative|operator|customer\s+(?:care|service)|موظف)"
-    r"(?:\W+(?:please|now|من\s+فضلك|لو\s+سمحت))*\W*$",
+    r"(?:[\s,!.?]+(?:please|now|من\s+فضلك|لو\s+سمحت))?[\s,!.?]*$",
     re.IGNORECASE,
 )
 _TAX_DISPUTE_RE = re.compile(
@@ -1548,19 +1549,19 @@ _TAX_DISPUTE_RE = re.compile(
     re.IGNORECASE,
 )
 _OFFER_ACCEPT_RE = re.compile(
-    r"^\W*(?:yes|yeah|yep|sure|ok(?:ay)?|alright|please|go\s+ahead|connect\s+me|please\s+do|confirm|نعم|أيوة|طيب|موافق)"
-    r"(?:\W+(?:yes|please|sure|thanks|thank\s+you|go\s+ahead|connect\s+me|do|confirm|شكرا|من\s+فضلك))*\W*$",
+    r"^[\s,!.?]*(?:yes|yeah|yep|sure|ok|okay|alright|please|go\s+ahead|connect\s+me|please\s+do|confirm|نعم|أيوة|طيب|موافق)"
+    r"(?:[\s,!.?]+(?:please\s+connect\s+me|connect\s+me|go\s+ahead|thank\s+you|please|sure|thanks|confirm|شكرا|من\s+فضلك))?[\s,!.?]*$",
     re.IGNORECASE,
 )
 _OFFER_DECLINE_RE = re.compile(
-    r"^\W*(?:no|nope|not\s+now|i'?m\s+(?:fine|okay|ok)|that'?s\s+(?:all|enough|it)|لا|لأ|مش\s+هسا)"
-    r"(?:\W+(?:thanks|thank\s+you|not\s+now|i'?m\s+(?:fine|okay|ok)|that'?s\s+(?:all|enough|it)|شكرا))*\W*$",
+    r"^[\s,!.?]*(?:no|nope|not\s+now|i'?m\s+(?:fine|okay|ok)|that'?s\s+(?:all|enough|it)|لا|لأ|مش\s+هسا)"
+    r"(?:[\s,!.?]+(?:i'?m\s+(?:fine|okay|ok)\s+thanks|i'?m\s+(?:fine|okay|ok)|thank\s+you|thanks|not\s+now|شكرا))?[\s,!.?]*$",
     re.IGNORECASE,
 )
 _MORE_ACCEPT_RE = re.compile(
-    r"^\W*(?:(?:yes|yeah|sure|ok(?:ay)?|please|نعم|أيوة)\W+)?"
-    r"(?:tell\s+me\s+more|go\s+on|carry\s+on|continue|more(?:\s+detail)?|تفاصيل\s+أكثر|استمر)"
-    r"(?:\W+please)?\W*$",
+    r"^[\s,!.?]*(?:(?:yes|yeah|sure|ok|okay|please|نعم|أيوة)[\s,!.?]+)?"
+    r"(?:tell\s+me\s+more|go\s+on|carry\s+on|continue|more\s+detail|more|تفاصيل\s+أكثر|استمر)"
+    r"(?:[\s,!.?]+please)?[\s,!.?]*$",
     re.IGNORECASE,
 )
 _CONTROL_MAX_WORDS: int = 8
@@ -1585,9 +1586,9 @@ _HANGUP_VOICE_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 _DONE_RE = re.compile(
-    r"^\W*(?:(?:ok(?:ay)?|thanks|thank\s+you|alright|great|no)\W+)*"
-    r"(?:that'?s\s+all|that\s+is\s+all|(?:good[\s-]?)?bye(?:\s+bye)?|i'?m\s+done)"
-    r"(?:\W+(?:for\s+(?:now|today)|thanks|thank\s+you|bye))*\W*$",
+    r"^[\s,!.?]*(?:(?:ok|okay|thanks|thank\s+you|alright|great|no)[\s,!.?]+)?"
+    r"(?:that'?s\s+all|that\s+is\s+all|good[\s-]?bye|bye\s+bye|bye|i'?m\s+done)"
+    r"(?:[\s,!.?]+(?:for\s+(?:now|today)|thank\s+you|thanks|bye))?[\s,!.?]*$",
     re.IGNORECASE,
 )
 _REVIEW_DECLINE_RE = re.compile(
