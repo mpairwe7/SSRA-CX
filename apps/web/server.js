@@ -3866,6 +3866,7 @@ function renderPwaShellHtml(locale, nonce) {
           let findings = [];
           let status = "ready";
           let errText = "";
+          let reconNote = "";
           try {
             const buf = await f.arrayBuffer();
             const uint8 = new Uint8Array(buf);
@@ -3881,23 +3882,64 @@ function renderPwaShellHtml(locale, nonce) {
                 findings = pdfCheck.findings;
               }
             } else if (lower.endsWith(".docx") || lower.endsWith(".xlsx")) {
+              const isOle2 =
+                uint8.byteLength >= 8 &&
+                uint8[0] === 0xd0 &&
+                uint8[1] === 0xcf &&
+                uint8[2] === 0x11 &&
+                uint8[3] === 0xe0;
               const isZip =
                 uint8.byteLength >= 4 &&
                 uint8[0] === 0x50 &&
                 uint8[1] === 0x4b &&
                 uint8[2] === 0x03 &&
                 uint8[3] === 0x04;
+              const zipEncrypted =
+                isZip && uint8.byteLength >= 30 && uint8[5] === 0 && (uint8[6] & 0x01) !== 0;
               const zipSample = new TextDecoder("latin1")
                 .decode(uint8.subarray(0, Math.min(uint8.byteLength, 256 * 1024)))
                 .toLowerCase();
-              if (!isZip || zipSample.includes("vbaproject.bin") || zipSample.includes("../")) {
+              const hasExtRels =
+                zipSample.includes('targetmode="external"') ||
+                zipSample.includes("targetmode='external'");
+              if (
+                isOle2 ||
+                !isZip ||
+                zipEncrypted ||
+                zipSample.includes("encryptedpackage") ||
+                zipSample.includes("vbaproject.bin") ||
+                hasExtRels ||
+                zipSample.includes("../")
+              ) {
                 status = "error";
                 errText = "Blocked by Office container guard";
                 findings = [
-                  zipSample.includes("vbaproject.bin")
-                    ? "Office container embeds vbaProject.bin macros (blocked)."
-                    : "Invalid or unsafe Office OpenXML ZIP container.",
+                  isOle2 || zipEncrypted || zipSample.includes("encryptedpackage")
+                    ? "Encrypted or password-protected Office documents are not accepted."
+                    : zipSample.includes("vbaproject.bin")
+                      ? "Office container embeds vbaProject.bin macros (blocked)."
+                      : hasExtRels
+                        ? "Office container contains external relationship targets (blocked)."
+                        : "Invalid or unsafe Office OpenXML ZIP container.",
                 ];
+              }
+            } else if (lower.endsWith(".txt") || lower.endsWith(".csv")) {
+              const txtSample = new TextDecoder("utf-8").decode(
+                uint8.subarray(0, Math.min(uint8.byteLength, 16384)),
+              );
+              const subMatch = /(?:Sub-?total|Taxable[ \\t]+Amount|Gross[ \\t]+Invoice)[ \\t:=-]{0,6}(?:(?:SSP|USD)[ \\t]{0,4})?(\\d{1,15}(?:,\\d{3})*(?:\\.\\d{1,2})?)/i.exec(txtSample);
+              const taxMatch = /(?:Sales[ \\t]+Tax|Tax[ \\t]+Amount|Withholding[ \\t]+Tax|W\\.?H\\.?T\\.?)[ \\t:=-]{0,6}(?:(?:SSP|USD)[ \\t]{0,4})?(\\d{1,15}(?:,\\d{3})*(?:\\.\\d{1,2})?)/i.exec(txtSample);
+              const totMatch = /(?:Total[ \\t]+Payable|Grand[ \\t]+Total|Net[ \\t]+Payable)[ \\t:=-]{0,6}(?:(?:SSP|USD)[ \\t]{0,4})?(\\d{1,15}(?:,\\d{3})*(?:\\.\\d{1,2})?)/i.exec(txtSample);
+              if (subMatch && totMatch) {
+                const subVal = Number(subMatch[1].replace(/,/g, ""));
+                const taxVal = taxMatch ? Number(taxMatch[1].replace(/,/g, "")) : 0;
+                const totVal = Number(totMatch[1].replace(/,/g, ""));
+                const balanced =
+                  Math.abs(totVal - (subVal + taxVal)) <= 2 ||
+                  Math.abs(totVal - (subVal - taxVal)) <= 2;
+                reconNote = balanced
+                  ? "Client-side plain-text arithmetic check: figures balance (server OCR disabled under OQ-017)."
+                  : "Client-side plain-text arithmetic check: variance detected between Subtotal/Tax and Total (server OCR disabled under OQ-017).";
               }
             }
           } catch {
@@ -3913,6 +3955,7 @@ function renderPwaShellHtml(locale, nonce) {
             status,
             error: errText,
             findings,
+            reconNote,
             prompts: cls.prompts,
           });
         }
@@ -3965,6 +4008,12 @@ function renderPwaShellHtml(locale, nonce) {
             att.findings && att.findings.length
               ? att.findings.join(" ")
               : "Client-side extension, filename BiDi, and header preflight passed.";
+        }
+        const reconEl = document.getElementById("doc-modal-recon-note");
+        if (reconEl) {
+          const hasRecon = Boolean(att.reconNote);
+          reconEl.classList.toggle("is-hidden", !hasRecon);
+          reconEl.textContent = att.reconNote || "";
         }
         if (docModalPromptsEl) {
           const promptsHtml = (att.prompts || [])
@@ -4105,6 +4154,16 @@ function renderPwaShellHtml(locale, nonce) {
         setAcctPopover(false, false);
         const activeConv = state.conversations.find((c) => c.id === state.activeId);
         const turns = activeConv?.turns || [];
+        const canonical = JSON.stringify(turns.map((t) => ({ role: t.role, content: t.content })));
+        let h1 = 0xdeadbeef ^ canonical.length;
+        let h2 = 0x41c6ce57 ^ canonical.length;
+        for (let i = 0; i < canonical.length; i += 1) {
+          const ch = canonical.charCodeAt(i);
+          h1 = Math.imul(h1 ^ ch, 2654435761);
+          h2 = Math.imul(h2 ^ ch, 1597334677);
+        }
+        const digestHex =
+          (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
         const lines = [
           "========================================================================",
           "SOUTH SUDAN REVENUE AUTHORITY (SSRA) — CONVERSATION & TAX SUMMARY REPORT",
@@ -4112,11 +4171,21 @@ function renderPwaShellHtml(locale, nonce) {
           "Conversation Title : " + (activeConv?.title || "New Conversation"),
           "Thread ID          : " + (activeConv?.id || "local_session"),
           "Turns Recorded     : " + turns.length,
+          "Integrity Digest   : " + digestHex,
           "------------------------------------------------------------------------",
         ];
         turns.forEach((t, idx) => {
+          const scrubbed = String(t.content || "")
+            .replace(/\\b(\\d{6})(\\d{4})\\b/g, "••••$2")
+            .replace(/\\+211[ -]?\\d{3}[ -]?\\d{3}[ -]?\\d(\\d{2})\\b/g, "+211•••••••$1");
           lines.push("[" + (idx + 1) + "] " + (t.role === "user" ? "Taxpayer" : "SSRA Assist (Automated)") + ":");
-          lines.push(String(t.content || ""));
+          lines.push(scrubbed);
+          if (Array.isArray(t.meta?.citations) && t.meta.citations.length > 0) {
+            lines.push(
+              "    Citations: " +
+                t.meta.citations.map((c) => c.section_anchor || c.title || "").filter(Boolean).join(", "),
+            );
+          }
           lines.push("");
         });
         lines.push("------------------------------------------------------------------------");

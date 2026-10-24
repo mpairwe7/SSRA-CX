@@ -742,6 +742,15 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     );
     expect(macroZip.ok).toBe(false);
     expect(macroZip.hasMacros).toBe(true);
+    const ole2Enc = inspectOfficeZipClientPreflight(
+      new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+    );
+    expect(ole2Enc.ok).toBe(false);
+    expect(ole2Enc.encrypted).toBe(true);
+    const extRelZip = inspectOfficeZipClientPreflight(
+      new TextEncoder().encode('PK\x03\x04\x14\x00\x00\x00<Relationship TargetMode="External"/>'),
+    );
+    expect(extRelZip.ok).toBe(false);
 
     const reconVerified = reconcileClientDocumentText(
       "Subtotal: SSP 1,000,000\nSales Tax: SSP 180,000\nTotal Payable: SSP 1,180,000",
@@ -781,6 +790,12 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(convExport.reportText).toContain("Part-II-Sec-10-PAYE");
 
     expect(sanitizeCopilotReturnUrl("https://evil.example/phish")).toBe("https://etax.nra.gov.ss/");
+    expect(sanitizeCopilotReturnUrl("https://etax.nra.gov.ss@evil.example/")).toBe(
+      "https://etax.nra.gov.ss/",
+    );
+    expect(sanitizeCopilotReturnUrl("/en?next=javascript:alert(1)")).toBe(
+      "https://etax.nra.gov.ss/",
+    );
     expect(sanitizeCopilotReturnUrl("/en")).toBe("/en");
     const copilotCard = buildPortalCopilotCardView({
       cardType: "step_up_login",

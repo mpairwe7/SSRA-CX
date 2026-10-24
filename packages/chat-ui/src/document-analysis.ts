@@ -442,16 +442,37 @@ export function buildTruthfulAttachmentReportText(input: {
 export interface OfficeZipPreflightResult {
   readonly ok: boolean;
   readonly hasMacros: boolean;
+  readonly encrypted?: boolean | undefined;
   readonly findings: readonly string[];
 }
 
 /**
  * Inspect an Office OpenXML (`.docx`/`.xlsx`) container for valid `PK\x03\x04` ZIP magic,
+ * OLE2/PKZIP encryption (`bit 0`), external relationship targets (`TargetMode="External"`, `CVE-2026-21259`),
  * embedded `vbaProject.bin` macros renamed to `.docx`/`.xlsx`, and `../` archive path traversal (`documents.py`).
  */
 export function inspectOfficeZipClientPreflight(bytes: Uint8Array): OfficeZipPreflightResult {
   if (!bytes || bytes.byteLength < 4) {
-    return { ok: false, hasMacros: false, findings: ["Empty or truncated Office container."] };
+    return {
+      ok: false,
+      hasMacros: false,
+      encrypted: false,
+      findings: ["Empty or truncated Office container."],
+    };
+  }
+  const isOle2Encrypted =
+    bytes.byteLength >= 8 &&
+    bytes[0] === 0xd0 &&
+    bytes[1] === 0xcf &&
+    bytes[2] === 0x11 &&
+    bytes[3] === 0xe0;
+  if (isOle2Encrypted) {
+    return {
+      ok: false,
+      hasMacros: false,
+      encrypted: true,
+      findings: ["Encrypted or password-protected Office documents are not accepted."],
+    };
   }
   const hasZipMagic =
     bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
@@ -459,17 +480,28 @@ export function inspectOfficeZipClientPreflight(bytes: Uint8Array): OfficeZipPre
     return {
       ok: false,
       hasMacros: false,
+      encrypted: false,
       findings: [
         "File content does not match the Office OpenXML ZIP header (PK\\x03\\x04 required).",
       ],
     };
   }
+  const zipEntryEncrypted =
+    bytes.byteLength >= 30 && (bytes[5] ?? 0) === 0 && ((bytes[6] ?? 0) & 0x01) !== 0;
   const scanSlice = bytes.subarray(0, Math.min(bytes.byteLength, 512 * 1024));
   const latin1 = new TextDecoder("latin1").decode(scanSlice).toLowerCase();
   const findings: string[] = [];
+  if (zipEntryEncrypted || latin1.includes("encryptedpackage")) {
+    findings.push("Encrypted or password-protected Office documents are not accepted.");
+  }
   const hasMacros = latin1.includes("vbaproject.bin");
   if (hasMacros) {
     findings.push("Office container embeds vbaProject.bin macros (blocked for security).");
+  }
+  if (latin1.includes('targetmode="external"') || latin1.includes("targetmode='external'")) {
+    findings.push(
+      'Office container contains external relationship targets (TargetMode="External" blocked).',
+    );
   }
   if (latin1.includes("../") || latin1.includes("..\\")) {
     findings.push("Office container contains unsafe relative archive paths (../).");
@@ -477,6 +509,7 @@ export function inspectOfficeZipClientPreflight(bytes: Uint8Array): OfficeZipPre
   return {
     ok: findings.length === 0,
     hasMacros,
+    encrypted: zipEntryEncrypted || latin1.includes("encryptedpackage"),
     findings,
   };
 }
@@ -781,17 +814,38 @@ export function buildConversationReportExport(params: {
 }
 
 /**
- * Sanitize a Portal Copilot return/handoff URL (`PortalCopilotCard.tsx` `sanitizeReturnTo` parity).
- * Allows only relative in-app paths (`/en`, `/ar`) or the official SSRA portal `https://etax.nra.gov.ss/`.
+ * Sanitize a Portal Copilot return/handoff URL (`PortalCopilotCard.tsx` `sanitizeReturnTo` & RFC 9700 §4.11 parity).
+ * Strips control/BiDi characters, rejects `@`, `\`, and `javascript:`/`data:` tokens, and allows only
+ * safe relative in-app paths (`/en`, `/ar`) or verified `https://etax.nra.gov.ss/` URLs.
  */
 export function sanitizeCopilotReturnUrl(rawUrl: string | undefined | null): string {
-  const trimmed = String(rawUrl || "").trim();
-  if (!trimmed) return "https://etax.nra.gov.ss/";
-  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.includes("\\")) {
-    return trimmed;
+  const cleaned = stripControlChars(String(rawUrl || ""), false).trim();
+  if (!cleaned || cleaned.includes("\\") || cleaned.includes("@")) {
+    return "https://etax.nra.gov.ss/";
   }
-  if (/^https:\/\/etax\.nra\.gov\.ss(?:\/[^\s]*)?$/i.test(trimmed)) {
-    return trimmed;
+  if (/(?:javascript|data|vbscript|file):/i.test(cleaned)) {
+    return "https://etax.nra.gov.ss/";
+  }
+  if (
+    cleaned.startsWith("/") &&
+    !cleaned.startsWith("//") &&
+    /^\/[A-Za-z0-9_\-/?.=&%#]*$/.test(cleaned)
+  ) {
+    return cleaned;
+  }
+  try {
+    const parsed = new URL(cleaned);
+    const isOfficialEtax =
+      parsed.protocol === "https:" &&
+      parsed.hostname.toLowerCase() === "etax.nra.gov.ss" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      (parsed.port === "" || parsed.port === "443");
+    if (isOfficialEtax) {
+      return parsed.toString();
+    }
+  } catch {
+    // Fall through to official portal default
   }
   return "https://etax.nra.gov.ss/";
 }
