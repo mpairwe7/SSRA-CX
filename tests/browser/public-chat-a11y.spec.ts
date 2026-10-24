@@ -319,5 +319,31 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await page.keyboard.press("Escape");
   await expect(voiceModeBtn).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#composer-recording-bar")).toBeHidden();
+
+  // Composer '+' attachment menu -> file attachment -> DocumentInspectionModal (OQ-017 truthful state) -> suggested prompt -> remove.
+  await page.locator("#composer-add-btn").click();
+  await expect(page.locator("#addmenu-modal-backdrop")).toHaveClass(/open/);
+  await page.keyboard.press("Escape");
+  await page.locator("#composer-file-input").setInputFiles({
+    name: "etax_portal_screenshot.png",
+    mimeType: "image/png",
+    buffer: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+  });
+  const chip = page.locator('[data-testid="attachment-chip"]');
+  await expect(chip).toBeVisible();
+  await expect(chip).toContainText("SSRA e-Tax Portal Screenshot");
+
+  await chip.locator("[data-inspect-att]").click();
+  await expect(page.locator("#doc-inspect-modal-backdrop")).toHaveClass(/open/);
+  await expect(page.locator("#doc-modal-title")).toHaveText("etax_portal_screenshot.png");
+  await expect(page.locator("#doc-modal-oq017-note")).toContainText("OQ-017");
+  await page.locator("#doc-modal-report-btn").click();
+  await expect(page.locator("#composer-hint")).toContainText("Inspection receipt downloaded");
+  await page.locator("#doc-modal-prompts [data-doc-prompt]").first().click();
+  await expect(page.locator("#doc-inspect-modal-backdrop")).not.toHaveClass(/open/);
+  await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(3);
+
+  await chip.locator("[data-remove-att]").click();
+  await expect(chip).toHaveCount(0);
 });
 

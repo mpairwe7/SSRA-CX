@@ -637,6 +637,32 @@ function renderPwaShellHtml(locale, nonce) {
     .composer-textarea { width: 100%; min-height: 46px; max-height: 140px; resize: none; border: none; background: transparent; color: var(--text-0); font: inherit; font-size: 0.95rem; outline: none; line-height: 1.45; }
     .composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
     .composer-tools-left, .composer-tools-right { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+    .add-circle-btn { width: 38px; height: 38px; border-radius: 50%; background: var(--surface-1); border: 1px solid var(--border-2); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .add-circle-btn:hover { background: var(--surface-3); }
+    .composer-attachments { display: flex; flex-wrap: wrap; gap: 0.45rem; padding-bottom: 0.25rem; }
+    .attachment-chip { display: inline-flex; align-items: center; gap: 0.4rem; max-width: 100%; padding: 0.3rem 0.55rem; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border-1); font-size: 0.78rem; color: var(--text-0); }
+    .attachment-chip-error { border-color: var(--danger); background: rgba(251, 113, 133, 0.1); }
+    .attachment-thumb { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+    .attachment-name { font-weight: 600; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .attachment-meta { color: var(--text-2); font-size: 0.72rem; white-space: nowrap; }
+    .attachment-act-btn { min-width: 28px; min-height: 28px; padding: 0 0.3rem; border-radius: 6px; border: 1px solid var(--border-1); background: var(--surface-2); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .composer-attachment-privacy { margin: 0; font-size: 0.72rem; color: var(--text-2); line-height: 1.35; }
+    .addmenu-modal, .doc-modal, .camera-modal { max-width: 520px; width: 100%; max-height: min(86vh, 700px); background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-xl); padding: 1.15rem 1.25rem; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 0.75rem; overflow-y: auto; text-align: start; }
+    .addmenu-list { display: flex; flex-direction: column; gap: 0.45rem; }
+    .addmenu-opt { display: flex; align-items: center; gap: 0.7rem; width: 100%; min-height: 48px; padding: 0.55rem 0.75rem; border-radius: 12px; border: 1px solid var(--border-1); background: var(--surface-1); color: var(--text-0); font: inherit; cursor: pointer; text-align: start; }
+    .addmenu-opt:hover { background: var(--surface-2); border-color: var(--ssra-gold); }
+    .addmenu-opt-copy { display: flex; flex-direction: column; gap: 0.1rem; }
+    .addmenu-opt-title { font-weight: 700; font-size: 0.86rem; color: var(--text-0); }
+    .addmenu-opt-desc { font-size: 0.76rem; color: var(--text-2); }
+    .doc-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.65rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-1); }
+    .doc-modal-badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.3rem; }
+    .doc-modal-badge { font-size: 0.72rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--surface-2); color: var(--text-1); border: 1px solid var(--border-1); }
+    .doc-modal-section { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.65rem 0.75rem; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border-1); font-size: 0.82rem; color: var(--text-1); line-height: 1.45; }
+    .doc-modal-section-title { margin: 0; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: var(--text-0); }
+    .doc-modal-prompts-list { display: flex; flex-direction: column; gap: 0.35rem; }
+    .doc-modal-prompt-btn { display: inline-flex; align-items: center; gap: 0.45rem; width: 100%; min-height: 40px; padding: 0.4rem 0.65rem; border-radius: 8px; border: 1px solid var(--border-1); background: var(--surface-2); color: var(--text-0); font: inherit; font-size: 0.8rem; cursor: pointer; text-align: start; }
+    .doc-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; padding-top: 0.4rem; border-top: 1px solid var(--border-1); }
+    .camera-video { width: 100%; max-height: 280px; border-radius: 10px; background: #000; object-fit: cover; }
     .voicemode-circle-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--surface-1); border: 1px solid var(--border-2); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
     .voicemode-circle-btn.is-active { background: rgba(7, 137, 48, 0.22); border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.28); color: #2ECC71; }
     .send-btn { min-height: 44px; padding: 0 1rem; border-radius: var(--radius-pill); background: var(--grad-primary); color: #fff; border: none; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; }
@@ -926,6 +952,11 @@ function renderPwaShellHtml(locale, nonce) {
             </div>
           </div>
           <form id="ssra-chat-form" class="composer-box">
+            <!-- Composer Attachment Chips & Privacy Note (ChatInput.tsx pattern) -->
+            <div id="composer-attachments" class="composer-attachments is-hidden" aria-label="Attached documents"></div>
+            <p id="composer-attachment-privacy" class="composer-attachment-privacy is-hidden" role="note">Files are checked locally for format safety. Server-side OCR and malware scanning remain disabled under OQ-017; do not attach confidential taxpayer records in public chat.</p>
+            <input id="composer-file-input" type="file" multiple accept=".pdf,.docx,.xlsx,.csv,.txt,image/*" class="sr-only" aria-hidden="true" tabindex="-1" />
+            <input id="composer-camera-input" type="file" accept="image/*" capture="environment" class="sr-only" aria-hidden="true" tabindex="-1" />
             <label for="ssra-chat-input" class="sr-only">Ask SSRA Assist</label>
             <textarea id="ssra-chat-input" class="composer-textarea" rows="1" required placeholder="Ask about SSRA taxes, TIN, PAYE, TCC, or customs in English, Arabic, or Juba Arabic…"></textarea>
             <!-- In-Composer Active Recording Panel (ChatInput.tsx composer-active-recording pattern) -->
@@ -942,6 +973,7 @@ function renderPwaShellHtml(locale, nonce) {
             </div>
             <div class="composer-toolbar">
               <div class="composer-tools-left">
+                <button type="button" id="composer-add-btn" class="add-circle-btn" data-testid="composer-add-btn" aria-haspopup="dialog" aria-expanded="false" aria-label="Add file or photo" title="Add file, screenshot, or photo">${ICONS.plus}</button>
                 <button type="button" id="voice-dictate-btn" class="icon-btn" title="Voice typing uses your browser's speech recognition" aria-label="Voice typing">
                   ${ICONS.mic} <span class="composer-waveform" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
                 </button>
@@ -1064,6 +1096,78 @@ function renderPwaShellHtml(locale, nonce) {
         <button type="submit" id="confirm-modal-ok" class="icon-btn"></button>
       </div>
     </form>
+  </div>
+
+  <!-- Composer Add-Attachment Modal (ChatInput.tsx addmenu-dialog pattern) -->
+  <div id="addmenu-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="composer-attach-title">
+    <div class="addmenu-modal">
+      <div class="settings-pane-head">
+        <h2 id="composer-attach-title" class="settings-pane-title">${ICONS.plus} Add to conversation</h2>
+        <button type="button" id="close-addmenu-btn" class="icon-btn" aria-label="Close attachment options">${ICONS.close} Close</button>
+      </div>
+      <div class="addmenu-list" role="group" aria-label="Attachment options">
+        <button type="button" id="addmenu-upload-btn" class="addmenu-opt">
+          <span aria-hidden="true">${ICONS.file}</span>
+          <span class="addmenu-opt-copy">
+            <span class="addmenu-opt-title">Upload a file or screenshot</span>
+            <span class="addmenu-opt-desc">PDF, DOCX, XLSX, CSV, TXT, or image (max 3 files, 40 MB)</span>
+          </span>
+        </button>
+        <button type="button" id="addmenu-camera-btn" class="addmenu-opt">
+          <span aria-hidden="true">${ICONS.camera}</span>
+          <span class="addmenu-opt-copy">
+            <span class="addmenu-opt-title">Take a photo</span>
+            <span class="addmenu-opt-desc">Scan a tax notice, receipt, or portal screen with your camera</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Document & Screenshot Inspection Modal (DocumentInspectionModal.tsx pattern, OQ-017 truthful state) -->
+  <div id="doc-inspect-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="doc-modal-title">
+    <div class="doc-modal">
+      <header class="doc-modal-header">
+        <div>
+          <h2 id="doc-modal-title" class="settings-pane-title" tabindex="-1">Document inspection</h2>
+          <div id="doc-modal-badges" class="doc-modal-badges"></div>
+        </div>
+        <button type="button" id="close-doc-modal-btn" class="icon-btn" aria-label="Close document inspection">${ICONS.close}</button>
+      </header>
+      <section class="doc-modal-section" aria-label="Client security preflight">
+        <h3 class="doc-modal-section-title">Client-Side Security Preflight</h3>
+        <p id="doc-modal-preflight-note" class="composer-attachment-privacy"></p>
+      </section>
+      <section class="doc-modal-section" aria-label="Analysis status">
+        <h3 class="doc-modal-section-title">Analysis &amp; Reconciliation Status (OQ-017)</h3>
+        <p id="doc-modal-oq017-note" class="composer-attachment-privacy">Automated OCR extraction, malware scanning, and tax figure reconciliation are unavailable until SSRA approves OQ-017 providers and legal snapshot rules. Do not upload confidential taxpayer records in public chat.</p>
+      </section>
+      <section class="doc-modal-section" aria-label="Suggested public questions">
+        <h3 class="doc-modal-section-title">Suggested Public Questions</h3>
+        <div id="doc-modal-prompts" class="doc-modal-prompts-list"></div>
+      </section>
+      <footer class="doc-modal-footer">
+        <button type="button" id="doc-modal-report-btn" class="icon-btn">${ICONS.download} Download inspection receipt</button>
+        <button type="button" id="doc-modal-close-secondary-btn" class="icon-btn">${ICONS.close} Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- CameraCapture Modal (CameraCapture.tsx pattern) -->
+  <div id="camera-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="camera-modal-title">
+    <div class="camera-modal">
+      <div class="settings-pane-head">
+        <h2 id="camera-modal-title" class="settings-pane-title">${ICONS.camera} Scan Document</h2>
+        <button type="button" id="close-camera-btn" class="icon-btn" aria-label="Close camera">${ICONS.close} Close</button>
+      </div>
+      <p id="camera-error" class="composer-attachment-privacy" role="status">Rear-camera access is disabled under this public chat's Permissions-Policy (camera=()). Use Choose photo below or Upload a file.</p>
+      <video id="camera-video" class="camera-video is-hidden" autoplay playsinline muted></video>
+      <canvas id="camera-canvas" class="is-hidden"></canvas>
+      <div class="doc-modal-footer">
+        <button type="button" id="camera-fallback-file-btn" class="icon-btn">${ICONS.camera} Choose photo or image</button>
+        <button type="button" id="camera-capture-btn" class="icon-btn" disabled>${ICONS.check} Capture</button>
+      </div>
+    </div>
   </div>
 
   <script nonce="${nonce}">
@@ -3089,6 +3193,475 @@ function renderPwaShellHtml(locale, nonce) {
           closeAllModals();
           sendTurn(q, { fromVoiceLoop: voiceContinuousActive });
         });
+      });
+
+      // Document & Screenshot Attachment Intake, Security Preflight & Inspection Modal (ChatInput.tsx & DocumentInspectionModal.tsx parity, OQ-017 truthful state)
+      const MAX_ATTACHMENTS = 3;
+      const MAX_ATTACHMENT_BYTES = 40 * 1024 * 1024;
+      const addMenuBackdrop = document.getElementById("addmenu-modal-backdrop");
+      const docModalBackdrop = document.getElementById("doc-inspect-modal-backdrop");
+      const cameraModalBackdrop = document.getElementById("camera-modal-backdrop");
+      const composerAddBtn = document.getElementById("composer-add-btn");
+      const composerFileInput = document.getElementById("composer-file-input");
+      const composerCameraInput = document.getElementById("composer-camera-input");
+      const composerAttachmentsEl = document.getElementById("composer-attachments");
+      const composerAttachPrivacyEl = document.getElementById("composer-attachment-privacy");
+      const docModalTitleEl = document.getElementById("doc-modal-title");
+      const docModalBadgesEl = document.getElementById("doc-modal-badges");
+      const docModalPreflightEl = document.getElementById("doc-modal-preflight-note");
+      const docModalPromptsEl = document.getElementById("doc-modal-prompts");
+      const docModalReportBtn = document.getElementById("doc-modal-report-btn");
+      let pendingAttachments = [];
+      let inspectingAttachmentId = null;
+
+      function sanitizeAttachmentName(rawName) {
+        const stripped = Array.from(String(rawName || "document"))
+          .filter((ch) => {
+            const code = ch.charCodeAt(0);
+            return (
+              code >= 32 &&
+              code !== 127 &&
+              !(code >= 0x200b && code <= 0x200f) &&
+              !(code >= 0x202a && code <= 0x202e) &&
+              !(code >= 0x2066 && code <= 0x2069) &&
+              code !== 0xfeff
+            );
+          })
+          .join("")
+          .split("\\\\")
+          .join("/");
+        const base = stripped.split("/").pop() || "document";
+        const safeChars = base.replace(/[^\\p{L}\\p{N}.\\- ()[\\]_]+/gu, "_");
+        let sIdx = 0;
+        let eIdx = safeChars.length;
+        while (sIdx < eIdx && (safeChars[sIdx] === "." || safeChars[sIdx] === " ")) sIdx += 1;
+        while (eIdx > sIdx && (safeChars[eIdx - 1] === "." || safeChars[eIdx - 1] === " ")) eIdx -= 1;
+        return safeChars.slice(sIdx, eIdx).slice(0, 120) || "document";
+      }
+
+      function formatBytes(bytes) {
+        const n = Number(bytes) || 0;
+        if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + " MB";
+        if (n >= 1024) return Math.round(n / 1024) + " KB";
+        return Math.round(n) + " B";
+      }
+
+      const DOC_LABELS = {
+        en: {
+          receipt: "Payment Receipt",
+          tin_card: "TIN Certificate",
+          assessment: "Tax Assessment Notice",
+          customs_declaration: "TANCIS++ Customs Declaration",
+          invoice: "Sales Tax Invoice",
+          portal_screenshot: "SSRA e-Tax Portal Screenshot",
+          generic: "Document",
+        },
+        ar: {
+          receipt: "إيصال دفع",
+          tin_card: "شهادة الرقم الضريبي TIN",
+          assessment: "إشعار ربط ضريبي",
+          customs_declaration: "بيان جمركي TANCIS++",
+          invoice: "فاتورة ضريبية",
+          portal_screenshot: "لقطة شاشة بوابة الضرائب e-Tax",
+          generic: "مستند",
+        },
+        pga: {
+          receipt: "Isal ta Dafa",
+          tin_card: "Shahada ta TIN",
+          assessment: "Rabit ta Dariba",
+          customs_declaration: "Bayan ta Jamarik",
+          invoice: "Fatura ta Dariba",
+          portal_screenshot: "Sura ta Mawqi SSRA e-Tax",
+          generic: "Waraga",
+        },
+      };
+
+      function formatDocCategory(docType) {
+        const dict = DOC_LABELS[state.locale] || DOC_LABELS.en;
+        return dict[docType] || DOC_LABELS.en[docType] || dict.generic;
+      }
+
+      function classifyAttachmentName(safeName) {
+        const lower = safeName.toLowerCase();
+        if (/(?:screenshot|screen|portal|etax|error|capture|snip)/.test(lower)) {
+          return {
+            docType: "portal_screenshot",
+            prompts: [
+              "Where can I find general e-Tax filing guidance?",
+              "Is https://etax.nra.gov.ss/ an official SSRA payment portal?",
+            ],
+          };
+        }
+        if (/(?:customs|declaration|tancis|asycuda|nimule)/.test(lower)) {
+          return {
+            docType: "customs_declaration",
+            prompts: [
+              "Where can I find general customs guidance?",
+              "What is the customs tariff rate for HS 8703.23?",
+            ],
+          };
+        }
+        if (/(?:tin|registration|certificate)/.test(lower)) {
+          return {
+            docType: "tin_card",
+            prompts: [
+              "How do I register for a TIN on e-Tax?",
+              "Where can I find general e-Tax filing guidance?",
+            ],
+          };
+        }
+        if (/(?:receipt|payment|bank|remittance)/.test(lower)) {
+          return {
+            docType: "receipt",
+            prompts: [
+              "Verify account TSA-ETAX-BANK for tax payment",
+              "How do I file and pay my tax return on e-Tax?",
+            ],
+          };
+        }
+        if (/(?:invoice|wht|withholding)/.test(lower)) {
+          return {
+            docType: "invoice",
+            prompts: [
+              "Calculate withholding tax on 1,000,000 SSP for rent",
+              "Where can I find general e-Tax filing guidance?",
+            ],
+          };
+        }
+        if (/(?:assessment|demand|notice)/.test(lower)) {
+          return {
+            docType: "assessment",
+            prompts: [
+              "How do I file and pay my tax return on e-Tax?",
+              "I would like to speak with an SSRA tax officer",
+            ],
+          };
+        }
+        return {
+          docType: "generic",
+          prompts: [
+            "Where can I find general e-Tax filing guidance?",
+            "How do I register for a TIN on e-Tax?",
+          ],
+        };
+      }
+
+      function inspectPdfPreflight(uint8) {
+        if (!uint8 || !uint8.byteLength) return { ok: false, findings: ["Empty PDF file."] };
+        let off = 0;
+        while (off < Math.min(uint8.byteLength, 8) && (uint8[off] === 0x20 || uint8[off] === 0x09 || uint8[off] === 0x0d || uint8[off] === 0x0a)) {
+          off += 1;
+        }
+        const magicOk =
+          uint8.byteLength >= off + 5 &&
+          uint8[off] === 0x25 &&
+          uint8[off + 1] === 0x50 &&
+          uint8[off + 2] === 0x44 &&
+          uint8[off + 3] === 0x46 &&
+          uint8[off + 4] === 0x2d;
+        if (!magicOk) {
+          return { ok: false, findings: ["File content does not match the .pdf header (%PDF- required)."] };
+        }
+        const sample = new TextDecoder("latin1").decode(uint8.subarray(0, Math.min(uint8.byteLength, 256 * 1024)));
+        const findings = [];
+        if (new RegExp("/Encrypt\\\\b").test(sample)) {
+          findings.push("Encrypted or password-protected PDF documents are not accepted.");
+        }
+        const badTokens = sample.match(
+          new RegExp("/(?:JavaScript|JS|Launch|SubmitForm|ImportData|GoToR|RichMedia|EmbeddedFiles|XFA)\\\\b", "g"),
+        );
+        if (badTokens && badTokens.length) {
+          findings.push("PDF contains active or embedded content (" + Array.from(new Set(badTokens)).join(", ") + ").");
+        }
+        return { ok: findings.length === 0, findings };
+      }
+
+      function renderComposerAttachments() {
+        if (!composerAttachmentsEl) return;
+        const hasAny = pendingAttachments.length > 0;
+        composerAttachmentsEl.classList.toggle("is-hidden", !hasAny);
+        composerAttachPrivacyEl?.classList.toggle("is-hidden", !hasAny);
+        if (!hasAny) {
+          setSafeHtml(composerAttachmentsEl, "");
+          return;
+        }
+        const chipsHtml = pendingAttachments
+          .map((att) => {
+            const metaText =
+              att.status === "error"
+                ? escapeHtml(att.error || "Rejected")
+                : escapeHtml(formatDocCategory(att.docType) + " · " + formatBytes(att.sizeBytes));
+            const inspectBtn =
+              '<button type="button" class="attachment-act-btn" data-inspect-att="' +
+              escapeHtml(att.id) +
+              '" aria-label="Inspect ' +
+              escapeHtml(att.name) +
+              '" title="Inspect document">' +
+              ICONS.eye +
+              "</button>" +
+              (att.status === "ready"
+                ? '<button type="button" class="attachment-act-btn" data-report-att="' +
+                  escapeHtml(att.id) +
+                  '" aria-label="Download inspection receipt for ' +
+                  escapeHtml(att.name) +
+                  '" title="Download inspection receipt">' +
+                  ICONS.download +
+                  "</button>"
+                : "");
+            return (
+              '<div class="attachment-chip' +
+              (att.status === "error" ? " attachment-chip-error" : "") +
+              '" data-testid="attachment-chip">' +
+              '<span aria-hidden="true">' +
+              ICONS.file +
+              "</span>" +
+              '<span class="attachment-name" title="' +
+              escapeHtml(att.name) +
+              '">' +
+              escapeHtml(att.name) +
+              "</span>" +
+              '<span class="attachment-meta">' +
+              metaText +
+              "</span>" +
+              inspectBtn +
+              '<button type="button" class="attachment-act-btn" data-remove-att="' +
+              escapeHtml(att.id) +
+              '" aria-label="Remove ' +
+              escapeHtml(att.name) +
+              '" title="Remove attachment">' +
+              ICONS.close +
+              "</button>" +
+              "</div>"
+            );
+          })
+          .join("");
+        setSafeHtml(composerAttachmentsEl, chipsHtml);
+      }
+
+      async function handleAttachFiles(fileList) {
+        if (!fileList || !fileList.length) return;
+        const files = Array.from(fileList);
+        for (const f of files) {
+          if (pendingAttachments.length >= MAX_ATTACHMENTS) {
+            if (hintEl) hintEl.textContent = "Up to 3 attachments allowed per turn.";
+            break;
+          }
+          const safeName = sanitizeAttachmentName(f.name);
+          const lower = safeName.toLowerCase();
+          const attId = "att_" + Math.random().toString(36).slice(2, 10);
+          if (f.size > MAX_ATTACHMENT_BYTES) {
+            pendingAttachments.push({
+              id: attId,
+              name: safeName,
+              sizeBytes: f.size,
+              docType: "generic",
+              status: "error",
+              error: "Exceeds 40 MB limit",
+              findings: ["File exceeds the 40 MB attachment limit."],
+              prompts: [],
+            });
+            continue;
+          }
+          if (lower.endsWith(".xlsm") || lower.endsWith(".docm") || lower.endsWith(".pptm") || lower.endsWith(".xls")) {
+            pendingAttachments.push({
+              id: attId,
+              name: safeName,
+              sizeBytes: f.size,
+              docType: "generic",
+              status: "error",
+              error: "Macros / legacy .xls blocked",
+              findings: ["Macro-enabled or legacy binary Office files are blocked. Re-save as .xlsx or .docx."],
+              prompts: [],
+            });
+            continue;
+          }
+          let shaHex = "local_preflight";
+          let findings = [];
+          let status = "ready";
+          let errText = "";
+          try {
+            const buf = await f.arrayBuffer();
+            const uint8 = new Uint8Array(buf);
+            if (window.crypto?.subtle?.digest) {
+              const digestBuf = await window.crypto.subtle.digest("SHA-256", buf);
+              shaHex = Array.from(new Uint8Array(digestBuf), (b) => b.toString(16).padStart(2, "0")).join("");
+            }
+            if (lower.endsWith(".pdf") || f.type === "application/pdf") {
+              const pdfCheck = inspectPdfPreflight(uint8);
+              if (!pdfCheck.ok) {
+                status = "error";
+                errText = "Blocked by PDF security guard";
+                findings = pdfCheck.findings;
+              }
+            }
+          } catch {
+            findings = ["Could not read file bytes for local preflight."];
+          }
+          const cls = classifyAttachmentName(safeName);
+          pendingAttachments.push({
+            id: attId,
+            name: safeName,
+            sizeBytes: f.size,
+            docType: cls.docType,
+            sha256Hex: shaHex,
+            status,
+            error: errText,
+            findings,
+            prompts: cls.prompts,
+          });
+        }
+        renderComposerAttachments();
+      }
+
+      function buildInspectionReceiptText(att) {
+        const lines = [
+          "========================================================================",
+          "SOUTH SUDAN REVENUE AUTHORITY (SSRA) — ATTACHMENT PREFLIGHT RECEIPT",
+          "========================================================================",
+          "Attachment ID     : " + att.id,
+          "File Name         : " + att.name,
+          "Detected Category : " + formatDocCategory(att.docType) + " (" + att.docType + ")",
+          "File Size         : " + formatBytes(att.sizeBytes) + " (" + att.sizeBytes + " bytes)",
+          "SHA-256 Digest    : " + (att.sha256Hex || "local_preflight"),
+          "Client Preflight  : " + (att.status === "ready" ? "PASSED" : "BLOCKED"),
+          "Preflight Notes   : " + (att.findings && att.findings.length ? att.findings.join("; ") : "Client-side extension and header preflight passed."),
+          "------------------------------------------------------------------------",
+          "GOVERNANCE & TRUTHFULNESS NOTICE (OQ-017):",
+          "Server-side OCR extraction, malware scanning, and automated tax figure",
+          "reconciliation are disabled until SSRA approves OQ-017 providers.",
+          "Official e-Tax portal: https://etax.nra.gov.ss/",
+          "========================================================================",
+        ];
+        return lines.join("\\n");
+      }
+
+      function openDocInspectionModal(attId, triggerEl) {
+        const att = pendingAttachments.find((a) => a.id === attId);
+        if (!att || !docModalBackdrop) return;
+        inspectingAttachmentId = att.id;
+        if (docModalTitleEl) docModalTitleEl.textContent = att.name;
+        if (docModalBadgesEl) {
+          setSafeHtml(
+            docModalBadgesEl,
+            '<span class="doc-modal-badge">' +
+              escapeHtml(formatDocCategory(att.docType)) +
+              "</span>" +
+              '<span class="doc-modal-badge">' +
+              escapeHtml(formatBytes(att.sizeBytes)) +
+              "</span>" +
+              '<span class="doc-modal-badge">' +
+              escapeHtml("SHA-256: " + String(att.sha256Hex || "local").slice(0, 12) + "…") +
+              "</span>",
+          );
+        }
+        if (docModalPreflightEl) {
+          docModalPreflightEl.textContent =
+            att.findings && att.findings.length
+              ? att.findings.join(" ")
+              : "Client-side extension, filename BiDi, and header preflight passed.";
+        }
+        if (docModalPromptsEl) {
+          const promptsHtml = (att.prompts || [])
+            .map(
+              (p) =>
+                '<button type="button" class="doc-modal-prompt-btn" data-doc-prompt="' +
+                escapeHtml(p) +
+                '">' +
+                ICONS.sparkles +
+                " <span>" +
+                escapeHtml(p) +
+                "</span></button>",
+            )
+            .join("");
+          setSafeHtml(docModalPromptsEl, promptsHtml);
+        }
+        openModal(docModalBackdrop, document.getElementById("close-doc-modal-btn"), triggerEl || composerAddBtn);
+      }
+
+      function downloadAttachmentReceipt(attId) {
+        const att = pendingAttachments.find((a) => a.id === attId);
+        if (!att) return;
+        const receipt = buildInspectionReceiptText(att);
+        try {
+          const blob = new Blob([receipt], { type: "text/plain;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "ssra_inspection_" + att.name.replace(/\\.[^.]+$/, "") + ".txt";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        } catch {}
+        if (hintEl) hintEl.textContent = "Inspection receipt downloaded for " + att.name + ".";
+      }
+
+      composerAddBtn?.addEventListener("click", (e) => {
+        openModal(addMenuBackdrop, document.getElementById("addmenu-upload-btn"), e.currentTarget);
+      });
+      document.getElementById("close-addmenu-btn")?.addEventListener("click", closeAllModals);
+      addMenuBackdrop?.addEventListener("click", (e) => {
+        if (e.target === addMenuBackdrop) closeAllModals();
+      });
+      document.getElementById("addmenu-upload-btn")?.addEventListener("click", () => {
+        closeAllModals();
+        composerFileInput?.click();
+      });
+      document.getElementById("addmenu-camera-btn")?.addEventListener("click", () => {
+        closeAllModals();
+        openModal(cameraModalBackdrop, document.getElementById("camera-fallback-file-btn"), composerAddBtn);
+      });
+      document.getElementById("close-camera-btn")?.addEventListener("click", closeAllModals);
+      cameraModalBackdrop?.addEventListener("click", (e) => {
+        if (e.target === cameraModalBackdrop) closeAllModals();
+      });
+      document.getElementById("camera-fallback-file-btn")?.addEventListener("click", () => {
+        closeAllModals();
+        composerCameraInput?.click();
+      });
+      composerFileInput?.addEventListener("change", (e) => {
+        if (e.target.files?.length) handleAttachFiles(e.target.files);
+        e.target.value = "";
+      });
+      composerCameraInput?.addEventListener("change", (e) => {
+        if (e.target.files?.length) handleAttachFiles(e.target.files);
+        e.target.value = "";
+      });
+      composerAttachmentsEl?.addEventListener("click", (e) => {
+        const inspectBtn = e.target.closest("[data-inspect-att]");
+        if (inspectBtn) {
+          openDocInspectionModal(inspectBtn.getAttribute("data-inspect-att"), inspectBtn);
+          return;
+        }
+        const reportBtn = e.target.closest("[data-report-att]");
+        if (reportBtn) {
+          downloadAttachmentReceipt(reportBtn.getAttribute("data-report-att"));
+          return;
+        }
+        const removeBtn = e.target.closest("[data-remove-att]");
+        if (removeBtn) {
+          const rid = removeBtn.getAttribute("data-remove-att");
+          pendingAttachments = pendingAttachments.filter((a) => a.id !== rid);
+          renderComposerAttachments();
+          composerAddBtn?.focus();
+        }
+      });
+      document.getElementById("close-doc-modal-btn")?.addEventListener("click", closeAllModals);
+      document.getElementById("doc-modal-close-secondary-btn")?.addEventListener("click", closeAllModals);
+      docModalBackdrop?.addEventListener("click", (e) => {
+        if (e.target === docModalBackdrop) {
+          closeAllModals();
+          return;
+        }
+        const promptBtn = e.target.closest("[data-doc-prompt]");
+        if (promptBtn) {
+          const q = promptBtn.getAttribute("data-doc-prompt");
+          closeAllModals();
+          if (q) sendTurn(q);
+        }
+      });
+      docModalReportBtn?.addEventListener("click", () => {
+        if (inspectingAttachmentId) downloadAttachmentReceipt(inspectingAttachmentId);
       });
 
       // Show saved conversations (or the empty state) as soon as the page loads.

@@ -116,6 +116,38 @@ test("public chat renders a safe answer through the subject-stripping BFF", asyn
   expect(forgedRequest?.headers.authorization).toBeNull();
   expect(forgedRequest?.headers.subject_ref).toBeNull();
 
+  const forgedStreamStatus = await page.evaluate(async () => {
+    const response = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer synthetic-browser-assertion",
+        "Content-Type": "application/json",
+        "X-Subject-Ref": "synthetic-foreign-subject",
+      },
+      body: JSON.stringify({
+        auth_level: "STAFF",
+        message: "Synthetic forged-stream request",
+        role: "admin",
+        subject_ref: "synthetic-foreign-subject",
+        thread_id: "synthetic-stream-thread",
+      }),
+    });
+    return response.status;
+  });
+  expect(forgedStreamStatus).toBe(200);
+  const streamCaptured = (await getRuntimeRequests(request)).at(-1);
+  expect(streamCaptured?.body).toEqual({
+    auth_level: "ANONYMOUS",
+    channel: "web",
+    locale: "en",
+    low_data_mode: false,
+    message: "Synthetic forged-stream request",
+    subject_ref: null,
+    thread_id: "synthetic-stream-thread",
+  });
+  expect(streamCaptured?.headers.authorization).toBeNull();
+  expect(streamCaptured?.headers.subject_ref).toBeNull();
+
   const protectedRouteStatuses = await page.evaluate(async () => {
     const paths = [
       "/v1/admin/audit-verify",

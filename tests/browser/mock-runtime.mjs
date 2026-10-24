@@ -145,7 +145,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (method === "POST" && pathname === "/v1/turns") {
+  if (method === "POST" && (pathname === "/v1/turns" || pathname === "/v1/agui/stream")) {
     try {
       const body = await readJson(req);
       requests.push({
@@ -156,6 +156,14 @@ const server = http.createServer(async (req, res) => {
           traceparent: req.headers.traceparent ?? null,
         },
       });
+      if (pathname === "/v1/agui/stream") {
+        res.writeHead(200, {
+          "Cache-Control": "no-store",
+          "Content-Type": "text/event-stream; charset=utf-8",
+        });
+        res.end('event: agui\ndata: {"type":"RUN_FINISHED"}\n\n');
+        return;
+      }
       if (body.message === "synthetic-scenario:slow") {
         await new Promise((resolve) => setTimeout(resolve, 3_000));
       }
