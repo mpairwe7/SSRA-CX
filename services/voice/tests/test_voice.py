@@ -1519,6 +1519,13 @@ def test_speech_normalization_asr_entity_mishears_clarify_gate_and_language_poli
     assert "redacted T I N" in cleaned
     assert "redacted phone number" in cleaned
     assert "SELECT 1" not in cleaned
+    # Spoofed lookalike URL must fall through to 'web link' and never be spoken as official e-Tax
+    spoof_cleaned = clean_text_for_speech(
+        "Visit https://etax.nra.gov.ss.evil.example/login or https://etax.nra.gov.ss/pay."
+    )
+    assert "web link" in spoof_cleaned
+    assert "e-tax dot n r a dot gov dot s s" in spoof_cleaned
+    assert "evil.example" not in spoof_cleaned
 
     # ASR phonetic mishear detection & repair
     assert detect_ssra_entity_mishear("ttiimu") == "TIN"
@@ -1568,8 +1575,10 @@ def test_speech_normalization_asr_entity_mishears_clarify_gate_and_language_poli
     )
     assert mild_low_dec.action == "none"
 
-    # Hysteresis CallLanguagePolicy
+    # Hysteresis CallLanguagePolicy & negation-safe explicit language request detection
     assert detect_explicit_language_request("") is None
+    assert detect_explicit_language_request("Do you have the form in English?") is None
+    assert detect_explicit_language_request("Please do not speak in English") is None
     assert detect_explicit_language_request("Not in English — please speak in Arabic") == "ar"
     assert detect_explicit_language_request("Can we speak Juba Arabic?") == "pga"
 
