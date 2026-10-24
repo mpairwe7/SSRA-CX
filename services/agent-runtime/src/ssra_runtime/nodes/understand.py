@@ -87,113 +87,60 @@ def _extract_monetary_amount(scan_text: str) -> str | None:
     return all_amounts[0] if all_amounts else None
 
 
+_WHT_NON_RESIDENT_RE = re.compile(
+    r"\b(?:non[- ]resident|foreign contractor)\b|غير مقيم|مقاول أجنبي",
+    re.IGNORECASE,
+)
+_WHT_GOV_CONTRACTOR_RE = re.compile(
+    r"\b(?:government contractor|resident contractor|ministry contract)\b|مقاول حكومي",
+    re.IGNORECASE,
+)
+_WHT_TECH_FEES_RE = re.compile(
+    r"\b(?:technical fees?|technical service|management fee|professional fee|consultanc(?:y|ies)|consulting)\b|رسوم فنية|استشارات",
+    re.IGNORECASE,
+)
+_WHT_MOBILE_MONEY_RE = re.compile(
+    r"\b(?:mobile money|m-?gurush|momo|dealer commission)\b|عمولة المحفظة",
+    re.IGNORECASE,
+)
+_WHT_EOSB_RE = re.compile(
+    r"\b(?:end of service|eosb|gratuity|severance)\b|نهاية الخدمة",
+    re.IGNORECASE,
+)
+_WHT_RENT_RE = re.compile(
+    r"\b(?:rent|rental|landlord|lease|ijar)\b|إيجار|ايجار",
+    re.IGNORECASE,
+)
+
+
 def _has_explicit_wht_category_cue(lower: str) -> bool:
     """Return True if the text explicitly names a statutory Withholding Tax category."""
     return any(
-        w in lower
-        for w in (
-            "non-resident",
-            "non resident",
-            "foreign contractor",
-            "غير مقيم",
-            "مقاول أجنبي",
-            "government contractor",
-            "resident contractor",
-            "ministry contract",
-            "مقاول حكومي",
-            "technical fee",
-            "technical fees",
-            "technical service",
-            "management fee",
-            "professional fee",
-            "consultancy",
-            "consulting",
-            "رسوم فنية",
-            "استشارات",
-            "mobile money",
-            "m-gurush",
-            "mgurush",
-            "momo",
-            "dealer commission",
-            "عمولة المحفظة",
-            "end of service",
-            "eosb",
-            "gratuity",
-            "severance",
-            "نهاية الخدمة",
-            "rent",
-            "rental",
-            "landlord",
-            "lease",
-            "إيجار",
-            "ايجار",
-            "ijar",
+        rx.search(lower) is not None
+        for rx in (
+            _WHT_NON_RESIDENT_RE,
+            _WHT_GOV_CONTRACTOR_RE,
+            _WHT_TECH_FEES_RE,
+            _WHT_MOBILE_MONEY_RE,
+            _WHT_EOSB_RE,
+            _WHT_RENT_RE,
         )
     )
 
 
 def _detect_withholding_category(lower: str) -> str:
     """Resolve the South Sudan statutory Withholding Tax category (Financial Act 2024/2025)."""
-    if any(
-        w in lower
-        for w in (
-            "non-resident",
-            "non resident",
-            "foreign contractor",
-            "غير مقيم",
-            "مقاول أجنبي",
-        )
-    ):
+    if _WHT_NON_RESIDENT_RE.search(lower) is not None:
         return "government_contractors_non_resident"
-    if any(
-        w in lower
-        for w in (
-            "government contractor",
-            "resident contractor",
-            "ministry contract",
-            "مقاول حكومي",
-        )
-    ):
+    if _WHT_GOV_CONTRACTOR_RE.search(lower) is not None:
         return "government_contractors_resident"
-    if any(
-        w in lower
-        for w in (
-            "technical fee",
-            "technical fees",
-            "technical service",
-            "management fee",
-            "professional fee",
-            "consultancy",
-            "consulting",
-            "رسوم فنية",
-            "استشارات",
-        )
-    ):
+    if _WHT_TECH_FEES_RE.search(lower) is not None:
         return "technical_fees"
-    if any(
-        w in lower
-        for w in (
-            "mobile money",
-            "m-gurush",
-            "mgurush",
-            "momo",
-            "dealer commission",
-            "عمولة المحفظة",
-        )
-    ):
+    if _WHT_MOBILE_MONEY_RE.search(lower) is not None:
         return "mobile_money_commissions"
-    if any(
-        w in lower
-        for w in (
-            "end of service",
-            "eosb",
-            "gratuity",
-            "severance",
-            "نهاية الخدمة",
-        )
-    ):
+    if _WHT_EOSB_RE.search(lower) is not None:
         return "end_of_service_benefits"
-    if any(w in lower for w in ("rent", "rental", "landlord", "lease", "إيجار", "ايجار", "ijar")):
+    if _WHT_RENT_RE.search(lower) is not None:
         return "rent"
     return "goods_and_services"
 
@@ -510,6 +457,14 @@ _STEP_CONTINUATION_RE = re.compile(
     r"^\s*(?:next(?:\s+step)?|continue|proceed|resume|go\s+on|what(?:'s|\s+is)\s+next|step\s+([123]))\b",
     re.IGNORECASE,
 )
+_STEP_CONTINUATION_ELIGIBLE: frozenset[IntentName] = frozenset(
+    {
+        IntentName.KNOWLEDGE_QA,
+        IntentName.GUIDED_TIN_REGISTRATION,
+        IntentName.GUIDED_FILING_AND_PAYMENT,
+        IntentName.GUIDED_TCC,
+    }
+)
 _ANAPHORIC_FOLLOWUP_RE = re.compile(
     r"\b(?:what\s+if|what\s+about|how\s+about|and\s+for|instead|now\s+for|if\s+it\s+is|for\s+cif)\b",
     re.IGNORECASE,
@@ -530,7 +485,12 @@ def _resolve_multiturn_followup(
 
     # 1. Guided journey step continuation ('next step', 'continue', 'step 2') on active workflow_stack
     step_match = _STEP_CONTINUATION_RE.search(lower)
-    if step_match is not None and updated_stack:
+    is_eligible_step = bool(
+        step_match is not None
+        and updated_stack
+        and intent_obj.intent in _STEP_CONTINUATION_ELIGIBLE
+    )
+    if is_eligible_step and step_match is not None:
         top = updated_stack[-1]
         j_intent_str = str(top.get("journey_intent", ""))
         if j_intent_str in IntentName._value2member_map_:
@@ -557,11 +517,12 @@ def _resolve_multiturn_followup(
             )
 
     # 2. If explicit CALCULATE_WITHHOLDING matched without a new amount, inherit prior amount_ssp
-    if (
+    should_inherit_wht_amt = bool(
         intent_obj.intent == IntentName.CALCULATE_WITHHOLDING
         and intent_obj.slots.get("amount_defaulted")
         and "amount_ssp" in prior_slots
-    ):
+    )
+    if should_inherit_wht_amt:
         inherited = {
             **intent_obj.slots,
             "amount_ssp": str(prior_slots["amount_ssp"]),
@@ -575,7 +536,7 @@ def _resolve_multiturn_followup(
         has_wht_cat = _has_explicit_wht_category_cue(lower)
 
         # 3a. Customs HS code carry-over when follow-up provides CIF value or asks about duty
-        if (
+        should_carry_hs = bool(
             "hs_code" not in intent_obj.slots
             and "hs_code" in prior_slots
             and (
@@ -585,7 +546,8 @@ def _resolve_multiturn_followup(
                     and any(w in lower for w in ("duty", "duties", "cif", "usd", "$", "tariff"))
                 )
             )
-        ):
+        )
+        if should_carry_hs:
             carried_slots = {**intent_obj.slots, "hs_code": str(prior_slots["hs_code"])}
             return intent_obj.model_copy(update={"slots": carried_slots}), updated_stack
 
@@ -618,13 +580,14 @@ def _resolve_multiturn_followup(
             )
 
         # 3c. PAYE Calculator follow-up ('What if it is 800,000 SSP?')
-        if (
+        should_promote_paye = bool(
             prior_intent == IntentName.CALCULATE_PAYE.value
             and is_anaphoric
             and "amount_ssp" in intent_obj.slots
             and "hs_code" not in intent_obj.slots
             and not has_wht_cat
-        ):
+        )
+        if should_promote_paye:
             return (
                 intent_obj.model_copy(
                     update={

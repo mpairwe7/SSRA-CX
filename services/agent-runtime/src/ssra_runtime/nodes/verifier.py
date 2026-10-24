@@ -45,28 +45,30 @@ def _detect_quiet_tool_fault(art: ToolArtifact) -> str | None:
         tax = _parse_decimal_safe(sc.get("estimated_tax_ssp", "-1"))
         net = _parse_decimal_safe(sc.get("net_monthly_ssp", "-1"))
         eff = _parse_decimal_safe(sc.get("effective_rate_percent", "-1"))
-        if (
+        paye_bad = (
             gross < Decimal("0")
             or tax < Decimal("0")
             or tax > gross
             or net != gross - tax
             or eff < Decimal("0")
             or eff > Decimal("100")
-        ):
+        )
+        if paye_bad:
             return "PAYE_INVARIANT_VIOLATION"
     elif art.tool == "calculate_withholding_estimate":
         gross = _parse_decimal_safe(sc.get("gross_amount_ssp", "-1"))
         wht = _parse_decimal_safe(sc.get("withholding_tax_ssp", "-1"))
         net = _parse_decimal_safe(sc.get("net_payable_ssp", "-1"))
         rate = _parse_decimal_safe(sc.get("rate_percent", "-1"))
-        if (
+        wht_bad = (
             gross < Decimal("0")
             or wht < Decimal("0")
             or wht > gross
             or net != gross - wht
             or rate < Decimal("0")
             or rate > Decimal("100")
-        ):
+        )
+        if wht_bad:
             return "WHT_INVARIANT_VIOLATION"
     elif art.tool == "estimate_duties":
         cif = _parse_decimal_safe(sc.get("cif_value_usd", "0"))

@@ -74,6 +74,39 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             )
         }
 
+    # 1b. Stage 9 Quiet-Fault Gate for calculator/customs estimates (arXiv:2610.10062 & ADR-028)
+    verif_top = state.get("outcome_verification") or {}
+    top_blockers = [str(b) for b in verif_top.get("blocker_codes", [])]
+    if any(b.startswith("QUIET_FAULT_DETECTED:") for b in top_blockers):
+        return {
+            "answer": Answer(
+                segments=[
+                    AnswerSegment(
+                        text=(
+                            "I could not safely verify the calculated tax figure. "
+                            "Please check directly on https://etax.nra.gov.ss/ or speak with an SSRA officer."
+                        )[: capabilities.max_len],
+                        citation_ids=[],
+                    )
+                ],
+                citations=[],
+                numbers=[],
+                ui_component=GenerativeUIComponent(
+                    name=GenerativeUIComponentName.HANDOFF_CARD,
+                    props={"reason": "CALCULATOR_VERIFICATION_FAILED"},
+                )
+                if capabilities.rich_ui
+                else None,
+                is_estimate=True,
+                abstained=True,
+            )
+        }
+    step_failed_suffix = (
+        " Note: a secondary calculation step was unavailable; please retry or check https://etax.nra.gov.ss/."
+        if any(b.startswith("STEP_FAILED:") for b in top_blockers)
+        else ""
+    )
+
     # 2. PAYE Calculator response (`CalculatorForm` generative UI card) — including compound PAYE + WHT/Customs
     paye_art = next((a for a in artifacts if a.tool == "calculate_paye_estimate"), None)
     if paye_art is not None:
@@ -124,6 +157,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
         if wf_stack and wf_stack[-1].get("status") != "COMPLETED" and capabilities.max_len >= 240:
             paused_step = int(wf_stack[-1].get("current_step", 1))
             text += f" (Guided journey paused at Step {paused_step} — reply 'continue' to resume.)"
+        text += step_failed_suffix
         return {
             "citations": citations,
             "answer": Answer(

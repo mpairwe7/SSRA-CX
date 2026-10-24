@@ -202,19 +202,24 @@ def execute_knowledge_qa_subgraph(
                     budget=budget,
                 )
                 artifacts.append(cust_art)
-                return {"artifacts": artifacts, "budget": budget}
-            tariff_art = gateway.invoke_tool(
-                server_name="customs",
-                tool_name="lookup_tariff",
-                arguments={"hs_code": hs_code},
-                auth_level=auth_level,
-                subject_ref=subject_ref,
-                budget=budget,
-            )
-            artifacts.append(tariff_art)
-            return {"artifacts": artifacts, "budget": budget}
+            else:
+                tariff_art = gateway.invoke_tool(
+                    server_name="customs",
+                    tool_name="lookup_tariff",
+                    arguments={"hs_code": hs_code},
+                    auth_level=auth_level,
+                    subject_ref=subject_ref,
+                    budget=budget,
+                )
+                artifacts.append(tariff_art)
         except SSRAError:
             return {"artifacts": artifacts, "budget": budget}
+        verif = verify_plan_outcomes(plan, artifacts, failed_steps=failed_steps)
+        return {
+            "artifacts": artifacts,
+            "budget": budget,
+            "outcome_verification": verif.model_dump(mode="json"),
+        }
 
     # Default: search published knowledge corpus
     query = state.get("redacted_user_text") or state.get("raw_user_text", "SSRA eTax")

@@ -50,7 +50,7 @@ _RISK_TIERS_FILE = Path(__file__).resolve().parents[5] / "ai" / "policies" / "ri
 MAX_TOOL_LIST_ITEMS: int = 25
 
 
-def _bound_overlong_tool_output(raw_sc: dict[str, Any]) -> dict[str, Any]:
+def bound_overlong_tool_output(raw_sc: dict[str, Any]) -> dict[str, Any]:
     """Bound overlong list collections in MCP tool outputs (Toolathlon Section 5.2 context governor)."""
     bounded: dict[str, Any] = {}
     truncated = False
@@ -312,11 +312,12 @@ class GovernedMcpGatewayClient:
                     status_code=429,
                 )
             budget.tool_call_counts[fingerprint] = prev_calls + 1
-            if (
+            can_memoize = (
                 is_retryable_read
                 and prev_calls == 1
                 and fingerprint in budget.memoized_read_artifacts
-            ):
+            )
+            if can_memoize:
                 return ToolArtifact.model_validate(budget.memoized_read_artifacts[fingerprint])
 
         def _call_once() -> dict[str, Any]:
@@ -354,7 +355,7 @@ class GovernedMcpGatewayClient:
             server=server_name,
             tool=tool_name,
             tier=tool.tier,
-            structured_content=_bound_overlong_tool_output(dict(envelope["structuredContent"])),
+            structured_content=bound_overlong_tool_output(dict(envelope["structuredContent"])),
             provenance=dict(envelope["provenance"]),
             data_classification=str(envelope["data_classification"]),
         )

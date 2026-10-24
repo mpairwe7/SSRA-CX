@@ -139,13 +139,13 @@ def test_multiturn_anaphoric_slot_carryover_and_guided_journey_progression() -> 
     runtime = SSRAConversationRuntime()
     thread_id = "thr_adr028_multiturn_01"
 
-    # 1. PAYE Turn 1 -> Anaphoric Turn 2 ('What if it is 800,000 SSP?')
+    # 1. PAYE Turn 1 -> Anaphoric Turn 2 ('Please, what if it is 800,000 SSP?')
     t1 = runtime.run_turn(
         make_conversation_event("Calculate PAYE on 300,000 SSP", thread_id=thread_id)
     )
     assert t1.intent is not None and t1.intent.intent == IntentName.CALCULATE_PAYE
     t2 = runtime.run_turn(
-        make_conversation_event("What if it is 800,000 SSP?", thread_id=thread_id)
+        make_conversation_event("Please, what if it is 800,000 SSP?", thread_id=thread_id)
     )
     assert t2.intent is not None and t2.intent.intent == IntentName.CALCULATE_PAYE
     assert "800000" in t2.answer.segments[0].text
@@ -205,9 +205,18 @@ def test_multiturn_anaphoric_slot_carryover_and_guided_journey_progression() -> 
     assert j3.answer.ui_component.props.get("current_step") == 3
     assert j3.answer.ui_component.props["resumable_workflow"]["status"] == "COMPLETED"
 
+    # A T4 appeal prefixed with 'Next' must NOT be overridden by guided journey continuation
+    j_t4 = runtime.run_turn(
+        make_conversation_event("Next, I want to appeal assessment", thread_id=journey_thread)
+    )
+    assert j_t4.intent is not None and j_t4.intent.intent == IntentName.REQUEST_WAIVER_OR_DISPUTE_T4
+    assert j_t4.tier == RiskTier.T4
+    assert j_t4.policy_decision == "HANDOFF"
+
 
 def test_toolathlon_compound_multi_tool_and_quiet_fault_loop_guards() -> None:
     """ADR-028 Phase 2 & 3: Verify Toolathlon compound tool execution, read memoization, loop blocking, and quiet fault detection."""
+    from ssra_runtime.nodes.compose import compose_node
     from ssra_runtime.nodes.verifier import verify_plan_outcomes
     from ssra_runtime.schemas import ToolArtifact, TurnBudget
 
@@ -267,7 +276,34 @@ def test_toolathlon_compound_multi_tool_and_quiet_fault_loop_guards() -> None:
             budget=budget,
         )
 
-    # 4. Quiet tool failure detection (arXiv:2610.10062) catches corrupted mathematical figures
+    # 4. Quiet tool failure detection (arXiv:2610.10062) catches corrupted mathematical figures across PAYE, WHT, Customs & Balance
+    from ssra_runtime.tools.mcp_client import bound_overlong_tool_output
+
+    bounded_out = bound_overlong_tool_output({"results": list(range(30)), "numeric_claims": [1, 2]})
+    assert len(bounded_out["results"]) == 25
+    assert bounded_out["_truncated_items"] is True
+
+    # Explicit CALCULATE_WITHHOLDING without amount inherits prior_slots['amount_ssp']
+    wht_inherit = runtime.run_turn(
+        make_conversation_event(
+            "Calculate withholding tax for consultancy",
+            thread_id="thr_adr028_multiturn_01",
+        )
+    )
+    assert (
+        wht_inherit.intent is not None
+        and wht_inherit.intent.intent == IntentName.CALCULATE_WITHHOLDING
+    )
+
+    # Compound PAYE + Customs HS code in a single turn
+    comp_paye_hs = runtime.run_turn(
+        make_conversation_event(
+            "Calculate PAYE on 400,000 SSP and customs duty for HS 8703.23 with CIF $10,000 USD",
+            thread_id="thr_toolathlon_paye_hs",
+        )
+    )
+    assert "customs.estimate_duties" in [f"{a.server}.{a.tool}" for a in comp_paye_hs.artifacts]
+
     corrupted_paye = ToolArtifact(
         id="art_corrupt_01",
         server="tax-facts",
@@ -283,9 +319,72 @@ def test_toolathlon_compound_multi_tool_and_quiet_fault_loop_guards() -> None:
         provenance={"snapshot_version": "2026.10.1"},
         data_classification="PUBLIC",
     )
-    verif = verify_plan_outcomes(None, [corrupted_paye])
+    corrupted_wht = ToolArtifact(
+        id="art_corrupt_02",
+        server="tax-facts",
+        tool="calculate_withholding_estimate",
+        tier=RiskTier.T0,
+        structured_content={
+            "snapshot_version": "2026.10.1",
+            "gross_amount_ssp": "100000",
+            "withholding_tax_ssp": "200000",
+            "net_payable_ssp": "50000",
+            "rate_percent": "150",
+        },
+        provenance={"snapshot_version": "2026.10.1"},
+        data_classification="PUBLIC",
+    )
+    corrupted_duty = ToolArtifact(
+        id="art_corrupt_03",
+        server="customs",
+        tool="estimate_duties",
+        tier=RiskTier.T0,
+        structured_content={
+            "snapshot_version": "2026.10.1",
+            "cif_value_usd": "0",
+            "boss_official_fx_rate_ssp_per_usd": "0",
+            "estimated_duty_ssp": "-10",
+        },
+        provenance={"snapshot_version": "2026.10.1"},
+        data_classification="PUBLIC",
+    )
+    corrupted_bal = ToolArtifact(
+        id="art_corrupt_04",
+        server="ledger",
+        tool="get_balance",
+        tier=RiskTier.T1,
+        structured_content={
+            "as_of": "2026-10-24",
+            "total_outstanding_ssp": "-500",
+            "tin_masked": "",
+        },
+        provenance={"source_id": "etax"},
+        data_classification="RESTRICTED",
+    )
+    verif = verify_plan_outcomes(
+        None, [corrupted_paye, corrupted_wht, corrupted_duty, corrupted_bal]
+    )
     assert verif.verified is False
     assert (
         "QUIET_FAULT_DETECTED:tax-facts.calculate_paye_estimate:PAYE_INVARIANT_VIOLATION"
         in verif.blocker_codes
+    )
+    assert (
+        "QUIET_FAULT_DETECTED:tax-facts.calculate_withholding_estimate:WHT_INVARIANT_VIOLATION"
+        in verif.blocker_codes
+    )
+    assert (
+        "QUIET_FAULT_DETECTED:customs.estimate_duties:CUSTOMS_DUTY_INVARIANT_VIOLATION"
+        in verif.blocker_codes
+    )
+    abstained_comp = compose_node(
+        {
+            "artifacts": [corrupted_paye],
+            "outcome_verification": verif.model_dump(mode="json"),
+        }
+    )
+    assert abstained_comp["answer"].abstained is True
+    assert abstained_comp["answer"].numbers == []
+    assert (
+        "QUIET_FAULT_DETECTED:ledger.get_balance:BALANCE_INVARIANT_VIOLATION" in verif.blocker_codes
     )
