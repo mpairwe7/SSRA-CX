@@ -37,6 +37,53 @@ def _parse_decimal_safe(val: object) -> Decimal:
         return Decimal("0")
 
 
+def _detect_quiet_tool_fault(art: ToolArtifact) -> str | None:
+    """Detect silent/plausible wrong tool outputs via mathematical & domain invariants (arXiv:2610.10062)."""
+    sc = art.structured_content
+    if art.tool == "calculate_paye_estimate":
+        gross = _parse_decimal_safe(sc.get("gross_monthly_ssp", "-1"))
+        tax = _parse_decimal_safe(sc.get("estimated_tax_ssp", "-1"))
+        net = _parse_decimal_safe(sc.get("net_monthly_ssp", "-1"))
+        eff = _parse_decimal_safe(sc.get("effective_rate_percent", "-1"))
+        paye_bad = (
+            gross < Decimal("0")
+            or tax < Decimal("0")
+            or tax > gross
+            or net != gross - tax
+            or eff < Decimal("0")
+            or eff > Decimal("100")
+        )
+        if paye_bad:
+            return "PAYE_INVARIANT_VIOLATION"
+    elif art.tool == "calculate_withholding_estimate":
+        gross = _parse_decimal_safe(sc.get("gross_amount_ssp", "-1"))
+        wht = _parse_decimal_safe(sc.get("withholding_tax_ssp", "-1"))
+        net = _parse_decimal_safe(sc.get("net_payable_ssp", "-1"))
+        rate = _parse_decimal_safe(sc.get("rate_percent", "-1"))
+        wht_bad = (
+            gross < Decimal("0")
+            or wht < Decimal("0")
+            or wht > gross
+            or net != gross - wht
+            or rate < Decimal("0")
+            or rate > Decimal("100")
+        )
+        if wht_bad:
+            return "WHT_INVARIANT_VIOLATION"
+    elif art.tool == "estimate_duties":
+        cif = _parse_decimal_safe(sc.get("cif_value_usd", "0"))
+        fx = _parse_decimal_safe(sc.get("boss_official_fx_rate_ssp_per_usd", "0"))
+        duty = _parse_decimal_safe(sc.get("estimated_duty_ssp", "-1"))
+        if cif <= Decimal("0") or fx <= Decimal("0") or duty < Decimal("0"):
+            return "CUSTOMS_DUTY_INVARIANT_VIOLATION"
+    elif art.tool == "get_balance":
+        outstanding = _parse_decimal_safe(sc.get("total_outstanding_ssp", "-1"))
+        tin_masked = str(sc.get("tin_masked", "")).strip()
+        if outstanding < Decimal("0") or not tin_masked:
+            return "BALANCE_INVARIANT_VIOLATION"
+    return None
+
+
 def verify_plan_outcomes(
     plan: Plan | None,
     artifacts: list[ToolArtifact],
@@ -57,6 +104,7 @@ def verify_plan_outcomes(
         )
 
     provenance_ok = True
+    quiet_fault_ok = True
     notes: list[str] = []
 
     has_tcc_step = any(a.tool == "get_tcc_status" for a in artifacts) or (
@@ -75,6 +123,15 @@ def verify_plan_outcomes(
         if not has_prov:
             provenance_ok = False
             blockers.append(f"MISSING_PROVENANCE:{art.server}.{art.tool}")
+
+        quiet_fault = _detect_quiet_tool_fault(art)
+        if quiet_fault is not None:
+            quiet_fault_ok = False
+            blockers.append(f"QUIET_FAULT_DETECTED:{art.server}.{art.tool}:{quiet_fault}")
+            notes.append(
+                f"Tool '{art.server}.{art.tool}' returned an inconsistent figure ({quiet_fault}); "
+                "verify directly on https://etax.nra.gov.ss/."
+            )
 
         if art.tool == "get_balance":
             outstanding = _parse_decimal_safe(sc.get("total_outstanding_ssp", "0"))
@@ -106,7 +163,7 @@ def verify_plan_outcomes(
                 )
 
     return OutcomeVerificationResult(
-        verified=provenance_ok and not failed_steps,
+        verified=provenance_ok and quiet_fault_ok and not failed_steps,
         planned_step_count=planned_count,
         completed_artifact_count=len(artifacts),
         provenance_complete=provenance_ok,

@@ -56,6 +56,14 @@ from ssra_runtime.schemas import PendingConfirmation, RuntimeTurnResponse
 from ssra_runtime.state import ConversationGraphState
 from ssra_runtime.tools import GovernedMcpGatewayClient
 
+_CARRYOVER_SLOT_KEYS: tuple[str, ...] = (
+    "amount_ssp",
+    "hs_code",
+    "cif_value_usd",
+    "wht_category",
+    "verification_mode",
+    "office_code",
+)
 _SAFE_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_:-]{1,128}$")
 MAX_TRACKED_RUNTIME_THREADS: int = 2048
 
@@ -196,7 +204,14 @@ class SSRAConversationRuntime:
         state: dict[str, Any] = {
             **{
                 k: prev_chk[k]
-                for k in ("affective_state", "language_candidate", "language_state")
+                for k in (
+                    "affective_state",
+                    "language_candidate",
+                    "language_state",
+                    "prior_intent",
+                    "prior_slots",
+                    "running_summary",
+                )
                 if k in prev_chk
             },
             **initial_state,
@@ -223,10 +238,38 @@ class SSRAConversationRuntime:
                     state.update(output_guard_node(state))  # pyright: ignore[reportArgumentType]
         state.update(egress_node(state, self.audit_ledger))  # pyright: ignore[reportArgumentType]
         with self._state_lock:
+            cur_intent = state.get("intent")
+            cur_slots = state.get("slots") or {}
+            prev_slots = dict(prev_chk.get("prior_slots") or {})
+            next_prior_slots = {
+                **prev_slots,
+                **{k: cur_slots[k] for k in _CARRYOVER_SLOT_KEYS if k in cur_slots},
+            }
+            if (
+                isinstance(cur_intent, Intent)
+                and cur_intent.intent
+                in (
+                    IntentName.CALCULATE_PAYE,
+                    IntentName.CALCULATE_WITHHOLDING,
+                )
+                and "hs_code" not in cur_slots
+            ):
+                next_prior_slots.pop("hs_code", None)
+                next_prior_slots.pop("cif_value_usd", None)
+            next_prior_intent = (
+                cur_intent.intent.value
+                if isinstance(cur_intent, Intent)
+                else prev_chk.get("prior_intent")
+            )
             self._checkpoint_state_by_thread[safe_thread_id] = {
-                k: state[k]
-                for k in ("affective_state", "language_candidate", "language_state")
-                if k in state
+                **{
+                    k: state[k]
+                    for k in ("affective_state", "language_candidate", "language_state")
+                    if k in state
+                },
+                "prior_intent": next_prior_intent,
+                "prior_slots": next_prior_slots,
+                "running_summary": str(state.get("running_summary", ""))[:280],
             }
             self._evict_overflow_threads()
         return state  # pyright: ignore[reportReturnType]
@@ -468,15 +511,20 @@ class SSRAConversationRuntime:
             IntentName.GUIDED_FILING_AND_PAYMENT,
             IntentName.GUIDED_TCC,
         ):
+            step_num = int((final_state.get("slots") or {}).get("guided_step_number", 1))
+            total_s = 3 if resp.intent.intent == IntentName.GUIDED_TIN_REGISTRATION else 2
             cursor = ActiveWorkflowCursor(
                 workflow_id=f"wf_{safe_thread_id}",
                 journey_intent=resp.intent.intent,
-                current_step=1,
-                total_steps=3 if resp.intent.intent == IntentName.GUIDED_TIN_REGISTRATION else 2,
-                status="PAUSED_FOR_DELEGATION",
+                current_step=min(max(1, step_num), total_s),
+                total_steps=total_s,
+                status="COMPLETED" if step_num >= total_s else "PAUSED_FOR_DELEGATION",
             )
             stack = self._workflow_stack_by_thread.setdefault(safe_thread_id, [])
-            stack.append(cursor.model_dump(mode="json"))
+            if stack and stack[-1].get("journey_intent") == resp.intent.intent.value:
+                stack[-1] = cursor.model_dump(mode="json")
+            else:
+                stack.append(cursor.model_dump(mode="json"))
             if len(stack) > MAX_WORKFLOW_STACK_DEPTH:
                 del stack[:-MAX_WORKFLOW_STACK_DEPTH]
 

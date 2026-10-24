@@ -47,6 +47,22 @@ from ssra_runtime.guardrails.injection import check_prompt_injection
 from ssra_runtime.schemas import ToolArtifact, TurnBudget
 
 _RISK_TIERS_FILE = Path(__file__).resolve().parents[5] / "ai" / "policies" / "risk-tiers.yaml"
+MAX_TOOL_LIST_ITEMS: int = 25
+
+
+def bound_overlong_tool_output(raw_sc: dict[str, Any]) -> dict[str, Any]:
+    """Bound overlong list collections in MCP tool outputs (Toolathlon Section 5.2 context governor)."""
+    bounded: dict[str, Any] = {}
+    truncated = False
+    for k, v in raw_sc.items():
+        if isinstance(v, list) and k != "numeric_claims" and len(v) > MAX_TOOL_LIST_ITEMS:
+            bounded[k] = v[:MAX_TOOL_LIST_ITEMS]
+            truncated = True
+        else:
+            bounded[k] = v
+    if truncated:
+        bounded["_truncated_items"] = True
+    return bounded
 
 
 @functools.lru_cache(maxsize=1)
@@ -279,6 +295,31 @@ class GovernedMcpGatewayClient:
         cb = self._circuit_breakers[server_name]
         is_retryable_read = bool(tool.annotations.readOnlyHint and tool.annotations.idempotentHint)
 
+        # Toolathlon & arXiv:2610.10062: Turn-scoped repetition loop detector & read memoization
+        fingerprint = f"{tool_key}:{subject_ref or 'anon'}:{json.dumps(arguments, sort_keys=True)}"
+        if budget is not None:
+            prev_calls = budget.tool_call_counts.get(fingerprint, 0)
+            if is_state_changing and prev_calls >= 1:
+                raise SSRAError(
+                    McpErrorCode.RATE_LIMITED,
+                    f"Duplicate state-changing tool call '{tool_key}' blocked within turn (TOOL_LOOP_DETECTED)",
+                    status_code=429,
+                )
+            if prev_calls >= budget.max_identical_tool_calls:
+                raise SSRAError(
+                    McpErrorCode.RATE_LIMITED,
+                    f"Repetitive tool call loop detected for '{tool_key}' (> {budget.max_identical_tool_calls} identical calls; TOOL_LOOP_DETECTED)",
+                    status_code=429,
+                )
+            budget.tool_call_counts[fingerprint] = prev_calls + 1
+            can_memoize = (
+                is_retryable_read
+                and prev_calls == 1
+                and fingerprint in budget.memoized_read_artifacts
+            )
+            if can_memoize:
+                return ToolArtifact.model_validate(budget.memoized_read_artifacts[fingerprint])
+
         def _call_once() -> dict[str, Any]:
             """Execute a single governed MCP tool call under circuit-breaker protection."""
             is_probe = cb.acquire_call_permission()
@@ -309,12 +350,15 @@ class GovernedMcpGatewayClient:
             is_idempotent=is_retryable_read,
             max_attempts=2,
         )
-        return ToolArtifact(
+        artifact = ToolArtifact(
             id=new_id("art"),
             server=server_name,
             tool=tool_name,
             tier=tool.tier,
-            structured_content=dict(envelope["structuredContent"]),
+            structured_content=bound_overlong_tool_output(dict(envelope["structuredContent"])),
             provenance=dict(envelope["provenance"]),
             data_classification=str(envelope["data_classification"]),
         )
+        if budget is not None and is_retryable_read:
+            budget.memoized_read_artifacts[fingerprint] = artifact.model_dump(mode="json")
+        return artifact

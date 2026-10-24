@@ -39,6 +39,8 @@ class ConversationGraphState(TypedDict, total=False):
     deterministic_handled: bool
     affective_state: AffectiveSnapshot | None
     english_router_envelope: EnglishRouterEnvelope | None
+    prior_intent: str | None
+    prior_slots: dict[str, Any]
     intent: Intent | None
     slots: dict[str, Any]
     tier: RiskTier

@@ -4,7 +4,7 @@ Every architectural decision with a real reversal cost is recorded here before i
 
 ---
 
-## ADR Catalog (ADR-001 to ADR-027)
+## ADR Catalog (ADR-001 to ADR-028)
 
 | ID | Title | One-Line Problem Statement | Status | Reversal Cost |
 |---|---|---|---|---|
@@ -35,3 +35,4 @@ Every architectural decision with a real reversal cost is recorded here before i
 | **[ADR-025](./0025-voice-launch-evidence-and-truthful-call-records.md)** | Voice Launch Evidence & Truthful Call Records | How do we stop a language going live on voice without measured WER, and keep officer briefs and voice records truthful? | Accepted (repository safety baseline) | Medium |
 | **[ADR-026](./0026-voice-caller-output-disclosure-and-figure-safe-text.md)** | Voice Caller Output, Disclosure & Figure-Safe Channel Text | How do we make sure callers know they are talking to an AI, consent to recording, can interrupt, and never receive a split figure by voice or SMS? | Accepted (repository safety baseline) | Medium |
 | **[ADR-027](./0027-voice-multiturn-continuity-echo-guard-and-barge-in.md)** | Multi-Turn Voice Continuity, Post-TTS Acoustic Echo Guard & Backchannel Immunity | How do we sustain multi-turn voice conversations without speaker-echo self-triggering, false backchannel interrupts, or one-shot recognition stalls? | Accepted (repository safety baseline) | Medium |
+| **[ADR-028](./0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md)** | Multi-Turn Conversation Continuity, Anaphoric Slot Carry-Over & Toolathlon Orchestration Hardening | How do we prevent multi-turn slot amnesia, stalled guided journeys, compound-turn tool truncation, repetitive tool loops, and silent tool output corruption? | Accepted (repository safety baseline) | Medium |

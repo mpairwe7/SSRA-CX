@@ -46,6 +46,7 @@ def detect_compound_self_service_steps(text: str, primary_intent: IntentName) ->
     wants_tcc = primary_intent == IntentName.GET_TCC_STATUS or any(
         k in lower for k in ("tcc status", "check my tcc", "compliance certificate status")
     )
+    wants_customs_dec = any(k in lower for k in ("customs declaration", "nimule declaration"))
     wants_case = any(
         k in lower
         for k in ("open a case", "create a case", "open a support case", "reconciliation case")
@@ -63,6 +64,8 @@ def detect_compound_self_service_steps(text: str, primary_intent: IntentName) ->
             steps.append("ledger.get_balance")
         if wants_filing:
             steps.append("ledger.get_filing_status")
+        if wants_customs_dec:
+            steps.append("customs.get_declaration_status")
         if wants_tcc:
             steps.append("tcc.get_tcc_status")
         if wants_case:
@@ -135,6 +138,16 @@ def build_execution_plan(
         )
         return Plan(subgraph=selected_subgraph, steps=[cust_step], tier=tier)
     steps = detect_compound_self_service_steps(canonical_query, intent.intent)
+    if intent.intent == IntentName.CALCULATE_PAYE:
+        if intent.slots.get("compound_wht"):
+            steps.append("tax-facts.calculate_withholding_estimate")
+        if intent.slots.get("hs_code"):
+            cust_step = (
+                "customs.estimate_duties"
+                if intent.slots.get("cif_value_usd")
+                else "customs.lookup_tariff"
+            )
+            steps.append(cust_step)
     if intent.intent == IntentName.GET_FILING_STATUS and intent.slots.get(
         "include_customs_declaration"
     ):
@@ -152,6 +165,7 @@ def build_execution_plan(
             ]
             if "customs.get_declaration_status" not in steps:
                 steps.insert(0, "customs.get_declaration_status")
+    steps = list(dict.fromkeys(steps))
     return Plan(
         subgraph=selected_subgraph,
         steps=steps[:MAX_PLAN_STEPS],
