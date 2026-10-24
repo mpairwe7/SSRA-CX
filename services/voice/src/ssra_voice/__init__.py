@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import base64
+import difflib
 import hashlib
 import hmac
 import json
 import math
 import os
 import re
+import struct
 import time
 import unicodedata
+import uuid
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -1525,6 +1529,212 @@ def is_likely_tts_echo(
     return False
 
 
+_HUMAN_REQUEST_RE = re.compile(
+    r"\b(?:(?:speak|talk)\s+(?:to|with)|(?:connect|transfer|put)\s+(?:me\s+)?(?:through\s+)?to|get\s+me|contact|call)"
+    r"\s+(?:(?:a|an|the)\s+)?(?:human|person|officer|agent|representative|someone|somebody|operator|real\s+person)\b|"
+    r"\b(?:i\s+want|can\s+i|need\s+to)\s+(?:talk\s+to|speak\s+(?:to|with)|see)\s+(?:an?\s+)?officer\b|"
+    r"(?:أريد|عايز|تحدث\s+مع|حولني\s+إلى)\s+(?:موظف|شخص)",
+    re.IGNORECASE,
+)
+_HUMAN_WORD_RE = re.compile(
+    r"^[\s,!.?]*(?:(?:yes|yeah|ok|okay|please|نعم|أيوة)[\s,!.?]+)?"
+    r"(?:(?:i\s+(?:want|need)|give\s+me|can\s+i\s+(?:have|get))\s+)?"
+    r"(?:(?:a|an|the)\s+)?(?:real\s+)?"
+    r"(?:officer|agent|human|person|representative|operator|customer\s+(?:care|service)|موظف)"
+    r"(?:[\s,!.?]+(?:please|now|من\s+فضلك|لو\s+سمحت))?[\s,!.?]*$",
+    re.IGNORECASE,
+)
+_TAX_DISPUTE_RE = re.compile(
+    r"\b(?:dispute|object(?:ion)?|appeal|tribunal|tat|court|lawyer|advocate|illegal|fraud|اعتراض|طعن|محكمة)\b",
+    re.IGNORECASE,
+)
+_OFFER_ACCEPT_RE = re.compile(
+    r"^[\s,!.?]*(?:yes|yeah|yep|sure|ok|okay|alright|please|go\s+ahead|connect\s+me|please\s+do|confirm|نعم|أيوة|طيب|موافق)"
+    r"(?:[\s,!.?]+(?:please\s+connect\s+me|connect\s+me|go\s+ahead|thank\s+you|please|sure|thanks|confirm|شكرا|من\s+فضلك))?[\s,!.?]*$",
+    re.IGNORECASE,
+)
+_OFFER_DECLINE_RE = re.compile(
+    r"^[\s,!.?]*(?:no|nope|not\s+now|i'?m\s+(?:fine|okay|ok)|that'?s\s+(?:all|enough|it)|لا|لأ|مش\s+هسا)"
+    r"(?:[\s,!.?]+(?:i'?m\s+(?:fine|okay|ok)\s+thanks|i'?m\s+(?:fine|okay|ok)|thank\s+you|thanks|not\s+now|شكرا))?[\s,!.?]*$",
+    re.IGNORECASE,
+)
+_MORE_ACCEPT_RE = re.compile(
+    r"^[\s,!.?]*(?:(?:yes|yeah|sure|ok|okay|please|نعم|أيوة)[\s,!.?]+)?"
+    r"(?:tell\s+me\s+more|go\s+on|carry\s+on|continue|more\s+detail|more|تفاصيل\s+أكثر|استمر)"
+    r"(?:[\s,!.?]+please)?[\s,!.?]*$",
+    re.IGNORECASE,
+)
+_CONTROL_MAX_WORDS: int = 8
+_REPEAT_PATTERNS = re.compile(
+    r"\b(?:repeat\s+that|say\s+that\s+again|could\s+you\s+repeat|pardon\s+me|what\s+did\s+you\s+say|أعد\s+ذلك|ممكن\s+تعيد)\b",
+    re.IGNORECASE,
+)
+_SPEED_SLOW_PATTERNS = re.compile(
+    r"\b(?:speak\s+slower|more\s+slowly|talk\s+slower|slow\s+down|تحدث\s+ببطء|تكلم\s+ببطء)\b",
+    re.IGNORECASE,
+)
+_SPEED_NORMAL_PATTERNS = re.compile(
+    r"\b(?:speak\s+(?:normally|faster)|normal\s+(?:speed|pace)|regular\s+(?:speed|pace)|talk\s+faster|سرعة\s+عادية)\b",
+    re.IGNORECASE,
+)
+_CALLBACK_RE = re.compile(
+    r"\b(?:(?:call|ring|phone)\s+me\s+(?:back|later)|call[\s-]?back|اتصل\s+بي\s+لاحقا)\b",
+    re.IGNORECASE,
+)
+_HANGUP_VOICE_PATTERNS = re.compile(
+    r"\b(?:hang\s+up|end\s+(?:the\s+)?call|disconnect|good[\s-]?bye|مع\s+السلامة|أنهي\s+المكالمة)\b",
+    re.IGNORECASE,
+)
+_DONE_RE = re.compile(
+    r"^[\s,!.?]*(?:(?:ok|okay|thanks|thank\s+you|alright|great|no)[\s,!.?]+)?"
+    r"(?:that'?s\s+all|that\s+is\s+all|good[\s-]?bye|bye\s+bye|bye|i'?m\s+done)"
+    r"(?:[\s,!.?]+(?:for\s+(?:now|today)|thank\s+you|thanks|bye))?[\s,!.?]*$",
+    re.IGNORECASE,
+)
+_REVIEW_DECLINE_RE = re.compile(
+    r"\b(?:no,?\s+thank(?:s|\s+you)|not\s+sure|(?:i\s+)?(?:don'?t|do\s+not)\s+know|لا\s+أعرف)\b",
+    re.IGNORECASE,
+)
+_REVIEW_NEUTRAL_NEGATED_RE = re.compile(
+    r"\b(?:not\s+(?:too\s+|that\s+|so\s+)?bad|ليس\s+سيئا)\b",
+    re.IGNORECASE,
+)
+_REVIEW_NEGATIVE_RE = re.compile(
+    r"\b(?:not\s+(?:really|much|at\s+all)|"
+    r"not\s+(?:very\s+|really\s+|that\s+|so\s+|too\s+)?(?:helpful|useful|good|clear|great)|"
+    r"(?:was|is|were)(?:n'?t|\s+not)\s+(?:very\s+|really\s+|that\s+)?(?:helpful|useful|good|clear)|"
+    r"(?:did|does)(?:n'?t|\s+not)\s+(?:really\s+)?(?:help|answer|work)|"
+    r"no\s+help|unhelpful|useless|waste\s+of\s+(?:my\s+)?time|terrible|awful|bad|poor|confusing|disappointed|غير\s+مفيد|سيء)\b",
+    re.IGNORECASE,
+)
+_REVIEW_NEUTRAL_RE = re.compile(
+    r"\b(?:so[\s-]so|a\s+(?:bit|little)|partly|partially|kind\s+of|sort\s+of|somewhat|more\s+or\s+less|half|قليلا)\b",
+    re.IGNORECASE,
+)
+_REVIEW_POSITIVE_RE = re.compile(
+    r"\b(?:helpful|useful|(?:very\s+)?good|great|excellent|perfect|wonderful|helped|thank(?:s|\s+you)|appreciate(?:d)?|satisfied|happy|clear|مفيد|ممتاز|شكرا)\b",
+    re.IGNORECASE,
+)
+_REVIEW_WEAK_NEUTRAL_RE = re.compile(
+    r"\b(?:ok(?:ay)?|fine|alright|all\s+right|average|fair|عادي)\b",
+    re.IGNORECASE,
+)
+_TRAILING_LIST_NUMBER_RE = re.compile(r"(?:^|\s)(\d{1,2})\.$")
+_TRAILING_ABBREVIATION_RE = re.compile(
+    r"(?:^|\s)(?:e\.g|i\.e|etc|No|Sec|Art|Cap|Mr|Mrs|Ms|Dr|St|vs)\.$", re.IGNORECASE
+)
+
+
+def is_spoken_officer_request(text: str) -> bool:
+    """Return True when *text* asks to speak with a human officer (`brain.py` `is_human_request`)."""
+    return bool(_HUMAN_REQUEST_RE.search(text) or _HUMAN_WORD_RE.search(text))
+
+
+def is_tax_dispute(text: str, reason: str = "") -> bool:
+    """Return True when the question or transfer reason involves a tax dispute or legal objection (`brain.py`)."""
+    return bool(_TAX_DISPUTE_RE.search(text) or _TAX_DISPUTE_RE.search(reason))
+
+
+def _is_short_control_request(pattern: re.Pattern[str], text: str) -> bool:
+    return len(text.split()) <= _CONTROL_MAX_WORDS and pattern.search(text) is not None
+
+
+def is_repeat_request(text: str) -> bool:
+    """Return True when the caller asks to repeat the last answer (`brain.py`)."""
+    return _is_short_control_request(_REPEAT_PATTERNS, text)
+
+
+def is_slower_pace_request(text: str) -> bool:
+    """Return True when the caller asks the receptionist to speak more slowly (`brain.py`)."""
+    return _is_short_control_request(_SPEED_SLOW_PATTERNS, text)
+
+
+def is_normal_pace_request(text: str) -> bool:
+    """Return True when the caller asks to restore normal speaking speed (`brain.py`)."""
+    return _is_short_control_request(_SPEED_NORMAL_PATTERNS, text)
+
+
+def is_callback_request(text: str) -> bool:
+    """Return True when a waiting caller asks for a callback instead (`brain.py`)."""
+    return bool(_CALLBACK_RE.search(text))
+
+
+def is_goodbye_request(text: str) -> bool:
+    """Return True when the caller is signing off (`brain.py` `_is_goodbye`)."""
+    return (
+        _is_short_control_request(_HANGUP_VOICE_PATTERNS, text) or _DONE_RE.search(text) is not None
+    )
+
+
+def classify_pending_offer_reply(
+    text: str,
+    pending_offer: str,
+) -> Literal["accept", "decline", "none"]:
+    """Classify a whole-turn reply to a pending receptionist offer (`brain.py` lines 222-244)."""
+    if not pending_offer or not text.strip():
+        return "none"
+    if _OFFER_DECLINE_RE.search(text):
+        return "decline"
+    if _OFFER_ACCEPT_RE.search(text):
+        return "accept"
+    if pending_offer == "more" and _MORE_ACCEPT_RE.search(text):
+        return "accept"
+    return "none"
+
+
+def classify_spoken_call_review(
+    text: str,
+) -> Literal["positive", "neutral", "negative", "unclear"]:
+    """Deterministically classify a caller's spoken answer to 'Was this call helpful?' (`review.py`)."""
+    clean = (text or "").strip()
+    if not clean or _REVIEW_DECLINE_RE.search(clean):
+        return "unclear"
+    if _REVIEW_NEUTRAL_NEGATED_RE.search(clean):
+        return "neutral"
+    if _REVIEW_NEGATIVE_RE.search(clean):
+        return "negative"
+    if _REVIEW_NEUTRAL_RE.search(clean):
+        return "neutral"
+    if _REVIEW_POSITIVE_RE.search(clean):
+        return "positive"
+    if _OFFER_ACCEPT_RE.search(clean):
+        return "positive"
+    if _OFFER_DECLINE_RE.search(clean):
+        return "negative"
+    if _REVIEW_WEAK_NEUTRAL_RE.search(clean):
+        return "neutral"
+    return "unclear"
+
+
+def _ends_mid_procedure_sentence(sentence: str) -> bool:
+    if _TRAILING_ABBREVIATION_RE.search(sentence):
+        return True
+    match = _TRAILING_LIST_NUMBER_RE.search(sentence)
+    if match is None:
+        return False
+    number = int(match.group(1))
+    before = sentence[: match.start()].rstrip()
+    if not before:
+        return True
+    if number == 1:
+        return before.endswith(":")
+    return re.search(rf"(?:^|\s){number - 1}\.\s", sentence) is not None
+
+
+def split_receptionist_spoken_sentences(text: str) -> list[str]:
+    """Split text into sentences while keeping numbered procedures and abbreviations attached (`brain.py`)."""
+    sentences: list[str] = []
+    for piece in re.split(r"(?<=[.!?؟])\s+", text.strip()):
+        piece = piece.strip()
+        if not piece:
+            continue
+        if sentences and _ends_mid_procedure_sentence(sentences[-1]):
+            sentences[-1] = f"{sentences[-1]} {piece}"
+        else:
+            sentences.append(piece)
+    return sentences
+
+
 @dataclass(frozen=True)
 class VoiceTurnOutcome:
     """Outcome of one turn in a stateful multi-turn `VoiceCallSession`."""
@@ -1537,13 +1747,20 @@ class VoiceTurnOutcome:
     ignored_as_backchannel: bool = False
     consecutive_low_confidence_turns: int = 0
     heard_assistant_context: str = ""
+    control_action_applied: str | None = None
+    spoken_response_text: str | None = None
+    speech_rate_slow: bool = False
+    pending_offer: str = ""
 
 
 class VoiceCallSession:
-    """Stateful multi-turn voice call controller (`ADR-027`).
+    """Stateful multi-turn voice call controller (`ADR-027` & `FinalYearProject` `brain.py`/`state.py`).
 
     Connects opening disclosure, opt-in recording consent, post-TTS echo suppression, backchannel
-    filtering, barge-in context trimming, and multi-turn recovery across turns.
+    filtering, barge-in context trimming, in-call receptionist controls (`repeat`, `slower`,
+    `normal_speed`, `more_detail`, `accept_offer`, `decline_offer`, `request_callback`), pending
+    offer interruption protection (`offer_interrupted`), transfer wait epochs, and multi-turn
+    recovery across turns.
     """
 
     def __init__(
@@ -1570,6 +1787,153 @@ class VoiceCallSession:
         self.last_assistant_spoken_text: str = ""
         self.last_interrupted_unspoken_text: str = ""
         self.history: list[dict[str, Any]] = []
+        self.speech_rate_slow: bool = False
+        self.pending_offer: str = ""
+        self.pending_offer_reason: str = ""
+        self.more_detail_text: str = ""
+        self.last_more_detail_text: str = ""
+        self.offer_interrupted: bool = False
+        self.offer_at_risk: bool = False
+        self.risk_offer_made: bool = False
+        self.queue_epoch: int = 0
+        self.needs_callback: bool = False
+
+    def set_pending_offer(
+        self,
+        offer: Literal["", "officer", "more", "confirm", "review"],
+        *,
+        reason: str = "",
+        more_detail: str = "",
+        at_risk: bool = False,
+    ) -> None:
+        """Open a pending yes/no or more-detail offer at the end of an assistant turn (`brain.py`)."""
+        self.pending_offer = offer
+        self.pending_offer_reason = reason
+        self.more_detail_text = more_detail
+        if more_detail:
+            self.last_more_detail_text = more_detail
+        self.offer_interrupted = False
+        self.offer_at_risk = at_risk
+        if at_risk:
+            self.risk_offer_made = True
+
+    def _take_pending_offer(self) -> tuple[str, str, str, bool]:
+        offer = self.pending_offer
+        reason = self.pending_offer_reason
+        more = self.more_detail_text
+        at_risk = self.offer_at_risk
+        self.pending_offer = ""
+        self.pending_offer_reason = ""
+        self.more_detail_text = ""
+        self.offer_interrupted = False
+        self.offer_at_risk = False
+        return offer, reason, more, at_risk
+
+    def begin_transfer_wait(self) -> int:
+        """Enter `transferred` wait mode and bump `queue_epoch` so stale timers become no-ops (`transfer.py`)."""
+        self.phase = "transferred"
+        self.queue_epoch += 1
+        return self.queue_epoch
+
+    def end_transfer_wait(self, *, timed_out: bool = False) -> int:
+        """Leave `transferred` wait mode and bump `queue_epoch`; record `needs_callback` on timeout (`transfer.py`)."""
+        self.queue_epoch += 1
+        if timed_out:
+            self.needs_callback = True
+            self.phase = "active_ai"
+        return self.queue_epoch
+
+    def build_call_state_frame(
+        self,
+        *,
+        turn_phase: Literal["listening", "thinking", "speaking"] = "listening",
+    ) -> dict[str, Any]:
+        """Build the `call_state` frame broadcast to the caller's screen (`brain.py` `_publish_call_state`)."""
+        has_more = bool(self.more_detail_text or self.last_more_detail_text)
+        return {
+            "type": "call_state",
+            "phase": turn_phase,
+            "pending_offer": self.pending_offer,
+            "speech_rate_slow": self.speech_rate_slow,
+            "has_more_detail": has_more,
+            "has_last_answer": bool(self.last_assistant_spoken_text),
+        }
+
+    def handle_call_control(
+        self,
+        action: Literal[
+            "repeat",
+            "slower",
+            "normal_speed",
+            "more_detail",
+            "accept_offer",
+            "decline_offer",
+            "request_callback",
+        ],
+    ) -> VoiceTurnOutcome:
+        """Execute an explicit on-screen CallControlFrame / RequestCallbackFrame action (`brain.py`)."""
+        self.offer_interrupted = False
+        if action == "request_callback":
+            if self.phase == "transferred":
+                self.end_transfer_wait(timed_out=True)
+            else:
+                self.needs_callback = True
+            return VoiceTurnOutcome(
+                session_id=self.session_id,
+                phase=self.phase,
+                turn_index=self.turn_index,
+                decision=None,
+                consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                heard_assistant_context=self.last_assistant_spoken_text,
+                control_action_applied="callback_requested",
+                spoken_response_text="Understood. An SSRA officer will call you back.",
+                speech_rate_slow=self.speech_rate_slow,
+                pending_offer=self.pending_offer,
+            )
+        if action == "repeat":
+            return self.process_caller_turn(transcript="repeat that")
+        if action in ("slower", "normal_speed"):
+            self.turn_index += 1
+            self.speech_rate_slow = action == "slower"
+            ack = (
+                "Okay, I will speak more slowly."
+                if self.speech_rate_slow
+                else "Okay, I will speak at a normal pace."
+            )
+            return VoiceTurnOutcome(
+                session_id=self.session_id,
+                phase=self.phase,
+                turn_index=self.turn_index,
+                decision=None,
+                consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                heard_assistant_context=self.last_assistant_spoken_text,
+                control_action_applied=action,
+                spoken_response_text=ack,
+                speech_rate_slow=self.speech_rate_slow,
+                pending_offer=self.pending_offer,
+            )
+        if action == "more_detail":
+            more_txt = self.more_detail_text or self.last_more_detail_text
+            self._take_pending_offer()
+            self.last_more_detail_text = ""
+            if more_txt:
+                self.turn_index += 1
+                self.record_assistant_reply(more_txt)
+            return VoiceTurnOutcome(
+                session_id=self.session_id,
+                phase=self.phase,
+                turn_index=self.turn_index,
+                decision=None,
+                consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                heard_assistant_context=self.last_assistant_spoken_text,
+                control_action_applied="more_detail",
+                spoken_response_text=more_txt or None,
+                speech_rate_slow=self.speech_rate_slow,
+                pending_offer=self.pending_offer,
+            )
+        if action == "accept_offer":
+            return self.process_caller_turn(transcript="yes")
+        return self.process_caller_turn(transcript="no")
 
     def start_call(self) -> list[VoicePrompt]:
         """Play the opening AI disclosure and, if offered, request opt-in recording consent."""
@@ -1596,7 +1960,7 @@ class VoiceCallSession:
                 wer_evidence=self.wer_evidence,
                 dtmf_digit="0",
             )
-            self.phase = "transferred"
+            self.begin_transfer_wait()
             return VoiceTurnOutcome(
                 session_id=self.session_id,
                 phase=self.phase,
@@ -1604,6 +1968,8 @@ class VoiceCallSession:
                 decision=decision,
                 consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
                 heard_assistant_context=self.last_assistant_spoken_text,
+                speech_rate_slow=self.speech_rate_slow,
+                pending_offer=self.pending_offer,
             )
         self.recording_consent_granted = resolve_recording_consent(dtmf_digit)
         self.phase = "active_ai"
@@ -1614,6 +1980,8 @@ class VoiceCallSession:
             decision=None,
             consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
             heard_assistant_context=self.last_assistant_spoken_text,
+            speech_rate_slow=self.speech_rate_slow,
+            pending_offer=self.pending_offer,
         )
 
     def record_assistant_reply(
@@ -1624,9 +1992,14 @@ class VoiceCallSession:
     ) -> str:
         """Record what the assistant actually spoke, trimming unspoken sentences on barge-in."""
         sentences = split_tts_sentences(reply_text)
-        if interrupted_at_sentence is not None and 0 <= interrupted_at_sentence < len(sentences):
+        was_interrupted = (
+            interrupted_at_sentence is not None and 0 <= interrupted_at_sentence < len(sentences)
+        )
+        if was_interrupted and interrupted_at_sentence is not None:
             heard = " ".join(sentences[:interrupted_at_sentence]).strip()
             unspoken = " ".join(sentences[interrupted_at_sentence:]).strip()
+            if self.pending_offer:
+                self.offer_interrupted = True
         else:
             heard = " ".join(sentences).strip()
             unspoken = ""
@@ -1642,6 +2015,21 @@ class VoiceCallSession:
                 }
             )
         return heard
+
+    def _build_officer_transfer_decision(
+        self, reason: str, *, barge_in: bool = False
+    ) -> VoiceSessionDecision:
+        return VoiceSessionDecision(
+            session_id=self.session_id,
+            locale=self.locale,
+            asr_engine=ASR_MODEL_BY_LOCALE[self.locale],
+            tts_engine=TTS_MODEL_BY_LOCALE[self.locale],
+            recording_enabled=self.recording_consent_granted,
+            cancel_active_reply=barge_in,
+            asr_rejected_reason=None,
+            action="WARM_TRANSFER_TO_OFFICER",
+            warm_transfer_summary=f"Warm transfer from IVR ({self.locale.value}): {reason}.",
+        )
 
     def process_caller_turn(
         self,
@@ -1664,6 +2052,8 @@ class VoiceCallSession:
                 decision=None,
                 consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
                 heard_assistant_context=self.last_assistant_spoken_text,
+                speech_rate_slow=self.speech_rate_slow,
+                pending_offer=self.pending_offer,
             )
         if self.phase in ("opening_disclosure", "recording_consent") and dtmf_digit in ("1", "2"):
             return self.submit_recording_consent(dtmf_digit)
@@ -1671,10 +2061,11 @@ class VoiceCallSession:
             self.disclosure_playing = False
             self.phase = "active_ai"
 
-        if dtmf_digit is None and transcript.strip():
+        clean_tx = transcript.strip()
+        if dtmf_digit is None and clean_tx:
             effective_elapsed = 0.0 if assistant_speaking else elapsed_since_tts_end_ms
             if is_likely_tts_echo(
-                transcript,
+                clean_tx,
                 self.last_assistant_spoken_text,
                 elapsed_since_tts_end_ms=effective_elapsed,
             ):
@@ -1686,8 +2077,10 @@ class VoiceCallSession:
                     ignored_as_echo=True,
                     consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
                     heard_assistant_context=self.last_assistant_spoken_text,
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
                 )
-            if assistant_speaking and is_backchannel_utterance(transcript):
+            if assistant_speaking and is_backchannel_utterance(clean_tx):
                 return VoiceTurnOutcome(
                     session_id=self.session_id,
                     phase=self.phase,
@@ -1696,6 +2089,177 @@ class VoiceCallSession:
                     ignored_as_backchannel=True,
                     consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
                     heard_assistant_context=self.last_assistant_spoken_text,
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
+                )
+
+        if self.phase == "transferred" and dtmf_digit is None and is_callback_request(clean_tx):
+            return self.handle_call_control("request_callback")
+
+        # Resolve pending offer replies and spoken in-call receptionist controls (`brain.py` lines 783-895)
+        if dtmf_digit is None and clean_tx:
+            unheard = self.offer_interrupted
+            offer, offer_reason, more_txt, offer_at_risk = self._take_pending_offer()
+            offer_reply = classify_pending_offer_reply(clean_tx, offer)
+            if offer and offer_reply != "none" and unheard:
+                self.set_pending_offer(
+                    offer,  # type: ignore[arg-type]
+                    reason=offer_reason,
+                    more_detail=more_txt,
+                    at_risk=offer_at_risk,
+                )
+                reask = (
+                    "Would you like more detail?"
+                    if offer == "more"
+                    else "Would you like to speak with an SSRA officer?"
+                )
+                self.turn_index += 1
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=None,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                    control_action_applied="reask_unheard_offer",
+                    spoken_response_text=reask,
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
+                )
+            if offer and offer_reply == "decline":
+                if offer == "more":
+                    self.last_more_detail_text = ""
+                self.turn_index += 1
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=None,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                    control_action_applied="offer_declined",
+                    spoken_response_text="Alright. Let me know if you have another question.",
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
+                )
+            if offer == "officer" and offer_reply == "accept":
+                self.turn_index += 1
+                self.begin_transfer_wait()
+                decision = self._build_officer_transfer_decision(
+                    offer_reason or "offer_accepted", barge_in=assistant_speaking
+                )
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=decision,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                    control_action_applied="offer_accepted_officer",
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
+                )
+            if offer == "more" and offer_reply == "accept":
+                self.turn_index += 1
+                self.last_more_detail_text = ""
+                if more_txt:
+                    self.record_assistant_reply(more_txt)
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=None,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                    control_action_applied="offer_accepted_more",
+                    spoken_response_text=more_txt or None,
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
+                )
+            if offer_at_risk and unheard:
+                self.risk_offer_made = False
+
+            if is_spoken_officer_request(clean_tx):
+                self.turn_index += 1
+                self.history.append(
+                    {"speaker": "caller", "text": clean_tx, "seq": len(self.history) + 1}
+                )
+                self.begin_transfer_wait()
+                decision = self._build_officer_transfer_decision(
+                    "caller_requested", barge_in=assistant_speaking
+                )
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=decision,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                    control_action_applied="spoken_officer_request",
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
+                )
+
+            if is_repeat_request(clean_tx) and self.last_assistant_spoken_text:
+                if offer:
+                    self.set_pending_offer(
+                        offer,  # type: ignore[arg-type]
+                        reason=offer_reason,
+                        more_detail=more_txt,
+                        at_risk=offer_at_risk,
+                    )
+                self.turn_index += 1
+                repeated = f"Sure, let me repeat that: {self.last_assistant_spoken_text}"
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=None,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                    control_action_applied="repeat",
+                    spoken_response_text=repeated,
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
+                )
+
+            if is_slower_pace_request(clean_tx):
+                if offer:
+                    self.set_pending_offer(
+                        offer,  # type: ignore[arg-type]
+                        reason=offer_reason,
+                        more_detail=more_txt,
+                        at_risk=offer_at_risk,
+                    )
+                return self.handle_call_control("slower")
+
+            if is_normal_pace_request(clean_tx):
+                if offer:
+                    self.set_pending_offer(
+                        offer,  # type: ignore[arg-type]
+                        reason=offer_reason,
+                        more_detail=more_txt,
+                        at_risk=offer_at_risk,
+                    )
+                return self.handle_call_control("normal_speed")
+
+            if not offer and _MORE_ACCEPT_RE.search(clean_tx) and self.last_more_detail_text:
+                return self.handle_call_control("more_detail")
+
+            if is_goodbye_request(clean_tx):
+                self.turn_index += 1
+                self.phase = "ended"
+                return VoiceTurnOutcome(
+                    session_id=self.session_id,
+                    phase=self.phase,
+                    turn_index=self.turn_index,
+                    decision=None,
+                    consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
+                    heard_assistant_context=self.last_assistant_spoken_text,
+                    control_action_applied="caller_voice_hangup",
+                    spoken_response_text="Thank you for calling SSRA Assist. Goodbye.",
+                    speech_rate_slow=self.speech_rate_slow,
+                    pending_offer=self.pending_offer,
                 )
 
         asr_verdict = (
@@ -1722,16 +2286,16 @@ class VoiceCallSession:
         )
         self.turn_index += 1
         self.consecutive_low_confidence_turns = next_low_conf_count
-        if transcript.strip() and asr_verdict == "accept":
+        if clean_tx and asr_verdict == "accept":
             self.history.append(
                 {
                     "speaker": "caller",
-                    "text": transcript.strip(),
+                    "text": clean_tx,
                     "seq": len(self.history) + 1,
                 }
             )
         if decision.action == "WARM_TRANSFER_TO_OFFICER":
-            self.phase = "transferred"
+            self.begin_transfer_wait()
         return VoiceTurnOutcome(
             session_id=self.session_id,
             phase=self.phase,
@@ -1739,6 +2303,8 @@ class VoiceCallSession:
             decision=decision,
             consecutive_low_confidence_turns=self.consecutive_low_confidence_turns,
             heard_assistant_context=self.last_assistant_spoken_text,
+            speech_rate_slow=self.speech_rate_slow,
+            pending_offer=self.pending_offer,
         )
 
 
@@ -2201,9 +2767,319 @@ def verify_call_to_web_carryover(
     return hmac.compare_digest(carryover.carryover_hmac, expected)
 
 
+REPLY_FRAME_KINDS: frozenset[str] = frozenset(
+    {
+        "output_audio",
+        "tts_text",
+        "llm_response_start",
+        "llm_response_end",
+        "tts_started",
+        "tts_stopped",
+    }
+)
+
+
+def should_drop_ai_frame_when_bridged(
+    *,
+    call_mode: str,
+    frame_kind: str,
+    direction: str = "downstream",
+) -> bool:
+    """Keep the AI silent once an officer has bridged onto the call (`hold_gate.py` `OfficerOutputGate`)."""
+    return direction == "downstream" and call_mode == "bridged" and frame_kind in REPLY_FRAME_KINDS
+
+
+_PRIORITY_QUEUE_RANK: dict[str, int] = {"urgent": 0, "high": 1, "normal": 2}
+
+
+def format_case_reference(ticket_id: str | None, *, fallback_call_id: str = "") -> str:
+    """Format a caller/officer case reference (`transfer.py` `case_reference`)."""
+    clean_ticket = str(ticket_id or "").strip()
+    if clean_ticket:
+        if clean_ticket.upper().startswith(("SSRA-", "CASE-", "CALL-")):
+            return clean_ticket.upper()
+        return f"SSRA-{clean_ticket[:8].upper()}"
+    clean_call = str(fallback_call_id or "").strip()
+    return f"CALL-{clean_call[:8].upper()}" if clean_call else "CALL-UNKNOWN"
+
+
+def compute_transfer_queue_position(
+    target_entry: LobbyCallEntry,
+    all_entries: list[LobbyCallEntry] | tuple[LobbyCallEntry, ...],
+) -> int:
+    """Return 1-based queue position among unclaimed `transferring` calls (`transfer.py` `queue_position`)."""
+    my_rank = (
+        _PRIORITY_QUEUE_RANK.get(target_entry.priority, 2),
+        target_entry.waiting_since if target_entry.waiting_since is not None else float("inf"),
+        target_entry.call_id,
+    )
+    ahead = 0
+    for other in all_entries:
+        skip = (
+            other.call_id == target_entry.call_id
+            or other.status != "transferring"
+            or bool(other.claimed_by)
+        )
+        if skip:
+            continue
+        other_rank = (
+            _PRIORITY_QUEUE_RANK.get(other.priority, 2),
+            other.waiting_since if other.waiting_since is not None else float("inf"),
+            other.call_id,
+        )
+        if other_rank < my_rank:
+            ahead += 1
+    return ahead + 1
+
+
+@dataclass(frozen=True)
+class CallRiskEvaluation:
+    """Live call risk evaluation (`risk.py` `evaluate_call_risk`)."""
+
+    level: Literal["none", "watch", "at_risk"]
+    signals: tuple[str, ...]
+    should_offer_officer: bool
+
+
+def _normalized_turn_similarity(a: str, b: str) -> float:
+    norm_a = " ".join((a or "").lower().split())
+    norm_b = " ".join((b or "").lower().split())
+    if not norm_a or not norm_b:
+        return 0.0
+    return difflib.SequenceMatcher(None, norm_a, norm_b).ratio()
+
+
+def evaluate_live_call_risk(
+    *,
+    turns: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    clarifications_asked: int = 0,
+    abstentions_count: int = 0,
+    duration_seconds: float = 0.0,
+    caller_affect: str = "calm",
+    risk_offer_already_made: bool = False,
+) -> CallRiskEvaluation:
+    """Evaluate a live call for the 6 `risk.py` queue risk signals (`none` | `watch` | `at_risk`)."""
+    signals: list[str] = []
+    if clarifications_asked >= 2:
+        signals.append(f"clarifications:{clarifications_asked}")
+
+    caller_utterances = [
+        t
+        for t in turns
+        if t.get("speaker") == "caller"
+        and t.get("kind", "utterance") != "review"
+        and str(t.get("text", "")).strip()
+    ]
+    if len(caller_utterances) >= 2:
+        latest_text = str(caller_utterances[-1].get("text", ""))
+        repeated = any(
+            _normalized_turn_similarity(latest_text, str(prev.get("text", ""))) >= 0.80
+            for prev in caller_utterances[:-1]
+        )
+        if repeated:
+            signals.append("repeated_question")
+
+    distress_in_text = bool(
+        caller_utterances
+        and _DISTRESS_WORDS_RE.search(str(caller_utterances[-1].get("text", "")).lower())
+    )
+    if distress_in_text or caller_affect in ("distressed", "urgent_distress"):
+        signals.append("distress")
+
+    low_prob_turns = sum(
+        1
+        for t in caller_utterances
+        if isinstance(t.get("mean_word_prob"), (int, float))
+        and not isinstance(t.get("mean_word_prob"), bool)
+        and float(t["mean_word_prob"]) < 0.50
+    )
+    if low_prob_turns >= 2:
+        signals.append("low_word_confidence")
+
+    if abstentions_count >= 1:
+        signals.append("abstention")
+
+    if duration_seconds > 360.0:
+        signals.append("long_call")
+
+    level: Literal["none", "watch", "at_risk"] = "none"
+    if "distress" in signals or len(signals) >= 2:
+        level = "at_risk"
+    elif len(signals) == 1:
+        level = "watch"
+
+    should_offer = level == "at_risk" and not risk_offer_already_made
+    return CallRiskEvaluation(
+        level=level,
+        signals=tuple(signals),
+        should_offer_officer=should_offer,
+    )
+
+
+@dataclass(frozen=True)
+class LowBandwidthVoiceProfile:
+    """Negotiated transport adaptation for a constrained 2G/3G mobile voice connection (`low_bandwidth.py`)."""
+
+    enabled: bool = False
+    codec: Literal["pcm16_16k", "mulaw_8k", "opus_12k"] = "pcm16_16k"
+    sample_rate: int = 16000
+    caption_only: bool = False
+    bitrate_kbps: int = 256
+
+
+def negotiate_low_bandwidth_voice_profile(
+    telemetry: Mapping[str, Any] | None = None,
+) -> LowBandwidthVoiceProfile:
+    """Negotiate low-bandwidth voice codec and caption-first degradation from client network telemetry (`low_bandwidth.py`)."""
+    cfg = telemetry or {}
+    eff_type = str(cfg.get("effective_type") or "").strip().lower()
+    save_data = bool(cfg.get("save_data") or cfg.get("low_bandwidth"))
+    raw_rtt = cfg.get("rtt_ms")
+    rtt_ms = (
+        float(raw_rtt)
+        if isinstance(raw_rtt, (int, float)) and not isinstance(raw_rtt, bool)
+        else 0.0
+    )
+
+    is_constrained = save_data or eff_type in ("slow-2g", "2g", "3g") or rtt_ms >= 600.0
+    if not is_constrained:
+        return LowBandwidthVoiceProfile()
+
+    caption_only = bool(cfg.get("caption_only")) or eff_type == "slow-2g" or rtt_ms > 1500.0
+    preferred_raw = str(cfg.get("audio_codec") or "mulaw_8k").strip().lower()
+    codec: Literal["mulaw_8k", "opus_12k"] = (
+        "opus_12k" if preferred_raw == "opus_12k" else "mulaw_8k"
+    )
+    bitrate = 0 if caption_only else (12 if codec == "opus_12k" else 64)
+    return LowBandwidthVoiceProfile(
+        enabled=True,
+        codec=codec,
+        sample_rate=8000 if codec == "mulaw_8k" else 16000,
+        caption_only=caption_only,
+        bitrate_kbps=bitrate,
+    )
+
+
+_MULAW_MU: float = 255.0
+_LOG1P_MU: float = math.log1p(_MULAW_MU)
+
+
+def pcm16_16k_to_mulaw_8k(pcm16_bytes: bytes) -> bytes:
+    """Downsample 16 kHz mono PCM16 to 8 kHz and encode as 8-bit ITU-T G.711 mu-law (`low_bandwidth.py`, 4x smaller)."""
+    if len(pcm16_bytes) < 4:
+        return b""
+    usable = len(pcm16_bytes) - (len(pcm16_bytes) % 2)
+    sample_count = usable // 2
+    samples = struct.unpack(f"<{sample_count}h", pcm16_bytes[:usable])
+    out = bytearray()
+    for idx in range(0, sample_count, 2):
+        norm = max(-1.0, min(1.0, samples[idx] / 32768.0))
+        sign = -1.0 if norm < 0.0 else (1.0 if norm > 0.0 else 0.0)
+        compressed = sign * math.log1p(_MULAW_MU * abs(norm)) / _LOG1P_MU
+        quantized = int(min(255, max(0, (compressed + 1.0) * 0.5 * _MULAW_MU + 0.5)))
+        out.append(quantized)
+    return bytes(out)
+
+
+def mulaw_8k_to_pcm16_16k(mulaw_bytes: bytes) -> bytes:
+    """Decode 8-bit 8 kHz G.711 mu-law and linearly upsample to 16 kHz mono PCM16 (`low_bandwidth.py`)."""
+    if not mulaw_bytes:
+        return b""
+    decoded_8k: list[float] = []
+    for byte_val in mulaw_bytes:
+        compressed = (byte_val / _MULAW_MU) * 2.0 - 1.0
+        sign = -1.0 if compressed < 0.0 else (1.0 if compressed > 0.0 else 0.0)
+        sample = sign * (1.0 / _MULAW_MU) * (math.pow(1.0 + _MULAW_MU, abs(compressed)) - 1.0)
+        decoded_8k.append(sample)
+
+    upsampled: list[int] = []
+    n = len(decoded_8k)
+    if n == 1:
+        val = int(max(-32768, min(32767, round(decoded_8k[0] * 32767.0))))
+        upsampled.extend((val, val))
+    else:
+        for i in range(n - 1):
+            cur_s = decoded_8k[i]
+            mid_s = 0.5 * (cur_s + decoded_8k[i + 1])
+            upsampled.append(int(max(-32768, min(32767, round(cur_s * 32767.0)))))
+            upsampled.append(int(max(-32768, min(32767, round(mid_s * 32767.0)))))
+        last_val = int(max(-32768, min(32767, round(decoded_8k[-1] * 32767.0))))
+        upsampled.extend((last_val, last_val))
+    return struct.pack(f"<{len(upsampled)}h", *upsampled)
+
+
+CALLER_RECONNECT_GRACE_SECONDS: int = 45
+_CONSUMED_CALL_RESUME_NONCES: OrderedDict[str, float] = OrderedDict()
+_MAX_CONSUMED_CALL_RESUME_NONCES: int = 2048
+
+
+def mint_call_resume_ticket(
+    call_id: str,
+    conversation_id: str,
+    *,
+    user_id: str = "",
+    ttl_seconds: int = CALLER_RECONNECT_GRACE_SECONDS,
+    signing_salt: str | None = None,
+    now: float | None = None,
+) -> str:
+    """Mint a fail-closed HMAC-SHA256 single-use caller resume ticket for dropped mobile voice sockets (`low_bandwidth.py`)."""
+    key = _carryover_signing_key(signing_salt)
+    current = time.time() if now is None else now
+    payload = {
+        "cid": call_id,
+        "conv": conversation_id,
+        "uid": user_id,
+        "nonce": uuid.uuid4().hex[:16],
+        "exp": round(current + max(5, ttl_seconds), 2),
+    }
+    raw_body = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii")
+    sig = hmac.new(key, raw_body.encode("ascii"), hashlib.sha256).hexdigest()[:32]
+    return f"{raw_body}.{sig}"
+
+
+def verify_call_resume_ticket(
+    resume_ticket: str,
+    *,
+    expected_call_id: str = "",
+    expected_user_id: str = "",
+    signing_salt: str | None = None,
+    now: float | None = None,
+) -> dict[str, Any] | None:
+    """Verify and consume a single-use caller resume ticket in constant time; returns claims or None (`low_bandwidth.py`)."""
+    if not resume_ticket or "." not in resume_ticket:
+        return None
+    key = _carryover_signing_key(signing_salt)
+    raw_body, sig = resume_ticket.rsplit(".", 1)
+    expected_sig = hmac.new(key, raw_body.encode("ascii"), hashlib.sha256).hexdigest()[:32]
+    if not hmac.compare_digest(sig, expected_sig):
+        return None
+    payload = json.loads(base64.urlsafe_b64decode(raw_body.encode("ascii")).decode("utf-8"))
+    current = time.time() if now is None else now
+    exp_ts = float(payload.get("exp") or 0.0)
+    if exp_ts <= current:
+        return None
+    if expected_call_id and payload.get("cid") != expected_call_id:
+        return None
+    if expected_user_id and payload.get("uid") != expected_user_id:
+        return None
+    nonce = str(payload.get("nonce") or "")
+    for old_nonce, old_exp in list(_CONSUMED_CALL_RESUME_NONCES.items()):
+        if old_exp <= current:
+            _CONSUMED_CALL_RESUME_NONCES.pop(old_nonce, None)
+    if nonce in _CONSUMED_CALL_RESUME_NONCES:
+        return None
+    if len(_CONSUMED_CALL_RESUME_NONCES) >= _MAX_CONSUMED_CALL_RESUME_NONCES:
+        _CONSUMED_CALL_RESUME_NONCES.popitem(last=False)
+    _CONSUMED_CALL_RESUME_NONCES[nonce] = exp_ts
+    return payload
+
+
 __all__ = [
     "APPROVED_VOICE_WER_EVIDENCE",
     "ASR_MODEL_BY_LOCALE",
+    "CALLER_RECONNECT_GRACE_SECONDS",
     "CARRYOVER_TTL_SECONDS",
     "LOBBY_EVENT_TYPES",
     "MAX_CARRYOVER_CONTEXT_CHARS",
@@ -2212,6 +3088,8 @@ __all__ = [
     "MAX_DTMF_STEP_UP_ATTEMPTS",
     "MAX_SMS_CONTINUATION_CHARS",
     "MAX_VOICE_WER_GATE",
+    "POST_TTS_ECHO_COOLDOWN_MS",
+    "REPLY_FRAME_KINDS",
     "TTS_DEFAULT_VOICE",
     "TTS_MODEL_BY_LOCALE",
     "TTS_VOICE_CATALOG",
@@ -2222,12 +3100,14 @@ __all__ = [
     "BargeInDirective",
     "BriefClaim",
     "CallLobbyManager",
+    "CallRiskEvaluation",
     "CallToWebCarryover",
     "ChatToCallCarryover",
     "EdgeFieldApplianceProfile",
     "HfVoiceModelDescriptor",
     "HybridVoiceRouteDecision",
     "LobbyCallEntry",
+    "LowBandwidthVoiceProfile",
     "OfficerCallBrief",
     "OtpVerifier",
     "SpokenNumberVerbalization",
@@ -2236,10 +3116,12 @@ __all__ = [
     "TtsPhraseCache",
     "TtsSynthesizer",
     "VADConfig",
+    "VoiceCallSession",
     "VoicePrompt",
     "VoiceRetentionPolicy",
     "VoiceSessionDecision",
     "VoiceStreamSession",
+    "VoiceTurnOutcome",
     "VoiceWebSocketConcurrencyGuard",
     "VoiceWerEvidence",
     "WhisperSegmentSignals",
@@ -2250,13 +3132,31 @@ __all__ = [
     "build_voice_consent_audit_entry",
     "build_voice_prosody_eq_metadata",
     "build_voice_spoken_turn_and_sms_followup",
+    "classify_pending_offer_reply",
+    "classify_spoken_call_review",
+    "compute_transfer_queue_position",
+    "evaluate_live_call_risk",
     "fixed_voice_prompts",
+    "format_case_reference",
     "generate_officer_call_brief",
     "get_localized_tool_wait_filler",
+    "is_backchannel_utterance",
+    "is_callback_request",
+    "is_goodbye_request",
+    "is_likely_tts_echo",
+    "is_normal_pace_request",
+    "is_repeat_request",
+    "is_slower_pace_request",
+    "is_spoken_officer_request",
+    "is_tax_dispute",
     "is_voice_language_approved",
     "is_ws_origin_allowed",
     "looks_like_valid_audio_bytes",
+    "mint_call_resume_ticket",
+    "mulaw_8k_to_pcm16_16k",
+    "negotiate_low_bandwidth_voice_profile",
     "normalize_statutory_text_for_speech",
+    "pcm16_16k_to_mulaw_8k",
     "resolve_edge_appliance_profile",
     "resolve_hf_voice_model_cache",
     "resolve_mt_and_tts_turn_plan",
@@ -2264,12 +3164,15 @@ __all__ = [
     "resolve_tts_voice",
     "route_voice_turn",
     "select_hybrid_voice_execution_mode",
+    "should_drop_ai_frame_when_bridged",
+    "split_receptionist_spoken_sentences",
     "split_tts_sentences",
     "sync_affective_state_to_call_lobby",
     "synthesize_tts_speech_envelope",
     "validate_audio_pcm_expansion_budget",
     "validate_call_wrap_up",
     "verbalize_statutory_figures_for_tts",
+    "verify_call_resume_ticket",
     "verify_call_to_web_carryover",
     "verify_spoken_figure_fidelity",
     "verify_voice_dtmf_step_up",
