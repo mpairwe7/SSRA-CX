@@ -4,7 +4,7 @@ Every architectural decision with a real reversal cost is recorded here before i
 
 ---
 
-## ADR Catalog (ADR-001 to ADR-028)
+## ADR Catalog (ADR-001 to ADR-029)
 
 | ID | Title | One-Line Problem Statement | Status | Reversal Cost |
 |---|---|---|---|---|
@@ -36,3 +36,4 @@ Every architectural decision with a real reversal cost is recorded here before i
 | **[ADR-026](./0026-voice-caller-output-disclosure-and-figure-safe-text.md)** | Voice Caller Output, Disclosure & Figure-Safe Channel Text | How do we make sure callers know they are talking to an AI, consent to recording, can interrupt, and never receive a split figure by voice or SMS? | Accepted (repository safety baseline) | Medium |
 | **[ADR-027](./0027-voice-multiturn-continuity-echo-guard-and-barge-in.md)** | Multi-Turn Voice Continuity, Post-TTS Acoustic Echo Guard & Backchannel Immunity | How do we sustain multi-turn voice conversations without speaker-echo self-triggering, false backchannel interrupts, or one-shot recognition stalls? | Accepted (repository safety baseline) | Medium |
 | **[ADR-028](./0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md)** | Multi-Turn Conversation Continuity, Anaphoric Slot Carry-Over & Toolathlon Orchestration Hardening | How do we prevent multi-turn slot amnesia, stalled guided journeys, compound-turn tool truncation, repetitive tool loops, and silent tool output corruption? | Accepted (repository safety baseline) | Medium |
+| **[ADR-029](./0029-document-intake-preflight-and-truthful-inspection-ux.md)** | Client-Side Document Intake Preflight, BiDi/PDF/Macro Guards & Truthful OQ-017 Inspection UX | How do we integrate the `FinalYearProject` composer attachment, inspection modal, and receipt export flows while blocking unsafe PDFs/macros and preserving `OQ-017` truthfulness? | Accepted (repository safety baseline) | Low–Medium |
