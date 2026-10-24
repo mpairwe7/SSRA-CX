@@ -2,6 +2,7 @@
 
 from ssra_runtime.guardrails.eq_detector import (
     build_empathetic_preamble,
+    build_eq_handling_guidance,
     compute_affective_state,
     should_trigger_eq_escalation,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "NumericProvenanceResult",
     "PiiGuardResult",
     "build_empathetic_preamble",
+    "build_eq_handling_guidance",
     "check_prompt_injection",
     "compute_affective_state",
     "detect_conflicting_chunks",

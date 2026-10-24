@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+import re
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from ssra_adapters import MockECustomsAdapter
@@ -17,6 +18,8 @@ from ssra_mcp import (
 )
 
 MAX_CIF_VALUE_USD = Decimal("1000000000")
+_GROUPED_CIF_RE = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d{1,6})?$")
+_PLAIN_CIF_RE = re.compile(r"^\d+(?:\.\d{1,6})?$")
 
 
 def create_customs_mcp_server() -> StatelessMcpServer:
@@ -43,14 +46,22 @@ def create_customs_mcp_server() -> StatelessMcpServer:
         # Principle 2 & Section 2: Foreign-currency customs values convert to SSP strictly at the
         # official Bank of South Sudan (BoSS) rate from the adapter—never guessed by the LLM.
         t = adapter.lookup_tariff(str(args["hs_code"]))
-        try:
-            cif_usd = Decimal(str(args["cif_value_usd"]).strip())
-        except InvalidOperation as exc:
+        raw_cif = args["cif_value_usd"]
+        stripped_cif = str(raw_cif).strip()
+        cleaned_cif = stripped_cif.replace(",", "")
+        bad_cif_input = (
+            isinstance(raw_cif, bool)
+            or ("," in stripped_cif and not _GROUPED_CIF_RE.match(stripped_cif))
+            or not _PLAIN_CIF_RE.match(cleaned_cif)
+            or len(cleaned_cif) > 32
+        )
+        if bad_cif_input:
             raise SSRAError(
                 McpErrorCode.VALIDATION_FAILED,
                 "cif_value_usd must be a valid decimal number",
                 status_code=400,
-            ) from exc
+            )
+        cif_usd = Decimal(cleaned_cif)
         if not cif_usd.is_finite() or cif_usd < Decimal("0") or cif_usd > MAX_CIF_VALUE_USD:
             raise SSRAError(
                 McpErrorCode.VALIDATION_FAILED,

@@ -14,7 +14,7 @@ but NEVER overrides `T0`-`T4` OPA security gates or unlocks `T3`/`T4` tools.
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from ssra_core import AffectiveSnapshot
 
@@ -115,6 +115,44 @@ _ADVERSARIAL_BYPASS_RE = re.compile(
 )
 
 _REPEATED_PUNCT_RE = re.compile(r"[!?]{2,}")
+_EQ_NEGATION_PREFIX_RE = re.compile(
+    r"\b(?:not|no|never|neither|without|don't|dont|isn't|isnt|aren't|arent|wasn't|wasnt|do\s+not|does\s+not|did\s+not|cannot|can't|cant)"
+    r"(?:\s+(?:really|very|so|too|at\s+all|even|feeling|feel))?\s+$"
+)
+
+
+def _compile_marker_patterns(
+    markers: tuple[str, ...],
+) -> tuple[tuple[str, re.Pattern[str]], ...]:
+    """Pre-compile lexical marker regexes once at import time (`<0.5ms` CPU budget)."""
+    compiled: list[tuple[str, re.Pattern[str]]] = []
+    for marker in markers:
+        is_ascii_word = marker.isascii() and " " not in marker
+        pattern_str = rf"\b{re.escape(marker)}\b" if is_ascii_word else re.escape(marker)
+        compiled.append((marker, re.compile(pattern_str)))
+    return tuple(compiled)
+
+
+_COMPILED_DISTRESS_MARKERS = _compile_marker_patterns(_DISTRESS_MARKERS)
+_COMPILED_FRUSTRATION_MARKERS = _compile_marker_patterns(_FRUSTRATION_MARKERS)
+_COMPILED_ANXIOUS_MARKERS = _compile_marker_patterns(_ANXIOUS_URGENT_MARKERS)
+_COMPILED_CONFUSION_MARKERS = _compile_marker_patterns(_CONFUSION_MARKERS)
+
+
+def _match_eq_markers(
+    lower_text: str,
+    compiled_markers: tuple[tuple[str, re.Pattern[str]], ...],
+) -> list[str]:
+    """Match pre-compiled lexical emotion markers with word boundaries and negation rejection."""
+    hits: list[str] = []
+    for marker, pat in compiled_markers:
+        for match in pat.finditer(lower_text):
+            prefix = lower_text[max(0, match.start() - 20) : match.start()]
+            if _EQ_NEGATION_PREFIX_RE.search(prefix):
+                continue
+            hits.append(marker)
+            break
+    return hits
 
 
 def compute_affective_state(
@@ -132,10 +170,10 @@ def compute_affective_state(
     lower = cleaned.lower()
     signals: list[str] = []
 
-    distress_hits = [m for m in _DISTRESS_MARKERS if m in lower]
-    frustration_hits = [m for m in _FRUSTRATION_MARKERS if m in lower]
-    anxious_hits = [m for m in _ANXIOUS_URGENT_MARKERS if m in lower]
-    confusion_hits = [m for m in _CONFUSION_MARKERS if m in lower]
+    distress_hits = _match_eq_markers(lower, _COMPILED_DISTRESS_MARKERS)
+    frustration_hits = _match_eq_markers(lower, _COMPILED_FRUSTRATION_MARKERS)
+    anxious_hits = _match_eq_markers(lower, _COMPILED_ANXIOUS_MARKERS)
+    confusion_hits = _match_eq_markers(lower, _COMPILED_CONFUSION_MARKERS)
 
     if distress_hits:
         signals.append(f"distress_lexical:{distress_hits[0]}")
@@ -285,3 +323,47 @@ def build_empathetic_preamble(
             return "Duɔ̈në riɔ̈ɔ̈c, buk dhöl de SSRA nyuɔɔth yïn në كök: "
         return "Here is the clear step-by-step official guidance: "
     return ""
+
+
+_EQ_HANDLING_GUIDANCE: dict[str, dict[str, Any]] = {
+    "distressed": {
+        "tone_register": "empathetic_reassuring",
+        "lead_with_acknowledgement": True,
+        "avoid": "Do not quote penalties without naming official e-Tax or officer resolution paths.",
+    },
+    "frustrated": {
+        "tone_register": "empathetic_reassuring",
+        "lead_with_acknowledgement": True,
+        "avoid": "Do not restate steps the taxpayer already tried; give the next concrete action.",
+    },
+    "anxious": {
+        "tone_register": "direct_urgent",
+        "lead_with_acknowledgement": True,
+        "avoid": "Do not lead with background; state the deadline and fastest official route first.",
+    },
+    "confused": {
+        "tone_register": "patient_clear",
+        "lead_with_acknowledgement": False,
+        "avoid": "Do not repeat dense jargon; use short sentences and clear step numbers.",
+    },
+    "calm": {
+        "tone_register": "neutral",
+        "lead_with_acknowledgement": False,
+        "avoid": "Answer directly; an unprompted empathy opener reads as insincere.",
+    },
+}
+
+
+def build_eq_handling_guidance(affective: AffectiveSnapshot) -> dict[str, Any]:
+    """Return structured handling guidance for the composer (`FinalYearProject` `empathy.py` `assess` parity)."""
+    spec = _EQ_HANDLING_GUIDANCE.get(affective.primary_emotion, _EQ_HANDLING_GUIDANCE["calm"])
+    offer_human = should_trigger_eq_escalation(affective)
+    return {
+        "primary_emotion": affective.primary_emotion,
+        "intensity": affective.intensity,
+        "recommended_tone": affective.recommended_tone,
+        "tone_register": spec["tone_register"],
+        "lead_with_acknowledgement": spec["lead_with_acknowledgement"],
+        "offer_human_handoff": offer_human,
+        "avoid": spec["avoid"],
+    }

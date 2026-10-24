@@ -88,14 +88,43 @@ def scrub_untrusted_urls_and_cap_length(text: str, max_len: int = MAX_STRING_FIE
     return scrubbed[:max_len]
 
 
-def sanitise_structured_output(value: Any, max_len: int = MAX_STRING_FIELD_LEN) -> Any:
-    """Recursively sanitise strings inside structured MCP tool output dictionaries and lists."""
+def sanitise_structured_output(
+    value: Any,
+    max_len: int = MAX_STRING_FIELD_LEN,
+    *,
+    _depth: int = 0,
+    max_depth: int = 12,
+) -> Any:
+    """Recursively sanitise strings and dict keys inside structured MCP tool output with depth bounds."""
+    if _depth > max_depth:
+        return "[REDACTED_MAX_DEPTH_EXCEEDED]"
     if isinstance(value, str):
         return scrub_untrusted_urls_and_cap_length(value, max_len=max_len)
     if isinstance(value, dict):
-        return {str(k): sanitise_structured_output(v, max_len=max_len) for k, v in value.items()}
-    if isinstance(value, list):
-        return [sanitise_structured_output(item, max_len=max_len) for item in value]
+        sanitised_dict: dict[str, Any] = {}
+        pairs = [
+            (scrub_untrusted_urls_and_cap_length(str(k), max_len=256), v) for k, v in value.items()
+        ]
+        reserved_keys = {bk for bk, _ in pairs}
+        for base_key, v in pairs:
+            clean_key = base_key
+            collision_idx = 2
+            while clean_key in sanitised_dict:
+                candidate = f"{base_key}_{collision_idx}"
+                collision_idx += 1
+                if candidate not in reserved_keys:
+                    clean_key = candidate
+            sanitised_dict[clean_key] = sanitise_structured_output(
+                v, max_len=max_len, _depth=_depth + 1, max_depth=max_depth
+            )
+        return sanitised_dict
+    if isinstance(value, (list, tuple)):
+        return [
+            sanitise_structured_output(
+                item, max_len=max_len, _depth=_depth + 1, max_depth=max_depth
+            )
+            for item in value
+        ]
     return value
 
 

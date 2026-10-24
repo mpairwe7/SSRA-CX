@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import time
 from typing import Any
@@ -64,8 +65,29 @@ def create_agentgateway_app(*, daily_usd_cap: float = 150.0) -> FastAPI:
     @app.post("/v1/spend/record")
     async def record_spend(request: Request) -> JSONResponse:
         """Record incremental USD inference spend and enforce the daily spend cap."""
-        body = await request.json()
-        delta = float(body.get("cost_usd", 0.0))
+        try:
+            body = await read_bounded_mcp_json_body(request)
+        except SSRAError as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"error": {"code": exc.code.value, "message": exc.message}},
+            )
+        raw_cost = body.get("cost_usd", 0.0)
+        try:
+            delta = float(raw_cost)
+        except (TypeError, ValueError, OverflowError):
+            delta = -1.0
+        invalid_delta = isinstance(raw_cost, bool) or not math.isfinite(delta) or delta < 0.0
+        if invalid_delta:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": {
+                        "code": McpErrorCode.VALIDATION_FAILED.value,
+                        "message": "cost_usd must be a finite non-negative number",
+                    }
+                },
+            )
         if state["daily_spend_usd"] + delta > daily_usd_cap:
             return JSONResponse(
                 status_code=429,
