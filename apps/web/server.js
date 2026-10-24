@@ -2947,8 +2947,14 @@ function renderPwaShellHtml(locale, nonce) {
                       : "Voice mode ready";
           }
           if (voiceDockDetailEl) {
+            const isReadingPhase = dockPhase === "speaking" || dockPhase === "paused";
+            if (isReadingPhase) {
+              voiceDockDetailEl.setAttribute("aria-hidden", "true");
+            } else {
+              voiceDockDetailEl.removeAttribute("aria-hidden");
+            }
             voiceDockDetailEl.textContent =
-              dockPhase === "speaking" || dockPhase === "paused"
+              isReadingPhase
                 ? lastSpokenAssistantText || "Tap the microphone to interrupt and ask a follow-up."
                 : dockPhase === "thinking" && lastHeardVoiceTranscript
                   ? 'You said: "' + lastHeardVoiceTranscript + '"'

@@ -1608,6 +1608,19 @@ def test_speech_normalization_asr_entity_mishears_clarify_gate_and_language_poli
     assert h2.target == "ar"
     assert h2.reason == "hysteresis"
 
+    # Code-switched tax loanword guard while locked in 'ar'
+    cs_guard = policy.observe(
+        LanguageVote(
+            probs={"en": 0.92},
+            top="en",
+            speech_s=2.0,
+            text="كيف أسجل في TIN و PAYE؟",
+        )
+    )
+    assert cs_guard.action == "none"
+    assert cs_guard.reason == "code_switched_loanword_guard"
+    assert policy.active == "ar"
+
     # Single high-confidence vote (>= 0.90) switches immediately back to 'en'
     high_sw = policy.observe(LanguageVote(probs={"en": 0.94}, top="en", speech_s=2.0))
     assert high_sw.action == "switch"

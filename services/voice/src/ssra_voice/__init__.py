@@ -3508,6 +3508,17 @@ class CallLanguagePolicy:
             return LanguageSwitchDecision("none", self.active, "unsupported_language")
 
         conf = vote.confidence
+        # Code-switched tax loanword guard (EACL 2026 & language.py lines 314-337):
+        # When locked in Arabic ('ar' or 'pga'), an English acoustic vote caused by tax loanwords
+        # ("TIN", "PAYE", "TCC") while the transcript still contains Arabic script stays in the active locale.
+        has_arabic_script = bool(re.search(r"[\u0600-\u06FF]", vote.text))
+        is_code_switched_loanword = (
+            self.locked and self.active in ("ar", "pga") and vote.top == "en" and has_arabic_script
+        )
+        if is_code_switched_loanword:
+            self.pending.clear()
+            return LanguageSwitchDecision("none", self.active, "code_switched_loanword_guard", conf)
+
         if not self.locked:
             if conf >= self.hysteresis_confidence:
                 return self._move(vote.top, "first_content", conf, "auto")
