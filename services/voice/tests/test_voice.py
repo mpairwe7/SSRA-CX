@@ -1779,3 +1779,62 @@ def test_multilingual_contact_url_pronunciation_and_receptionist_structuring() -
     assert state_frame["voice_id"] == "ssra_eng_0002"
     assert state_frame["speaker_name"] == "Lado"
     assert state_frame["dialect_code"] == "en-SS-EAC"
+
+    # Acoustic + lexical vote fusion (`fuse_language_vote`), `is_native_language_word`, and 8-locale `text_confirmed`
+    from ssra_voice import (
+        CallLanguagePolicy,
+        LanguageVote,
+        assess_spoken_clarification,
+        detect_explicit_language_request,
+        fuse_language_vote,
+        is_native_language_word,
+        lexical_language_hits,
+    )
+
+    assert is_native_language_word("wëu", "din") is True
+    assert is_native_language_word("weu", "din") is True
+    assert is_native_language_word("weu", "xx") is False
+    hits = lexical_language_hits("Ajul weu tene bengic paguot")
+    assert hits["din"] >= 4
+
+    # Native vernacular words are not flagged by ClarifyGate as low-confidence English mishears
+    clarify_native = assess_spoken_clarification(
+        "Ajul weu",
+        words=[{"word": "weu", "probability": 0.42}],
+        locale=LocaleCode.DIN,
+    )
+    assert clarify_native.action == "none"
+
+    # fuse_language_vote overrides uncertain acoustic vote (< 0.80) when >= 2 lexical hits agree
+    raw_vote = LanguageVote(
+        probs={"en": 0.55, "din": 0.30, "ar": 0.15},
+        top="en",
+        speech_s=2.4,
+        text="Namba de ajul weu tene bengic",
+    )
+    fused = fuse_language_vote(raw_vote, text_confidence=0.80)
+    assert fused.top == "din"
+    assert fused.confidence == 0.80
+    # Already confident vote (>= 0.80) is untouched
+    conf_vote = LanguageVote(
+        probs={"en": 0.90, "din": 0.10}, top="en", speech_s=2.0, text="ajul weu"
+    )
+    assert fuse_language_vote(conf_vote).top == "en"
+
+    # 8-language explicit switch & text_confirmed fast switch in CallLanguagePolicy
+    assert detect_explicit_language_request("Jam në Thuɔŋjäŋ") == "din"
+    assert detect_explicit_language_request("Ruacni Thok Naath") == "nus"
+    pol8 = CallLanguagePolicy(active="en")
+    pol8.observe(LanguageVote(probs={"en": 0.85}, top="en", speech_s=2.0, text="Hello how are you"))
+    assert pol8.locked is True
+    txt_conf_dec = pol8.observe(
+        LanguageVote(
+            probs={"din": 0.75, "en": 0.25},
+            top="din",
+            speech_s=2.2,
+            text="Ajul weu tene bengic paguot",
+        )
+    )
+    assert txt_conf_dec.action == "switch"
+    assert txt_conf_dec.target == "din"
+    assert txt_conf_dec.reason == "text_confirmed"

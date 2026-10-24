@@ -1811,3 +1811,49 @@ def test_mcp_eq_word_boundaries_structuring_spend_and_sanitiser_hardening() -> N
                 arguments={"hs_code": "8703.23", "cif_value_usd": bad_cif},
             )
         assert cif_exc.value.code == McpErrorCode.VALIDATION_FAILED
+
+
+def test_south_sudan_orthography_folding_juba_arabic_script_and_forward_switch() -> None:
+    from ssra_runtime.nodes.guards import detect_language, score_language_candidates
+    from ssra_runtime.nodes.language_state import (
+        build_english_router_envelope,
+        detect_explicit_locale_switch,
+        evaluate_language_state_transition,
+        fold_south_sudan_orthography,
+    )
+
+    # 1. Diacritic-free mobile keyboard orthography folding & language detection
+    assert fold_south_sudan_orthography("Thuɔŋjäŋ wëu bɛ̈ŋic") == "thuongjang weu bengic"
+    assert detect_language("Namba de ajul weu tene SSRA bengic") == LocaleCode.DIN
+    assert detect_language("Namba juaara yiooth cuol thok nath") == LocaleCode.NUS
+    assert detect_language("Namba lo kaser longot kutuk na bari") == LocaleCode.BFA
+    assert detect_language("Namba mara tumosi pa pazande") == LocaleCode.ZNE
+    assert detect_language("Coori ocul jami beene dhog collo") == LocaleCode.SHK
+    assert score_language_candidates("Namba de ajul weu")[LocaleCode.DIN] >= 2
+
+    # 2. Juba Arabic ('pga') written in Arabic script vs Modern Standard Arabic ('ar')
+    assert detect_language("شنو المطلوب عشان اسجل الرقم الضريبي بتاع شركتي؟") == LocaleCode.PGA
+    assert detect_language("ما هي نسبة ضريبة أرباح الأعمال؟") == LocaleCode.AR
+
+    # 3. ASCII-folded vernacular expansion in build_english_router_envelope
+    env_din = build_english_router_envelope(
+        "Ye namba de ajul weu caar?",
+        source_locale=LocaleCode.DIN,
+    )
+    assert "taxpayer identification number" in env_din.canonical_en_query.lower()
+
+    # 4. Forward-correcting & negation-aware explicit locale switch ('not in Arabic — speak in Dinka')
+    assert detect_explicit_locale_switch("") is None
+    assert detect_explicit_locale_switch("Do you have the form in English?") is None
+    assert (
+        detect_explicit_locale_switch("Please do not speak in Arabic, speak in Dinka")
+        == LocaleCode.DIN
+    )
+    assert detect_explicit_locale_switch("Jam në Thuɔŋjäŋ") == LocaleCode.DIN
+    assert detect_explicit_locale_switch("Ruacni Thok Naath") == LocaleCode.NUS
+    eff_loc, state_str, cand = evaluate_language_state_transition(
+        previous_locale=LocaleCode.EN,
+        detected_locale=LocaleCode.EN,
+        raw_text="Not in English — switch to Juba Arabic please",
+    )
+    assert eff_loc == LocaleCode.PGA and state_str == "LOCKED" and cand is None

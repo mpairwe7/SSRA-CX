@@ -12,6 +12,7 @@ Enforces:
 from __future__ import annotations
 
 import re
+import unicodedata
 from pathlib import Path
 from typing import Literal
 
@@ -21,6 +22,32 @@ from ssra_core import EnglishRouterEnvelope, LocaleCode
 LanguageStateLiteral = Literal["LOCKED", "CODE_SWITCHING", "CANDIDATE_SHIFT", "FALLBACK_EN"]
 
 _GLOSSARY_FILE = Path(__file__).resolve().parents[5] / "ai" / "termbase" / "glossary.yaml"
+
+_ORTHOGRAPHY_FOLD_MAP: dict[str, str] = {
+    "ë": "e",
+    "ɛ": "e",
+    "ɔ": "o",
+    "ŋ": "ng",
+    "ö": "o",
+    "ä": "a",
+    "ï": "i",
+    "ü": "u",
+    "ã": "a",
+    "ø": "o",
+    "\u0331": "",
+    "\u0308": "",
+    "\u0303": "",
+}
+
+
+def fold_south_sudan_orthography(text: str) -> str:
+    """Normalize Unicode NFC and fold South Sudanese IPA/diacritics to mobile-keyboard ASCII."""
+    nfc = unicodedata.normalize("NFC", text or "").lower()
+    out: list[str] = []
+    for ch in nfc:
+        out.append(_ORTHOGRAPHY_FOLD_MAP.get(ch, ch))
+    return "".join(out)
+
 
 # Statutory tokens that must NEVER be altered by translation or normalization
 _STATUTORY_TOKEN_RE = re.compile(
@@ -101,29 +128,101 @@ def _load_termbase_glossary_expansions() -> tuple[tuple[str, str, str], ...]:
         en_canonical = str(item.get("en", "")).strip().lower()
         for loc_key in ("ar", "pga", "din", "nus", "bfa", "zne", "shk"):
             loc_phrase = str(item.get(loc_key, "")).strip()
-            clean_phrase = re.sub(r"\s*\([^)]*\)\s*$", "", loc_phrase).strip().lower()
+            clean_phrase = (
+                unicodedata.normalize("NFC", re.sub(r"\s*\([^)]*\)\s*$", "", loc_phrase))
+                .strip()
+                .lower()
+            )
             if len(clean_phrase) >= 4:
                 entries.append((clean_phrase, loc_key, en_canonical))
+                folded = fold_south_sudan_orthography(clean_phrase)
+                if folded != clean_phrase and len(folded) >= 4:
+                    entries.append((folded, loc_key, en_canonical))
     return tuple(entries)
 
 
 _GLOSSARY_EXPANSIONS: tuple[tuple[str, str, str], ...] = _load_termbase_glossary_expansions()
 
-_EXPLICIT_SWITCH_RE = re.compile(
-    r"\b(?:speak|switch\s+to|respond\s+in|in)\s+(english|arabic|juba\s+arabic|dinka|nuer|bari|zande|shilluk)\b",
+_SWITCH_NEGATION_PREFIX_RE = re.compile(
+    r"(?:\b(?:not|no|don'?t|do\s+not|never)|(?:لا|مش))[\s,;:—-]*$",
     flags=re.IGNORECASE,
 )
+_EXPLICIT_LOCALE_PATTERNS: tuple[tuple[LocaleCode, re.Pattern[str]], ...] = (
+    (
+        LocaleCode.PGA,
+        re.compile(
+            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+(?:juba\s+arabic|arabi\s+juba)|atkalam\s+arabi\s+juba|عربي\s+جوبا)\b",
+            flags=re.IGNORECASE,
+        ),
+    ),
+    (
+        LocaleCode.AR,
+        re.compile(
+            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+arabic|تكلم\s+عربي|تحدث\s+بالعربية|باللغة\s+العربية)\b",
+            flags=re.IGNORECASE,
+        ),
+    ),
+    (
+        LocaleCode.DIN,
+        re.compile(
+            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+(?:dinka|thuongjang)|thuɔŋjäŋ|jam\s+në\s+thuɔŋjäŋ|jam\s+ne\s+thuongjang)\b",
+            flags=re.IGNORECASE,
+        ),
+    ),
+    (
+        LocaleCode.NUS,
+        re.compile(
+            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+(?:nuer|thok\s+na+th)|thok\s+naath|ruacni\s+thok\s+na+th)\b",
+            flags=re.IGNORECASE,
+        ),
+    ),
+    (
+        LocaleCode.BFA,
+        re.compile(
+            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+bari|kutuk\s+na\s+bari|kulya\s+ko\s+bari)\b",
+            flags=re.IGNORECASE,
+        ),
+    ),
+    (
+        LocaleCode.ZNE,
+        re.compile(
+            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+(?:zande|pazande)|pa\s+pazande|fura\s+pa\s+pazande)\b",
+            flags=re.IGNORECASE,
+        ),
+    ),
+    (
+        LocaleCode.SHK,
+        re.compile(
+            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+(?:shilluk|dhog\s+collo)|dhøg\s+cøllø|kwop\s+dhøg\s+cøllø)\b",
+            flags=re.IGNORECASE,
+        ),
+    ),
+    (
+        LocaleCode.EN,
+        re.compile(
+            r"\b(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in)\s+english\b|تكلم\s+إنجليزي",
+            flags=re.IGNORECASE,
+        ),
+    ),
+)
 
-_LANGUAGE_NAME_TO_LOCALE: dict[str, LocaleCode] = {
-    "english": LocaleCode.EN,
-    "arabic": LocaleCode.AR,
-    "juba arabic": LocaleCode.PGA,
-    "dinka": LocaleCode.DIN,
-    "nuer": LocaleCode.NUS,
-    "bari": LocaleCode.BFA,
-    "zande": LocaleCode.ZNE,
-    "shilluk": LocaleCode.SHK,
-}
+
+def detect_explicit_locale_switch(raw_text: str) -> LocaleCode | None:
+    """Detect an explicit language switch request with negation rejection and forward self-correction."""
+    clean = unicodedata.normalize("NFC", raw_text or "").strip()
+    if not clean:
+        return None
+    best_end = -1
+    best_loc: LocaleCode | None = None
+    for loc_code, pat in _EXPLICIT_LOCALE_PATTERNS:
+        for match in pat.finditer(clean):
+            prefix = clean[max(0, match.start() - 24) : match.start()]
+            if _SWITCH_NEGATION_PREFIX_RE.search(prefix):
+                continue
+            if match.end() > best_end:
+                best_end = match.end()
+                best_loc = loc_code
+    return best_loc
 
 
 def extract_preserved_statutory_tokens(text: str) -> list[str]:
@@ -143,11 +242,9 @@ def evaluate_language_state_transition(
 
     Returns `(effective_locale, language_state, next_candidate_locale)`.
     """
-    explicit_match = _EXPLICIT_SWITCH_RE.search(raw_text)
-    if explicit_match:
-        lang_name = explicit_match.group(1).strip().lower()
-        target = _LANGUAGE_NAME_TO_LOCALE.get(lang_name, detected_locale)
-        return target, "LOCKED", None
+    explicit_target = detect_explicit_locale_switch(raw_text)
+    if explicit_target is not None:
+        return explicit_target, "LOCKED", None
 
     if detected_locale == previous_locale:
         return previous_locale, "LOCKED", None
@@ -175,21 +272,22 @@ def build_english_router_envelope(
     extracted_slots: dict[str, str | int | float | bool] | None = None,
 ) -> EnglishRouterEnvelope:
     """Normalize South Sudanese vernacular or code-switched input into a canonical English-Router Envelope."""
-    cleaned = raw_text.strip() or "general tax inquiry"
+    cleaned = unicodedata.normalize("NFC", raw_text).strip() or "general tax inquiry"
     lower = cleaned.lower()
+    folded_lower = fold_south_sudan_orthography(cleaned)
     preserved = extract_preserved_statutory_tokens(cleaned)
 
     detected_vernacular = source_locale.value
     expansions: list[str] = []
 
     for markers, vern_code, en_concept in _VERNACULAR_TO_CANONICAL_EN:
-        if any(m in lower for m in markers):
+        if any(m in lower or fold_south_sudan_orthography(m) in folded_lower for m in markers):
             detected_vernacular = vern_code
             if en_concept not in expansions:
                 expansions.append(en_concept)
 
     for marker_lower, vern_code, en_canonical in _GLOSSARY_EXPANSIONS:
-        if marker_lower in lower:
+        if marker_lower in lower or marker_lower in folded_lower:
             detected_vernacular = vern_code
             if en_canonical not in expansions:
                 expansions.append(en_canonical)
