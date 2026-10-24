@@ -191,10 +191,15 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
     money_scan_text = (
         _HS_CODE_RE.sub(" ", normalized_digits_text) if has_hs_cue else normalized_digits_text
     )
-    extracted_amount = _extract_monetary_amount(money_scan_text)
+    cif_match = _CIF_USD_MONEY_RE.search(money_scan_text)
+    ssp_scan_text = (
+        _CIF_USD_MONEY_RE.sub(" ", money_scan_text) if cif_match is not None else money_scan_text
+    )
+    extracted_amount = _extract_monetary_amount(ssp_scan_text) or _extract_monetary_amount(
+        money_scan_text
+    )
     if extracted_amount is not None:
         slots["amount_ssp"] = extracted_amount
-    cif_match = _CIF_USD_MONEY_RE.search(money_scan_text)
     if cif_match is not None:
         raw_cif = cif_match.group(1) or cif_match.group(2)
         if raw_cif:
@@ -321,7 +326,9 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
         or "كم" in lower
     )
     if has_paye_cue:
-        all_amounts = _extract_all_monetary_amounts(money_scan_text)
+        all_amounts = _extract_all_monetary_amounts(ssp_scan_text) or _extract_all_monetary_amounts(
+            money_scan_text
+        )
         if "amount_ssp" not in slots:
             slots["amount_ssp"] = "250000"
             slots["amount_defaulted"] = True
@@ -493,7 +500,9 @@ def classify_intent_deterministic(text: str, locale: LocaleCode) -> Intent:
 
 
 _STEP_CONTINUATION_RE = re.compile(
-    r"^\s*(?:next(?:\s+step)?|continue|proceed|resume|go\s+on|what(?:'s|\s+is)\s+next|step\s+([123]))\b",
+    r"^\s*(?:next(?:\s+step)?|continue|proceed|resume|go\s+on|what(?:'s|\s+is)\s+next|step\s+([123])"
+    r"|khatwa\s+al[- ]?baad|kammil|baad\s+da)\b"
+    r"|^\s*(?:الخطوة\s+التالية|التالي|استمر|تابع|الخطوة\s+([123]))",
     re.IGNORECASE,
 )
 _STEP_CONTINUATION_ELIGIBLE: frozenset[IntentName] = frozenset(
@@ -505,7 +514,9 @@ _STEP_CONTINUATION_ELIGIBLE: frozenset[IntentName] = frozenset(
     }
 )
 _ANAPHORIC_FOLLOWUP_RE = re.compile(
-    r"\b(?:what\s+if|what\s+about|how\s+about|and\s+for|instead|now\s+for|if\s+it\s+is|for\s+cif)\b",
+    r"\b(?:what\s+if|what\s+about|how\s+about|and\s+for|instead|now\s+for|if\s+it\s+is|for\s+cif"
+    r"|kan\s+hu|wa\s+kan|kif\s+kan)\b"
+    r"|ماذا\s+لو|وإذا\s+كان|لو\s+كان|وماذا\s+عن",
     re.IGNORECASE,
 )
 
@@ -524,10 +535,13 @@ def _resolve_multiturn_followup(
 
     # 1. Guided journey step continuation ('next step', 'continue', 'step 2') on active workflow_stack
     step_match = _STEP_CONTINUATION_RE.search(lower)
+    explicit_step_str = (step_match.group(1) or step_match.group(2)) if step_match else None
+    explicit_step = int(explicit_step_str) if explicit_step_str else 0
     is_eligible_step = bool(
         step_match is not None
         and updated_stack
         and intent_obj.intent in _STEP_CONTINUATION_ELIGIBLE
+        and (updated_stack[-1].get("status") != "COMPLETED" or explicit_step > 0)
     )
     if is_eligible_step and step_match is not None:
         top = updated_stack[-1]
@@ -535,7 +549,6 @@ def _resolve_multiturn_followup(
         if j_intent_str in IntentName._value2member_map_:
             cur_step = int(top.get("current_step", 1))
             total_steps = int(top.get("total_steps", 2))
-            explicit_step = int(step_match.group(1)) if step_match.group(1) else 0
             next_step = (
                 min(max(1, explicit_step), total_steps)
                 if explicit_step > 0

@@ -76,6 +76,17 @@ def _detect_quiet_tool_fault(art: ToolArtifact) -> str | None:
         duty = _parse_decimal_safe(sc.get("estimated_duty_ssp", "-1"))
         if cif <= Decimal("0") or fx <= Decimal("0") or duty < Decimal("0"):
             return "CUSTOMS_DUTY_INVARIANT_VIOLATION"
+    elif art.tool == "lookup_tariff":
+        duty_r = _parse_decimal_safe(sc.get("duty_rate_percent", "-1"))
+        exc_r = _parse_decimal_safe(sc.get("excise_rate_percent", "-1"))
+        fx_r = _parse_decimal_safe(sc.get("boss_official_fx_rate_ssp_per_usd", "0"))
+        if (
+            duty_r < Decimal("0")
+            or duty_r > Decimal("100")
+            or exc_r < Decimal("0")
+            or fx_r <= Decimal("0")
+        ):
+            return "CUSTOMS_TARIFF_INVARIANT_VIOLATION"
     elif art.tool == "get_balance":
         outstanding = _parse_decimal_safe(sc.get("total_outstanding_ssp", "-1"))
         tin_masked = str(sc.get("tin_masked", "")).strip()

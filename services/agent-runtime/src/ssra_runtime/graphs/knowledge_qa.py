@@ -81,6 +81,37 @@ def execute_knowledge_qa_subgraph(
     if intent_name == IntentName.OUT_OF_SCOPE:
         return {"artifacts": artifacts, "budget": budget}
 
+    def _invoke_secondary_customs_if_present() -> None:
+        hs_code_comp = str(slots.get("hs_code", "")).strip()
+        if not hs_code_comp:
+            return
+        cif_comp = str(slots.get("cif_value_usd", "")).strip()
+        try:
+            if cif_comp:
+                artifacts.append(
+                    gateway.invoke_tool(
+                        server_name="customs",
+                        tool_name="estimate_duties",
+                        arguments={"hs_code": hs_code_comp, "cif_value_usd": cif_comp},
+                        auth_level=auth_level,
+                        subject_ref=subject_ref,
+                        budget=budget,
+                    )
+                )
+            else:
+                artifacts.append(
+                    gateway.invoke_tool(
+                        server_name="customs",
+                        tool_name="lookup_tariff",
+                        arguments={"hs_code": hs_code_comp},
+                        auth_level=auth_level,
+                        subject_ref=subject_ref,
+                        budget=budget,
+                    )
+                )
+        except SSRAError:
+            failed_steps.append("customs.estimate_duties" if cif_comp else "customs.lookup_tariff")
+
     if intent_name == IntentName.CALCULATE_PAYE:
         gross = str(slots.get("amount_ssp", "250000"))
         art = gateway.invoke_tool(
@@ -107,36 +138,7 @@ def execute_knowledge_qa_subgraph(
                 artifacts.append(wht_art)
             except SSRAError:
                 failed_steps.append("tax-facts.calculate_withholding_estimate")
-        hs_code_comp = str(slots.get("hs_code", "")).strip()
-        if hs_code_comp:
-            cif_comp = str(slots.get("cif_value_usd", "")).strip()
-            try:
-                if cif_comp:
-                    artifacts.append(
-                        gateway.invoke_tool(
-                            server_name="customs",
-                            tool_name="estimate_duties",
-                            arguments={"hs_code": hs_code_comp, "cif_value_usd": cif_comp},
-                            auth_level=auth_level,
-                            subject_ref=subject_ref,
-                            budget=budget,
-                        )
-                    )
-                else:
-                    artifacts.append(
-                        gateway.invoke_tool(
-                            server_name="customs",
-                            tool_name="lookup_tariff",
-                            arguments={"hs_code": hs_code_comp},
-                            auth_level=auth_level,
-                            subject_ref=subject_ref,
-                            budget=budget,
-                        )
-                    )
-            except SSRAError:
-                failed_steps.append(
-                    "customs.estimate_duties" if cif_comp else "customs.lookup_tariff"
-                )
+        _invoke_secondary_customs_if_present()
         verif = verify_plan_outcomes(plan, artifacts, failed_steps=failed_steps)
         return {
             "artifacts": artifacts,
@@ -156,6 +158,7 @@ def execute_knowledge_qa_subgraph(
             budget=budget,
         )
         artifacts.append(art)
+        _invoke_secondary_customs_if_present()
         verif = verify_plan_outcomes(plan, artifacts, failed_steps=failed_steps)
         return {
             "artifacts": artifacts,
