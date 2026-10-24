@@ -1491,3 +1491,143 @@ def test_low_bandwidth_voice_profile_mulaw_codec_and_call_resume_ticket() -> Non
         )
         is None
     )
+
+
+def test_speech_normalization_asr_entity_mishears_clarify_gate_and_language_policy() -> None:
+    """FinalYearProject speech_normalization.py, clarify.py & language.py parity."""
+    from ssra_voice import (
+        CallLanguagePolicy,
+        LanguageVote,
+        assess_spoken_clarification,
+        clean_text_for_speech,
+        detect_explicit_language_request,
+        detect_ssra_entity_mishear,
+        repair_ssra_asr_entities,
+    )
+
+    raw_md = (
+        "### Filing Rules\n"
+        "- Under **Sec. 18** and __Art. 12__, your [e-Tax Portal](https://etax.nra.gov.ss/) "
+        "account `••••1234` (<TIN_REDACTED>, [REDACTED_PHONE]) is due [1, 2].\n"
+        "```sql\nSELECT 1;\n```"
+    )
+    cleaned = clean_text_for_speech(raw_md)
+    assert "[1, 2]" not in cleaned
+    assert "Section 18" in cleaned
+    assert "Article 12" in cleaned
+    assert "T I N ending in 1 2 3 4" in cleaned
+    assert "redacted T I N" in cleaned
+    assert "redacted phone number" in cleaned
+    assert "SELECT 1" not in cleaned
+
+    # ASR phonetic mishear detection & repair
+    assert detect_ssra_entity_mishear("ttiimu") == "TIN"
+    assert detect_ssra_entity_mishear("era", "from") == "SSRA"
+    assert detect_ssra_entity_mishear("payment") is None
+    assert repair_ssra_asr_entities("") == ""
+    assert (
+        repair_ssra_asr_entities("How do I get my ttiimu from era on etaksi?")
+        == "How do I get my TIN from SSRA on e-Tax?"
+    )
+
+    # Spoken ClarifyGate assessment
+    term_dec = assess_spoken_clarification("Where is my tiisiisii certificate?")
+    assert term_dec.action == "ask_term"
+    assert term_dec.candidate == "TCC"
+    assert term_dec.prompt == "Excuse me, did you mean TCC?"
+
+    none_no_words = assess_spoken_clarification("What is the PAYE filing deadline?")
+    assert none_no_words.action == "none"
+
+    none_high_conf = assess_spoken_clarification(
+        "What is the PAYE deadline?",
+        words=[{"word": "What", "prob": 0.95}, {"word": "deadline", "prob": 0.91}],
+    )
+    assert none_high_conf.action == "none"
+
+    repeat_dec = assess_spoken_clarification(
+        "What is the mumbledword?",
+        words=[
+            {"word": "the", "prob": 0.40},
+            {"word": "123", "prob": 0.40},
+            {"word": "mumbledword", "prob": 0.42},
+        ],
+        threshold=0.65,
+    )
+    assert repeat_dec.action == "ask_repeat"
+    assert repeat_dec.target_word == "mumbledword"
+
+    mild_low_dec = assess_spoken_clarification(
+        "Tell me about customs duties",
+        words=[
+            {"word": "Tell", "prob": 0.95},
+            {"word": "customs", "prob": 0.62},
+            {"word": "duties", "prob": 0.95},
+        ],
+        threshold=0.65,
+    )
+    assert mild_low_dec.action == "none"
+
+    # Hysteresis CallLanguagePolicy
+    assert detect_explicit_language_request("") is None
+    assert detect_explicit_language_request("Not in English — please speak in Arabic") == "ar"
+    assert detect_explicit_language_request("Can we speak Juba Arabic?") == "pga"
+
+    policy = CallLanguagePolicy(active="en", supported_languages=("en", "ar", "pga"))
+    assert policy.set_override("fr").reason == "unsupported_language"
+
+    # Too-short utterance does not lock
+    assert (
+        policy.observe(LanguageVote(probs={"ar": 0.95}, top="ar", speech_s=0.6)).reason
+        == "too_short"
+    )
+    # Unsupported language vote ignored
+    assert (
+        policy.observe(LanguageVote(probs={"fr": 0.95}, top="fr", speech_s=2.0)).reason
+        == "unsupported_language"
+    )
+    # Weak first vote leaves call unlocked
+    assert (
+        policy.observe(LanguageVote(probs={"en": 0.55}, top="en", speech_s=2.0)).reason
+        == "weak_first_vote"
+    )
+    # Confident first content locks English
+    lock_dec = policy.observe(LanguageVote(probs={"en": 0.82}, top="en", speech_s=2.2))
+    assert lock_dec.action == "lock"
+    assert policy.locked is True
+    # Same language clears pending
+    assert (
+        policy.observe(LanguageVote(probs={"en": 0.80}, top="en", speech_s=2.0)).reason
+        == "same_language"
+    )
+    # Hysteresis: two moderate votes (0.68, 0.72) in window of 3 switch to 'ar'
+    h1 = policy.observe(LanguageVote(probs={"ar": 0.68}, top="ar", speech_s=2.0))
+    assert h1.reason == "accumulating_hysteresis"
+    h2 = policy.observe(LanguageVote(probs={"ar": 0.72}, top="ar", speech_s=2.1))
+    assert h2.action == "switch"
+    assert h2.target == "ar"
+    assert h2.reason == "hysteresis"
+
+    # Single high-confidence vote (>= 0.90) switches immediately back to 'en'
+    high_sw = policy.observe(LanguageVote(probs={"en": 0.94}, top="en", speech_s=2.0))
+    assert high_sw.action == "switch"
+    assert high_sw.reason == "high_confidence"
+
+    # UI override locks 'pga', ignoring acoustic votes, but explicit spoken request still overrides
+    ov_dec = policy.set_override("pga")
+    assert ov_dec.source == "override"
+    assert (
+        policy.observe(LanguageVote(probs={"en": 0.99}, top="en", speech_s=2.5)).reason
+        == "override_locked"
+    )
+    exp_dec = policy.observe(
+        LanguageVote(
+            probs={"en": 0.50},
+            top="en",
+            speech_s=0.8,
+            text="Please switch to English",
+        )
+    )
+    assert exp_dec.action == "switch"
+    assert exp_dec.target == "en"
+    assert exp_dec.source == "explicit"

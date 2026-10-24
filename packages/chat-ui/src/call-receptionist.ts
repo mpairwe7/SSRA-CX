@@ -434,3 +434,156 @@ export function detectSpokenCallControl(transcript: string): CallControlAction |
   if (SPOKEN_MORE_RE.test(clean)) return "more_detail";
   return null;
 }
+
+export type VoiceDockPhase =
+  | "opening"
+  | "listening"
+  | "hearing"
+  | "pausing"
+  | "transcribing"
+  | "thinking"
+  | "preparing"
+  | "speaking"
+  | "paused"
+  | "idle";
+
+export const PAUSE_SHOWN_FROM = 0.25;
+
+export const VOICE_PAUSE_OPTIONS: readonly { readonly value: string; readonly label: string }[] = [
+  { value: "0", label: "Off" },
+  { value: "800", label: "0.8 s" },
+  { value: "1200", label: "1.2 s" },
+  { value: "2000", label: "2 s" },
+];
+
+export function orbStateForVoiceDock(phase: VoiceDockPhase): OrbState {
+  if (phase === "listening" || phase === "hearing" || phase === "pausing") return "listening";
+  if (
+    phase === "opening" ||
+    phase === "transcribing" ||
+    phase === "thinking" ||
+    phase === "preparing"
+  ) {
+    return "thinking";
+  }
+  if (phase === "speaking" || phase === "paused") return "speaking";
+  return "idle";
+}
+
+export interface VoiceModeDockView {
+  readonly effectivePhase: VoiceDockPhase;
+  readonly floor: OrbState;
+  readonly label: string;
+  readonly detail: string;
+  readonly detailAriaHidden: boolean;
+  readonly announcement: string;
+  readonly primaryAction: "busy" | "send" | "stop" | "interrupt" | "talk";
+  readonly primaryLabel: string;
+  readonly showCountdownRing: boolean;
+  readonly showMicOffButton: boolean;
+  readonly showPauseButton: boolean;
+}
+
+/**
+ * Build the `VoiceModeDock` view model (`FinalYearProject` `components/VoiceModeDock.tsx` parity).
+ */
+export function buildVoiceModeDockView(params: {
+  readonly phase: VoiceDockPhase;
+  readonly workingLabel?: string | undefined;
+  readonly heard?: string | null | undefined;
+  readonly notice?: string | null | undefined;
+  readonly sentence?: string | null | undefined;
+  readonly lastSentence?: string | null | undefined;
+  readonly autoSend: boolean;
+  readonly paused?: boolean | undefined;
+}): VoiceModeDockView {
+  const effectivePhase: VoiceDockPhase =
+    params.phase === "speaking" && params.paused ? "paused" : params.phase;
+  const floor = orbStateForVoiceDock(effectivePhase);
+  const micOpen =
+    effectivePhase === "opening" ||
+    effectivePhase === "listening" ||
+    effectivePhase === "hearing" ||
+    effectivePhase === "pausing";
+  const reading =
+    effectivePhase === "preparing" || effectivePhase === "speaking" || effectivePhase === "paused";
+  const sentenceShown = reading ? String(params.sentence || params.lastSentence || "").trim() : "";
+
+  const labels: Record<VoiceDockPhase, string> = {
+    opening: "Starting microphone…",
+    listening: "Listening…",
+    hearing: "Hearing you…",
+    pausing: "Sending in a moment…",
+    transcribing: "Transcribing…",
+    thinking: params.workingLabel || "Working on your answer…",
+    preparing: "Preparing voice reply…",
+    speaking: "Speaking…",
+    paused: "Paused",
+    idle: "Voice mode ready",
+  };
+  const label = labels[effectivePhase];
+
+  const youSaid = params.heard ? `You said: "${params.heard}"` : "";
+  const defaultDetails: Record<VoiceDockPhase, string> = {
+    opening: "Allow microphone access to speak.",
+    listening: params.autoSend
+      ? "Speak your question — pauses send automatically."
+      : "Speak your question, then tap Send.",
+    hearing: params.autoSend
+      ? "Speak your question — pauses send automatically."
+      : "Speak your question, then tap Send.",
+    pausing: "Keep speaking or tap Send now.",
+    transcribing: "Converting speech to text…",
+    thinking: youSaid,
+    preparing: youSaid,
+    speaking: sentenceShown || "Tap the microphone to interrupt and ask a follow-up.",
+    paused: sentenceShown || "Reading paused.",
+    idle: "Tap the microphone to start speaking.",
+  };
+  const noticeText = String(params.notice || "").trim();
+  const detail = noticeText || defaultDetails[effectivePhase];
+  const detailAriaHidden =
+    !noticeText && (effectivePhase === "speaking" || effectivePhase === "paused");
+
+  // Screen reader announcement: silent while mic is open or TTS is speaking so it never talks over audio
+  const announcement = micOpen
+    ? ""
+    : effectivePhase === "thinking" || effectivePhase === "preparing"
+      ? "Working on your answer…"
+      : effectivePhase === "speaking"
+        ? ""
+        : [label, noticeText].filter(Boolean).join(". ");
+
+  const primaryAction: "busy" | "send" | "stop" | "interrupt" | "talk" =
+    effectivePhase === "opening"
+      ? "busy"
+      : micOpen
+        ? "send"
+        : effectivePhase === "transcribing" || effectivePhase === "thinking"
+          ? "stop"
+          : reading
+            ? "interrupt"
+            : "talk";
+
+  const primaryLabels: Record<typeof primaryAction, string> = {
+    busy: "Starting microphone",
+    send: "Send voice turn now",
+    stop: "Stop answer generation",
+    interrupt: "Interrupt and speak",
+    talk: "Start speaking",
+  };
+
+  return {
+    effectivePhase,
+    floor,
+    label,
+    detail,
+    detailAriaHidden,
+    announcement,
+    primaryAction,
+    primaryLabel: primaryLabels[primaryAction],
+    showCountdownRing: primaryAction === "send" && params.autoSend,
+    showMicOffButton: micOpen && effectivePhase !== "opening",
+    showPauseButton: effectivePhase === "speaking" || effectivePhase === "paused",
+  };
+}

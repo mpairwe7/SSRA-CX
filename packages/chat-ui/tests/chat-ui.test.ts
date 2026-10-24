@@ -8,6 +8,7 @@ import {
   buildHumanSubtleMicrocopy,
   buildNarrationBarView,
   buildTruthfulAttachmentReportText,
+  buildVoiceModeDockView,
   calculateOfflinePayeEstimate,
   calculateOfflineWithholdingEstimate,
   classifySsraDocumentType,
@@ -35,6 +36,8 @@ import {
   nextRevealIndex,
   OFFLINE_SSRA_OFFICE_DIRECTORY,
   OfflineOutboxQueue,
+  orbStateForVoiceDock,
+  PAUSE_SHOWN_FROM,
   POST_TTS_ECHO_COOLDOWN_MS,
   parseAguiSseStream,
   renderGenerativeUICard,
@@ -45,6 +48,7 @@ import {
   sanitizeAttachmentFilename,
   scrubDocumentTextForIndirectInjection,
   stripStepPrefix,
+  VOICE_PAUSE_OPTIONS,
   validateMcpAppIframe,
   validateVoiceNoteSubmission,
   verifyAllStorybookFixturesRenderAccessibly,
@@ -538,6 +542,42 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(
       detectSpokenCallControl("That is all the money I have to pay my monthly return"),
     ).toBeNull();
+
+    // VoiceModeDock view model (VoiceModeDock.tsx & VoiceSection.tsx parity)
+    expect(PAUSE_SHOWN_FROM).toBe(0.25);
+    expect(VOICE_PAUSE_OPTIONS).toHaveLength(4);
+    expect(orbStateForVoiceDock("listening")).toBe("listening");
+    expect(orbStateForVoiceDock("thinking")).toBe("thinking");
+    expect(orbStateForVoiceDock("speaking")).toBe("speaking");
+    expect(orbStateForVoiceDock("idle")).toBe("idle");
+
+    const dockListening = buildVoiceModeDockView({
+      phase: "listening",
+      autoSend: true,
+    });
+    expect(dockListening.floor).toBe("listening");
+    expect(dockListening.primaryAction).toBe("send");
+    expect(dockListening.showCountdownRing).toBe(true);
+    expect(dockListening.announcement).toBe("");
+
+    const dockSpeaking = buildVoiceModeDockView({
+      phase: "speaking",
+      autoSend: true,
+      lastSentence: "Your PAYE return is due by day 15.",
+      paused: false,
+    });
+    expect(dockSpeaking.detail).toBe("Your PAYE return is due by day 15.");
+    expect(dockSpeaking.detailAriaHidden).toBe(true);
+    expect(dockSpeaking.primaryAction).toBe("interrupt");
+
+    const dockPaused = buildVoiceModeDockView({
+      phase: "speaking",
+      autoSend: true,
+      lastSentence: "Your PAYE return is due by day 15.",
+      paused: true,
+    });
+    expect(dockPaused.effectivePhase).toBe("paused");
+    expect(dockPaused.showPauseButton).toBe(true);
 
     // Multi-turn voice continuation, 450ms post-TTS echo guard, backchannel immunity & retry bound
     expect(POST_TTS_ECHO_COOLDOWN_MS).toBe(450);
