@@ -101,13 +101,24 @@ def sanitise_structured_output(
     if isinstance(value, str):
         return scrub_untrusted_urls_and_cap_length(value, max_len=max_len)
     if isinstance(value, dict):
-        return {
-            scrub_untrusted_urls_and_cap_length(str(k), max_len=256): sanitise_structured_output(
+        sanitised_dict: dict[str, Any] = {}
+        pairs = [
+            (scrub_untrusted_urls_and_cap_length(str(k), max_len=256), v) for k, v in value.items()
+        ]
+        reserved_keys = {bk for bk, _ in pairs}
+        for base_key, v in pairs:
+            clean_key = base_key
+            collision_idx = 2
+            while clean_key in sanitised_dict:
+                candidate = f"{base_key}_{collision_idx}"
+                collision_idx += 1
+                if candidate not in reserved_keys:
+                    clean_key = candidate
+            sanitised_dict[clean_key] = sanitise_structured_output(
                 v, max_len=max_len, _depth=_depth + 1, max_depth=max_depth
             )
-            for k, v in value.items()
-        }
-    if isinstance(value, list):
+        return sanitised_dict
+    if isinstance(value, (list, tuple)):
         return [
             sanitise_structured_output(
                 item, max_len=max_len, _depth=_depth + 1, max_depth=max_depth

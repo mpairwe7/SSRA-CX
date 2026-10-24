@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import functools
+import re
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Literal
 
@@ -87,6 +88,8 @@ class WithholdingEstimateResult(BaseModel):
 
 
 MAX_TAXABLE_AMOUNT_SSP: Decimal = Decimal("1000000000000")
+_GROUPED_DECIMAL_RE = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d{1,6})?$")
+_PLAIN_DECIMAL_RE = re.compile(r"^\d+(?:\.\d{1,6})?$")
 
 
 def _parse_bounded_ssp_amount(
@@ -100,22 +103,17 @@ def _parse_bounded_ssp_amount(
             f"{field_name} must be a valid finite decimal number",
             status_code=400,
         )
-    cleaned = str(raw_value).replace(",", "").strip()
-    if not cleaned or len(cleaned) > 32:
+    stripped = str(raw_value).strip()
+    malformed_commas = "," in stripped and not _GROUPED_DECIMAL_RE.match(stripped)
+    cleaned = stripped.replace(",", "")
+    if malformed_commas or not _PLAIN_DECIMAL_RE.match(cleaned) or len(cleaned) > 32:
         raise SSRAError(
             McpErrorCode.VALIDATION_FAILED,
             f"{field_name} must be a valid finite decimal number",
             status_code=400,
         )
-    try:
-        val = Decimal(cleaned)
-    except InvalidOperation as exc:
-        raise SSRAError(
-            McpErrorCode.VALIDATION_FAILED,
-            f"{field_name} must be a valid finite decimal number",
-            status_code=400,
-        ) from exc
-    if not val.is_finite() or val < Decimal("0") or val > MAX_TAXABLE_AMOUNT_SSP:
+    val = Decimal(cleaned)
+    if val > MAX_TAXABLE_AMOUNT_SSP:
         raise SSRAError(
             McpErrorCode.VALIDATION_FAILED,
             f"{field_name} must be a non-negative finite number <= {MAX_TAXABLE_AMOUNT_SSP}",

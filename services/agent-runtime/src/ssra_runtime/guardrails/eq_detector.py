@@ -115,21 +115,39 @@ _ADVERSARIAL_BYPASS_RE = re.compile(
 )
 
 _REPEATED_PUNCT_RE = re.compile(r"[!?]{2,}")
-_EQ_NEGATION_PREFIX_RE = re.compile(r"\b(?:not|no|never|neither)\s+$")
+_EQ_NEGATION_PREFIX_RE = re.compile(
+    r"\b(?:not|no|never|neither|without|don't|dont|isn't|isnt|aren't|arent|wasn't|wasnt|do\s+not|does\s+not|did\s+not|cannot|can't|cant)"
+    r"(?:\s+(?:really|very|so|too|at\s+all|even|feeling|feel))?\s+$"
+)
 
 
-def _match_eq_markers(lower_text: str, markers: tuple[str, ...]) -> list[str]:
-    """Match lexical emotion markers with ASCII word boundaries and negation-prefix rejection."""
-    hits: list[str] = []
+def _compile_marker_patterns(
+    markers: tuple[str, ...],
+) -> tuple[tuple[str, re.Pattern[str]], ...]:
+    """Pre-compile lexical marker regexes once at import time (`<0.5ms` CPU budget)."""
+    compiled: list[tuple[str, re.Pattern[str]]] = []
     for marker in markers:
         is_ascii_word = marker.isascii() and " " not in marker
-        pat = (
-            re.compile(rf"\b{re.escape(marker)}\b")
-            if is_ascii_word
-            else re.compile(re.escape(marker))
-        )
+        pattern_str = rf"\b{re.escape(marker)}\b" if is_ascii_word else re.escape(marker)
+        compiled.append((marker, re.compile(pattern_str)))
+    return tuple(compiled)
+
+
+_COMPILED_DISTRESS_MARKERS = _compile_marker_patterns(_DISTRESS_MARKERS)
+_COMPILED_FRUSTRATION_MARKERS = _compile_marker_patterns(_FRUSTRATION_MARKERS)
+_COMPILED_ANXIOUS_MARKERS = _compile_marker_patterns(_ANXIOUS_URGENT_MARKERS)
+_COMPILED_CONFUSION_MARKERS = _compile_marker_patterns(_CONFUSION_MARKERS)
+
+
+def _match_eq_markers(
+    lower_text: str,
+    compiled_markers: tuple[tuple[str, re.Pattern[str]], ...],
+) -> list[str]:
+    """Match pre-compiled lexical emotion markers with word boundaries and negation rejection."""
+    hits: list[str] = []
+    for marker, pat in compiled_markers:
         for match in pat.finditer(lower_text):
-            prefix = lower_text[max(0, match.start() - 16) : match.start()]
+            prefix = lower_text[max(0, match.start() - 20) : match.start()]
             if _EQ_NEGATION_PREFIX_RE.search(prefix):
                 continue
             hits.append(marker)
@@ -152,10 +170,10 @@ def compute_affective_state(
     lower = cleaned.lower()
     signals: list[str] = []
 
-    distress_hits = _match_eq_markers(lower, _DISTRESS_MARKERS)
-    frustration_hits = _match_eq_markers(lower, _FRUSTRATION_MARKERS)
-    anxious_hits = _match_eq_markers(lower, _ANXIOUS_URGENT_MARKERS)
-    confusion_hits = _match_eq_markers(lower, _CONFUSION_MARKERS)
+    distress_hits = _match_eq_markers(lower, _COMPILED_DISTRESS_MARKERS)
+    frustration_hits = _match_eq_markers(lower, _COMPILED_FRUSTRATION_MARKERS)
+    anxious_hits = _match_eq_markers(lower, _COMPILED_ANXIOUS_MARKERS)
+    confusion_hits = _match_eq_markers(lower, _COMPILED_CONFUSION_MARKERS)
 
     if distress_hits:
         signals.append(f"distress_lexical:{distress_hits[0]}")

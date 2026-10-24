@@ -1733,9 +1733,9 @@ def test_mcp_eq_word_boundaries_structuring_spend_and_sanitiser_hardening() -> N
     from ssra_runtime.guardrails import build_eq_handling_guidance, compute_affective_state
     from ssra_runtime.nodes.compose import fit_and_structure_answer_text
 
-    # 1. Word-boundary and negation-aware EQ detection ("almost" != "lost", "not confused" != "confused")
+    # 1. Word-boundary and negation-aware EQ detection ("almost" != "lost", "not really confused" != "confused")
     calm_almost = compute_affective_state(
-        "I am almost done with my e-Tax return and I am not confused"
+        "I am almost done with my e-Tax return, I am not really confused, and do not panic"
     )
     assert calm_almost.primary_emotion == "calm"
     guidance_calm = build_eq_handling_guidance(calm_almost)
@@ -1767,19 +1767,47 @@ def test_mcp_eq_word_boundaries_structuring_spend_and_sanitiser_hardening() -> N
     assert ok_res.status_code == 200
     assert ok_res.json()["daily_spend_usd"] == 12.5
 
-    for invalid_cost in [-50.0, True, "NaN", "Infinity", "bad"]:
+    for invalid_cost in [-50.0, True, "NaN", "Infinity", "bad", 10**400]:
         bad_res = gw_client.post("/v1/spend/record", json={"cost_usd": invalid_cost})
         assert bad_res.status_code == 400
+    bad_json_res = gw_client.post("/v1/spend/record", json=[1, 2, 3])
+    assert bad_json_res.status_code == 400
     # Verify daily spend was not reset by negative delta
     check_res = gw_client.post("/v1/spend/record", json={"cost_usd": 0.0})
     assert check_res.json()["daily_spend_usd"] == 12.5
 
-    # 4. `sanitise_structured_output` scrubs dict keys and enforces max_depth
-    nested: dict[str, object] = {"https://evil.example/phish": "visit https://evil.example/x"}
+    # 4. `sanitise_structured_output` scrubs dict keys, preserves colliding keys, and enforces max_depth
+    nested: dict[str, object] = {
+        "https://evil.example/a": ("visit https://evil.example/x",),
+        "https://evil.example/b": "second value preserved",
+        "[REDACTED_UNALLOWLISTED_URL]_2": "literal reserved key preserved",
+    }
     clean_nested = sanitise_structured_output(nested)
-    assert "[REDACTED_UNALLOWLISTED_URL]" in clean_nested
+    assert clean_nested["[REDACTED_UNALLOWLISTED_URL]"] == ["visit [REDACTED_UNALLOWLISTED_URL]"]
+    assert clean_nested["[REDACTED_UNALLOWLISTED_URL]_3"] == "second value preserved"
+    assert clean_nested["[REDACTED_UNALLOWLISTED_URL]_2"] == "literal reserved key preserved"
     deep: object = "leaf"
     for _ in range(15):
         deep = [deep]
     sanitised_deep = sanitise_structured_output(deep, max_depth=4)
     assert "REDACTED_MAX_DEPTH_EXCEEDED" in str(sanitised_deep)
+
+    # 5. Customs `estimate_duties` rejects malformed comma grouping and oversized strings
+    from ssra_core import McpErrorCode, SSRAError
+    from ssra_runtime.tools import GovernedMcpGatewayClient
+
+    mcp_gw = GovernedMcpGatewayClient()
+    valid_duty = mcp_gw.invoke_tool(
+        server_name="customs",
+        tool_name="estimate_duties",
+        arguments={"hs_code": "8703.23", "cif_value_usd": "12,000"},
+    )
+    assert valid_duty.structured_content["cif_value_usd"] == "12000"
+    for bad_cif in ["1,2", "1e999999", "1e-999999", "9" * 40]:
+        with pytest.raises(SSRAError) as cif_exc:
+            mcp_gw.invoke_tool(
+                server_name="customs",
+                tool_name="estimate_duties",
+                arguments={"hs_code": "8703.23", "cif_value_usd": bad_cif},
+            )
+        assert cif_exc.value.code == McpErrorCode.VALIDATION_FAILED
