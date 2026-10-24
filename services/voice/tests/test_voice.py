@@ -1044,3 +1044,400 @@ def test_voice_multiturn_call_session_echo_guard_and_recovery() -> None:
     )
     assert t5_esc.decision is not None and t5_esc.decision.action == "WARM_TRANSFER_TO_OFFICER"
     assert call.phase == "transferred"
+
+
+def test_receptionist_spoken_intent_control_offer_review_and_sentence_splitter() -> None:
+    """FinalYearProject brain.py & review.py parity: spoken zero-out, controls, offer reply, review & procedure splitting."""
+    from ssra_voice import (
+        classify_pending_offer_reply,
+        classify_spoken_call_review,
+        is_callback_request,
+        is_goodbye_request,
+        is_normal_pace_request,
+        is_repeat_request,
+        is_slower_pace_request,
+        is_spoken_officer_request,
+        is_tax_dispute,
+        split_receptionist_spoken_sentences,
+    )
+
+    assert is_spoken_officer_request("Connect me to an officer please") is True
+    assert is_spoken_officer_request("Officer, please.") is True
+    assert is_spoken_officer_request("أريد موظف") is True
+    assert is_spoken_officer_request("What does a tax officer do?") is False
+
+    assert is_tax_dispute("I want to appeal this assessment at the tribunal") is True
+    assert is_tax_dispute("What is the PAYE filing deadline?") is False
+
+    assert is_repeat_request("Could you repeat that?") is True
+    assert (
+        is_repeat_request("I said repeat that to my accountant when filing PAYE returns yesterday")
+        is False
+    )
+    assert is_slower_pace_request("Please speak slower") is True
+    assert is_normal_pace_request("Speak at normal speed") is True
+    assert is_callback_request("Can you call me back later?") is True
+    assert is_goodbye_request("That's all, thank you") is True
+    assert is_goodbye_request("Goodbye") is True
+    assert is_goodbye_request("That is all the money I have for tax") is False
+
+    assert classify_pending_offer_reply("", "officer") == "none"
+    assert classify_pending_offer_reply("Yes, please connect me", "officer") == "accept"
+    assert classify_pending_offer_reply("No, I'm fine thanks", "officer") == "decline"
+    assert classify_pending_offer_reply("Tell me more", "officer") == "none"
+    assert classify_pending_offer_reply("Tell me more", "more") == "accept"
+    assert classify_pending_offer_reply("Yes, and what is the excise rate?", "officer") == "none"
+
+    assert classify_spoken_call_review("") == "unclear"
+    assert classify_spoken_call_review("No, thank you") == "unclear"
+    assert classify_spoken_call_review("Not too bad") == "neutral"
+    assert classify_spoken_call_review("It was not helpful at all") == "negative"
+    assert classify_spoken_call_review("Sort of") == "neutral"
+    assert classify_spoken_call_review("Very helpful, thank you") == "positive"
+    assert classify_spoken_call_review("Yes") == "positive"
+    assert classify_spoken_call_review("No") == "negative"
+    assert classify_spoken_call_review("Fine") == "neutral"
+    assert classify_spoken_call_review("Purple elephant") == "unclear"
+
+    proc_text = (
+        "Happy to help! To register for a TIN in South Sudan: "
+        "1. Open the e-Tax portal 2. Upload your company certificate, e.g. Form A 3. Submit the form. "
+        "The standard rate is 18. Thank you."
+    )
+    split_proc = split_receptionist_spoken_sentences(proc_text)
+    assert len(split_proc) == 4
+    assert split_proc[1].startswith("To register for a TIN in South Sudan: 1. Open")
+    assert split_proc[1].endswith("3. Submit the form.")
+    assert split_proc[2] == "The standard rate is 18."
+    assert split_proc[3] == "Thank you."
+    assert split_receptionist_spoken_sentences(
+        "1. Visit the portal.\n2. Open TIN Registration."
+    ) == [
+        "1. Visit the portal.",
+        "2. Open TIN Registration.",
+    ]
+
+
+def test_voice_call_session_controls_pending_offers_interruption_and_transfer_epoch() -> None:
+    """FinalYearProject brain.py, state.py & transfer.py parity inside VoiceCallSession."""
+    from ssra_voice import VoiceCallSession
+
+    session = VoiceCallSession(
+        session_id="call_brain_01",
+        locale=LocaleCode.EN,
+        recording_offered=False,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
+    )
+    session.start_call()
+    session.mark_disclosure_finished()
+    assert session.phase == "active_ai"
+
+    session.record_assistant_reply("Monthly PAYE returns are due by the 15th.")
+    state_frame = session.build_call_state_frame(turn_phase="listening")
+    assert state_frame["type"] == "call_state"
+    assert state_frame["has_last_answer"] is True
+    assert state_frame["speech_rate_slow"] is False
+
+    # Control actions: slower, normal_speed, repeat, more_detail
+    slow_out = session.handle_call_control("slower")
+    assert slow_out.speech_rate_slow is True
+    assert slow_out.control_action_applied == "slower"
+
+    norm_out = session.handle_call_control("normal_speed")
+    assert norm_out.speech_rate_slow is False
+    assert norm_out.control_action_applied == "normal_speed"
+
+    rep_out = session.handle_call_control("repeat")
+    assert rep_out.control_action_applied == "repeat"
+    assert (
+        rep_out.spoken_response_text
+        == "Sure, let me repeat that: Monthly PAYE returns are due by the 15th."
+    )
+
+    # Pending offer interrupted by barge-in: saying 'yes' over the answer re-asks the offer question!
+    session.set_pending_offer(
+        "officer",
+        reason="complex_case",
+        more_detail="Additional penalty rules apply under Section 42.",
+        at_risk=True,
+    )
+    assert session.risk_offer_made is True
+    session.record_assistant_reply(
+        "First sentence of the answer. Would you like to speak with an officer?",
+        interrupted_at_sentence=1,
+    )
+    assert session.offer_interrupted is True
+    reask_out = session.process_caller_turn(transcript="okay", elapsed_since_tts_end_ms=700)
+    assert reask_out.control_action_applied == "reask_unheard_offer"
+    assert session.pending_offer == "officer"
+    assert session.phase == "active_ai"
+
+    # If interrupted again and caller asks a new question instead of yes/no, risk_offer_made resets.
+    session.offer_interrupted = True
+    new_q_out = session.process_caller_turn(
+        transcript="What is the withholding tax rate?",
+        elapsed_since_tts_end_ms=700,
+    )
+    assert new_q_out.decision is not None and new_q_out.decision.action == "STREAM_ASR"
+    assert session.risk_offer_made is False
+
+    # Persistent last_more_detail_text works even after offer lapsed
+    more_spoken = session.process_caller_turn(
+        transcript="tell me more", elapsed_since_tts_end_ms=700
+    )
+    assert more_spoken.control_action_applied == "more_detail"
+    assert more_spoken.spoken_response_text == "Additional penalty rules apply under Section 42."
+
+    # Pending 'more' offer accept & decline, plus repeat/pace preserving pending offer
+    session.set_pending_offer("more", more_detail="Step 3 is bank payment confirmation.")
+    rep_with_offer = session.process_caller_turn(
+        transcript="repeat that", elapsed_since_tts_end_ms=700
+    )
+    assert rep_with_offer.control_action_applied == "repeat"
+    assert session.pending_offer == "more"
+
+    slow_with_offer = session.process_caller_turn(
+        transcript="speak slower", elapsed_since_tts_end_ms=700
+    )
+    assert slow_with_offer.control_action_applied == "slower"
+    assert session.pending_offer == "more"
+
+    norm_with_offer = session.process_caller_turn(
+        transcript="normal speed", elapsed_since_tts_end_ms=700
+    )
+    assert norm_with_offer.control_action_applied == "normal_speed"
+    assert session.pending_offer == "more"
+
+    accept_more = session.handle_call_control("accept_offer")
+    assert accept_more.control_action_applied == "offer_accepted_more"
+    assert accept_more.spoken_response_text == "Step 3 is bank payment confirmation."
+
+    session.set_pending_offer("more", more_detail="Extra detail to discard.")
+    decline_more = session.handle_call_control("decline_offer")
+    assert decline_more.control_action_applied == "offer_declined"
+    assert session.last_more_detail_text == ""
+
+    # Accept officer offer -> transfers & bumps queue_epoch
+    session.set_pending_offer("officer", reason="caller_needs_help")
+    accept_off = session.handle_call_control("accept_offer")
+    assert accept_off.control_action_applied == "offer_accepted_officer"
+    assert session.phase == "transferred"
+    assert session.queue_epoch >= 1
+
+    # While transferring, caller says "call me back later" -> ends wait and sets needs_callback
+    cb_out = session.process_caller_turn(
+        transcript="Please call me back later", elapsed_since_tts_end_ms=700
+    )
+    assert cb_out.control_action_applied == "callback_requested"
+    assert session.needs_callback is True
+    assert session.phase == "active_ai"
+
+    # Direct request_callback when not in transferred phase also records needs_callback
+    cb_direct = session.handle_call_control("request_callback")
+    assert cb_direct.control_action_applied == "callback_requested"
+    assert session.needs_callback is True
+    session.end_transfer_wait(timed_out=False)
+
+    # Spoken officer request in active_ai transfers immediately
+    off_req = session.process_caller_turn(
+        transcript="Please connect me to an officer",
+        elapsed_since_tts_end_ms=700,
+    )
+    assert off_req.control_action_applied == "spoken_officer_request"
+    assert session.phase == "transferred"
+
+    # Return to active_ai and test spoken goodbye hangup
+    session.end_transfer_wait(timed_out=True)
+    bye_out = session.process_caller_turn(transcript="Goodbye", elapsed_since_tts_end_ms=700)
+    assert bye_out.control_action_applied == "caller_voice_hangup"
+    assert session.phase == "ended"
+
+
+def test_officer_hold_gate_queue_position_and_live_call_risk_evaluator() -> None:
+    """FinalYearProject hold_gate.py, transfer.py & risk.py parity."""
+    from ssra_voice import (
+        LobbyCallEntry,
+        compute_transfer_queue_position,
+        evaluate_live_call_risk,
+        format_case_reference,
+        should_drop_ai_frame_when_bridged,
+    )
+
+    assert should_drop_ai_frame_when_bridged(call_mode="bridged", frame_kind="output_audio") is True
+    assert should_drop_ai_frame_when_bridged(call_mode="bridged", frame_kind="tts_text") is True
+    assert should_drop_ai_frame_when_bridged(call_mode="bridged", frame_kind="caption") is False
+    assert should_drop_ai_frame_when_bridged(call_mode="ai", frame_kind="output_audio") is False
+    assert (
+        should_drop_ai_frame_when_bridged(
+            call_mode="bridged", frame_kind="output_audio", direction="upstream"
+        )
+        is False
+    )
+
+    assert format_case_reference("SSRA-20261025-001") == "SSRA-20261025-001"
+    assert format_case_reference("abcd1234efgh") == "SSRA-ABCD1234"
+    assert format_case_reference(None, fallback_call_id="call987654321") == "CALL-CALL9876"
+    assert format_case_reference(None) == "CALL-UNKNOWN"
+
+    c_norm_late = LobbyCallEntry(
+        call_id="c3", status="transferring", priority="normal", waiting_since=200.0
+    )
+    c_norm_early = LobbyCallEntry(
+        call_id="c2", status="transferring", priority="normal", waiting_since=100.0
+    )
+    c_urgent = LobbyCallEntry(
+        call_id="c1", status="transferring", priority="urgent", waiting_since=300.0
+    )
+    c_claimed = LobbyCallEntry(
+        call_id="c0",
+        status="transferring",
+        priority="urgent",
+        waiting_since=50.0,
+        claimed_by="staff_1",
+    )
+    all_calls = [c_norm_late, c_norm_early, c_urgent, c_claimed]
+    assert compute_transfer_queue_position(c_urgent, all_calls) == 1
+    assert compute_transfer_queue_position(c_norm_early, all_calls) == 2
+    assert compute_transfer_queue_position(c_norm_late, all_calls) == 3
+
+    # Live call risk evaluation: none -> watch -> at_risk
+    none_risk = evaluate_live_call_risk(
+        turns=[
+            {
+                "speaker": "caller",
+                "text": "What is the PAYE filing deadline?",
+                "mean_word_prob": 0.92,
+            }
+        ],
+    )
+    assert none_risk.level == "none"
+    assert none_risk.should_offer_officer is False
+
+    watch_risk = evaluate_live_call_risk(
+        turns=[{"speaker": "caller", "text": "What is the PAYE filing deadline?"}],
+        duration_seconds=400.0,
+    )
+    assert watch_risk.level == "watch"
+    assert watch_risk.signals == ("long_call",)
+
+    at_risk = evaluate_live_call_risk(
+        turns=[
+            {"speaker": "caller", "text": "Where do I file PAYE returns?", "mean_word_prob": 0.42},
+            {"speaker": "caller", "text": "Where do I file PAYE return?", "mean_word_prob": 0.41},
+            {"speaker": "caller", "kind": "review", "text": "useless!!"},
+        ],
+        clarifications_asked=2,
+        abstentions_count=1,
+        duration_seconds=420.0,
+        caller_affect="distressed",
+        risk_offer_already_made=False,
+    )
+    assert at_risk.level == "at_risk"
+    assert "clarifications:2" in at_risk.signals
+    assert "repeated_question" in at_risk.signals
+    assert "distress" in at_risk.signals
+    assert "low_word_confidence" in at_risk.signals
+    assert "abstention" in at_risk.signals
+    assert "long_call" in at_risk.signals
+    assert at_risk.should_offer_officer is True
+
+
+def test_low_bandwidth_voice_profile_mulaw_codec_and_call_resume_ticket() -> None:
+    """FinalYearProject low_bandwidth.py parity: 2G/3G negotiation, G.711 mu-law transcoding & single-use resume ticket."""
+    import struct
+
+    from ssra_voice import (
+        mint_call_resume_ticket,
+        mulaw_8k_to_pcm16_16k,
+        negotiate_low_bandwidth_voice_profile,
+        pcm16_16k_to_mulaw_8k,
+        verify_call_resume_ticket,
+    )
+
+    normal_prof = negotiate_low_bandwidth_voice_profile({"effective_type": "4g", "rtt_ms": 80})
+    assert normal_prof.enabled is False
+    assert normal_prof.codec == "pcm16_16k"
+
+    edge_prof = negotiate_low_bandwidth_voice_profile({"effective_type": "2g", "rtt_ms": 720})
+    assert edge_prof.enabled is True
+    assert edge_prof.codec == "mulaw_8k"
+    assert edge_prof.sample_rate == 8000
+    assert edge_prof.caption_only is False
+    assert edge_prof.bitrate_kbps == 64
+
+    slow_2g_prof = negotiate_low_bandwidth_voice_profile(
+        {"effective_type": "slow-2g", "rtt_ms": 1800, "audio_codec": "opus_12k"}
+    )
+    assert slow_2g_prof.enabled is True
+    assert slow_2g_prof.codec == "opus_12k"
+    assert slow_2g_prof.caption_only is True
+    assert slow_2g_prof.bitrate_kbps == 0
+
+    # G.711 mu-law 8 kHz <-> 16 kHz PCM16 transcoding (4x byte reduction)
+    assert pcm16_16k_to_mulaw_8k(b"\x00\x01") == b""
+    assert mulaw_8k_to_pcm16_16k(b"") == b""
+    single_mulaw = pcm16_16k_to_mulaw_8k(struct.pack("<2h", 4000, -4000))
+    assert len(single_mulaw) == 1
+    assert len(mulaw_8k_to_pcm16_16k(single_mulaw)) == 4
+
+    pcm_samples = [int(12000 * ((i % 16) - 8) / 8) for i in range(64)]
+    pcm_bytes = struct.pack(f"<{len(pcm_samples)}h", *pcm_samples)
+    mulaw_bytes = pcm16_16k_to_mulaw_8k(pcm_bytes)
+    assert len(mulaw_bytes) == len(pcm_bytes) // 4
+    restored_pcm = mulaw_8k_to_pcm16_16k(mulaw_bytes)
+    assert len(restored_pcm) == len(pcm_bytes)
+
+    # Single-use HMAC-SHA256 caller drop-resume ticket
+    secret = "test-voice-carryover-secret-key-at-least-32-bytes"
+    early_ticket = mint_call_resume_ticket(
+        "call_drop_0",
+        "conv_drop_0",
+        user_id="usr_0",
+        ttl_seconds=10,
+        signing_salt=secret,
+        now=900.0,
+    )
+    assert verify_call_resume_ticket(early_ticket, signing_salt=secret, now=905.0) is not None
+    ticket = mint_call_resume_ticket(
+        "call_drop_1",
+        "conv_drop_1",
+        user_id="usr_1",
+        ttl_seconds=45,
+        signing_salt=secret,
+        now=1000.0,
+    )
+    assert "." in ticket
+    assert verify_call_resume_ticket("", signing_salt=secret, now=1010.0) is None
+    assert verify_call_resume_ticket(f"{ticket}bad", signing_salt=secret, now=1010.0) is None
+    assert verify_call_resume_ticket(ticket, signing_salt=secret, now=2000.0) is None
+    assert (
+        verify_call_resume_ticket(
+            ticket, expected_call_id="wrong_call", signing_salt=secret, now=1010.0
+        )
+        is None
+    )
+    assert (
+        verify_call_resume_ticket(
+            ticket, expected_user_id="wrong_user", signing_salt=secret, now=1010.0
+        )
+        is None
+    )
+    claims = verify_call_resume_ticket(
+        ticket,
+        expected_call_id="call_drop_1",
+        expected_user_id="usr_1",
+        signing_salt=secret,
+        now=1010.0,
+    )
+    assert claims is not None and claims["cid"] == "call_drop_1"
+    # Replay of the same ticket is rejected (single-use nonce consumed)
+    assert (
+        verify_call_resume_ticket(
+            ticket,
+            expected_call_id="call_drop_1",
+            expected_user_id="usr_1",
+            signing_salt=secret,
+            now=1011.0,
+        )
+        is None
+    )
