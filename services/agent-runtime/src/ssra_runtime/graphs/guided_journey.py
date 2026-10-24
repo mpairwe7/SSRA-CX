@@ -384,6 +384,23 @@ SSRA_JOURNEY_FORM_SCHEMAS: dict[str, tuple[str, str, tuple[JourneyFormFieldSpec,
 }
 
 
+_PREREQUISITE_DAG_SLOTS: frozenset[str] = frozenset(
+    spec.slot for specs in SSRA_JOURNEY_PREREQUISITE_DAG.values() for spec in specs if spec.slot
+)
+_SAFE_SUBJECT_REF_RE = re.compile(r"^[A-Za-z0-9_-]{3,64}$")
+
+
+def filter_prerequisite_slots(slots: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Retain only prerequisite-relevant slots (`journey_copilot.py` `prerequisite_case_facts` data minimization)."""
+    if not slots:
+        return {}
+    return {
+        key: slots[key]
+        for key in sorted(_PREREQUISITE_DAG_SLOTS)
+        if slots.get(key) not in ("", None)
+    }
+
+
 def evaluate_journey_prerequisites(
     journey_id: str,
     slots: Mapping[str, Any],
@@ -575,7 +592,13 @@ def elevate_anonymous_journey_slots(
     profile_defaults: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Elevate anonymous journey slots to an authenticated subject with zero data loss (`journey_copilot.py` Pillar 5, WCAG 3.3.7)."""
-    merged: dict[str, Any] = dict(anonymous_slots)
+    if not _SAFE_SUBJECT_REF_RE.match(authenticated_subject_ref or ""):
+        raise ValueError("authenticated_subject_ref must match _SAFE_SUBJECT_REF_RE")
+    merged: dict[str, Any] = {
+        k: v
+        for k, v in anonymous_slots.items()
+        if not k.startswith("_") and k not in ("subject_ref", "tin")
+    }
     merged["_authenticated_subject_ref"] = authenticated_subject_ref
     if profile_defaults:
         for key, value in profile_defaults.items():

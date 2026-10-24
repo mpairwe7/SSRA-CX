@@ -1627,11 +1627,24 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
         elevate_anonymous_journey_slots,
         evaluate_journey_prerequisites,
         evaluate_journey_step_up_auth,
+        filter_prerequisite_slots,
         generate_ssra_resume_code,
         infer_taxpayer_journey_objective,
         looks_like_ssra_resume_code,
         parse_ssra_resume_code,
     )
+
+    assert filter_prerequisite_slots(None) == {}
+    assert filter_prerequisite_slots({"has_tin": True, "gross_salary_ssp": 500000}) == {
+        "has_tin": True
+    }
+    with pytest.raises(ValueError, match="_SAFE_SUBJECT_REF_RE"):
+        elevate_anonymous_journey_slots({}, authenticated_subject_ref="../bad")
+    elevated_clean = elevate_anonymous_journey_slots(
+        {"_forged": "x", "subject_ref": "evil", "taxpayer_type": "individual"},
+        authenticated_subject_ref="sub_01",
+    )
+    assert "_forged" not in elevated_clean and "subject_ref" not in elevated_clean
 
     prereqs = evaluate_journey_prerequisites(
         "obtain_tcc",
