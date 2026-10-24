@@ -296,7 +296,7 @@ class GovernedMcpGatewayClient:
         is_retryable_read = bool(tool.annotations.readOnlyHint and tool.annotations.idempotentHint)
 
         # Toolathlon & arXiv:2610.10062: Turn-scoped repetition loop detector & read memoization
-        fingerprint = f"{tool_key}:{subject_ref or 'anon'}:{json.dumps(arguments, sort_keys=True)}"
+        fingerprint = f"{tool_key}:{subject_ref or 'anon'}:{json.dumps(arguments, sort_keys=True, separators=(',', ':'), default=str)}"
         if budget is not None:
             prev_calls = budget.tool_call_counts.get(fingerprint, 0)
             if is_state_changing and prev_calls >= 1:

@@ -107,6 +107,102 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
         else ""
     )
 
+    def _append_secondary_customs_clause(
+        cits_out: list[Citation],
+        nums_out: list[NumericClaim],
+    ) -> str:
+        duty_comp = next((a for a in artifacts if a.tool == "estimate_duties"), None)
+        if duty_comp is not None:
+            dsc = duty_comp.structured_content
+            cits_out.append(
+                Citation(
+                    id="cit_customs_act",
+                    snapshot_version="2026.10.1",
+                    doc_title="Customs Service Act 2013 & Financial Act 2024/2025 Tariff Schedule",
+                    section_anchor="Part-V-Sec-12-Customs-Valuation-FX",
+                    effective_from="2024-12-02",
+                    url="https://customs.eservices.gov.ss/",
+                )
+            )
+            c_usd = str(dsc["cif_value_usd"])
+            c_fx = str(dsc["boss_official_fx_rate_ssp_per_usd"])
+            c_ssp = str(dsc["customs_value_ssp"])
+            c_rate = str(dsc["duty_rate_percent"])
+            c_duty = str(dsc["estimated_duty_ssp"])
+            nums_out.extend(
+                [
+                    NumericClaim(
+                        value=c_usd,
+                        unit=NumericUnit.USD,
+                        source_ref=f"{duty_comp.id}.cif_value_usd",
+                    ),
+                    NumericClaim(
+                        value=c_fx,
+                        unit=NumericUnit.SSP,
+                        source_ref=f"{duty_comp.id}.boss_official_fx_rate_ssp_per_usd",
+                    ),
+                    NumericClaim(
+                        value=c_ssp,
+                        unit=NumericUnit.SSP,
+                        source_ref=f"{duty_comp.id}.customs_value_ssp",
+                    ),
+                    NumericClaim(
+                        value=c_rate,
+                        unit=NumericUnit.PERCENT,
+                        source_ref=f"{duty_comp.id}.duty_rate_percent",
+                    ),
+                    NumericClaim(
+                        value=c_duty,
+                        unit=NumericUnit.SSP,
+                        source_ref=f"{duty_comp.id}.estimated_duty_ssp",
+                    ),
+                ]
+            )
+            return (
+                f" For HS {dsc['hs_code']} with CIF {c_usd} USD (BoSS rate {c_fx} SSP/USD = {c_ssp} SSP), "
+                f"customs duty at {c_rate}% is {c_duty} SSP."
+            )
+        tariff_comp = next((a for a in artifacts if a.tool == "lookup_tariff"), None)
+        if tariff_comp is not None:
+            tsc = tariff_comp.structured_content
+            cits_out.append(
+                Citation(
+                    id="cit_customs_tariff",
+                    snapshot_version="2026.10.1",
+                    doc_title="Customs Service Act 2013 & Financial Act 2024/2025 Tariff Schedule",
+                    section_anchor="Part-V-Sec-12-Customs-Valuation-FX",
+                    effective_from="2024-12-02",
+                    url="https://customs.eservices.gov.ss/",
+                )
+            )
+            t_duty = str(tsc["duty_rate_percent"])
+            t_exc = str(tsc["excise_rate_percent"])
+            t_fx = str(tsc["boss_official_fx_rate_ssp_per_usd"])
+            nums_out.extend(
+                [
+                    NumericClaim(
+                        value=t_duty,
+                        unit=NumericUnit.PERCENT,
+                        source_ref=f"{tariff_comp.id}.duty_rate_percent",
+                    ),
+                    NumericClaim(
+                        value=t_exc,
+                        unit=NumericUnit.PERCENT,
+                        source_ref=f"{tariff_comp.id}.excise_rate_percent",
+                    ),
+                    NumericClaim(
+                        value=t_fx,
+                        unit=NumericUnit.SSP,
+                        source_ref=f"{tariff_comp.id}.boss_official_fx_rate_ssp_per_usd",
+                    ),
+                ]
+            )
+            return (
+                f" For HS {tsc['hs_code']} ({tsc['description']}), customs duty rate is {t_duty}% "
+                f"and excise rate is {t_exc}% (BoSS rate {t_fx} SSP/USD)."
+            )
+        return ""
+
     # 2. PAYE Calculator response (`CalculatorForm` generative UI card) — including compound PAYE + WHT/Customs
     paye_art = next((a for a in artifacts if a.tool == "calculate_paye_estimate"), None)
     if paye_art is not None:
@@ -153,57 +249,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
                 f"the withholding tax at {wsc['rate_percent']}% is {wsc['withholding_tax_ssp']} SSP, "
                 f"with {wsc['net_payable_ssp']} SSP net payable."
             )
-        duty_comp = next((a for a in artifacts if a.tool == "estimate_duties"), None)
-        if duty_comp is not None:
-            dsc = duty_comp.structured_content
-            citations.append(
-                Citation(
-                    id="cit_customs_act",
-                    snapshot_version="2026.10.1",
-                    doc_title="Customs Service Act 2013 & Financial Act 2024/2025 Tariff Schedule",
-                    section_anchor="Part-V-Sec-12-Customs-Valuation-FX",
-                    effective_from="2024-12-02",
-                    url="https://customs.eservices.gov.ss/",
-                )
-            )
-            c_usd = str(dsc["cif_value_usd"])
-            c_fx = str(dsc["boss_official_fx_rate_ssp_per_usd"])
-            c_ssp = str(dsc["customs_value_ssp"])
-            c_rate = str(dsc["duty_rate_percent"])
-            c_duty = str(dsc["estimated_duty_ssp"])
-            numbers.extend(
-                [
-                    NumericClaim(
-                        value=c_usd,
-                        unit=NumericUnit.USD,
-                        source_ref=f"{duty_comp.id}.cif_value_usd",
-                    ),
-                    NumericClaim(
-                        value=c_fx,
-                        unit=NumericUnit.SSP,
-                        source_ref=f"{duty_comp.id}.boss_official_fx_rate_ssp_per_usd",
-                    ),
-                    NumericClaim(
-                        value=c_ssp,
-                        unit=NumericUnit.SSP,
-                        source_ref=f"{duty_comp.id}.customs_value_ssp",
-                    ),
-                    NumericClaim(
-                        value=c_rate,
-                        unit=NumericUnit.PERCENT,
-                        source_ref=f"{duty_comp.id}.duty_rate_percent",
-                    ),
-                    NumericClaim(
-                        value=c_duty,
-                        unit=NumericUnit.SSP,
-                        source_ref=f"{duty_comp.id}.estimated_duty_ssp",
-                    ),
-                ]
-            )
-            text += (
-                f" For HS {dsc['hs_code']} with CIF {c_usd} USD (BoSS rate {c_fx} SSP/USD = {c_ssp} SSP), "
-                f"customs duty at {c_rate}% is {c_duty} SSP."
-            )
+        text += _append_secondary_customs_clause(citations, numbers)
         wf_stack = state.get("workflow_stack") or []
         if wf_stack and wf_stack[-1].get("status") != "COMPLETED" and capabilities.max_len >= 240:
             paused_step = int(wf_stack[-1].get("current_step", 1))
@@ -239,18 +285,20 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             ),
         }
 
-    # 3. Withholding Tax Calculator response
+    # 3. Withholding Tax Calculator response — including compound WHT + Customs
     wht_art = next((a for a in artifacts if a.tool == "calculate_withholding_estimate"), None)
     if wht_art is not None:
         sc = wht_art.structured_content
-        cit = Citation(
-            id="cit_wht_act",
-            snapshot_version=str(sc.get("snapshot_version", "2026.10.1")),
-            doc_title="Taxation Act 2009 (as amended by Financial Act 2024/2025)",
-            section_anchor="Part-IX-Withholding-Tax",
-            effective_from="2024-07-01",
-            url="https://etax.nra.gov.ss/",
-        )
+        wht_cits = [
+            Citation(
+                id="cit_wht_act",
+                snapshot_version=str(sc.get("snapshot_version", "2026.10.1")),
+                doc_title="Taxation Act 2009 (as amended by Financial Act 2024/2025)",
+                section_anchor="Part-IX-Withholding-Tax",
+                effective_from="2024-07-01",
+                url="https://etax.nra.gov.ss/",
+            )
+        ]
         numbers = [NumericClaim.model_validate(n) for n in sc.get("numeric_claims", [])]
         gross = sc["gross_amount_ssp"]
         rate = sc["rate_percent"]
@@ -260,11 +308,18 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             f"ESTIMATE ONLY: For a gross payment of {gross} SSP ({sc['category']}), "
             f"the withholding tax at {rate}% is {wht} SSP, with {net} SSP net payable."
         )
+        text += _append_secondary_customs_clause(wht_cits, numbers)
+        text += step_failed_suffix
         return {
-            "citations": [cit],
+            "citations": wht_cits,
             "answer": Answer(
-                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
-                citations=[cit],
+                segments=[
+                    AnswerSegment(
+                        text=text[: capabilities.max_len],
+                        citation_ids=[c.id for c in wht_cits],
+                    )
+                ],
+                citations=wht_cits,
                 numbers=numbers,
                 ui_component=GenerativeUIComponent(
                     name=GenerativeUIComponentName.CALCULATOR_FORM,

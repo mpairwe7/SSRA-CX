@@ -316,6 +316,55 @@ def test_toolathlon_compound_multi_tool_and_quiet_fault_loop_guards() -> None:
     assert rev_comp.artifacts[0].structured_content["gross_monthly_ssp"] == "500000"
     assert rev_comp.artifacts[1].structured_content["gross_amount_ssp"] == "1000000"
 
+    # CIF-first compound Customs + PAYE isolates CIF USD from SSP salary amount
+    cif_first_comp = runtime.run_turn(
+        make_conversation_event(
+            "Estimate customs duty for HS 8703.23 with CIF $10,000 USD and calculate PAYE on 400,000 SSP",
+            thread_id="thr_toolathlon_cif_first",
+        )
+    )
+    assert cif_first_comp.artifacts[0].structured_content["gross_monthly_ssp"] == "400000"
+    assert cif_first_comp.artifacts[1].structured_content["cif_value_usd"] == "10000"
+
+    # Compound PAYE + Customs tariff lookup (without CIF) and Compound WHT + Customs duty
+    comp_paye_tariff = runtime.run_turn(
+        make_conversation_event(
+            "Calculate PAYE on 400,000 SSP and customs tariff for HS 2203.00",
+            thread_id="thr_toolathlon_paye_tariff",
+        )
+    )
+    assert any(c.id == "cit_customs_tariff" for c in comp_paye_tariff.answer.citations)
+
+    comp_wht_duty = runtime.run_turn(
+        make_conversation_event(
+            "Calculate withholding tax on 1,000,000 SSP for rent and customs duty for HS 8703.23 with CIF $10,000 USD",
+            thread_id="thr_toolathlon_wht_duty",
+        )
+    )
+    assert [f"{a.server}.{a.tool}" for a in comp_wht_duty.artifacts] == [
+        "tax-facts.calculate_withholding_estimate",
+        "customs.estimate_duties",
+    ]
+    assert any(c.id == "cit_customs_act" for c in comp_wht_duty.answer.citations)
+
+    # Arabic multi-turn anaphoric PAYE follow-up ('ماذا لو كان' with 800,000 SSP)
+    runtime.run_turn(
+        make_conversation_event(
+            "كم ضريبة الدخل PAYE على راتب شهري ٣٠٠٬٠٠٠ SSP؟",
+            locale=LocaleCode.AR,
+            thread_id="thr_ar_anaphoric",
+        )
+    )
+    ar_followup = runtime.run_turn(
+        make_conversation_event(
+            "ماذا لو كان ٨٠٠٬٠٠٠ SSP؟",
+            locale=LocaleCode.AR,
+            thread_id="thr_ar_anaphoric",
+        )
+    )
+    assert ar_followup.intent is not None and ar_followup.intent.intent == IntentName.CALCULATE_PAYE
+    assert "800000" in ar_followup.answer.segments[0].text
+
     corrupted_paye = ToolArtifact(
         id="art_corrupt_01",
         server="tax-facts",
@@ -373,10 +422,29 @@ def test_toolathlon_compound_multi_tool_and_quiet_fault_loop_guards() -> None:
         provenance={"source_id": "etax"},
         data_classification="RESTRICTED",
     )
+    corrupted_tariff = ToolArtifact(
+        id="art_corrupt_05",
+        server="customs",
+        tool="lookup_tariff",
+        tier=RiskTier.T0,
+        structured_content={
+            "snapshot_version": "2026.10.1",
+            "duty_rate_percent": "-5",
+            "excise_rate_percent": "20",
+            "boss_official_fx_rate_ssp_per_usd": "0",
+        },
+        provenance={"snapshot_version": "2026.10.1"},
+        data_classification="PUBLIC",
+    )
     verif = verify_plan_outcomes(
-        None, [corrupted_paye, corrupted_wht, corrupted_duty, corrupted_bal]
+        None,
+        [corrupted_paye, corrupted_wht, corrupted_duty, corrupted_bal, corrupted_tariff],
     )
     assert verif.verified is False
+    assert (
+        "QUIET_FAULT_DETECTED:customs.lookup_tariff:CUSTOMS_TARIFF_INVARIANT_VIOLATION"
+        in verif.blocker_codes
+    )
     assert (
         "QUIET_FAULT_DETECTED:tax-facts.calculate_paye_estimate:PAYE_INVARIANT_VIOLATION"
         in verif.blocker_codes
