@@ -1724,3 +1724,62 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
     assert diagnose_ssra_portal_error("All good") is None
     err_diag = diagnose_ssra_portal_error("TCC application rejected due to outstanding tax arrears")
     assert err_diag is not None and err_diag["error_code"] == "TCC_COMPLIANCE_ARREARS_BLOCK"
+
+
+def test_mcp_eq_word_boundaries_structuring_spend_and_sanitiser_hardening() -> None:
+    from fastapi.testclient import TestClient
+    from ssra_mcp.sanitiser import sanitise_structured_output
+    from ssra_runtime.gateway_server import create_agentgateway_app
+    from ssra_runtime.guardrails import build_eq_handling_guidance, compute_affective_state
+    from ssra_runtime.nodes.compose import fit_and_structure_answer_text
+
+    # 1. Word-boundary and negation-aware EQ detection ("almost" != "lost", "not confused" != "confused")
+    calm_almost = compute_affective_state(
+        "I am almost done with my e-Tax return and I am not confused"
+    )
+    assert calm_almost.primary_emotion == "calm"
+    guidance_calm = build_eq_handling_guidance(calm_almost)
+    assert guidance_calm["tone_register"] == "neutral"
+    assert guidance_calm["lead_with_acknowledgement"] is False
+
+    distressed = compute_affective_state(
+        "My container is detained at Nimule border and my bank frozen!!"
+    )
+    assert distressed.primary_emotion == "distressed"
+    guidance_dist = build_eq_handling_guidance(distressed)
+    assert guidance_dist["tone_register"] == "empathetic_reassuring"
+    assert guidance_dist["offer_human_handoff"] is True
+
+    # 2. Figure-safe answer structuring (`fit_and_structure_answer_text`)
+    short_txt = "Your PAYE tax is 25,000 SSP."
+    assert fit_and_structure_answer_text(short_txt, 160) == short_txt
+    long_txt = (
+        "First sentence with official figure 25,000 SSP due on the 15th. "
+        "Second sentence with extra background details that exceed the SMS limit."
+    )
+    fitted = fit_and_structure_answer_text(long_txt, 75)
+    assert "25,000 SSP" in fitted
+    assert len(fitted) <= 75
+
+    # 3. Gateway `/v1/spend/record` rejects negative, boolean, NaN, and non-numeric cost_usd
+    gw_client = TestClient(create_agentgateway_app(daily_usd_cap=150.0))
+    ok_res = gw_client.post("/v1/spend/record", json={"cost_usd": 12.5})
+    assert ok_res.status_code == 200
+    assert ok_res.json()["daily_spend_usd"] == 12.5
+
+    for invalid_cost in [-50.0, True, "NaN", "Infinity", "bad"]:
+        bad_res = gw_client.post("/v1/spend/record", json={"cost_usd": invalid_cost})
+        assert bad_res.status_code == 400
+    # Verify daily spend was not reset by negative delta
+    check_res = gw_client.post("/v1/spend/record", json={"cost_usd": 0.0})
+    assert check_res.json()["daily_spend_usd"] == 12.5
+
+    # 4. `sanitise_structured_output` scrubs dict keys and enforces max_depth
+    nested: dict[str, object] = {"https://evil.example/phish": "visit https://evil.example/x"}
+    clean_nested = sanitise_structured_output(nested)
+    assert "[REDACTED_UNALLOWLISTED_URL]" in clean_nested
+    deep: object = "leaf"
+    for _ in range(15):
+        deep = [deep]
+    sanitised_deep = sanitise_structured_output(deep, max_depth=4)
+    assert "REDACTED_MAX_DEPTH_EXCEEDED" in str(sanitised_deep)

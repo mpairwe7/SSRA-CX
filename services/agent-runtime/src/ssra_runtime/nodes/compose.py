@@ -15,11 +15,19 @@ from ssra_core import (
     LocaleCode,
     NumericClaim,
     NumericUnit,
+    fit_text,
 )
 from ssra_llm import PromptRegistry
 
 from ssra_runtime.guardrails.eq_detector import build_empathetic_preamble
 from ssra_runtime.state import ConversationGraphState
+
+
+def fit_and_structure_answer_text(text: str, max_len: int) -> str:
+    """Fit answer text within *max_len* by whole sentences/words without ever splitting a figure (`AUD-041`)."""
+    if len(text) <= max_len:
+        return text
+    return fit_text(text, fits=lambda candidate: len(candidate) <= max_len).text
 
 
 def compose_node(state: ConversationGraphState) -> dict[str, Any]:
@@ -82,10 +90,11 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             "answer": Answer(
                 segments=[
                     AnswerSegment(
-                        text=(
+                        text=fit_and_structure_answer_text(
                             "I could not safely verify the calculated tax figure. "
-                            "Please check directly on https://etax.nra.gov.ss/ or speak with an SSRA officer."
-                        )[: capabilities.max_len],
+                            "Please check directly on https://etax.nra.gov.ss/ or speak with an SSRA officer.",
+                            capabilities.max_len,
+                        ),
                         citation_ids=[],
                     )
                 ],
@@ -260,7 +269,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             "answer": Answer(
                 segments=[
                     AnswerSegment(
-                        text=text[: capabilities.max_len],
+                        text=fit_and_structure_answer_text(text, capabilities.max_len),
                         citation_ids=[c.id for c in citations],
                     )
                 ],
@@ -315,7 +324,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             "answer": Answer(
                 segments=[
                     AnswerSegment(
-                        text=text[: capabilities.max_len],
+                        text=fit_and_structure_answer_text(text, capabilities.max_len),
                         citation_ids=[c.id for c in wht_cits],
                     )
                 ],
@@ -385,7 +394,12 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
         return {
             "citations": [cit],
             "answer": Answer(
-                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
+                segments=[
+                    AnswerSegment(
+                        text=fit_and_structure_answer_text(text, capabilities.max_len),
+                        citation_ids=[cit.id],
+                    )
+                ],
                 citations=[cit],
                 numbers=numbers,
                 ui_component=GenerativeUIComponent(
@@ -441,7 +455,12 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
         return {
             "citations": [cit],
             "answer": Answer(
-                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
+                segments=[
+                    AnswerSegment(
+                        text=fit_and_structure_answer_text(text, capabilities.max_len),
+                        citation_ids=[cit.id],
+                    )
+                ],
                 citations=[cit],
                 numbers=numbers,
                 ui_component=GenerativeUIComponent(
@@ -475,7 +494,10 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             "answer": Answer(
                 segments=[
                     AnswerSegment(
-                        text=f"{sc['status']}: {sc['guidance']}"[: capabilities.max_len],
+                        text=fit_and_structure_answer_text(
+                            f"{sc['status']}: {sc['guidance']}",
+                            capabilities.max_len,
+                        ),
                         citation_ids=[cit.id],
                     )
                 ],
@@ -597,7 +619,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             "answer": Answer(
                 segments=[
                     AnswerSegment(
-                        text=text[: capabilities.max_len],
+                        text=fit_and_structure_answer_text(text, capabilities.max_len),
                         citation_ids=[c.id for c in cits_bal],
                     )
                 ],
@@ -692,7 +714,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             "answer": Answer(
                 segments=[
                     AnswerSegment(
-                        text=text[: capabilities.max_len],
+                        text=fit_and_structure_answer_text(text, capabilities.max_len),
                         citation_ids=[c.id for c in cits],
                     )
                 ],
@@ -766,7 +788,7 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
             "answer": Answer(
                 segments=[
                     AnswerSegment(
-                        text=text[: capabilities.max_len],
+                        text=fit_and_structure_answer_text(text, capabilities.max_len),
                         citation_ids=[c.id for c in cits],
                     )
                 ],
@@ -803,7 +825,12 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
         return {
             "citations": [cit],
             "answer": Answer(
-                segments=[AnswerSegment(text=text[: capabilities.max_len], citation_ids=[cit.id])],
+                segments=[
+                    AnswerSegment(
+                        text=fit_and_structure_answer_text(text, capabilities.max_len),
+                        citation_ids=[cit.id],
+                    )
+                ],
                 citations=[cit],
                 numbers=[],
                 is_estimate=False,
@@ -956,12 +983,21 @@ def compose_node(state: ConversationGraphState) -> dict[str, Any]:
         wf_stack = state.get("workflow_stack") or []
         if wf_stack:
             ui_props["resumable_workflow"] = wf_stack[-1]
+        affective = state.get("affective_state")
+        kn_preamble = (
+            build_empathetic_preamble(affective, locale_code=locale.value)
+            if affective is not None and capabilities.max_len >= 240
+            else ""
+        )
         return {
             "citations": [cit],
             "answer": Answer(
                 segments=[
                     AnswerSegment(
-                        text=content_text[: capabilities.max_len],
+                        text=fit_and_structure_answer_text(
+                            f"{kn_preamble}{content_text}",
+                            capabilities.max_len,
+                        ),
                         citation_ids=[cit.id],
                     )
                 ],

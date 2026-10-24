@@ -194,3 +194,30 @@ def test_tax_fact_end_before_start_rejected() -> None:
         TaxFactsRegistry(facts=[invalid], snapshot_version="2026.10.1")
 
     assert exc_info.value.code == McpErrorCode.VALIDATION_FAILED
+
+
+def test_bounded_ssp_amount_rejects_nan_infinity_bool_and_overflow() -> None:
+    reg = TaxFactsRegistry.from_yaml_file()
+    # Comma-formatted amounts are accepted
+    res = reg.calculate_paye_estimate("250,000", as_of=date(2026, 10, 16))
+    assert res.estimated_tax_ssp == "25000"
+
+    for bad_input in [
+        True,
+        False,
+        "NaN",
+        "Infinity",
+        "-Infinity",
+        "1e999999",
+        "9" * 40,
+        "1000000000001",
+        "not-a-number",
+        "",
+    ]:
+        with pytest.raises(SSRAError) as paye_exc:
+            reg.calculate_paye_estimate(bad_input)  # type: ignore[arg-type]
+        assert paye_exc.value.code == McpErrorCode.VALIDATION_FAILED
+
+        with pytest.raises(SSRAError) as wht_exc:
+            reg.calculate_withholding_estimate(bad_input)  # type: ignore[arg-type]
+        assert wht_exc.value.code == McpErrorCode.VALIDATION_FAILED

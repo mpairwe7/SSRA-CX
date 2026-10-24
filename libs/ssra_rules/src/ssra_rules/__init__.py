@@ -2,6 +2,7 @@
 
 from ssra_rules.engine import (
     ESTIMATE_DISCLAIMER_EN,
+    MAX_TAXABLE_AMOUNT_SSP,
     PayeBandBreakdown,
     PayeEstimateResult,
     TaxFactsRegistry,
@@ -10,6 +11,7 @@ from ssra_rules.engine import (
 
 __all__ = [
     "ESTIMATE_DISCLAIMER_EN",
+    "MAX_TAXABLE_AMOUNT_SSP",
     "PayeBandBreakdown",
     "PayeEstimateResult",
     "TaxFactsRegistry",

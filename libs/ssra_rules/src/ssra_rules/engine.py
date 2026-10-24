@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Literal
 
@@ -84,6 +84,44 @@ class WithholdingEstimateResult(BaseModel):
     is_estimate: Literal[True] = True
     disclaimer: str = ESTIMATE_DISCLAIMER_EN
     numeric_claims: list[NumericClaim]
+
+
+MAX_TAXABLE_AMOUNT_SSP: Decimal = Decimal("1000000000000")
+
+
+def _parse_bounded_ssp_amount(
+    raw_value: Decimal | int | float | str,
+    field_name: str,
+) -> Decimal:
+    """Parse and bound an SSP amount (`0 <= val <= 1,000,000,000,000`), rejecting NaN/Infinity/bool/malformed strings."""
+    if isinstance(raw_value, bool):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"{field_name} must be a valid finite decimal number",
+            status_code=400,
+        )
+    cleaned = str(raw_value).replace(",", "").strip()
+    if not cleaned or len(cleaned) > 32:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"{field_name} must be a valid finite decimal number",
+            status_code=400,
+        )
+    try:
+        val = Decimal(cleaned)
+    except InvalidOperation as exc:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"{field_name} must be a valid finite decimal number",
+            status_code=400,
+        ) from exc
+    if not val.is_finite() or val < Decimal("0") or val > MAX_TAXABLE_AMOUNT_SSP:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"{field_name} must be a non-negative finite number <= {MAX_TAXABLE_AMOUNT_SSP}",
+            status_code=400,
+        )
+    return val
 
 
 def _quantize_ssp(amount: Decimal) -> Decimal:
@@ -188,13 +226,7 @@ class TaxFactsRegistry:
         as_of: date | None = None,
     ) -> PayeEstimateResult:
         target_date = as_of or juba_today()
-        gross = Decimal(str(gross_monthly_ssp))
-        if gross < Decimal("0"):
-            raise SSRAError(
-                McpErrorCode.VALIDATION_FAILED,
-                "gross_monthly_ssp must be non-negative",
-                status_code=400,
-            )
+        gross = _parse_bounded_ssp_amount(gross_monthly_ssp, "gross_monthly_ssp")
 
         b1_max_fact = self.get_fact("paye.bracket.1.max_monthly_ssp", as_of=target_date)
         b1_rate_fact = self.get_fact("paye.bracket.1.rate_percent", as_of=target_date)
@@ -306,13 +338,7 @@ class TaxFactsRegistry:
         as_of: date | None = None,
     ) -> WithholdingEstimateResult:
         target_date = as_of or juba_today()
-        gross = Decimal(str(gross_amount_ssp))
-        if gross < Decimal("0"):
-            raise SSRAError(
-                McpErrorCode.VALIDATION_FAILED,
-                "gross_amount_ssp must be non-negative",
-                status_code=400,
-            )
+        gross = _parse_bounded_ssp_amount(gross_amount_ssp, "gross_amount_ssp")
 
         fact_key = f"wht.{category}.rate_percent"
         rate_fact = self.get_fact(fact_key, as_of=target_date)
