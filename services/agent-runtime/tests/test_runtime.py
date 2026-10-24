@@ -1830,6 +1830,12 @@ def test_south_sudan_orthography_folding_juba_arabic_script_and_forward_switch()
     assert detect_language("Namba mara tumosi pa pazande") == LocaleCode.ZNE
     assert detect_language("Coori ocul jami beene dhog collo") == LocaleCode.SHK
     assert score_language_candidates("Namba de ajul weu")[LocaleCode.DIN] >= 2
+    assert (
+        score_language_candidates("wëu")[LocaleCode.DIN]
+        == score_language_candidates("weu")[LocaleCode.DIN]
+        == 1
+    )
+    assert detect_language("Please switch to Dinka") == LocaleCode.DIN
 
     # 2. Juba Arabic ('pga') written in Arabic script vs Modern Standard Arabic ('ar')
     assert detect_language("شنو المطلوب عشان اسجل الرقم الضريبي بتاع شركتي؟") == LocaleCode.PGA

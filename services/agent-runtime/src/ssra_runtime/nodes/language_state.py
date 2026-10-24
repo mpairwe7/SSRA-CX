@@ -120,6 +120,18 @@ _VERNACULAR_TO_CANONICAL_EN: tuple[tuple[tuple[str, ...], str, str], ...] = (
 )
 
 
+_PREFOLDED_VERNACULAR_TO_CANONICAL_EN: tuple[tuple[tuple[tuple[str, str], ...], str, str], ...] = (
+    tuple(
+        (
+            tuple((m, fold_south_sudan_orthography(m)) for m in markers),
+            vern_code,
+            en_concept,
+        )
+        for markers, vern_code, en_concept in _VERNACULAR_TO_CANONICAL_EN
+    )
+)
+
+
 def _load_termbase_glossary_expansions() -> tuple[tuple[str, str, str], ...]:
     """Load multilingual term mappings from `ai/termbase/glossary.yaml` into `(marker_lower, locale_code, canonical_en)`."""
     raw = yaml.safe_load(_GLOSSARY_FILE.read_text(encoding="utf-8")) or {}
@@ -280,8 +292,8 @@ def build_english_router_envelope(
     detected_vernacular = source_locale.value
     expansions: list[str] = []
 
-    for markers, vern_code, en_concept in _VERNACULAR_TO_CANONICAL_EN:
-        if any(m in lower or fold_south_sudan_orthography(m) in folded_lower for m in markers):
+    for marker_pairs, vern_code, en_concept in _PREFOLDED_VERNACULAR_TO_CANONICAL_EN:
+        if any(raw_m in lower or fold_m in folded_lower for raw_m, fold_m in marker_pairs):
             detected_vernacular = vern_code
             if en_concept not in expansions:
                 expansions.append(en_concept)

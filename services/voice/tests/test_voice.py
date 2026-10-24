@@ -1838,3 +1838,10 @@ def test_multilingual_contact_url_pronunciation_and_receptionist_structuring() -
     assert txt_conf_dec.action == "switch"
     assert txt_conf_dec.target == "din"
     assert txt_conf_dec.reason == "text_confirmed"
+
+    # Auto-fusion inside CallLanguagePolicy.observe on unlocked uncertain acoustic vote (< 0.80)
+    pol_auto_fuse = CallLanguagePolicy(active="en")
+    auto_fused_dec = pol_auto_fuse.observe(raw_vote)
+    assert auto_fused_dec.action == "switch"
+    assert auto_fused_dec.target == "din"
+    assert auto_fused_dec.reason == "first_content"
