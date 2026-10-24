@@ -2483,7 +2483,7 @@ _EXPLICIT_TIN_HYPHEN_SPEECH_RE = re.compile(
 )
 _SEC_ANCHOR_SPEECH_RE = re.compile(r"\bPart-([IVX]+)-Sec-(\d+)\b", flags=re.IGNORECASE)
 _SPOOFED_USERINFO_URL_SPEECH_RE = re.compile(
-    r"\bhttps?://[^\s/]*@[^\s.,;:!?)]*",
+    r"\bhttps?://[^\s/@]{1,128}@[^\s.,;:!?)]{1,256}",
     flags=re.IGNORECASE,
 )
 _ALLOWED_GOV_SS_HOSTS_PATTERN = (
@@ -3366,10 +3366,12 @@ _SPEECH_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _SPEECH_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _SPEECH_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*|__([^_]+)__")
 _SPEECH_HEADER_BULLET_RE = re.compile(r"^\s*(?:#{1,6}|[-*+])\s+", re.MULTILINE)
-_SPEECH_NUMBERED_LINE_RE = re.compile(r"^\s*(\d{1,2})[.)]\s+", re.MULTILINE)
-_SPEECH_NUMBERED_INLINE_RE = re.compile(r"(?<=[:.!?؟])\s+(\d{1,2})\.\s+(?=[A-Z\u0600-\u06FF])")
+_SPEECH_NUMBERED_LINE_RE = re.compile(r"^[ \t]*(\d{1,2})[.)][ \t]+", re.MULTILINE)
+_SPEECH_NUMBERED_INLINE_RE = re.compile(
+    r"(?<=[:.!?؟])[ \t]+(\d{1,2})\.[ \t]+(?=[A-Z\u0600-\u06FF])"
+)
 _SPEECH_VISUAL_FOOTER_RE = re.compile(
-    r"\n+\s*(?:\*\*)?(?:You might also want to know|Related questions)\b.*",
+    r"(?:^|\n)[ \t]*(?:\*\*)?(?:You might also want to know|Related questions)\b.*",
     flags=re.IGNORECASE | re.DOTALL,
 )
 _STEP_WORD_BY_LOCALE: dict[LocaleCode, str] = {

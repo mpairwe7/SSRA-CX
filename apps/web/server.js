@@ -1818,9 +1818,9 @@ function renderPwaShellHtml(locale, nonce) {
         const linkW = isAr ? "رابط إلكتروني" : "web link";
         const stepW = isAr ? "الخطوة" : state.locale === "pga" ? "Khatwa" : "Step";
         return String(raw || "")
-          .replace(/\\bhttps?:\\/\\/[^\\s/]*@[^\\s.,;:!?)]*/gi, linkW)
+          .replace(/\\bhttps?:\\/\\/[^\\s/@]{1,128}@[^\\s.,;:!?)]{1,256}/gi, linkW)
           .replace(/(?<!\\w)\\*(\\d{2,4}(?:\\*\\d{1,4}){0,5})#(?!\\w)/g, (_, c) => starW + " " + c.split("*").map((s) => s.split("").join(" ")).join(" " + starW + " ") + " " + hashW)
-          .replace(/(?:(?:\\bTIN|\\bT\\.I\\.N\\.)\\s+)?(?:••••|\\*{4,8})(\\d{4})\\b/gi, (_, d) => tinW + " " + d.split("").join(" "))
+          .replace(/(?:(?:\\bTIN|\\bT\\.I\\.N\\.)[ \\t]+)?(?:••••|\\*{4,8})(\\d{4})\\b/gi, (_, d) => tinW + " " + d.split("").join(" "))
           .replace(/\\s*\\[\\d+(?:\\s*[,;]\\s*\\d+)*\\](?!\\()/g, "")
           .replace(/\\[([^\\]]+)\\]\\([^\\)]+\\)/g, "$1")
           .replace(/\\*\\*([^*]+)\\*\\*|__([^_]+)__/g, "$1$2")
@@ -1828,8 +1828,8 @@ function renderPwaShellHtml(locale, nonce) {
           .replace(/(?<![A-Za-z0-9@.-])(?:https?:\\/\\/)?((?:www\\.)?(?:etax\\.nra|ecustoms\\.nra|cms\\.nra|nra|etax\\.ssra|assist\\.ssra|ssra|business\\.eservices|customs\\.eservices|trade\\.eservices|eservices|mofp|boss|mojca)\\.gov\\.ss)(?:\\/(?![^\\s]*@)[^\\s.,;:!?)]*)?(?=$|\\s|[,;:!?)](?=$|\\s)|\\.+(?=$|\\s))/gi, (_, h) => formatGovDomainSpeech(h))
           .replace(/https?:\\/\\/\\S+/gi, linkW)
           .replace(/(?<!\\w)\\+211[ \\t-]?(?:\\(0\\)[ \\t-]?)?\\(?0?([19]\\d{2})\\)?[ \\t-]?(\\d{3})[ \\t-]?(\\d{3})\\b/g, (_, a, b, c) => plusW + " 2 1 1, " + a.split("").join(" ") + ", " + b.split("").join(" ") + ", " + c.split("").join(" "))
-          .replace(/^\\s*(\\d{1,2})[.)]\\s+/gm, stepW + " $1: ")
-          .replace(/(?<=[:.!?؟])\\s+(\\d{1,2})\\.\\s+(?=[A-Z\\u0600-\\u06FF])/g, " " + stepW + " $1: ")
+          .replace(/^[ \\t]*(\\d{1,2})[.)][ \\t]+/gm, stepW + " $1: ")
+          .replace(/(?<=[:.!?؟])[ \\t]+(\\d{1,2})\\.[ \\t]+(?=[A-Z\\u0600-\\u06FF])/g, " " + stepW + " $1: ")
           .replace(/\\bSec\\.\\s*(\\d+[A-Za-z]?)\\b/g, "Section $1")
           .replace(/\\bArt\\.\\s*(\\d+[A-Za-z]?)\\b/g, "Article $1")
           .replace(/[*_\\x60#~>-]+/g, " ")

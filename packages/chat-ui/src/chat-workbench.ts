@@ -272,20 +272,23 @@ export function cleanMarkdownForSpeech(text: string, locale = "en"): string {
   const webLinkWord = isAr ? "رابط إلكتروني" : "web link";
   const stepWord = STEP_WORDS_BY_LOCALE[locale] ?? "Step";
 
-  return text
-    .replace(/\n+\s*(?:\*\*)?(?:You might also want to know|Related questions)\b[\s\S]*$/i, "")
+  const footerMatch =
+    /(?:^|\n)[ \t]*(?:\*\*)?(?:You might also want to know|Related questions)\b/i.exec(text);
+  const withoutFooter = footerMatch ? text.slice(0, footerMatch.index) : text;
+
+  return withoutFooter
     .replace(/```[\s\S]*?```/g, " ")
-    .replace(/\bhttps?:\/\/[^\s/]*@[^\s.,;:!?)]*/gi, webLinkWord)
+    .replace(/\bhttps?:\/\/[^\s/@]{1,128}@[^\s.,;:!?)]{1,256}/gi, webLinkWord)
     .replace(/(?<!\w)\*(\d{2,4}(?:\*\d{1,4}){0,5})#(?!\w)/g, (_m, code: string) => {
       const segs = code.split("*").map((s) => s.split("").join(" "));
       return `${starWord} ${segs.join(` ${starWord} `)} ${hashWord}`;
     })
     .replace(
-      /(?:(?:\bTIN|\bT\.I\.N\.)\s+)?(?:••••|\*{4,8})(\d{4})\b/gi,
+      /(?:(?:\bTIN|\bT\.I\.N\.)[ \t]+)?(?:••••|\*{4,8})(\d{4})\b/gi,
       (_m, d: string) => `${tinEndPrefix} ${d.split("").join(" ")}`,
     )
     .replace(
-      /\b(?:T-?I-?N|T\.I\.N\.)(?::|\s+is|\s+number|\s+no\.?)?\s*(\d{3})-(\d{3})-(\d{4})\b/gi,
+      /\b(?:T-?I-?N|T\.I\.N\.)(?::|[ \t]+(?:is|number|no\.?))?[ \t]{0,4}(\d{3})-(\d{3})-(\d{4})\b/gi,
       (_m, g1: string, g2: string, g3: string) =>
         `T I N ${g1.split("").join(" ")}, ${g2.split("").join(" ")}, ${g3.split("").join(" ")}`,
     )
@@ -321,9 +324,9 @@ export function cleanMarkdownForSpeech(text: string, locale = "en"): string {
       /\bP\.?[ \t]?O\.?[ \t]?Box[ \t]{1,4}(\d{1,6})\b/gi,
       (_m, box: string) => `P O Box ${box.split("").join(" ")}`,
     )
-    .replace(/^\s*(\d{1,2})[.)]\s+/gm, `${stepWord} $1: `)
-    .replace(/(?<=[:.!?؟])\s+(\d{1,2})\.\s+(?=[A-Z\u0600-\u06FF])/g, ` ${stepWord} $1: `)
-    .replace(/^\s*[-*+]\s+/gm, " ")
+    .replace(/^[ \t]*(\d{1,2})[.)][ \t]+/gm, `${stepWord} $1: `)
+    .replace(/(?<=[:.!?؟])[ \t]+(\d{1,2})\.[ \t]+(?=[A-Z\u0600-\u06FF])/g, ` ${stepWord} $1: `)
+    .replace(/^[ \t]*[-*+][ \t]+/gm, " ")
     .replace(/[*_~>#]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

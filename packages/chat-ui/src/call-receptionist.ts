@@ -606,19 +606,19 @@ export function structureCallReceptionistBlocks(text: string): readonly CallCapt
   const cleaned = String(text ?? "").trim();
   if (!cleaned) return [];
   const blocks: CallCaptionBlock[] = [];
-  const rawParagraphs = cleaned.split(/\n\s*\n+/);
+  const rawParagraphs = cleaned.split(/\n(?:[ \t]*\n)+/);
   for (const para of rawParagraphs) {
     const trimmedPara = para.trim();
     if (!trimmedPara) continue;
     // Split inline numbered steps ("To register: 1. Open portal. 2. Enter TIN.") into separate lines
     const normalizedLines = trimmedPara
-      .replace(/(?<=[:.!?؟])\s+(?=\d{1,2}[.)]\s+[A-Z\u0600-\u06FF])/g, "\n")
+      .replace(/(?<=[:.!?؟])[ \t]+(?=\d{1,2}[.)][ \t]+[A-Z\u0600-\u06FF])/g, "\n")
       .split(/\n+/)
       .map((l) => l.trim())
       .filter(Boolean);
     const listItems: { stepNumber: number; text: string }[] = [];
     for (const line of normalizedLines) {
-      const m = /^(\d{1,2})[.)]\s+(.+)$/.exec(line);
+      const m = /^(\d{1,2})[.)][ \t]+(.+)$/.exec(line);
       if (m?.[1] && m[2]) {
         listItems.push({ stepNumber: Number(m[1]), text: m[2].trim() });
       } else {
