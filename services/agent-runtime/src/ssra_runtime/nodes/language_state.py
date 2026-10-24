@@ -159,60 +159,63 @@ _SWITCH_NEGATION_PREFIX_RE = re.compile(
     r"(?:\b(?:not|no|don'?t|do\s+not|never)|(?:لا|مش))[\s,;:—-]*$",
     flags=re.IGNORECASE,
 )
+_SWITCH_VERB_PREFIX = (
+    r"(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)"
+)
 _EXPLICIT_LOCALE_PATTERNS: tuple[tuple[LocaleCode, re.Pattern[str]], ...] = (
     (
         LocaleCode.PGA,
         re.compile(
-            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+(?:juba\s+arabic|arabi\s+juba)|atkalam\s+arabi\s+juba|عربي\s+جوبا)\b",
+            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+(?:juba\s+arabic|arabi\s+juba)|atkalam\s+arabi\s+juba)\b|عربي\s+جوبا",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.AR,
         re.compile(
-            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+arabic|تكلم\s+عربي|تحدث\s+بالعربية|باللغة\s+العربية)\b",
+            rf"\b{_SWITCH_VERB_PREFIX}\s+arabic\b|تكلم\s+عربي|تحدث\s+بالعربية|باللغة\s+العربية",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.DIN,
         re.compile(
-            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+(?:dinka|thuongjang)|thuɔŋjäŋ|jam\s+në\s+thuɔŋjäŋ|jam\s+ne\s+thuongjang)\b",
+            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+(?:dinka|thuongjang)|thuongjang|jam\s+ne\s+thuongjang)\b",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.NUS,
         re.compile(
-            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+(?:nuer|thok\s+na+th)|thok\s+naath|ruacni\s+thok\s+na+th)\b",
+            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+(?:nuer|thok\s+na+th)|thok\s+na+th|ruacni\s+thok\s+na+th)\b",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.BFA,
         re.compile(
-            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+bari|kutuk\s+na\s+bari|kulya\s+ko\s+bari)\b",
+            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+bari|kutuk\s+na\s+bari|kulya\s+ko\s+bari)\b",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.ZNE,
         re.compile(
-            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+(?:zande|pazande)|pa\s+pazande|fura\s+pa\s+pazande)\b",
+            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+(?:zande|pazande)|pa\s+pazande|fura\s+pa\s+pazande)\b",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.SHK,
         re.compile(
-            r"\b(?:(?:speak|talk|switch\s+to|respond\s+in|reply\s+in|in)\s+(?:shilluk|dhog\s+collo)|dhøg\s+cøllø|kwop\s+dhøg\s+cøllø)\b",
+            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+(?:shilluk|dhog\s+collo)|dhog\s+collo|kwop\s+dhog\s+collo)\b",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.EN,
         re.compile(
-            r"\b(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in)\s+english\b|تكلم\s+إنجليزي",
+            rf"\b{_SWITCH_VERB_PREFIX}\s+english\b|تكلم\s+إنجليزي",
             flags=re.IGNORECASE,
         ),
     ),
@@ -221,7 +224,7 @@ _EXPLICIT_LOCALE_PATTERNS: tuple[tuple[LocaleCode, re.Pattern[str]], ...] = (
 
 def detect_explicit_locale_switch(raw_text: str) -> LocaleCode | None:
     """Detect an explicit language switch request with negation rejection and forward self-correction."""
-    clean = unicodedata.normalize("NFC", raw_text or "").strip()
+    clean = fold_south_sudan_orthography(raw_text or "").strip()
     if not clean:
         return None
     best_end = -1
@@ -269,6 +272,14 @@ def evaluate_language_state_transition(
     )
     if has_en_tax_word and detected_locale != LocaleCode.EN and previous_locale == LocaleCode.EN:
         return previous_locale, "CODE_SWITCHING", detected_locale
+    is_short_loanword_in_vernacular = (
+        has_en_tax_word
+        and previous_locale != LocaleCode.EN
+        and detected_locale == LocaleCode.EN
+        and len(lower.split()) <= 3
+    )
+    if is_short_loanword_in_vernacular:
+        return previous_locale, "CODE_SWITCHING", None
 
     if previous_candidate == detected_locale:
         return detected_locale, "LOCKED", None

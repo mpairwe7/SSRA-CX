@@ -105,6 +105,15 @@ _LANGUAGE_MARKER_LEXICON: dict[LocaleCode, tuple[str, ...]] = {
         "dhog",
         "dhog collo",
     ),
+    LocaleCode.EN: (
+        "what is",
+        "how do i",
+        "how much",
+        "when is",
+        "where can i",
+        "filing deadline",
+        "salary tax",
+    ),
 }
 
 
