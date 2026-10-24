@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
+from collections.abc import Mapping, Set
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from ssra_core import IntentName, LocaleCode
 
@@ -257,3 +260,464 @@ def get_guided_journey_steps(
             section_anchor="Sec-1-Cash-Free-Collection",
         ),
     ]
+
+
+@dataclass(frozen=True)
+class JourneyPrerequisiteSpec:
+    """Statutory or operational prerequisite in an SSRA guided journey DAG (`journey_copilot.py` Pillar 1)."""
+
+    id: str
+    label: str
+    slot: str = ""
+    remediation_journey: str = ""
+    remediation_journey_name: str = ""
+
+
+@dataclass(frozen=True)
+class JourneyFormFieldSpec:
+    """Declarative A2UI form box mapping for an SSRA guided journey slot (`journey_copilot.py` Pillar 2)."""
+
+    box: str
+    label: str
+    slot: str
+
+
+SSRA_JOURNEY_PREREQUISITE_DAG: dict[str, tuple[JourneyPrerequisiteSpec, ...]] = {
+    "tin_registration": (
+        JourneyPrerequisiteSpec(
+            id="applicant_category",
+            label="Applicant classification (Individual, Business, or NGO)",
+            slot="taxpayer_type",
+        ),
+        JourneyPrerequisiteSpec(
+            id="identity_or_moj_docs",
+            label="National ID / Passport, Ministry of Justice eServices, or Humanitarian Services registration",
+            slot="documents_ready",
+        ),
+    ),
+    "obtain_tcc": (
+        JourneyPrerequisiteSpec(
+            id="active_tin_tcc",
+            label="Active SSRA TIN on e-Tax",
+            slot="has_tin",
+            remediation_journey="tin_registration",
+            remediation_journey_name="TIN Registration Guide",
+        ),
+        JourneyPrerequisiteSpec(
+            id="returns_up_to_date",
+            label="All required periodic tax returns filed on https://etax.nra.gov.ss/",
+            slot="returns_filed",
+            remediation_journey="file_and_pay",
+            remediation_journey_name="File and Pay Guide",
+        ),
+        JourneyPrerequisiteSpec(
+            id="tax_due_settled",
+            label="Undisputed tax balances settled via approved TSA commercial bank",
+            slot="tax_paid",
+            remediation_journey="file_and_pay",
+            remediation_journey_name="File and Pay Guide",
+        ),
+    ),
+    "file_and_pay": (
+        JourneyPrerequisiteSpec(
+            id="active_tin",
+            label="Active SSRA TIN",
+            slot="has_tin",
+            remediation_journey="tin_registration",
+            remediation_journey_name="TIN Registration Guide",
+        ),
+        JourneyPrerequisiteSpec(
+            id="tsa_bank_verified",
+            label="Designated TSA-remitting commercial bank selected (Cash-Free Directive)",
+            slot="tsa_bank_ready",
+        ),
+    ),
+    "customs_clearance": (
+        JourneyPrerequisiteSpec(
+            id="customs_valuation_evidence",
+            label="Commercial invoice, CIF valuation & HS code ready for TANCIS++",
+            slot="valuation_ready",
+        ),
+        JourneyPrerequisiteSpec(
+            id="customs_supporting_documents",
+            label="Bill of lading / airway bill and packing list ready",
+            slot="documents_ready",
+        ),
+    ),
+}
+
+SSRA_JOURNEY_FORM_SCHEMAS: dict[str, tuple[str, str, tuple[JourneyFormFieldSpec, ...]]] = {
+    "tin_registration": (
+        "ETAX-TIN-01",
+        "SSRA TIN Registration Readiness Schedule",
+        (
+            JourneyFormFieldSpec("Box A1", "Applicant Classification", "taxpayer_type"),
+            JourneyFormFieldSpec("Box A2", "Supporting Registration Documents", "documents_ready"),
+        ),
+    ),
+    "obtain_tcc": (
+        "ETAX-TCC-01",
+        "SSRA Tax Compliance Certificate (TCC) Readiness Schedule",
+        (
+            JourneyFormFieldSpec("Sec A", "Active SSRA TIN Confirmed", "has_tin"),
+            JourneyFormFieldSpec("Sec B", "All Periodic Returns Filed", "returns_filed"),
+            JourneyFormFieldSpec("Sec C", "TSA Tax Balances Settled", "tax_paid"),
+        ),
+    ),
+    "file_and_pay": (
+        "ETAX-RET-PAY-01",
+        "SSRA e-Tax Return & TSA Bank Payment Schedule",
+        (
+            JourneyFormFieldSpec("Line 1", "Active SSRA TIN", "has_tin"),
+            JourneyFormFieldSpec("Line 2", "Tax Head / Return Type", "tax_type"),
+            JourneyFormFieldSpec("Line 3", "Designated TSA Bank Verified", "tsa_bank_ready"),
+        ),
+    ),
+    "customs_clearance": (
+        "TANCIS-CUS-01",
+        "SSRA TANCIS++ Customs Clearance Schedule",
+        (
+            JourneyFormFieldSpec("Box 1", "HS Code & CIF Valuation Ready", "valuation_ready"),
+            JourneyFormFieldSpec("Box 2", "Shipping & Packing Documents Ready", "documents_ready"),
+        ),
+    ),
+}
+
+
+def evaluate_journey_prerequisites(
+    journey_id: str,
+    slots: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Evaluate the Prerequisite DAG for *journey_id* (`journey_copilot.py` Pillar 1)."""
+    specs = SSRA_JOURNEY_PREREQUISITE_DAG.get(journey_id, ())
+    out: list[dict[str, Any]] = []
+    for spec in specs:
+        raw_val = slots.get(spec.slot) if spec.slot else None
+        is_missing = raw_val is False or str(raw_val).strip().lower() in ("false", "no", "unknown")
+        if is_missing:
+            status = "missing"
+        elif raw_val not in ("", None):
+            status = "satisfied"
+        else:
+            status = "pending"
+        item: dict[str, Any] = {"id": spec.id, "label": spec.label, "status": status}
+        if spec.slot:
+            item["slot"] = spec.slot
+        if spec.remediation_journey and status == "missing":
+            item["remediation_journey"] = spec.remediation_journey
+            item["remediation_action"] = f"Guide me through {spec.remediation_journey_name}"
+        out.append(item)
+    return out
+
+
+def build_journey_form_draft_surface(
+    journey_id: str,
+    slots: Mapping[str, Any],
+    *,
+    sensitive_slots: Set[str] = frozenset({"tin", "phone", "subject_ref"}),
+) -> dict[str, Any]:
+    """Build a declarative A2UI form co-completion schedule without leaking sensitive values (`journey_copilot.py` Pillar 2)."""
+    schema = SSRA_JOURNEY_FORM_SCHEMAS.get(journey_id)
+    if schema is None:
+        return {
+            "protocol": "a2ui/v1",
+            "surface_id": f"ssra-form-{journey_id}",
+            "form_code": "ETAX-GEN-01",
+            "title": "SSRA Guided Preparation Schedule",
+            "completion_pct": 0,
+            "filled_count": 0,
+            "total_fields": 0,
+            "ready_for_portal": False,
+            "fields": [],
+        }
+    form_code, title, field_specs = schema
+    fields: list[dict[str, Any]] = []
+    for fspec in field_specs:
+        val = slots.get(fspec.slot)
+        is_filled = val not in ("", None)
+        is_masked = fspec.slot in sensitive_slots
+        if not is_filled:
+            display_val = "Pending"
+            status = "pending"
+        elif is_masked:
+            display_val = "•••• (Masked)"
+            status = "filled"
+        elif isinstance(val, bool):
+            display_val = "Confirmed" if val else "Action required"
+            status = "filled" if val else "attention_needed"
+        else:
+            display_val = "Recorded"
+            status = "filled"
+        fields.append(
+            {
+                "box": fspec.box,
+                "label": fspec.label,
+                "slot": fspec.slot,
+                "status": status,
+                "display_value": display_val,
+                "masked": is_masked,
+            }
+        )
+    total_fields = len(fields)
+    filled_count = sum(1 for f in fields if f["status"] == "filled")
+    completion_pct = round((filled_count / total_fields) * 100)
+    attention_needed = any(f["status"] == "attention_needed" for f in fields)
+    return {
+        "protocol": "a2ui/v1",
+        "surface_id": f"ssra-form-{journey_id}",
+        "form_code": form_code,
+        "title": title,
+        "completion_pct": completion_pct,
+        "filled_count": filled_count,
+        "total_fields": total_fields,
+        "ready_for_portal": filled_count == total_fields and not attention_needed,
+        "fields": fields,
+    }
+
+
+_SSRA_OBJECTIVE_PATTERNS: tuple[tuple[re.Pattern[str], dict[str, str]], ...] = (
+    (
+        re.compile(
+            r"\b(?:bid\s+for\s+a\s+tender|government\s+contract\s+clearance|apply\s+for\s+(?:a\s+)?tcc|"
+            r"need\s+(?:a\s+)?tax\s+clearance|clearance\s+certificate)\b",
+            re.IGNORECASE,
+        ),
+        {
+            "objective_id": "tax_clearance_application",
+            "title": "Apply for an SSRA Tax Compliance Certificate (TCC) on e-Tax",
+            "journey_id": "obtain_tcc",
+            "official_portal": "https://etax.nra.gov.ss/",
+            "prerequisites_summary": "Active TIN, all periodic returns filed, and undisputed tax balances settled via TSA bank",
+        },
+    ),
+    (
+        re.compile(
+            r"\b(?:goods\s+(?:stuck|held|detained)\s+at\s+(?:nimule|kaya|juba|customs|border)|"
+            r"clear\s+(?:my\s+)?(?:container|shipment|cargo|import)|tancis\s+declaration)\b",
+            re.IGNORECASE,
+        ),
+        {
+            "objective_id": "customs_cargo_clearance",
+            "title": "Clear Imported Goods via TANCIS++ Customs",
+            "journey_id": "customs_clearance",
+            "official_portal": "https://etax.nra.gov.ss/",
+            "prerequisites_summary": "Commercial invoice, CIF valuation, HS code, bill of lading, and packing list",
+        },
+    ),
+    (
+        re.compile(
+            r"\b(?:opening\s+a\s+(?:shop|business|company)|starting\s+a\s+(?:new\s+)?business|"
+            r"register\s+my\s+new\s+business\s+for\s+tax|first\s+time\s+taxpayer)\b",
+            re.IGNORECASE,
+        ),
+        {
+            "objective_id": "new_business_tax_onboarding",
+            "title": "Onboard a New Business & Register for an SSRA TIN (ETAX-TIN-01)",
+            "journey_id": "tin_registration",
+            "official_portal": "https://etax.nra.gov.ss/",
+            "prerequisites_summary": "National ID/Passport (citizens), Ministry of Justice eServices (businesses), or Humanitarian Services registration (NGOs)",
+        },
+    ),
+)
+
+
+def infer_taxpayer_journey_objective(text: str) -> dict[str, str] | None:
+    """Map natural-language taxpayer situations to explicit SSRA journey objectives (`journey_copilot.py` Pillar 4)."""
+    clean = (text or "").strip()
+    if not clean:
+        return None
+    for pattern, descriptor in _SSRA_OBJECTIVE_PATTERNS:
+        if pattern.search(clean):
+            return dict(descriptor)
+    return None
+
+
+def evaluate_journey_step_up_auth(
+    journey_id: str,
+    slots: Mapping[str, Any],
+    *,
+    is_authenticated: bool = False,
+    requires_auth: bool = False,
+) -> dict[str, Any] | None:
+    """Return an inline Step-Up Auth descriptor preserving anonymous slots (`journey_copilot.py` Pillar 5, WCAG 2.2 SC 3.3.7)."""
+    filled_keys = [k for k in slots if not k.startswith("_") and slots.get(k) not in ("", None)]
+    portal_blocked = (
+        slots.get("portal_access") is False
+        or str(slots.get("portal_access", "")).lower() == "false"
+    )
+    if portal_blocked:
+        return {
+            "required": True,
+            "mode": "recover_access",
+            "reason": "SSRA e-Tax portal access is required to submit this declaration.",
+            "login_url": "https://etax.nra.gov.ss/",
+            "remediation_journey_id": "tin_registration",
+            "preserves_slots": True,
+            "preserved_slot_count": len(filled_keys),
+        }
+    if requires_auth and not is_authenticated:
+        return {
+            "required": True,
+            "mode": "login_or_register",
+            "reason": "Sign in to your SSRA e-Tax account (or register for a TIN) to complete submission.",
+            "login_url": "https://etax.nra.gov.ss/",
+            "register_journey_id": "tin_registration",
+            "preserves_slots": True,
+            "preserved_slot_count": len(filled_keys),
+        }
+    return None
+
+
+def elevate_anonymous_journey_slots(
+    anonymous_slots: Mapping[str, Any],
+    *,
+    authenticated_subject_ref: str,
+    profile_defaults: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Elevate anonymous journey slots to an authenticated subject with zero data loss (`journey_copilot.py` Pillar 5, WCAG 3.3.7)."""
+    merged: dict[str, Any] = dict(anonymous_slots)
+    merged["_authenticated_subject_ref"] = authenticated_subject_ref
+    if profile_defaults:
+        for key, value in profile_defaults.items():
+            if value not in ("", None) and merged.get(key) in ("", None):
+                merged[key] = value
+    return merged
+
+
+def build_journey_stall_scaffolding(
+    step_id: str,
+    slot_name: str,
+    failed_attempts: int,
+    options: list[str] | None = None,
+) -> dict[str, Any] | None:
+    """Return progressive field-level examples and 1-tap helpers when a user stalls (`journey_copilot.py` Pillar 6)."""
+    if failed_attempts <= 0:
+        return None
+    helper_actions = list(options[:4] if options else ["individual", "business", "ngo"])
+    if failed_attempts >= 2 and "Talk to an SSRA officer" not in helper_actions:
+        helper_actions.append("Talk to an SSRA officer")
+    return {
+        "step_id": step_id,
+        "slot_name": slot_name,
+        "failed_attempts": failed_attempts,
+        "hint": (
+            f"Please select one of the valid options: {', '.join(options)}."
+            if options
+            else "Provide a valid value for this step, or ask to speak with an SSRA officer."
+        ),
+        "helper_actions": helper_actions,
+    }
+
+
+SSRA_RESUME_CODE_PREFIXES: dict[str, str] = {
+    "tin_registration": "TIN",
+    "obtain_tcc": "TCC",
+    "file_and_pay": "PAY",
+    "customs_clearance": "CUS",
+}
+_SSRA_PREFIX_TO_JOURNEY: dict[str, str] = {
+    code: jid for jid, code in SSRA_RESUME_CODE_PREFIXES.items()
+}
+_SSRA_RESUME_CODE_RE = re.compile(r"\bSSRA-([A-Z]{3})-S(\d{1,2})-([A-F0-9]{4})\b", re.IGNORECASE)
+
+
+def _ssra_resume_check(prefix: str, step_number: int) -> str:
+    return hashlib.sha256(f"ssra-resume:{prefix}:{step_number}".encode()).hexdigest()[:4].upper()
+
+
+def generate_ssra_resume_code(journey_id: str, step_idx: int) -> str:
+    """Generate a deterministic, PII-free cross-channel resume code (`journey_copilot.py` Pillar 7)."""
+    prefix = SSRA_RESUME_CODE_PREFIXES.get(journey_id or "")
+    if prefix is None:
+        return ""
+    step_num = max(0, int(step_idx)) + 1
+    return f"SSRA-{prefix}-S{step_num}-{_ssra_resume_check(prefix, step_num)}"
+
+
+def looks_like_ssra_resume_code(text: str) -> bool:
+    """Return True when *text* contains an SSRA resume code pattern."""
+    return bool(text) and _SSRA_RESUME_CODE_RE.search(text) is not None
+
+
+def parse_ssra_resume_code(text: str) -> dict[str, Any] | None:
+    """Parse and verify a cross-channel SSRA resume token (`SSRA-TIN-S2-...`), rejecting typos (`Pillar 7`)."""
+    if not text:
+        return None
+    for match in _SSRA_RESUME_CODE_RE.finditer(text):
+        prefix = match.group(1).upper()
+        step_num = int(match.group(2))
+        digest = match.group(3).upper()
+        journey_id = _SSRA_PREFIX_TO_JOURNEY.get(prefix)
+        if journey_id is None or step_num < 1 or digest != _ssra_resume_check(prefix, step_num):
+            continue
+        return {
+            "code": f"SSRA-{prefix}-S{step_num}-{digest}",
+            "prefix": prefix,
+            "journey_id": journey_id,
+            "step_number": step_num,
+            "step_idx": step_num - 1,
+            "digest": digest,
+        }
+    return None
+
+
+_SSRA_PORTAL_ERROR_CATALOG: tuple[tuple[re.Pattern[str], dict[str, Any]], ...] = (
+    (
+        re.compile(
+            r"\b(?:session\s+expired|timed\s+out|unauthorized|login\s+expired)\b", re.IGNORECASE
+        ),
+        {
+            "error_code": "ETAX_SESSION_EXPIRED",
+            "title": "e-Tax Portal Session Expired",
+            "root_cause": "Your SSRA e-Tax session timed out due to inactivity.",
+            "official_portal": "https://etax.nra.gov.ss/",
+            "resolution_steps": [
+                "Return to https://etax.nra.gov.ss/ and sign in again with your TIN.",
+                "Re-open your draft return or payment schedule from your taxpayer dashboard.",
+            ],
+        },
+    ),
+    (
+        re.compile(
+            r"\b(?:duplicate\s+return|already\s+filed\s+for\s+period|return\s+already\s+exists)\b",
+            re.IGNORECASE,
+        ),
+        {
+            "error_code": "ETAX_DUPLICATE_RETURN",
+            "title": "Duplicate Return for Filing Period",
+            "root_cause": "An original return has already been submitted for this tax period on e-Tax.",
+            "official_portal": "https://etax.nra.gov.ss/",
+            "resolution_steps": [
+                "Check your filing history on https://etax.nra.gov.ss/ for the existing return receipt.",
+                "If a correction is needed, select 'Amended Return' rather than filing a new original return.",
+            ],
+        },
+    ),
+    (
+        re.compile(
+            r"\b(?:tcc\s+application\s+rejected|outstanding\s+tax\s+arrears|compliance\s+block|unfiled\s+returns)\b",
+            re.IGNORECASE,
+        ),
+        {
+            "error_code": "TCC_COMPLIANCE_ARREARS_BLOCK",
+            "title": "TCC Compliance Block — Unfiled Returns or Outstanding Arrears",
+            "root_cause": "e-Tax blocked TCC issuance because periodic returns or undisputed tax balances remain open.",
+            "official_portal": "https://etax.nra.gov.ss/",
+            "resolution_steps": [
+                "Review your e-Tax ledger on https://etax.nra.gov.ss/ for any unfiled monthly PAYE or WHT periods.",
+                "Settle any undisputed balance through a designated TSA commercial bank, then re-apply for the TCC online.",
+            ],
+        },
+    ),
+)
+
+
+def diagnose_ssra_portal_error(text: str) -> dict[str, Any] | None:
+    """Diagnose known SSRA e-Tax / TANCIS++ portal error messages into structured resolution steps (`portal_copilot.py`)."""
+    clean = (text or "").strip()
+    if not clean:
+        return None
+    for pattern, diag in _SSRA_PORTAL_ERROR_CATALOG:
+        if pattern.search(clean):
+            return dict(diag)
+    return None

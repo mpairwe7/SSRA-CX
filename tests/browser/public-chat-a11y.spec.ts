@@ -374,11 +374,17 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(page.locator("#doc-inspect-modal-backdrop")).toHaveClass(/open/);
   await expect(page.locator("#doc-modal-title")).toHaveText("etax_portal_screenshot.png");
   await expect(page.locator("#doc-modal-oq017-note")).toContainText("OQ-017");
+  await expect(page.locator("#doc-modal-copilot-steps li")).toHaveCount(2);
   await page.locator("#doc-modal-report-btn").click();
   await expect(page.locator("#composer-hint")).toContainText("Inspection receipt downloaded");
   await page.locator("#doc-modal-prompts [data-doc-prompt]").first().click();
   await expect(page.locator("#doc-inspect-modal-backdrop")).not.toHaveClass(/open/);
   await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(4);
+
+  // Conversation report export from account menu (pdf_export.py parity)
+  await page.locator("#acct-rail-trigger").click();
+  await page.locator("#export-conv-report-btn").click();
+  await expect(page.locator("#composer-hint")).toContainText("Conversation report downloaded.");
 
   await chip.locator("[data-remove-att]").click();
   await expect(chip).toHaveCount(0);

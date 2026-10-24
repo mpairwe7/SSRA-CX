@@ -1618,3 +1618,96 @@ def test_october_2026_south_sudan_business_flows_wht_customs_verify_and_guided_i
             steps = get_guided_journey_steps(journey_intent, loc)
             assert len(steps) >= 2
             assert all(s.official_portal == "https://etax.nra.gov.ss/" for s in steps)
+
+    # 6. Journey Copilot & Portal Error Troubleshooter (7 Customer-Experience Pillars)
+    from ssra_runtime.graphs.guided_journey import (
+        build_journey_form_draft_surface,
+        build_journey_stall_scaffolding,
+        diagnose_ssra_portal_error,
+        elevate_anonymous_journey_slots,
+        evaluate_journey_prerequisites,
+        evaluate_journey_step_up_auth,
+        generate_ssra_resume_code,
+        infer_taxpayer_journey_objective,
+        looks_like_ssra_resume_code,
+        parse_ssra_resume_code,
+    )
+
+    prereqs = evaluate_journey_prerequisites(
+        "obtain_tcc",
+        {"has_tin": True, "returns_filed": "no"},
+    )
+    assert len(prereqs) == 3
+    assert prereqs[0]["status"] == "satisfied"
+    assert prereqs[1]["status"] == "missing"
+    assert prereqs[1]["remediation_journey"] == "file_and_pay"
+    assert prereqs[2]["status"] == "pending"
+
+    unknown_surface = build_journey_form_draft_surface("unknown_flow", {})
+    assert unknown_surface["form_code"] == "ETAX-GEN-01"
+
+    tcc_surface = build_journey_form_draft_surface(
+        "obtain_tcc",
+        {"has_tin": True, "returns_filed": False, "tax_paid": "yes", "tin": "1002001234"},
+        sensitive_slots=frozenset({"has_tin"}),
+    )
+    assert tcc_surface["form_code"] == "ETAX-TCC-01"
+    assert tcc_surface["fields"][0]["display_value"] == "•••• (Masked)"
+    assert tcc_surface["fields"][1]["status"] == "attention_needed"
+    assert tcc_surface["ready_for_portal"] is False
+
+    assert infer_taxpayer_journey_objective("") is None
+    assert infer_taxpayer_journey_objective("What is the weather?") is None
+    tcc_obj = infer_taxpayer_journey_objective("I need to bid for a tender and apply for a TCC")
+    assert tcc_obj is not None and tcc_obj["journey_id"] == "obtain_tcc"
+
+    blocked_auth = evaluate_journey_step_up_auth(
+        "file_and_pay",
+        {"portal_access": "false", "tax_type": "PAYE"},
+    )
+    assert blocked_auth is not None and blocked_auth["mode"] == "recover_access"
+    assert blocked_auth["preserved_slot_count"] == 2
+
+    login_auth = evaluate_journey_step_up_auth(
+        "obtain_tcc",
+        {"has_tin": True},
+        is_authenticated=False,
+        requires_auth=True,
+    )
+    assert login_auth is not None and login_auth["mode"] == "login_or_register"
+    assert (
+        evaluate_journey_step_up_auth("obtain_tcc", {}, is_authenticated=True, requires_auth=True)
+        is None
+    )
+
+    elevated = elevate_anonymous_journey_slots(
+        {"taxpayer_type": "individual"},
+        authenticated_subject_ref="sub_01",
+        profile_defaults={"taxpayer_type": "company", "has_tin": True},
+    )
+    assert elevated["taxpayer_type"] == "individual"
+    assert elevated["has_tin"] is True
+
+    assert build_journey_stall_scaffolding("s1", "taxpayer_type", 0) is None
+    stall_1 = build_journey_stall_scaffolding("s1", "taxpayer_type", 1)
+    assert stall_1 is not None and "Talk to an SSRA officer" not in stall_1["helper_actions"]
+    stall_2 = build_journey_stall_scaffolding("s1", "taxpayer_type", 2, options=["yes", "no"])
+    assert stall_2 is not None and "Talk to an SSRA officer" in stall_2["helper_actions"]
+
+    assert generate_ssra_resume_code("unknown", 0) == ""
+    code = generate_ssra_resume_code("tin_registration", 1)
+    assert code.startswith("SSRA-TIN-S2-")
+    assert looks_like_ssra_resume_code(f"Resume with {code}") is True
+    assert parse_ssra_resume_code("") is None
+    assert parse_ssra_resume_code("SSRA-TIN-S2-0000") is None
+    parsed = parse_ssra_resume_code(f"Please resume {code}")
+    assert (
+        parsed is not None
+        and parsed["journey_id"] == "tin_registration"
+        and parsed["step_number"] == 2
+    )
+
+    assert diagnose_ssra_portal_error("") is None
+    assert diagnose_ssra_portal_error("All good") is None
+    err_diag = diagnose_ssra_portal_error("TCC application rejected due to outstanding tax arrears")
+    assert err_diag is not None and err_diag["error_code"] == "TCC_COMPLIANCE_ARREARS_BLOCK"
