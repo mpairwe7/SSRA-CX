@@ -38,7 +38,9 @@ import {
   parseAguiSseStream,
   renderGenerativeUICard,
   resolveAdaptiveVoiceNetworkProfile,
+  resolveCallControlDirective,
   resolveGenerativeUIComponent,
+  SPEECH_RATE_SLOW,
   sanitizeAttachmentFilename,
   scrubDocumentTextForIndirectInjection,
   stripStepPrefix,
@@ -488,6 +490,43 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     // Reduced motion stops the animation but still reports who has the floor.
     expect(orbReduced.mode).toBe("speaking");
     expect(orbReduced.smoothedLevel).toBe(0);
+
+    const orbThinking = computeCallOrbFrame({
+      active: true,
+      prefersReducedMotion: false,
+      previousSmoothed: 0,
+      inputLevel: 0,
+      outputLevel: 0,
+      overrideState: "thinking",
+    });
+    expect(orbThinking.mode).toBe("thinking");
+
+    expect(
+      resolveCallControlDirective("slower", {
+        lastAssistantText: "PAYE is due by day 15.",
+        speechRateSlow: false,
+      }),
+    ).toEqual({
+      kind: "set_speech_rate",
+      speechRateSlow: true,
+      speechRate: SPEECH_RATE_SLOW,
+    });
+    expect(
+      resolveCallControlDirective("repeat", {
+        lastAssistantText: "PAYE is due by day 15.",
+        speechRateSlow: true,
+      }),
+    ).toEqual({
+      kind: "repeat_speech",
+      textToSpeak: "PAYE is due by day 15.",
+      speechRate: SPEECH_RATE_SLOW,
+    });
+    expect(
+      resolveCallControlDirective("more_detail", {
+        lastAssistantText: "PAYE is due by day 15.",
+        speechRateSlow: false,
+      }).kind,
+    ).toBe("send_followup_turn");
 
     // Multi-turn voice continuation, 450ms post-TTS echo guard, backchannel immunity & retry bound
     expect(POST_TTS_ECHO_COOLDOWN_MS).toBe(450);
