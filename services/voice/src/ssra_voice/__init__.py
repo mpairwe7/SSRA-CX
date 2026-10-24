@@ -841,9 +841,9 @@ VOICE_SAMPLES_BY_LOCALE: dict[str, str] = {
     "ar": "مرحباً بكم في مساعد هيئة الإيرادات بجنوب السودان. يُقدم إقرار ضريبة الدخل في اليوم الخامس عشر من الشهر التالي.",
     "pga": "ahlan bik fi SSRA Assist. dariba ta PAYE lazim tudfa يوم 15 في الشهر الجاي.",
     "din": "Bak ben tënë SSRA Assist. Ajul de PAYE aa yennë cool në nïn 15 de pɛɛi bɔ.",
-    "nus": "Bërɛ tënë SSRA Assist. Muthɔɔr PAYE la cäthɛ në চ্যাंग 15.",
+    "nus": "Bërɛ tënë SSRA Assist. Muthɔɔr PAYE la cäthɛ në cäŋ 15.",
     "bfa": "Worun ti SSRA Assist. Kulya na PAYE rembu kode 15.",
-    "zne": "Mo ye ku SSRA Assist. Marã PAYEidu ni rame 15.",
+    "zne": "Mo ye ku SSRA Assist. Marã PAYE du ni rame 15.",
     "shk": "Wol yi SSRA Assist. Gin culu PAYE bedo nino 15.",
 }
 
@@ -2124,12 +2124,16 @@ class VoiceCallSession:
         *,
         session_id: str,
         locale: LocaleCode,
+        voice_id: str | None = None,
         recording_offered: bool = True,
         wer_evidence: Mapping[LocaleCode, VoiceWerEvidence] = APPROVED_VOICE_WER_EVIDENCE,
         enable_spoken_clarify_gate: bool = True,
     ) -> None:
         self.session_id = session_id
         self.locale = locale
+        self.voice_id: str = (
+            resolve_tts_voice(locale.value, voice_id) or TTS_DEFAULT_VOICE[locale.value]
+        )
         self.recording_offered = recording_offered
         self.wer_evidence = wer_evidence
         self.enable_spoken_clarify_gate = enable_spoken_clarify_gate
@@ -2221,6 +2225,14 @@ class VoiceCallSession:
             self.phase = "active_ai"
         return self.queue_epoch
 
+    def set_speaker_voice(self, requested_voice: str | None) -> VoiceSpeakerProfile:
+        """Select a locale-validated speaker and dialect for this call session."""
+        self.voice_id = (
+            resolve_tts_voice(self.locale.value, requested_voice)
+            or TTS_DEFAULT_VOICE[self.locale.value]
+        )
+        return TTS_SPEAKER_PROFILES[self.voice_id]
+
     def build_call_state_frame(
         self,
         *,
@@ -2228,9 +2240,13 @@ class VoiceCallSession:
     ) -> dict[str, Any]:
         """Build the `call_state` frame broadcast to the caller's screen (`brain.py` `_publish_call_state`)."""
         has_more = bool(self.more_detail_text or self.last_more_detail_text)
+        prof = TTS_SPEAKER_PROFILES.get(self.voice_id)
         return {
             "type": "call_state",
             "phase": turn_phase,
+            "voice_id": self.voice_id,
+            "speaker_name": prof.name if prof else "",
+            "dialect_code": prof.dialect_code if prof else self.locale.value,
             "pending_offer": self.pending_offer,
             "speech_rate_slow": self.speech_rate_slow,
             "has_more_detail": has_more,

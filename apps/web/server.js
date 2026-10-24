@@ -1792,12 +1792,12 @@ function renderPwaShellHtml(locale, nonce) {
       let lastHeardVoiceTranscript = "";
       const VOICE_SPEAKERS_BY_LOCALE = {
         en: [
-          { id: "ssra_eng_0001", name: "Abuk", dialect: "Juba Standard (en-SS)", tone: "Warm & Clear", pitch: 1.02, rate: 1.0, bcp47: "en-SS" },
+          { id: "ssra_eng_0001", name: "Abuk", dialect: "Juba Standard (en-SS)", tone: "Warm & Clear", pitch: 1.02, rate: 1.0, bcp47: "en" },
           { id: "ssra_eng_0002", name: "Lado", dialect: "East African Regional", tone: "Structured & Crisp", pitch: 0.95, rate: 0.98, bcp47: "en-KE" },
           { id: "ssra_eng_0003", name: "Akol", dialect: "South Sudan Civic", tone: "Patient & Step-by-Step", pitch: 1.0, rate: 0.95, bcp47: "en-GB" }
         ],
         ar: [
-          { id: "ssra_ara_0001", name: "Amira (أميرة)", dialect: "Nile Valley / Sudanese Standard", tone: "Official & Reassuring", pitch: 1.02, rate: 1.0, bcp47: "ar-SD" },
+          { id: "ssra_ara_0001", name: "Amira (أميرة)", dialect: "Nile Valley / Sudanese Standard", tone: "Official & Reassuring", pitch: 1.02, rate: 1.0, bcp47: "ar" },
           { id: "ssra_ara_0002", name: "Tariq (طارق)", dialect: "Modern Standard Statutory", tone: "Precise & Structured", pitch: 0.95, rate: 0.98, bcp47: "ar-SA" }
         ],
         pga: [
@@ -1837,11 +1837,8 @@ function renderPwaShellHtml(locale, nonce) {
       function speechUtterance(text) {
         const utterance = new SpeechSynthesisUtterance(cleanTextForSpeech(text));
         const spk = getActiveVoiceSpeaker(state.locale);
-        if (selectedVoiceByLocale[state.locale] && spk && spk.bcp47) {
-          utterance.lang = spk.bcp47;
-        } else if (SPEECH_LANGS[state.locale]) {
-          utterance.lang = SPEECH_LANGS[state.locale];
-        }
+        const langTag = (spk && spk.bcp47) || SPEECH_LANGS[state.locale] || "";
+        if (langTag) utterance.lang = langTag;
         utterance.pitch = (spk && spk.pitch) || 1.0;
         utterance.rate = (callSpeechRateSlow ? 0.82 : 1.0) * ((spk && spk.rate) || 1.0);
         return utterance;
@@ -2800,7 +2797,12 @@ function renderPwaShellHtml(locale, nonce) {
         const spkBtn = e.target.closest("[data-voice-speaker]");
         if (spkBtn) {
           const spkId = spkBtn.getAttribute("data-voice-speaker") || "";
-          selectedVoiceByLocale[state.locale] = spkId;
+          const list = VOICE_SPEAKERS_BY_LOCALE[state.locale] || VOICE_SPEAKERS_BY_LOCALE.en;
+          if (list[0] && spkId === list[0].id) {
+            delete selectedVoiceByLocale[state.locale];
+          } else {
+            selectedVoiceByLocale[state.locale] = spkId;
+          }
           renderSettingsTabContent("voice");
           document.querySelector('[data-voice-speaker="' + spkId + '"]')?.focus();
           return;

@@ -657,7 +657,7 @@ export const SSRA_VOICE_SAMPLES: Readonly<Record<LocaleCode, string>> = {
   ar: "مرحباً بكم في مساعد هيئة الإيرادات بجنوب السودان. يُقدم إقرار ضريبة الدخل في اليوم الخامس عشر من الشهر التالي.",
   pga: "ahlan bik fi SSRA Assist. dariba ta PAYE lazim tudfa يوم 15 في الشهر الجاي.",
   din: "Bak ben tënë SSRA Assist. Ajul de PAYE aa yennë cool në nïn 15 de pɛɛi bɔ.",
-  nus: "Bërɛ tënë SSRA Assist. Muthɔɔr PAYE la cäthɛ në 15.",
+  nus: "Bërɛ tënë SSRA Assist. Muthɔɔr PAYE la cäthɛ në cäŋ 15.",
   bfa: "Worun ti SSRA Assist. Kulya na PAYE rembu kode 15.",
   zne: "Mo ye ku SSRA Assist. Marã PAYE du ni rame 15.",
   shk: "Wol yi SSRA Assist. Gin culu PAYE bedo nino 15.",
@@ -967,23 +967,8 @@ export function resolveVoiceSpeakerOption(
     const match = speakers.find((s) => s.id === requestedVoiceId);
     if (match) return match;
   }
-  const fallback = speakers.find((s) => s.isDefault) ?? speakers[0];
-  if (fallback) return fallback;
-  return {
-    id: "ssra_eng_0001",
-    locale: "en",
-    name: "Abuk",
-    role: "Senior Taxpayer Services Specialist",
-    dialectCode: "en-SS-Juba",
-    dialectLabel: "South Sudan English (Juba Standard)",
-    tone: "Warm, Reassuring & Clear",
-    provider: "orpheus_3b",
-    native: true,
-    isDefault: true,
-    pitchMultiplier: 1.02,
-    rateMultiplier: 1.0,
-    bcp47Hint: "en-SS",
-  };
+  const defaultEn = SSRA_VOICE_SPEAKER_CATALOG.en[0] as VoiceSpeakerOption;
+  return speakers.find((s) => s.isDefault) ?? speakers[0] ?? defaultEn;
 }
 
 export function formatVoiceSpeakerDisplayName(voice: VoiceSpeakerOption, index: number): string {
