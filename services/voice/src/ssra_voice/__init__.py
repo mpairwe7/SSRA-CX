@@ -4381,6 +4381,7 @@ class CallLanguagePolicy:
             return LanguageSwitchDecision("none", self.active, "override_locked", source="override")
         if vote.speech_s < self.min_speech_s or not vote.top:
             return LanguageSwitchDecision("none", self.active, "too_short")
+        vote = fuse_language_vote(vote)
         if vote.top not in self.supported_languages:
             return LanguageSwitchDecision("none", self.active, "unsupported_language")
 
