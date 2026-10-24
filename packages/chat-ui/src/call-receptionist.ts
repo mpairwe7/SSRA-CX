@@ -28,8 +28,20 @@ export type CallSessionStatus =
   | "ended";
 
 export type CallLanguageSource = "auto" | "override" | "explicit";
-export type OrbMode = "idle" | "listening" | "speaking";
+export type OrbMode = "idle" | "listening" | "thinking" | "speaking";
+export type OrbState = OrbMode;
+export type CallTurnPhase = "listening" | "thinking" | "speaking";
+export type CallControlAction =
+  | "repeat"
+  | "slower"
+  | "normal_speed"
+  | "more_detail"
+  | "accept_offer"
+  | "decline_offer";
 export type CallAgentKind = "automated_assistant" | "officer" | "none";
+
+export const SPEECH_RATE_NORMAL = 1.0;
+export const SPEECH_RATE_SLOW = 0.82;
 
 export interface CallCaptionEntry {
   readonly id: string;
@@ -82,6 +94,7 @@ export function computeCallOrbFrame(params: {
   readonly previousSmoothed: number;
   readonly inputLevel: number;
   readonly outputLevel: number;
+  readonly overrideState?: OrbState | undefined;
 }): CallOrbFrameState {
   if (!params.active) {
     return { mode: "idle", smoothedLevel: 0, cssOrbLevel: "0" };
@@ -92,18 +105,18 @@ export function computeCallOrbFrame(params: {
 
   const speaking = output >= 0.06 && output >= input;
   const listening = !speaking && input >= 0.06;
+  const derivedMode: OrbMode =
+    params.overrideState ?? (speaking ? "speaking" : listening ? "listening" : "idle");
   if (params.prefersReducedMotion) {
-    const still: OrbMode = speaking ? "speaking" : listening ? "listening" : "idle";
-    return { mode: still, smoothedLevel: 0, cssOrbLevel: "0" };
+    return { mode: derivedMode, smoothedLevel: 0, cssOrbLevel: "0" };
   }
   const target = speaking ? output : listening ? input : 0;
 
   let smoothed = prev + (target - prev) * (target > prev ? 0.45 : 0.12);
   if (smoothed < 0.002) smoothed = 0;
 
-  const mode: OrbMode = speaking ? "speaking" : listening ? "listening" : "idle";
   return {
-    mode,
+    mode: derivedMode,
     smoothedLevel: Number(smoothed.toFixed(3)),
     cssOrbLevel: smoothed.toFixed(3),
   };
@@ -329,5 +342,65 @@ export function evaluateVoiceTurnContinuation(params: {
     action: "submit_turn",
     nextRetryCount: 0,
     resumeDelayMs: POST_TTS_ECHO_COOLDOWN_MS,
+  };
+}
+
+export type CallControlDirective =
+  | {
+      readonly kind: "repeat_speech";
+      readonly textToSpeak: string;
+      readonly speechRate: number;
+    }
+  | {
+      readonly kind: "set_speech_rate";
+      readonly speechRateSlow: boolean;
+      readonly speechRate: number;
+    }
+  | {
+      readonly kind: "send_followup_turn";
+      readonly prompt: string;
+    }
+  | {
+      readonly kind: "resolve_offer";
+      readonly accepted: boolean;
+      readonly offerKey: string;
+    };
+
+/**
+ * Resolve an in-call receptionist control strip action (`CallScreen.tsx` `sendControl` parity).
+ */
+export function resolveCallControlDirective(
+  action: CallControlAction,
+  state: {
+    readonly lastAssistantText: string;
+    readonly speechRateSlow: boolean;
+    readonly pendingOffer?: string | undefined;
+  },
+): CallControlDirective {
+  if (action === "repeat") {
+    return {
+      kind: "repeat_speech",
+      textToSpeak: String(state.lastAssistantText || "").trim(),
+      speechRate: state.speechRateSlow ? SPEECH_RATE_SLOW : SPEECH_RATE_NORMAL,
+    };
+  }
+  if (action === "slower" || action === "normal_speed") {
+    const slow = action === "slower";
+    return {
+      kind: "set_speech_rate",
+      speechRateSlow: slow,
+      speechRate: slow ? SPEECH_RATE_SLOW : SPEECH_RATE_NORMAL,
+    };
+  }
+  if (action === "more_detail") {
+    return {
+      kind: "send_followup_turn",
+      prompt: "Please provide more detail on the previous answer.",
+    };
+  }
+  return {
+    kind: "resolve_offer",
+    accepted: action === "accept_offer",
+    offerKey: String(state.pendingOffer || ""),
   };
 }

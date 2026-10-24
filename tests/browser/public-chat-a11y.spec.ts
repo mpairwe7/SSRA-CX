@@ -296,6 +296,20 @@ test("continuous voice conversation auto-advances across turns and filters speak
   });
   await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(2);
 
+  // In-Call Receptionist Controls Strip (CallScreen.tsx lines 393-498): Repeat last, Slower pace, and Type a question.
+  await expect(page.locator("#call-repeat-btn")).toBeVisible();
+  const paceBtn = page.locator("#call-pace-btn");
+  await paceBtn.click();
+  await expect(paceBtn).toHaveAttribute("aria-pressed", "true");
+  await expect(paceBtn).toHaveText("Normal pace");
+
+  const typeToggleBtn = page.locator("#call-type-toggle-btn");
+  await typeToggleBtn.click();
+  await expect(page.locator("#call-text-form")).toBeVisible();
+  await page.locator("#call-text-input").press("Escape");
+  await expect(page.locator("#call-text-form")).toBeHidden();
+  await expect(page.locator("#call-modal-backdrop")).toHaveClass(/open/);
+
   // Officer handoff -> Request a callback instead -> End call (CallScreen.tsx dock flows).
   const officerBtn = page.locator("#call-officer-btn");
   await expect(officerBtn).toHaveAttribute("aria-label", "Request an SSRA officer");

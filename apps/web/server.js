@@ -708,12 +708,20 @@ function renderPwaShellHtml(locale, nonce) {
     .call-orb-halo { position: absolute; inset: -12px; border-radius: 50%; background: radial-gradient(circle, rgba(15, 71, 175, 0.42), transparent 68%); opacity: 0.25; pointer-events: none; transition: opacity 0.08s linear; }
     .call-orb[data-mode="listening"] .call-orb-core { background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.5), transparent 42%), radial-gradient(circle at 60% 65%, #2ECC71, #078930 74%); }
     .call-orb[data-mode="listening"] .call-orb-halo { background: radial-gradient(circle, rgba(46, 204, 113, 0.45), transparent 68%); opacity: 0.65; }
+    .call-orb[data-mode="thinking"] .call-orb-core { background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.45), transparent 42%), radial-gradient(circle at 60% 65%, #FCDD09, #D97706 76%); }
+    .call-orb[data-mode="thinking"] .call-orb-halo { background: radial-gradient(circle, rgba(252, 221, 9, 0.48), transparent 68%); opacity: 0.72; }
     .call-orb[data-mode="speaking"] { transform: scale(1.1); }
     .call-orb[data-mode="speaking"] .call-orb-halo { opacity: 0.85; }
-    .call-orb[data-mode="idle"] { animation: orbPulse 2.8s ease-in-out infinite; }
+    .call-orb[data-mode="idle"], .call-orb[data-mode="thinking"] { animation: orbPulse 2.8s ease-in-out infinite; }
+    .call-controls-strip { display: flex; align-items: center; justify-content: center; gap: 0.4rem; flex-wrap: wrap; }
+    .call-chip-btn { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 34px; padding: 0.25rem 0.65rem; border-radius: 999px; font: inherit; font-size: 0.76rem; font-weight: 600; background: var(--surface-2); color: var(--text-0); border: 1px solid var(--border-1); cursor: pointer; }
+    .call-chip-btn.is-active { background: rgba(7, 137, 48, 0.22); border-color: #2ECC71; color: #2ECC71; }
+    .call-text-form { display: flex; align-items: center; gap: 0.45rem; width: 100%; }
+    .call-text-input { flex: 1; min-width: 0; min-height: 38px; padding: 0.35rem 0.65rem; border-radius: 10px; border: 1px solid var(--border-2); background: var(--surface-1); color: var(--text-0); font: inherit; font-size: 0.84rem; }
+    .call-text-send { min-height: 38px; padding: 0 0.85rem; border-radius: 10px; border: none; background: var(--grad-primary); color: #fff; font: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
     @keyframes orbPulse { 0%, 100% { transform: scale(0.97); } 50% { transform: scale(1.03); } }
     @media (prefers-reduced-motion: reduce) {
-      .call-orb, .call-orb[data-mode="idle"], .call-orb[data-mode="speaking"], .call-status-pill[data-status="ai"] .call-status-dot, .composer-rec-dot { animation: none; transform: none; transition: none; }
+      .call-orb, .call-orb[data-mode="idle"], .call-orb[data-mode="thinking"], .call-orb[data-mode="speaking"], .call-status-pill[data-status="ai"] .call-status-dot, .composer-rec-dot { animation: none; transform: none; transition: none; }
     }
 
     .search-modal { max-width: 540px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
@@ -1029,6 +1037,17 @@ function renderPwaShellHtml(locale, nonce) {
         <button type="button" class="icon-btn call-sample-btn" data-voice-q="Where can I find general e-Tax filing guidance?">${ICONS.messageSquare} "General e-Tax guidance"</button>
         <button type="button" class="icon-btn call-sample-btn" data-voice-q="Where can I find general customs guidance?">${ICONS.messageSquare} "General customs guidance"</button>
       </div>
+      <!-- In-Call Receptionist Controls Strip & Typed Turn Form (CallScreen.tsx lines 393-498 parity) -->
+      <div class="call-controls-strip" role="toolbar" aria-label="Call receptionist controls">
+        <button type="button" id="call-repeat-btn" class="call-chip-btn is-hidden" data-testid="call-repeat-btn">${ICONS.refresh} Repeat last</button>
+        <button type="button" id="call-more-detail-btn" class="call-chip-btn is-hidden" data-testid="call-more-detail-btn">More detail</button>
+        <button type="button" id="call-pace-btn" class="call-chip-btn" data-testid="call-pace-btn" aria-pressed="false">Slower pace</button>
+        <button type="button" id="call-type-toggle-btn" class="call-chip-btn" data-testid="call-type-toggle-btn" aria-expanded="false" aria-controls="call-text-form">Type a question</button>
+      </div>
+      <form id="call-text-form" class="call-text-form is-hidden" data-testid="call-text-form">
+        <input id="call-text-input" class="call-text-input" data-testid="call-text-input" type="text" maxlength="500" aria-label="Type your question" placeholder="Type your question for SSRA Assist…" autocomplete="off" />
+        <button type="submit" id="call-text-send" class="call-text-send" data-testid="call-text-send">Send</button>
+      </form>
       <footer class="call-dock">
         <div class="call-dock-side">
           <button type="button" id="call-mute-btn" class="call-ctl" aria-pressed="false" aria-label="Mute microphone" title="Mute microphone">${ICONS.mic}</button>
@@ -1722,10 +1741,12 @@ function renderPwaShellHtml(locale, nonce) {
       let ttsKeepAliveTimer = null;
       let postTtsResumeTimer = null;
       let assistantCurrentlySpeaking = false;
+      let callSpeechRateSlow = false;
 
       function speechUtterance(text) {
         const utterance = new SpeechSynthesisUtterance(cleanTextForSpeech(text));
         if (SPEECH_LANGS[state.locale]) utterance.lang = SPEECH_LANGS[state.locale];
+        utterance.rate = callSpeechRateSlow ? 0.82 : 1.0;
         return utterance;
       }
 
@@ -1975,6 +1996,9 @@ function renderPwaShellHtml(locale, nonce) {
         }
         conv.turns[conv.turns.length - 1] = reply;
         if (fromVoiceLoop || voiceContinuousActive || callBackdrop?.classList.contains("open")) {
+          lastSpokenAssistantText = cleanTextForSpeech(reply.content);
+          document.getElementById("call-repeat-btn")?.classList.remove("is-hidden");
+          document.getElementById("call-more-detail-btn")?.classList.remove("is-hidden");
           appendCallCaption("assistant", reply.content);
         }
         if (reply.meta?.kind === "failure" && hintEl) {
@@ -2766,21 +2790,30 @@ function renderPwaShellHtml(locale, nonce) {
             vmOn ? "Exit voice conversation mode" : "Enter voice conversation mode",
           );
         }
+        const isThinking = Boolean(activeTurnAbortController);
         if (callOrbEl) {
-          // Playback (speaking) wins ties over listening so speaker echo never flickers the orb.
-          const orbMode = assistantCurrentlySpeaking ? "speaking" : isListening ? "listening" : "idle";
+          // Playback (speaking) wins ties over thinking and listening so speaker echo never flickers the orb.
+          const orbMode = assistantCurrentlySpeaking
+            ? "speaking"
+            : isThinking
+              ? "thinking"
+              : isListening
+                ? "listening"
+                : "idle";
           callOrbEl.setAttribute("data-mode", orbMode);
         }
         if (callStatusPillEl && callStatusLabelEl) {
           const curStatus = callStatusPillEl.getAttribute("data-status");
-          if (voiceContinuousActive || assistantCurrentlySpeaking || isListening) {
+          if (voiceContinuousActive || assistantCurrentlySpeaking || isThinking || isListening) {
             if (curStatus !== "transferring") {
               callStatusPillEl.setAttribute("data-status", "ai");
               callStatusLabelEl.textContent = assistantCurrentlySpeaking
                 ? "Speaking · Automated AI"
-                : isListening
-                  ? "Listening · Automated AI"
-                  : "Connected · Automated AI";
+                : isThinking
+                  ? "Thinking · Automated AI"
+                  : isListening
+                    ? "Listening · Automated AI"
+                    : "Connected · Automated AI";
             }
           } else if (curStatus !== "transferring" && curStatus !== "ended") {
             callStatusPillEl.setAttribute("data-status", "consent");
@@ -3013,6 +3046,69 @@ function renderPwaShellHtml(locale, nonce) {
         appendCallCaption("system", "Thank you for calling SSRA Assist.");
         syncVoiceModalButtons();
         setVoiceStatus("Call ended. Tap Start voice conversation to begin a new session.");
+      });
+
+      const callRepeatBtn = document.getElementById("call-repeat-btn");
+      const callMoreDetailBtn = document.getElementById("call-more-detail-btn");
+      const callPaceBtn = document.getElementById("call-pace-btn");
+      const callTypeToggleBtn = document.getElementById("call-type-toggle-btn");
+      const callTextForm = document.getElementById("call-text-form");
+      const callTextInput = document.getElementById("call-text-input");
+
+      callRepeatBtn?.addEventListener("click", () => {
+        if (!lastSpokenAssistantText) return;
+        appendCallCaption("system", "Repeating last answer…");
+        speakAssistantReply(lastSpokenAssistantText);
+      });
+
+      callMoreDetailBtn?.addEventListener("click", () => {
+        sendTurn("Please provide more detail on the previous answer.", {
+          fromVoiceLoop: voiceContinuousActive,
+        });
+      });
+
+      callPaceBtn?.addEventListener("click", () => {
+        callSpeechRateSlow = !callSpeechRateSlow;
+        callPaceBtn.classList.toggle("is-active", callSpeechRateSlow);
+        callPaceBtn.setAttribute("aria-pressed", String(callSpeechRateSlow));
+        callPaceBtn.textContent = callSpeechRateSlow ? "Normal pace" : "Slower pace";
+        setVoiceStatus(
+          callSpeechRateSlow
+            ? "Speech pace set to slower (0.82x)."
+            : "Speech pace set to normal (1.0x).",
+        );
+      });
+
+      callTypeToggleBtn?.addEventListener("click", () => {
+        const isOpen = !callTextForm?.classList.contains("is-hidden");
+        callTextForm?.classList.toggle("is-hidden", isOpen);
+        callTypeToggleBtn.classList.toggle("is-active", !isOpen);
+        callTypeToggleBtn.setAttribute("aria-expanded", String(!isOpen));
+        if (!isOpen) {
+          callTextInput?.focus();
+        }
+      });
+
+      callTextForm?.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          e.preventDefault();
+          callTextForm.classList.add("is-hidden");
+          callTypeToggleBtn?.classList.remove("is-active");
+          callTypeToggleBtn?.setAttribute("aria-expanded", "false");
+          callTypeToggleBtn?.focus();
+        }
+      });
+
+      callTextForm?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const val = (callTextInput?.value || "").trim();
+        if (!val) return;
+        if (callTextInput) callTextInput.value = "";
+        callTextForm.classList.add("is-hidden");
+        callTypeToggleBtn?.classList.remove("is-active");
+        callTypeToggleBtn?.setAttribute("aria-expanded", "false");
+        sendTurn(val, { fromVoiceLoop: true });
       });
 
       window.addEventListener("pagehide", () => {
