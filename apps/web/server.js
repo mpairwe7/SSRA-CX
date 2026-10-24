@@ -3231,12 +3231,12 @@ function renderPwaShellHtml(locale, nonce) {
           .split("\\\\")
           .join("/");
         const base = stripped.split("/").pop() || "document";
-        return (
-          base
-            .replace(/[^\\p{L}\\p{N}.\\- ()[\\]_]+/gu, "_")
-            .replace(/^[.\\s]+|[.\\s]+$/g, "")
-            .slice(0, 120) || "document"
-        );
+        const safeChars = base.replace(/[^\\p{L}\\p{N}.\\- ()[\\]_]+/gu, "_");
+        let sIdx = 0;
+        let eIdx = safeChars.length;
+        while (sIdx < eIdx && (safeChars[sIdx] === "." || safeChars[sIdx] === " ")) sIdx += 1;
+        while (eIdx > sIdx && (safeChars[eIdx - 1] === "." || safeChars[eIdx - 1] === " ")) eIdx -= 1;
+        return safeChars.slice(sIdx, eIdx).slice(0, 120) || "document";
       }
 
       function formatBytes(bytes) {

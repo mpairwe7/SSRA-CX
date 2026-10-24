@@ -40,9 +40,25 @@ const DANGEROUS_PDF_TOKEN_RE =
   /\/(?:JavaScript|JS|Launch|SubmitForm|ImportData|GoToR|RichMedia|EmbeddedFiles|XFA)\b/g;
 const PDF_ENCRYPT_TOKEN_RE = /\/Encrypt\b/;
 const INDIRECT_INJECTION_RE =
-  /(?:ignore\s+(?:all\s+)?(?:previous|prior)\s+instructions|system\s+prompt\s*:|<\|im_start\|>|<\|endoftext\|>|<\s*\/?\s*untrusted_)/gi;
+  /(?:ignore[ \t]{1,8}(?:all[ \t]{1,8})?(?:previous|prior)[ \t]{1,8}instructions|system[ \t]{1,8}prompt[ \t]{0,4}:|<\|im_start\|>|<\|endoftext\|>|<\/?untrusted_)/gi;
 const RAW_TIN_RE = /\b(\d{6})(\d{4})\b/g;
-const RAW_PHONE_211_RE = /\+211[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d(\d{2})\b/g;
+const RAW_PHONE_211_RE = /\+211[ -]?\d{3}[ -]?\d{3}[ -]?\d(\d{2})\b/g;
+
+function trimDotsAndSpaces(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end) {
+    const ch = value.charCodeAt(start);
+    if (ch === 46 || ch === 32 || ch === 9) start += 1;
+    else break;
+  }
+  while (end > start) {
+    const ch = value.charCodeAt(end - 1);
+    if (ch === 46 || ch === 32 || ch === 9) end -= 1;
+    else break;
+  }
+  return value.slice(start, end);
+}
 
 export type AttachmentKind = "pdf" | "docx" | "xlsx" | "csv" | "text" | "image";
 
@@ -98,9 +114,12 @@ export function formatFileSize(bytes: number): string {
  * Drop path segments, NUL bytes, and Unicode BiDi override characters (blocking RLO extension spoofing).
  */
 export function sanitizeAttachmentFilename(filename: string): string {
-  const raw = stripControlChars(String(filename || "document"), false).replace(/\\/g, "/");
+  const raw = stripControlChars(String(filename || "document").slice(0, 512), false).replace(
+    /\\/g,
+    "/",
+  );
   const base = raw.split("/").pop() || "document";
-  const cleaned = base.replace(FILENAME_UNSAFE_RE, "_").replace(/^[.\s]+|[.\s]+$/g, "");
+  const cleaned = trimDotsAndSpaces(base.replace(FILENAME_UNSAFE_RE, "_"));
   return cleaned.slice(0, 120) || "document";
 }
 
@@ -206,7 +225,7 @@ export function scrubDocumentTextForIndirectInjection(rawText: string): {
   readonly injectionScrubbed: boolean;
   readonly piiRedacted: boolean;
 } {
-  const noBidi = stripControlChars(String(rawText || ""), true);
+  const noBidi = stripControlChars(String(rawText || "").slice(0, 8000), true);
   let injectionScrubbed = false;
   const afterInj = noBidi.replace(INDIRECT_INJECTION_RE, () => {
     injectionScrubbed = true;
