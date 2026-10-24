@@ -302,6 +302,23 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await paceBtn.click();
   await expect(paceBtn).toHaveAttribute("aria-pressed", "true");
   await expect(paceBtn).toHaveText("Normal pace");
+  // Wait for recognition to re-arm after Turn 2's 450ms post-TTS cooldown, then test spoken pace control
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => (window as unknown as { __voiceTest: { getStartCalls: () => string[] } }).__voiceTest.getStartCalls().length,
+        ),
+      { timeout: 5_000 },
+    )
+    .toBeGreaterThanOrEqual(4);
+  await page.evaluate(() => {
+    (window as unknown as { __voiceTest: { emitTranscript: (t: string) => void } }).__voiceTest.emitTranscript(
+      "Speak at normal speed",
+    );
+  });
+  await expect(paceBtn).toHaveAttribute("aria-pressed", "false");
+  await expect(paceBtn).toHaveText("Slower pace");
 
   const typeToggleBtn = page.locator("#call-type-toggle-btn");
   await typeToggleBtn.click();
@@ -323,6 +340,7 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await page.locator("#call-hangup-btn").click();
   await expect(page.locator("#call-status-pill")).toHaveAttribute("data-status", "ended");
   await expect(page.locator("#call-listen-btn")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(3);
   await page.locator("#close-call-btn").click();
 
   // Main chat composer voice mode button couples with auto-narrate and Escape cancels recording (useVoiceEscape).
@@ -355,7 +373,7 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(page.locator("#composer-hint")).toContainText("Inspection receipt downloaded");
   await page.locator("#doc-modal-prompts [data-doc-prompt]").first().click();
   await expect(page.locator("#doc-inspect-modal-backdrop")).not.toHaveClass(/open/);
-  await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(3);
+  await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(4);
 
   await chip.locator("[data-remove-att]").click();
   await expect(chip).toHaveCount(0);

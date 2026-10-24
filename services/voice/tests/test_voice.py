@@ -1246,11 +1246,46 @@ def test_voice_call_session_controls_pending_offers_interruption_and_transfer_ep
     assert off_req.control_action_applied == "spoken_officer_request"
     assert session.phase == "transferred"
 
-    # Return to active_ai and test spoken goodbye hangup
+    # While in transferred phase, a general utterance keeps the caller waiting without re-triggering route_voice_turn
+    hold_out = session.process_caller_turn(
+        transcript="Hello, am I still in the queue?",
+        elapsed_since_tts_end_ms=700,
+    )
+    assert hold_out.control_action_applied == "waiting_for_officer"
+    assert session.phase == "transferred"
+
+    # Return to active_ai, test spoken review offer, test spoken tax-dispute escalation, then test goodbye hangup
     session.end_transfer_wait(timed_out=True)
-    bye_out = session.process_caller_turn(transcript="Goodbye", elapsed_since_tts_end_ms=700)
-    assert bye_out.control_action_applied == "caller_voice_hangup"
+    session.set_pending_offer("review")
+    rev_out = session.process_caller_turn(
+        transcript="Yes, very helpful thank you",
+        elapsed_since_tts_end_ms=700,
+    )
+    assert rev_out.control_action_applied == "review_recorded"
+    assert session.spoken_review_rating == "positive"
+
+    # History FIFO bound (100 entries) and PII redaction
+    for i in range(105):
+        session.record_assistant_reply(f"Step {i} guidance.")
+    assert len(session.history) == 100
+
+    dispute_out = session.process_caller_turn(
+        transcript="I want to appeal this assessment at the tribunal",
+        elapsed_since_tts_end_ms=700,
+    )
+    assert dispute_out.control_action_applied == "tax_dispute_escalation"
+    assert session.phase == "transferred"
+
+    # Goodbye while in transferred phase ends the call cleanly
+    bye_from_transfer = session.process_caller_turn(
+        transcript="Goodbye",
+        elapsed_since_tts_end_ms=700,
+    )
+    assert bye_from_transfer.control_action_applied == "caller_voice_hangup"
     assert session.phase == "ended"
+    # Terminal-state guard: once ended, turns and controls are no-ops
+    assert session.process_caller_turn(transcript="Another question").phase == "ended"
+    assert session.handle_call_control("repeat").phase == "ended"
 
 
 def test_officer_hold_gate_queue_position_and_live_call_risk_evaluator() -> None:
@@ -1346,6 +1381,7 @@ def test_low_bandwidth_voice_profile_mulaw_codec_and_call_resume_ticket() -> Non
     """FinalYearProject low_bandwidth.py parity: 2G/3G negotiation, G.711 mu-law transcoding & single-use resume ticket."""
     import struct
 
+    import pytest
     from ssra_voice import (
         mint_call_resume_ticket,
         mulaw_8k_to_pcm16_16k,
@@ -1374,6 +1410,11 @@ def test_low_bandwidth_voice_profile_mulaw_codec_and_call_resume_ticket() -> Non
     assert slow_2g_prof.bitrate_kbps == 0
 
     # G.711 mu-law 8 kHz <-> 16 kHz PCM16 transcoding (4x byte reduction)
+    from ssra_core import SSRAError
+    from ssra_voice import MAX_DECODED_PCM_BYTES
+
+    with pytest.raises(SSRAError):
+        pcm16_16k_to_mulaw_8k(b"\x00" * (MAX_DECODED_PCM_BYTES + 2))
     assert pcm16_16k_to_mulaw_8k(b"\x00\x01") == b""
     assert mulaw_8k_to_pcm16_16k(b"") == b""
     single_mulaw = pcm16_16k_to_mulaw_8k(struct.pack("<2h", 4000, -4000))
@@ -1389,6 +1430,8 @@ def test_low_bandwidth_voice_profile_mulaw_codec_and_call_resume_ticket() -> Non
 
     # Single-use HMAC-SHA256 caller drop-resume ticket
     secret = "test-voice-carryover-secret-key-at-least-32-bytes"
+    with pytest.raises(ValueError, match="_SAFE_ID_RE"):
+        mint_call_resume_ticket("../bad", "conv_drop_0", signing_salt=secret)
     early_ticket = mint_call_resume_ticket(
         "call_drop_0",
         "conv_drop_0",
@@ -1408,11 +1451,18 @@ def test_low_bandwidth_voice_profile_mulaw_codec_and_call_resume_ticket() -> Non
     )
     assert "." in ticket
     assert verify_call_resume_ticket("", signing_salt=secret, now=1010.0) is None
+    assert verify_call_resume_ticket("é.1234", signing_salt=secret, now=1010.0) is None
     assert verify_call_resume_ticket(f"{ticket}bad", signing_salt=secret, now=1010.0) is None
     assert verify_call_resume_ticket(ticket, signing_salt=secret, now=2000.0) is None
     assert (
         verify_call_resume_ticket(
             ticket, expected_call_id="wrong_call", signing_salt=secret, now=1010.0
+        )
+        is None
+    )
+    assert (
+        verify_call_resume_ticket(
+            ticket, expected_conversation_id="wrong_conv", signing_salt=secret, now=1010.0
         )
         is None
     )

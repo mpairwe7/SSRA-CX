@@ -15,6 +15,7 @@ import {
   computeCallOrbFrame,
   createRevealQueue,
   detectAttachmentKind,
+  detectSpokenCallControl,
   EndOfTurnDetector,
   escapeHtmlStrict,
   evaluateCaptionScrollPin,
@@ -527,6 +528,16 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
         speechRateSlow: false,
       }).kind,
     ).toBe("send_followup_turn");
+    expect(detectSpokenCallControl("")).toBeNull();
+    expect(detectSpokenCallControl("Could you repeat that?")).toBe("repeat");
+    expect(detectSpokenCallControl("Please speak slower")).toBe("slower");
+    expect(detectSpokenCallControl("Speak at normal speed")).toBe("normal_speed");
+    expect(detectSpokenCallControl("Tell me more")).toBe("more_detail");
+    expect(detectSpokenCallControl("That's all, thank you")).toBe("hangup");
+    expect(detectSpokenCallControl("End the call")).toBe("hangup");
+    expect(
+      detectSpokenCallControl("That is all the money I have to pay my monthly return"),
+    ).toBeNull();
 
     // Multi-turn voice continuation, 450ms post-TTS echo guard, backchannel immunity & retry bound
     expect(POST_TTS_ECHO_COOLDOWN_MS).toBe(450);

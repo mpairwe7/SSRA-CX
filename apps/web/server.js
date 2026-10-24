@@ -3041,6 +3041,10 @@ function renderPwaShellHtml(locale, nonce) {
         stopAssistantSpeechPlayback();
         syncNarrationBar(false, "");
         resetOfficerBtnUi();
+        document.getElementById("call-text-form")?.classList.add("is-hidden");
+        const toggleBtn = document.getElementById("call-type-toggle-btn");
+        toggleBtn?.classList.remove("is-active");
+        toggleBtn?.setAttribute("aria-expanded", "false");
         if (callStatusPillEl) callStatusPillEl.setAttribute("data-status", "ended");
         if (callStatusLabelEl) callStatusLabelEl.textContent = "Call ended";
         appendCallCaption("system", "Thank you for calling SSRA Assist.");
@@ -3056,12 +3060,13 @@ function renderPwaShellHtml(locale, nonce) {
       const callTextInput = document.getElementById("call-text-input");
 
       callRepeatBtn?.addEventListener("click", () => {
-        if (!lastSpokenAssistantText) return;
+        if (!lastSpokenAssistantText || callStatusPillEl?.getAttribute("data-status") === "ended") return;
         appendCallCaption("system", "Repeating last answer…");
         speakAssistantReply(lastSpokenAssistantText);
       });
 
       callMoreDetailBtn?.addEventListener("click", () => {
+        if (callStatusPillEl?.getAttribute("data-status") === "ended") return;
         sendTurn("Please provide more detail on the previous answer.", {
           fromVoiceLoop: voiceContinuousActive,
         });
@@ -3110,6 +3115,48 @@ function renderPwaShellHtml(locale, nonce) {
         callTypeToggleBtn?.setAttribute("aria-expanded", "false");
         sendTurn(val, { fromVoiceLoop: true });
       });
+
+      const SPOKEN_REPEAT_RE = /\\b(?:repeat\\s+that|say\\s+that\\s+again|could\\s+you\\s+repeat|pardon\\s+me|what\\s+did\\s+you\\s+say|أعد\\s+ذلك|ممكن\\s+تعيد)\\b/i;
+      const SPOKEN_SLOW_RE = /\\b(?:speak\\s+slower|more\\s+slowly|talk\\s+slower|slow\\s+down|تحدث\\s+ببطء|تكلم\\s+ببطء)\\b/i;
+      const SPOKEN_NORMAL_RE = /\\b(?:speak\\s+(?:normally|faster)|normal\\s+(?:speed|pace)|regular\\s+(?:speed|pace)|talk\\s+faster|سرعة\\s+عادية)\\b/i;
+      const SPOKEN_MORE_RE = /\\b(?:tell\\s+me\\s+more|more\\s+detail|تفاصيل\\s+أكثر)\\b/i;
+      const SPOKEN_HANGUP_RE = /\\b(?:hang\\s+up|end\\s+(?:the\\s+)?call|disconnect|good[\\s-]?bye|مع\\s+السلامة|أنهي\\s+المكالمة)\\b/i;
+      const SPOKEN_DONE_RE = /^[\\s,!.?]*(?:(?:ok|okay|thanks|thank\\s+you|alright|great|no)[\\s,!.?]+)?(?:that'?s\\s+all|that\\s+is\\s+all|good[\\s-]?bye|bye\\s+bye|bye|i'?m\\s+done)(?:[\\s,!.?]+(?:for\\s+(?:now|today)|thank\\s+you|thanks|bye))?[\\s,!.?]*$/i;
+
+      function handleSpokenCallControl(transcript) {
+        const clean = String(transcript || "").trim();
+        if (!clean) return false;
+        const wordCount = clean.split(/\\s+/).filter(Boolean).length;
+        if (SPOKEN_DONE_RE.test(clean) || (wordCount <= 8 && SPOKEN_HANGUP_RE.test(clean))) {
+          appendCallCaption("caller", clean);
+          callHangupBtn?.click();
+          return true;
+        }
+        if (wordCount > 8) return false;
+        if (SPOKEN_REPEAT_RE.test(clean) && lastSpokenAssistantText) {
+          appendCallCaption("caller", clean);
+          callRepeatBtn?.click();
+          return true;
+        }
+        if (SPOKEN_MORE_RE.test(clean) && lastSpokenAssistantText) {
+          appendCallCaption("caller", clean);
+          callMoreDetailBtn?.click();
+          return true;
+        }
+        if (SPOKEN_SLOW_RE.test(clean)) {
+          appendCallCaption("caller", clean);
+          if (!callSpeechRateSlow) callPaceBtn?.click();
+          speakAssistantReply("Okay, I will speak more slowly.");
+          return true;
+        }
+        if (SPOKEN_NORMAL_RE.test(clean)) {
+          appendCallCaption("caller", clean);
+          if (callSpeechRateSlow) callPaceBtn?.click();
+          speakAssistantReply("Okay, I will speak at a normal pace.");
+          return true;
+        }
+        return false;
+      }
 
       window.addEventListener("pagehide", () => {
         voiceContinuousActive = false;
@@ -3171,6 +3218,9 @@ function renderPwaShellHtml(locale, nonce) {
           receivedTranscript = true;
           voiceConsecutiveEmptyRetries = 0;
           if (voiceContinuousActive) {
+            if (handleSpokenCallControl(transcript)) {
+              return;
+            }
             setVoiceStatus('Heard: "' + transcript + '" — preparing answer…');
             sendTurn(transcript, { fromVoiceLoop: true });
           } else {
