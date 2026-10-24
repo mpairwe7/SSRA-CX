@@ -587,3 +587,51 @@ export function buildVoiceModeDockView(params: {
     showPauseButton: effectivePhase === "speaking" || effectivePhase === "paused",
   };
 }
+
+export type CallCaptionBlock =
+  | {
+      readonly kind: "paragraph";
+      readonly text: string;
+    }
+  | {
+      readonly kind: "numbered_list";
+      readonly items: readonly { readonly stepNumber: number; readonly text: string }[];
+    };
+
+/**
+ * Structure a Call Receptionist agent caption into paragraphs and numbered step items
+ * so procedures (`1. ... 2. ...`) are never rendered as a flat unparagraphing wall of text.
+ */
+export function structureCallReceptionistBlocks(text: string): readonly CallCaptionBlock[] {
+  const cleaned = String(text ?? "").trim();
+  if (!cleaned) return [];
+  const blocks: CallCaptionBlock[] = [];
+  const rawParagraphs = cleaned.split(/\n\s*\n+/);
+  for (const para of rawParagraphs) {
+    const trimmedPara = para.trim();
+    if (!trimmedPara) continue;
+    // Split inline numbered steps ("To register: 1. Open portal. 2. Enter TIN.") into separate lines
+    const normalizedLines = trimmedPara
+      .replace(/(?<=[:.!?؟])\s+(?=\d{1,2}[.)]\s+[A-Z\u0600-\u06FF])/g, "\n")
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const listItems: { stepNumber: number; text: string }[] = [];
+    for (const line of normalizedLines) {
+      const m = /^(\d{1,2})[.)]\s+(.+)$/.exec(line);
+      if (m?.[1] && m[2]) {
+        listItems.push({ stepNumber: Number(m[1]), text: m[2].trim() });
+      } else {
+        if (listItems.length > 0) {
+          blocks.push({ kind: "numbered_list", items: [...listItems] });
+          listItems.length = 0;
+        }
+        blocks.push({ kind: "paragraph", text: line });
+      }
+    }
+    if (listItems.length > 0) {
+      blocks.push({ kind: "numbered_list", items: [...listItems] });
+    }
+  }
+  return blocks;
+}

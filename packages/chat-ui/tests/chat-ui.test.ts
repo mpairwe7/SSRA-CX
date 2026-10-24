@@ -54,6 +54,7 @@ import {
   sanitizeCopilotReturnUrl,
   scrubDocumentTextForIndirectInjection,
   stripStepPrefix,
+  structureCallReceptionistBlocks,
   VOICE_PAUSE_OPTIONS,
   validateMcpAppIframe,
   validateVoiceNoteSubmission,
@@ -417,7 +418,22 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
 
     expect(
       cleanMarkdownForSpeech("Visit **https://etax.nra.gov.ss/** [Sec-18] for `TIN` registration."),
-    ).toBe("Visit official SSRA portal for TIN registration.");
+    ).toBe("Visit e-tax dot n r a dot gov dot s s for TIN registration.");
+    expect(
+      cleanMarkdownForSpeech(
+        "1. Dial *311# or call +211 912 345 678 / 0912 345 678 / 0800 123 456.\n2. Email info.help_1-a+b@ecustoms.nra.gov.ss for TIN ******1234 or TIN 100-200-1234 at P.O. Box 456 or https://etax.nra.gov.ss@evil.example/x.\n\nYou might also want to know: extra",
+        "en",
+      ),
+    ).toContain("Step 1: Dial star 3 1 1 hash or call plus 2 1 1, 9 1 2, 3 4 5, 6 7 8");
+    expect(
+      cleanMarkdownForSpeech(
+        "1. اطلب *311# أو راسل info@nra.gov.ss أو https://evil.example/x",
+        "ar",
+      ),
+    ).toContain(
+      "الخطوة 1: اطلب نجمة 3 1 1 شباك أو راسل info آت إن آر إيه دوت جوف دوت إس إس أو رابط إلكتروني",
+    );
+    expect(cleanMarkdownForSpeech("1. Amlu *311#", "pga")).toBe("Khatwa 1: Amlu star 3 1 1 shibak");
 
     const nowMs = 1_792_152_000_000;
     const grouped = groupConversationsByRecency(
@@ -822,6 +838,15 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
 
     expect(AUDIO_SIGNIFIER_SPECS.micStart.startHz).toBe(440);
     expect(AUDIO_SIGNIFIER_SPECS.micStart.endHz).toBe(880);
+
+    expect(structureCallReceptionistBlocks("")).toHaveLength(0);
+    const callBlocks = structureCallReceptionistBlocks(
+      "To register for a TIN: 1. Open https://etax.nra.gov.ss/. 2. Upload your ID.\n\nKeep your receipt.",
+    );
+    expect(callBlocks).toHaveLength(3);
+    expect(callBlocks[0]?.kind).toBe("paragraph");
+    expect(callBlocks[1]?.kind).toBe("numbered_list");
+    expect(callBlocks[2]?.kind).toBe("paragraph");
 
     const narBar = buildNarrationBarView({
       active: true,

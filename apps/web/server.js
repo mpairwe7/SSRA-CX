@@ -1798,13 +1798,38 @@ function renderPwaShellHtml(locale, nonce) {
         return utterance;
       }
 
+      const SPEECH_DOMAIN_EN = { etax: "e-tax", ecustoms: "e-customs", eservices: "e-services", nra: "n r a", ssra: "s s r a", mofp: "m o f p", boss: "b o s s", mojca: "m o j c a", cms: "c m s", gov: "gov", ss: "s s" };
+      const SPEECH_DOMAIN_AR = { etax: "إي تاكس", ecustoms: "إي كاستمز", eservices: "إي سيرفيسز", nra: "إن آر إيه", ssra: "إس إس آر إيه", mofp: "إم أو إف بي", boss: "بي أو إس إس", mojca: "إم أو جيه سي إيه", cms: "سي إم إس", gov: "جوف", ss: "إس إس" };
+
+      function formatGovDomainSpeech(host) {
+        const isAr = state.locale === "ar";
+        const map = isAr ? SPEECH_DOMAIN_AR : SPEECH_DOMAIN_EN;
+        const dotW = isAr ? " دوت " : " dot ";
+        return String(host || "").trim().toLowerCase().replace(/^www\\./, "").split(".").filter(Boolean).map((l) => map[l] || l).join(dotW);
+      }
+
       function cleanTextForSpeech(raw) {
+        const isAr = state.locale === "ar";
+        const starW = isAr ? "نجمة" : "star";
+        const hashW = isAr ? "شباك" : state.locale === "pga" ? "shibak" : "hash";
+        const atW = isAr ? "آت" : "at";
+        const plusW = isAr ? "زائد" : "plus";
+        const tinW = isAr ? "الرقم الضريبي المنتهي بـ" : "T I N ending in";
+        const linkW = isAr ? "رابط إلكتروني" : "web link";
+        const stepW = isAr ? "الخطوة" : state.locale === "pga" ? "Khatwa" : "Step";
         return String(raw || "")
+          .replace(/\\bhttps?:\\/\\/[^\\s/]*@[^\\s.,;:!?)]*/gi, linkW)
+          .replace(/(?<!\\w)\\*(\\d{2,4}(?:\\*\\d{1,4}){0,5})#(?!\\w)/g, (_, c) => starW + " " + c.split("*").map((s) => s.split("").join(" ")).join(" " + starW + " ") + " " + hashW)
+          .replace(/(?:(?:\\bTIN|\\bT\\.I\\.N\\.)\\s+)?(?:••••|\\*{4,8})(\\d{4})\\b/gi, (_, d) => tinW + " " + d.split("").join(" "))
           .replace(/\\s*\\[\\d+(?:\\s*[,;]\\s*\\d+)*\\](?!\\()/g, "")
           .replace(/\\[([^\\]]+)\\]\\([^\\)]+\\)/g, "$1")
-          .replace(/\\bhttps?:\\/\\/etax\\.nra\\.gov\\.ss(?:\\/(?![^\\s]*@)[^\\s.,;:!?)]*)?(?=$|\\s|[,;:!?)](?=$|\\s)|\\.+(?=$|\\s))/gi, "e-tax dot n r a dot gov dot s s")
-          .replace(/https?:\\/\\/\\S+/g, "web link")
-          .replace(/••••(\\d{4})/g, (_, d) => "T I N ending in " + d.split("").join(" "))
+          .replace(/\\*\\*([^*]+)\\*\\*|__([^_]+)__/g, "$1$2")
+          .replace(/(?<![:/A-Za-z0-9._%+-])\\b([A-Za-z0-9._%+-]{1,64})@([A-Za-z0-9-]{1,63}(?:\\.[A-Za-z0-9-]{1,63}){1,4})\\b(?![/])/gi, (_, u, d) => u.replace(/\\./g, isAr ? " دوت " : " dot ").replace(/_/g, " underscore ").replace(/-/g, " dash ") + " " + atW + " " + formatGovDomainSpeech(d))
+          .replace(/(?<![A-Za-z0-9@.-])(?:https?:\\/\\/)?((?:www\\.)?(?:etax\\.nra|ecustoms\\.nra|cms\\.nra|nra|etax\\.ssra|assist\\.ssra|ssra|business\\.eservices|customs\\.eservices|trade\\.eservices|eservices|mofp|boss|mojca)\\.gov\\.ss)(?:\\/(?![^\\s]*@)[^\\s.,;:!?)]*)?(?=$|\\s|[,;:!?)](?=$|\\s)|\\.+(?=$|\\s))/gi, (_, h) => formatGovDomainSpeech(h))
+          .replace(/https?:\\/\\/\\S+/gi, linkW)
+          .replace(/(?<!\\w)\\+211[ \\t-]?(?:\\(0\\)[ \\t-]?)?\\(?0?([19]\\d{2})\\)?[ \\t-]?(\\d{3})[ \\t-]?(\\d{3})\\b/g, (_, a, b, c) => plusW + " 2 1 1, " + a.split("").join(" ") + ", " + b.split("").join(" ") + ", " + c.split("").join(" "))
+          .replace(/^\\s*(\\d{1,2})[.)]\\s+/gm, stepW + " $1: ")
+          .replace(/(?<=[:.!?؟])\\s+(\\d{1,2})\\.\\s+(?=[A-Z\\u0600-\\u06FF])/g, " " + stepW + " $1: ")
           .replace(/\\bSec\\.\\s*(\\d+[A-Za-z]?)\\b/g, "Section $1")
           .replace(/\\bArt\\.\\s*(\\d+[A-Za-z]?)\\b/g, "Article $1")
           .replace(/[*_\\x60#~>-]+/g, " ")
@@ -2847,7 +2872,35 @@ function renderPwaShellHtml(locale, nonce) {
           row.className = "call-turn call-turn--agent";
           const s = document.createElement("div");
           s.className = "call-say";
-          s.textContent = text;
+          const lines = String(text || "")
+            .replace(/(?<=[:.!?؟])\\s+(?=\\d{1,2}[.)]\\s+[A-Z\\u0600-\\u06FF])/g, "\\n")
+            .split(/\\n+/)
+            .map((l) => l.trim())
+            .filter(Boolean);
+          if (lines.length <= 1) {
+            s.textContent = text;
+          } else {
+            let activeOl = null;
+            lines.forEach((line) => {
+              const stepMatch = /^(\\d{1,2})[.)]\\s+(.+)$/.exec(line);
+              if (stepMatch) {
+                if (!activeOl) {
+                  activeOl = document.createElement("ol");
+                  activeOl.className = "call-say-steps";
+                  s.appendChild(activeOl);
+                }
+                const li = document.createElement("li");
+                li.textContent = stepMatch[2];
+                activeOl.appendChild(li);
+              } else {
+                activeOl = null;
+                const p = document.createElement("p");
+                p.className = "call-say-p";
+                p.textContent = line;
+                s.appendChild(p);
+              }
+            });
+          }
           row.appendChild(s);
         }
         if (speaker !== "system") callThreadEl.appendChild(row);

@@ -2017,6 +2017,48 @@ class VoiceCallSession:
             pending_offer=self.pending_offer,
         )
 
+    def prepare_spoken_answer(
+        self,
+        reply_text: str,
+        *,
+        offer_officer: bool = False,
+        at_risk: bool = False,
+        max_sentences: int = MAX_SPOKEN_SENTENCES,
+    ) -> str:
+        """Structure an assistant reply for the Call Receptionist (`brain.py` `_spoken_answer` parity).
+
+        1. Strips visual chat footers (`You might also want to know...`).
+        2. Splits by procedure-safe sentences (`split_receptionist_spoken_sentences`).
+        3. Keeps up to *max_sentences* and stores any overflow in `more_detail_text`.
+        4. Appends at most one yes/no question (`officer` offer wins over `more` detail).
+        5. Normalizes contact info, USSD codes, `.gov.ss` domains, and numbered steps via `clean_text_for_speech`.
+        """
+        cleaned_reply = _SPEECH_VISUAL_FOOTER_RE.sub("", reply_text or "").strip() or (
+            reply_text or ""
+        )
+        sentences = split_receptionist_spoken_sentences(cleaned_reply)
+        rest = sentences[max_sentences:]
+        spoken_core = " ".join(sentences[:max_sentences]) if rest else cleaned_reply
+        rest_joined = " ".join(rest).strip()
+        if offer_officer:
+            self.last_more_detail_text = ""
+            self.set_pending_offer("officer", reason="offer_accepted", at_risk=at_risk)
+            offer_q = _RECEPTIONIST_OFFICER_OFFER_BY_LOCALE.get(
+                self.locale, _RECEPTIONIST_OFFICER_OFFER_BY_LOCALE[LocaleCode.EN]
+            )
+            combined = f"{spoken_core} {offer_q}".strip()
+        elif rest_joined:
+            self.set_pending_offer("more", more_detail=rest_joined)
+            offer_q = _RECEPTIONIST_MORE_OFFER_BY_LOCALE.get(
+                self.locale, _RECEPTIONIST_MORE_OFFER_BY_LOCALE[LocaleCode.EN]
+            )
+            combined = f"{spoken_core} {offer_q}".strip()
+        else:
+            combined = spoken_core
+        spoken_clean = clean_text_for_speech(combined, locale=self.locale)
+        self.record_assistant_reply(spoken_clean)
+        return spoken_clean
+
     def record_assistant_reply(
         self,
         reply_text: str,
@@ -2024,7 +2066,7 @@ class VoiceCallSession:
         interrupted_at_sentence: int | None = None,
     ) -> str:
         """Record what the assistant actually spoke, trimming unspoken sentences on barge-in."""
-        sentences = split_tts_sentences(reply_text)
+        sentences = split_receptionist_spoken_sentences(reply_text)
         was_interrupted = (
             interrupted_at_sentence is not None and 0 <= interrupted_at_sentence < len(sentences)
         )
@@ -2431,26 +2473,159 @@ def select_hybrid_voice_execution_mode(
     )
 
 
-_MASKED_TIN_SPEECH_RE = re.compile(r"••••(\d{4})")
-_SEC_ANCHOR_SPEECH_RE = re.compile(r"\bPart-([IVX]+)-Sec-(\d+)\b", flags=re.IGNORECASE)
-_OFFICIAL_ETAX_URL_SPEECH_RE = re.compile(
-    r"\bhttps?://etax\.nra\.gov\.ss(?:/(?![^\s]*@)[^\s.,;:!?)]*)?(?=$|\s|[,;:!?)](?=$|\s)|\.+(?=$|\s))",
+_MASKED_TIN_SPEECH_RE = re.compile(
+    r"(?:(?:\bTIN|\bT\.I\.N\.)\s+)?(?:••••|\*{4,8})(\d{4})\b",
     flags=re.IGNORECASE,
 )
+_EXPLICIT_TIN_HYPHEN_SPEECH_RE = re.compile(
+    r"\b(?:T-?I-?N|T\.I\.N\.)(?::|\s+is|\s+number|\s+no\.?)?\s*(\d{3})-(\d{3})-(\d{4})\b",
+    flags=re.IGNORECASE,
+)
+_SEC_ANCHOR_SPEECH_RE = re.compile(r"\bPart-([IVX]+)-Sec-(\d+)\b", flags=re.IGNORECASE)
+_SPOOFED_USERINFO_URL_SPEECH_RE = re.compile(
+    r"\bhttps?://[^\s/]*@[^\s.,;:!?)]*",
+    flags=re.IGNORECASE,
+)
+_ALLOWED_GOV_SS_HOSTS_PATTERN = (
+    r"(?:(?:www\.)?(?:etax\.nra|ecustoms\.nra|cms\.nra|nra|etax\.ssra|assist\.ssra|ssra|"
+    r"business\.eservices|customs\.eservices|trade\.eservices|eservices|mofp|boss|mojca)\.gov\.ss)"
+)
+_OFFICIAL_GOV_SS_URL_SPEECH_RE = re.compile(
+    rf"(?<![A-Za-z0-9@.-])(?:https?://)?({_ALLOWED_GOV_SS_HOSTS_PATTERN})(?:/(?![^\s]*@)[^\s.,;:!?)]*)?(?=$|\s|[,;:!?)](?=$|\s)|\.+(?=$|\s))",
+    flags=re.IGNORECASE,
+)
+_EMAIL_SPEECH_RE = re.compile(
+    r"(?<![:/A-Za-z0-9._%+-])\b([A-Za-z0-9._%+-]{1,64})@([A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){1,4})\b(?![/])",
+    flags=re.IGNORECASE,
+)
+_USSD_CODE_SPEECH_RE = re.compile(r"(?<!\w)\*(\d{2,4}(?:\*\d{1,4}){0,5})#(?!\w)")
+_SS_INTL_PHONE_SPEECH_RE = re.compile(
+    r"(?<!\w)\+211[ \t-]?(?:\(0\)[ \t-]?)?\(?0?([19]\d{2})\)?[ \t-]?(\d{3})[ \t-]?(\d{3})\b"
+)
+_SS_LOCAL_PHONE_SPEECH_RE = re.compile(r"(?<![\w+])\(?(0[19]\d{2})\)?[ \t-](\d{3})[ \t-](\d{3})\b")
+_TOLLFREE_PHONE_SPEECH_RE = re.compile(r"\b0800[ \t-]*(\d{3})[ \t-]*(\d{3})\b")
+_PO_BOX_SPEECH_RE = re.compile(
+    r"\bP\.?[ \t]?O\.?[ \t]?Box[ \t]{1,4}(\d{1,6})\b", flags=re.IGNORECASE
+)
+
+_DOMAIN_LABEL_SPEECH_EN: dict[str, str] = {
+    "etax": "e-tax",
+    "ecustoms": "e-customs",
+    "eservices": "e-services",
+    "nra": "n r a",
+    "ssra": "s s r a",
+    "mofp": "m o f p",
+    "boss": "b o s s",
+    "mojca": "m o j c a",
+    "cms": "c m s",
+    "gov": "gov",
+    "ss": "s s",
+}
+_DOMAIN_LABEL_SPEECH_AR: dict[str, str] = {
+    "etax": "إي تاكس",
+    "ecustoms": "إي كاستمز",
+    "eservices": "إي سيرفيسز",
+    "nra": "إن آر إيه",
+    "ssra": "إس إس آر إيه",
+    "mofp": "إم أو إف بي",
+    "boss": "بي أو إس إس",
+    "mojca": "إم أو جيه سي إيه",
+    "cms": "سي إم إس",
+    "gov": "جوف",
+    "ss": "إس إس",
+}
+
+
+def _format_domain_for_speech(domain: str, locale: LocaleCode = LocaleCode.EN) -> str:
+    """Pronounce a domain name naturally (`etax.nra.gov.ss` -> `e-tax dot n r a dot gov dot s s`)."""
+    host = domain.strip().lower().removeprefix("www.")
+    labels = [lbl for lbl in host.split(".") if lbl]
+    label_map = _DOMAIN_LABEL_SPEECH_AR if locale == LocaleCode.AR else _DOMAIN_LABEL_SPEECH_EN
+    dot_word = " دوت " if locale == LocaleCode.AR else " dot "
+    spoken_labels = [label_map.get(lbl, lbl) for lbl in labels]
+    return dot_word.join(spoken_labels)
+
+
+def _format_email_local_for_speech(user: str, locale: LocaleCode = LocaleCode.EN) -> str:
+    """Format an email local-part so dots, underscores, hyphens, pluses, and digits are spoken naturally."""
+    dot_word = " دوت " if locale == LocaleCode.AR else " dot "
+    out = (
+        user.replace(".", dot_word)
+        .replace("_", " underscore ")
+        .replace("-", " dash ")
+        .replace("+", " plus ")
+    )
+    out = re.sub(r"\betax\b", "e-tax", out, flags=re.IGNORECASE)
+    out = re.sub(r"\becustoms\b", "e-customs", out, flags=re.IGNORECASE)
+    out = re.sub(r"\d", lambda d: f" {d.group(0)} ", out)
+    return re.sub(r"[ \t]+", " ", out).strip()
+
+
+def _format_ussd_for_speech(code_body: str, locale: LocaleCode = LocaleCode.EN) -> str:
+    """Pronounce USSD shortcodes such as `*311#` naturally across `en`, `ar`, `pga`, and Nilotic/Zande locales."""
+    star_word = "نجمة" if locale == LocaleCode.AR else "star"
+    hash_word = (
+        "شباك" if locale == LocaleCode.AR else ("shibak" if locale == LocaleCode.PGA else "hash")
+    )
+    segments = [" ".join(seg) for seg in code_body.split("*")]
+    return f"{star_word} {f' {star_word} '.join(segments)} {hash_word}"
 
 
 def normalize_statutory_text_for_speech(text: str, locale: LocaleCode = LocaleCode.EN) -> str:
-    """Expand statutory anchors, masked TINs, and verified official portal URLs for natural TTS pronunciation without altering numbers."""
-    _ = locale
+    """Expand statutory anchors, masked TINs, contact details, and verified official portal URLs for natural TTS pronunciation."""
+    is_ar = locale == LocaleCode.AR
+    tin_end_prefix = "الرقم الضريبي المنتهي بـ" if is_ar else "T I N ending in"
+    at_word = "آت" if is_ar else "at"
+    plus_word = "زائد" if is_ar else "plus"
+    web_link_word = "رابط إلكتروني" if is_ar else "web link"
+
+    out = _SPOOFED_USERINFO_URL_SPEECH_RE.sub(web_link_word, text)
+    out = _USSD_CODE_SPEECH_RE.sub(
+        lambda m: _format_ussd_for_speech(m.group(1), locale),
+        out,
+    )
     out = _MASKED_TIN_SPEECH_RE.sub(
-        lambda m: f"T I N ending in {' '.join(m.group(1))}",
-        text,
+        lambda m: f"{tin_end_prefix} {' '.join(m.group(1))}",
+        out,
+    )
+    out = _EXPLICIT_TIN_HYPHEN_SPEECH_RE.sub(
+        lambda m: f"T I N {' '.join(m.group(1))}, {' '.join(m.group(2))}, {' '.join(m.group(3))}",
+        out,
     )
     out = _SEC_ANCHOR_SPEECH_RE.sub(
         lambda m: f"Part {m.group(1)}, Section {m.group(2)}",
         out,
     )
-    out = _OFFICIAL_ETAX_URL_SPEECH_RE.sub("e-tax dot n r a dot gov dot s s", out)
+    out = _EMAIL_SPEECH_RE.sub(
+        lambda m: (
+            f"{_format_email_local_for_speech(m.group(1), locale)} {at_word} "
+            f"{_format_domain_for_speech(m.group(2), locale)}"
+        ),
+        out,
+    )
+    out = _OFFICIAL_GOV_SS_URL_SPEECH_RE.sub(
+        lambda m: _format_domain_for_speech(m.group(1), locale),
+        out,
+    )
+    out = _SS_INTL_PHONE_SPEECH_RE.sub(
+        lambda m: (
+            f"{plus_word} 2 1 1, {' '.join(m.group(1))}, "
+            f"{' '.join(m.group(2))}, {' '.join(m.group(3))}"
+        ),
+        out,
+    )
+    out = _SS_LOCAL_PHONE_SPEECH_RE.sub(
+        lambda m: f"{' '.join(m.group(1))}, {' '.join(m.group(2))}, {' '.join(m.group(3))}",
+        out,
+    )
+    out = _TOLLFREE_PHONE_SPEECH_RE.sub(
+        lambda m: f"0 800, {' '.join(m.group(1))}, {' '.join(m.group(2))}",
+        out,
+    )
+    out = _PO_BOX_SPEECH_RE.sub(
+        lambda m: f"P O Box {' '.join(m.group(1))}",
+        out,
+    )
     return out
 
 
@@ -3191,6 +3366,42 @@ _SPEECH_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _SPEECH_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _SPEECH_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*|__([^_]+)__")
 _SPEECH_HEADER_BULLET_RE = re.compile(r"^\s*(?:#{1,6}|[-*+])\s+", re.MULTILINE)
+_SPEECH_NUMBERED_LINE_RE = re.compile(r"^\s*(\d{1,2})[.)]\s+", re.MULTILINE)
+_SPEECH_NUMBERED_INLINE_RE = re.compile(r"(?<=[:.!?؟])\s+(\d{1,2})\.\s+(?=[A-Z\u0600-\u06FF])")
+_SPEECH_VISUAL_FOOTER_RE = re.compile(
+    r"\n+\s*(?:\*\*)?(?:You might also want to know|Related questions)\b.*",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_STEP_WORD_BY_LOCALE: dict[LocaleCode, str] = {
+    LocaleCode.EN: "Step",
+    LocaleCode.AR: "الخطوة",
+    LocaleCode.PGA: "Khatwa",
+    LocaleCode.DIN: "Dhöl",
+    LocaleCode.NUS: "Dia",
+    LocaleCode.BFA: "Daket",
+    LocaleCode.ZNE: "Di",
+    LocaleCode.SHK: "Yoo",
+}
+_RECEPTIONIST_MORE_OFFER_BY_LOCALE: dict[LocaleCode, str] = {
+    LocaleCode.EN: "Would you like me to read the remaining details?",
+    LocaleCode.AR: "هل ترغب في سماع باقي التفاصيل؟",
+    LocaleCode.PGA: "Inta aayiz tasma baagi al-tafasil?",
+    LocaleCode.DIN: "Yïn nhiar ba käk döŋ kueen?",
+    LocaleCode.NUS: "I nhök ba käk döŋ kueen?",
+    LocaleCode.BFA: "Do nyar kulya naaran?",
+    LocaleCode.ZNE: "Mo kpinyemu mi geda yangaapai?",
+    LocaleCode.SHK: "Yi dwata akwena gin odong?",
+}
+_RECEPTIONIST_OFFICER_OFFER_BY_LOCALE: dict[LocaleCode, str] = {
+    LocaleCode.EN: "Would you like me to connect you with an SSRA officer?",
+    LocaleCode.AR: "هل ترغب في التحدث إلى موظف هيئة الإيرادات؟",
+    LocaleCode.PGA: "Inta aayiz tatkalam ma'a muwazzaf SSRA?",
+    LocaleCode.DIN: "Yïn nhiar ba yïn mat kekë raan luɔi de SSRA?",
+    LocaleCode.NUS: "I nhök ba ji mat kɛ raan luɔi SSRA?",
+    LocaleCode.BFA: "Do nyar kulya ko ngutu lo SSRA?",
+    LocaleCode.ZNE: "Mo kpinyemu mi banda ro ku boro SSRA?",
+    LocaleCode.SHK: "Yi dwata aribi yi ki جال SSRA?",
+}
 _SPEECH_SEC_SHORTHAND_RE = re.compile(r"\bSec\.\s*(\d+[A-Za-z]?)\b")
 _SPEECH_ART_SHORTHAND_RE = re.compile(r"\bArt\.\s*(\d+[A-Za-z]?)\b")
 _REDACTED_SPEECH_MAP: tuple[tuple[str, str], ...] = (
@@ -3205,18 +3416,27 @@ _REDACTED_SPEECH_MAP: tuple[tuple[str, str], ...] = (
 
 def clean_text_for_speech(text: str, locale: LocaleCode = LocaleCode.EN) -> str:
     """Prepare markdown and statutory reply text for natural TTS synthesis (`speech_normalization.py` parity)."""
-    out = _SPEECH_CODE_BLOCK_RE.sub(" ", text or "")
+    web_link_word = "رابط إلكتروني" if locale == LocaleCode.AR else "web link"
+    step_word = _STEP_WORD_BY_LOCALE.get(locale, "Step")
+    out = _SPEECH_VISUAL_FOOTER_RE.sub("", text or "")
+    out = _SPEECH_CODE_BLOCK_RE.sub(" ", out)
+    out = _USSD_CODE_SPEECH_RE.sub(
+        lambda m: _format_ussd_for_speech(m.group(1), locale),
+        out,
+    )
     out = _SPEECH_CITATION_BRACKET_RE.sub("", out)
     out = _SPEECH_MD_LINK_RE.sub(r"\1", out)
     out = _SPEECH_INLINE_CODE_RE.sub(r"\1", out)
     out = _SPEECH_BOLD_RE.sub(lambda m: m.group(1) or m.group(2) or "", out)
     out = _SPEECH_HEADER_BULLET_RE.sub("", out)
+    out = _SPEECH_NUMBERED_LINE_RE.sub(rf"{step_word} \1: ", out)
+    out = _SPEECH_NUMBERED_INLINE_RE.sub(rf" {step_word} \1: ", out)
     for marker, spoken_label in _REDACTED_SPEECH_MAP:
         out = out.replace(marker, spoken_label)
     out = _SPEECH_SEC_SHORTHAND_RE.sub(r"Section \1", out)
     out = _SPEECH_ART_SHORTHAND_RE.sub(r"Article \1", out)
     out = normalize_statutory_text_for_speech(out, locale=locale)
-    out = re.sub(r"\bhttps?://\S+", "web link", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bhttps?://\S+", web_link_word, out, flags=re.IGNORECASE)
     return re.sub(r"\s+", " ", out).strip()
 
 
