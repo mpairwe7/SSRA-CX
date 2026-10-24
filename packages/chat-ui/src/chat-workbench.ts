@@ -193,17 +193,140 @@ export function buildHumanSubtleMicrocopy(
   };
 }
 
+const DOMAIN_LABELS_EN: Record<string, string> = {
+  etax: "e-tax",
+  ecustoms: "e-customs",
+  eservices: "e-services",
+  nra: "n r a",
+  ssra: "s s r a",
+  mofp: "m o f p",
+  boss: "b o s s",
+  mojca: "m o j c a",
+  cms: "c m s",
+  gov: "gov",
+  ss: "s s",
+};
+
+const DOMAIN_LABELS_AR: Record<string, string> = {
+  etax: "إي تاكس",
+  ecustoms: "إي كاستمز",
+  eservices: "إي سيرفيسز",
+  nra: "إن آر إيه",
+  ssra: "إس إس آر إيه",
+  mofp: "إم أو إف بي",
+  boss: "بي أو إس إس",
+  mojca: "إم أو جيه سي إيه",
+  cms: "سي إم إس",
+  gov: "جوف",
+  ss: "إس إس",
+};
+
+function formatDomainForSpeech(domain: string, locale = "en"): string {
+  const isAr = locale === "ar";
+  const host = domain
+    .trim()
+    .toLowerCase()
+    .replace(/^www\./, "");
+  const labels = host.split(".").filter(Boolean);
+  const map = isAr ? DOMAIN_LABELS_AR : DOMAIN_LABELS_EN;
+  const dotWord = isAr ? " دوت " : " dot ";
+  return labels.map((lbl) => map[lbl] ?? lbl).join(dotWord);
+}
+
+function formatEmailLocalForSpeech(user: string, locale = "en"): string {
+  const dotWord = locale === "ar" ? " دوت " : " dot ";
+  return user
+    .replace(/\./g, dotWord)
+    .replace(/_/g, " underscore ")
+    .replace(/-/g, " dash ")
+    .replace(/\+/g, " plus ")
+    .replace(/\betax\b/gi, "e-tax")
+    .replace(/\becustoms\b/gi, "e-customs")
+    .replace(/\d/g, (d) => ` ${d} `)
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+const STEP_WORDS_BY_LOCALE: Record<string, string> = {
+  en: "Step",
+  ar: "الخطوة",
+  pga: "Khatwa",
+  din: "Dhöl",
+  nus: "Dia",
+  bfa: "Daket",
+  zne: "Di",
+  shk: "Yoo",
+};
+
 /**
- * Clean Markdown & inline citation markers (`[1]`, `[Sec-18]`) before TTS synthesis.
+ * Clean Markdown, inline citation markers (`[1]`, `[Sec-18]`), numbered steps, contact details,
+ * and official `.gov.ss` domains before TTS synthesis across all 8 South Sudan languages.
  */
-export function cleanMarkdownForSpeech(text: string): string {
-  return text
+export function cleanMarkdownForSpeech(text: string, locale = "en"): string {
+  const isAr = locale === "ar";
+  const starWord = isAr ? "نجمة" : "star";
+  const hashWord = isAr ? "شباك" : locale === "pga" ? "shibak" : "hash";
+  const atWord = isAr ? "آت" : "at";
+  const plusWord = isAr ? "زائد" : "plus";
+  const tinEndPrefix = isAr ? "الرقم الضريبي المنتهي بـ" : "T I N ending in";
+  const webLinkWord = isAr ? "رابط إلكتروني" : "web link";
+  const stepWord = STEP_WORDS_BY_LOCALE[locale] ?? "Step";
+
+  const footerMatch =
+    /(?:^|\n)[ \t]*(?:\*\*)?(?:You might also want to know|Related questions)\b/i.exec(text);
+  const withoutFooter = footerMatch ? text.slice(0, footerMatch.index) : text;
+
+  return withoutFooter
     .replace(/```[\s\S]*?```/g, " ")
+    .replace(/\bhttps?:\/\/[^\s/@]{1,128}@[^\s.,;:!?)]{1,256}/gi, webLinkWord)
+    .replace(/(?<!\w)\*(\d{2,4}(?:\*\d{1,4}){0,5})#(?!\w)/g, (_m, code: string) => {
+      const segs = code.split("*").map((s) => s.split("").join(" "));
+      return `${starWord} ${segs.join(` ${starWord} `)} ${hashWord}`;
+    })
+    .replace(
+      /(?:(?:\bTIN|\bT\.I\.N\.)[ \t]+)?(?:••••|\*{4,8})(\d{4})\b/gi,
+      (_m, d: string) => `${tinEndPrefix} ${d.split("").join(" ")}`,
+    )
+    .replace(
+      /\b(?:T-?I-?N|T\.I\.N\.)(?::|[ \t]+(?:is|number|no\.?))?[ \t]{0,4}(\d{3})-(\d{3})-(\d{4})\b/gi,
+      (_m, g1: string, g2: string, g3: string) =>
+        `T I N ${g1.split("").join(" ")}, ${g2.split("").join(" ")}, ${g3.split("").join(" ")}`,
+    )
     .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, "$1$2")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/\[(?:cit_|\d+|Sec-|Art-)[^\]]*\](?!\()/gi, "")
-    .replace(/https?:\/\/\S+/g, "official SSRA portal")
-    .replace(/^\s*[-*+]\s+/gm, " ")
+    .replace(
+      /(?<![:/A-Za-z0-9._%+-])\b([A-Za-z0-9._%+-]{1,64})@([A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){1,4})\b(?![/])/gi,
+      (_m, user: string, domain: string) =>
+        `${formatEmailLocalForSpeech(user, locale)} ${atWord} ${formatDomainForSpeech(domain, locale)}`,
+    )
+    .replace(
+      /(?<![A-Za-z0-9@.-])(?:https?:\/\/)?((?:www\.)?(?:etax\.nra|ecustoms\.nra|cms\.nra|nra|etax\.ssra|assist\.ssra|ssra|business\.eservices|customs\.eservices|trade\.eservices|eservices|mofp|boss|mojca)\.gov\.ss)(?:\/(?![^\s]*@)[^\s.,;:!?)]*)?(?=$|\s|[,;:!?)](?=$|\s)|\.+(?=$|\s))/gi,
+      (_m, host: string) => formatDomainForSpeech(host, locale),
+    )
+    .replace(/https?:\/\/\S+/gi, webLinkWord)
+    .replace(
+      /(?<!\w)\+211[ \t-]?(?:\(0\)[ \t-]?)?\(?0?([19]\d{2})\)?[ \t-]?(\d{3})[ \t-]?(\d{3})\b/g,
+      (_m, g1: string, g2: string, g3: string) =>
+        `${plusWord} 2 1 1, ${g1.split("").join(" ")}, ${g2.split("").join(" ")}, ${g3.split("").join(" ")}`,
+    )
+    .replace(
+      /(?<![\w+])\(?(0[19]\d{2})\)?[ \t-](\d{3})[ \t-](\d{3})\b/g,
+      (_m, g1: string, g2: string, g3: string) =>
+        `${g1.split("").join(" ")}, ${g2.split("").join(" ")}, ${g3.split("").join(" ")}`,
+    )
+    .replace(
+      /\b0800[ \t-]*(\d{3})[ \t-]*(\d{3})\b/g,
+      (_m, g1: string, g2: string) => `0 800, ${g1.split("").join(" ")}, ${g2.split("").join(" ")}`,
+    )
+    .replace(
+      /\bP\.?[ \t]?O\.?[ \t]?Box[ \t]{1,4}(\d{1,6})\b/gi,
+      (_m, box: string) => `P O Box ${box.split("").join(" ")}`,
+    )
+    .replace(/^[ \t]*(\d{1,2})[.)][ \t]+/gm, `${stepWord} $1: `)
+    .replace(/(?<=[:.!?؟])[ \t]+(\d{1,2})\.[ \t]+(?=[A-Z\u0600-\u06FF])/g, ` ${stepWord} $1: `)
+    .replace(/^[ \t]*[-*+][ \t]+/gm, " ")
     .replace(/[*_~>#]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

@@ -1653,3 +1653,80 @@ def test_speech_normalization_asr_entity_mishears_clarify_gate_and_language_poli
     assert exp_dec.action == "switch"
     assert exp_dec.target == "en"
     assert exp_dec.source == "explicit"
+
+
+def test_multilingual_contact_url_pronunciation_and_receptionist_structuring() -> None:
+    """Verify natural pronunciation of contact info, .gov.ss links, USSD codes, and receptionist structuring across locales."""
+    from ssra_voice import VoiceCallSession, clean_text_for_speech
+
+    en_contact = clean_text_for_speech(
+        "1. Dial *311# or call +211 912 345 678, 0922 111 222, or 0800 123 456.\n"
+        "2. Email support.etax_1+help@nra.gov.ss or visit https://ecustoms.nra.gov.ss/ and www.eservices.gov.ss.\n"
+        "3. Check TIN ******1234 or TIN 100-200-1234 at P.O. Box 456.",
+        locale=LocaleCode.EN,
+    )
+    assert "Step 1: Dial star 3 1 1 hash" in en_contact
+    assert "plus 2 1 1, 9 1 2, 3 4 5, 6 7 8" in en_contact
+    assert "0 9 2 2, 1 1 1, 2 2 2" in en_contact
+    assert "0 800, 1 2 3, 4 5 6" in en_contact
+    assert (
+        "Step 2: Email support dot e-tax underscore 1 plus help at n r a dot gov dot s s"
+        in en_contact
+    )
+    assert "e-customs dot n r a dot gov dot s s" in en_contact
+    assert "e-services dot gov dot s s" in en_contact
+    assert "Step 3: Check T I N ending in 1 2 3 4" in en_contact
+    assert "T I N 1 0 0, 2 0 0, 1 2 3 4" in en_contact
+    assert "P O Box 4 5 6" in en_contact
+
+    # Arabic ('ar') and Juba Arabic ('pga') localization + RFC 3986 @ userinfo spoof rejection
+    ar_contact = clean_text_for_speech(
+        "1. اطلب *311# أو راسل info@etax.nra.gov.ss أو اتصل على +211 912 345 678 لحساب ******9876. "
+        "لا تضغط على https://etax.nra.gov.ss@evil.example/phish.",
+        locale=LocaleCode.AR,
+    )
+    assert "الخطوة 1: اطلب نجمة 3 1 1 شباك" in ar_contact
+    assert "info آت إي تاكس دوت إن آر إيه دوت جوف دوت إس إس" in ar_contact
+    assert "زائد 2 1 1, 9 1 2, 3 4 5, 6 7 8" in ar_contact
+    assert "الرقم الضريبي المنتهي بـ 9 8 7 6" in ar_contact
+    assert "رابط إلكتروني" in ar_contact
+    assert "evil.example" not in ar_contact
+
+    pga_contact = clean_text_for_speech("1. Amlu *311# fi etax.nra.gov.ss.", locale=LocaleCode.PGA)
+    assert "Khatwa 1: Amlu star 3 1 1 shibak fi e-tax dot n r a dot gov dot s s." in pga_contact
+
+    # Call Receptionist prepare_spoken_answer: 3-sentence cap, more_detail overflow, and officer offer priority
+    session = VoiceCallSession(
+        session_id="call_struct_01",
+        locale=LocaleCode.EN,
+        recording_offered=False,
+        wer_evidence=_synthetic_wer(LocaleCode.EN, 0.05),
+    )
+    session.start_call()
+    session.mark_disclosure_finished()
+    long_proc = (
+        "1. Open https://etax.nra.gov.ss/.\n"
+        "2. Enter TIN ******1234.\n"
+        "3. Upload your TCC form.\n"
+        "4. Download the e-Receipt.\n\n"
+        "You might also want to know: BPT rate is 30%."
+    )
+    spoken_turn = session.prepare_spoken_answer(long_proc)
+    assert "Step 1: Open e-tax dot n r a dot gov dot s s." in spoken_turn
+    assert "Step 2: Enter T I N ending in 1 2 3 4." in spoken_turn
+    assert "Step 3: Upload your TCC form." in spoken_turn
+    assert "Step 4" not in spoken_turn
+    assert "You might also want to know" not in spoken_turn
+    assert "Would you like me to read the remaining details?" in spoken_turn
+    assert session.pending_offer == "more"
+    assert "4. Download the e-Receipt." in session.more_detail_text
+
+    # Officer offer supersedes more_detail so only one yes/no question is asked per turn
+    spoken_officer = session.prepare_spoken_answer(long_proc, offer_officer=True, at_risk=True)
+    assert "Would you like me to connect you with an SSRA officer?" in spoken_officer
+    assert "remaining details" not in spoken_officer
+    assert session.pending_offer == "officer"
+
+    # Single-sentence answer with no overflow and no officer offer
+    short_turn = session.prepare_spoken_answer("Your return is filed on https://etax.nra.gov.ss/.")
+    assert short_turn == "Your return is filed on e-tax dot n r a dot gov dot s s."
