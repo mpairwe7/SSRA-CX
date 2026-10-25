@@ -211,6 +211,10 @@ export const ICONS = {
     '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>',
     15,
   ),
+  newChat: svgWrap(
+    '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M18.4 2.6a1.5 1.5 0 0 1 2.1 2.1L13 12.2l-2.8.7.7-2.8Z"/>',
+    18,
+  ),
   idCard: svgWrap(
     '<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.17 15a3 3 0 0 1 5.66 0"/><path d="M16 10h2"/><path d="M16 14h2"/>',
     18,

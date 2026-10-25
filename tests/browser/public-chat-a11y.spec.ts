@@ -37,23 +37,29 @@ test("the composer status stays visible on a phone", async ({ page }) => {
   await expect(page.locator("#composer-hint")).toHaveText("Not answered. Your message is back in the box.");
 });
 
-test("the account panel is a disclosure that Escape closes", async ({ page }) => {
+test("Sign in and Register explain portal sign-in in an in-page dialog", async ({ page }) => {
   await page.goto("/en");
   await expect(page.locator('[role="menu"], [role="menuitem"]')).toHaveCount(0);
-  const trigger = page.locator("#acct-rail-trigger");
-  await trigger.click();
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
-  await page.getByRole("link", { name: /Open official e-Tax portal/ }).focus();
-  await page.keyboard.press("Escape");
-  await expect(trigger).toHaveAttribute("aria-expanded", "false");
-  await expect(trigger).toBeFocused();
-  await expect(page.locator("#acct-popover")).toBeHidden();
+  const footer = page.getByRole("group", { name: "Your e-Tax account" });
+  for (const [name, text] of [
+    ["Sign in", "Sign in isn’t available in SSRA Assist yet"],
+    ["Register", "To register for a TIN or an e-Tax account, use the official e-Tax portal"],
+  ] as const) {
+    const opener = footer.getByRole("button", { name });
+    await opener.click();
+    const dialog = page.getByRole("dialog", { name });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(text);
+    await expect(dialog.getByRole("button", { name: "Open e-Tax portal" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(opener).toBeFocused();
+  }
 });
 
 test("settings tabs follow the APG keyboard model", async ({ page }) => {
   await page.goto("/en");
-  await page.locator("#acct-rail-trigger").click();
-  await page.getByRole("button", { name: /Settings & Privacy/ }).click();
+  await page.getByRole("button", { name: "Settings & Privacy" }).click();
   const general = page.getByRole("tab", { name: "General & Theme" });
   await expect(general).toBeFocused();
   await expect(page.locator("#ssra-app-shell")).toHaveAttribute("inert", "");
@@ -73,7 +79,7 @@ test("settings tabs follow the APG keyboard model", async ({ page }) => {
 
   await page.keyboard.press("Escape");
   await expect(page.locator("#ssra-app-shell")).not.toHaveAttribute("inert", "");
-  await expect(page.locator("#acct-rail-trigger")).toBeFocused();
+  await expect(page.locator("#open-settings-btn")).toBeFocused();
 });
 
 test("rename, delete, and clear use in-page dialogs with a safe default", async ({ page }) => {
@@ -103,8 +109,7 @@ test("rename, delete, and clear use in-page dialogs with a safe default", async 
   await page.keyboard.press("Escape");
   await expect(page.locator(".rail-row")).toHaveCount(1);
 
-  await page.locator("#acct-rail-trigger").click();
-  await page.getByRole("button", { name: /Settings & Privacy/ }).click();
+  await page.getByRole("button", { name: "Settings & Privacy" }).click();
   await page.getByRole("tab", { name: "Privacy & Erasure" }).click();
   await page.getByRole("button", { name: /Clear saved conversations on this device/ }).click();
   const clearAll = page.getByRole("dialog", { name: "Delete all saved conversations?" });
@@ -161,6 +166,44 @@ test("the landing centres the composer between the headline and three suggestion
   await ask(page, "Synthetic public guidance question");
   await expect(main).toHaveAttribute("data-view", "chat");
   await expect(page.locator("#landing-prompts")).toBeHidden();
+});
+
+test("Ctrl+Shift+O starts a new conversation and the rail fades only where content scrolls under", async ({ page }) => {
+  await page.setViewportSize({ height: 640, width: 1280 });
+  await page.goto("/en");
+  await page.evaluate(() => {
+    const now = Date.now();
+    const conversations = Array.from({ length: 30 }, (_, i) => ({
+      id: `thr_web_${String(i).padStart(32, "a")}`,
+      isAuthenticated: false,
+      title: `Synthetic saved conversation ${i}`,
+      turns: [
+        { content: `Synthetic question ${i}`, role: "user" },
+        { content: "Synthetic answer.", meta: { citations: [], kind: "answer", tier: "T0" }, role: "assistant" },
+      ],
+      updatedAtMs: now - i * 60_000,
+    }));
+    localStorage.setItem("ssra-chat-store-v2", JSON.stringify({ conversations }));
+  });
+  await page.reload();
+  const list = page.locator("#rail-conv-list");
+  await expect(list).not.toHaveAttribute("data-fade-top");
+  await expect(list).toHaveAttribute("data-fade-bottom", "");
+  await list.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await expect(list).toHaveAttribute("data-fade-top", "");
+  await expect(list).not.toHaveAttribute("data-fade-bottom");
+
+  const main = page.locator("#main-content");
+  const newChat = page.getByRole("button", { name: "New Conversation" });
+  await expect(newChat).toHaveAttribute("aria-keyshortcuts", "Control+Shift+O");
+  await page.locator("#rail-conv-list .rail-item").first().click();
+  await expect(main).toHaveAttribute("data-view", "chat");
+  await expect(newChat).not.toHaveClass(/is-current/);
+  await page.keyboard.press("Control+Shift+O");
+  await expect(main).toHaveAttribute("data-view", "landing");
+  await expect(newChat).toHaveClass(/is-current/);
 });
 
 test("the composer placeholder rotates only while idle", async ({ page }) => {
@@ -430,7 +473,7 @@ test("continuous voice conversation auto-advances across turns and filters speak
     const s = getComputedStyle(el);
     return { bg: s.backgroundColor, color: s.color };
   });
-  expect(railStyles).toEqual({ bg: "rgb(0, 93, 180)", color: "rgb(255, 255, 255)" });
+  expect(railStyles).toEqual({ bg: "rgb(30, 64, 175)", color: "rgb(255, 255, 255)" });
   const mainBg = await page.locator(".app-content").evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(mainBg).toBe("rgba(0, 0, 0, 0)");
   const canvas = await page.locator(".ssra-main-gradient").evaluate((el) => getComputedStyle(el).backgroundImage);
@@ -531,8 +574,8 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(page.locator("#doc-inspect-modal-backdrop")).not.toHaveClass(/open/);
   await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(4);
 
-  // Conversation report export from account menu (pdf_export.py parity)
-  await page.locator("#acct-rail-trigger").click();
+  // Conversation report export from the 3-dot menu (pdf_export.py parity)
+  await page.locator("#header-kebab-btn").click();
   await page.locator("#export-conv-report-btn").click();
   await expect(page.locator("#composer-hint")).toContainText("Conversation report downloaded.");
 

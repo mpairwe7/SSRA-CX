@@ -38,20 +38,20 @@ test("the composer discloses AI use, accuracy limits, and identifier risk", asyn
   await expect(disclosure).toHaveAttribute("lang", "en");
   await expect(disclosure).toContainText("automated AI assistant and can make mistakes");
   await expect(disclosure).toContainText("Don’t enter your TIN, phone number, or passwords");
-  await expect(page.locator("#rail-device-note")).toContainText("saved on this device only");
+  await expect(page.locator("#rail-device-note")).toBeHidden();
   await expect(page.locator("#net-status-badge")).toBeHidden();
   await expect(page.locator("#active-conv-title")).toBeHidden();
 });
 
 test("people on shared devices can stop saving conversations", async ({ page }) => {
   await page.goto("/en");
-  await page.locator("#acct-rail-trigger").click();
-  await page.getByRole("button", { name: /Settings & Privacy/ }).click();
+  await page.getByRole("button", { name: "Settings & Privacy" }).click();
   await page.getByRole("tab", { name: "Privacy & Erasure" }).click();
   const toggle = page.getByRole("button", { name: /Save conversations on this device: ON/ });
   await toggle.click();
   await expect(page.getByRole("button", { name: /Save conversations on this device: OFF/ })).toBeFocused();
   await page.keyboard.press("Escape");
+  await expect(page.locator("#rail-device-note")).toBeVisible();
   await expect(page.locator("#rail-device-note")).toContainText("not saved");
 
   await ask(page, "Synthetic public guidance question");
@@ -66,8 +66,7 @@ test("low-data mode removes blur, decorative backgrounds, and motion", async ({ 
   await page.goto("/en");
   const composerBox = page.locator(".composer-box");
   expect(await composerBox.evaluate((el) => getComputedStyle(el).backdropFilter)).not.toBe("none");
-  await page.locator("#acct-rail-trigger").click();
-  await page.getByRole("button", { name: /Settings & Privacy/ }).click();
+  await page.getByRole("button", { name: "Settings & Privacy" }).click();
   await page.locator("#toggle-lowdata-btn").click();
   await expect(page.locator("html")).toHaveAttribute("data-low-data", "true");
   expect(await composerBox.evaluate((el) => getComputedStyle(el).backdropFilter)).toBe("none");

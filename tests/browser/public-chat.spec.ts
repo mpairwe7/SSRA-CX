@@ -257,8 +257,7 @@ test("Arabic direction, low-data mode, and offline fallback remain explicit", as
     await page.keyboard.press("Escape");
 
     await page.getByRole("button", { name: "Open conversations" }).click();
-    await page.locator("#acct-rail-trigger").click();
-    await page.getByRole("button", { name: /Settings & Privacy/ }).click();
+    await page.locator("#open-settings-btn").click();
     const lowDataToggle = page.locator("#toggle-lowdata-btn");
     await expect(lowDataToggle).toBeVisible();
     await lowDataToggle.click();

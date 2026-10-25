@@ -339,6 +339,10 @@ function renderPwaShellHtml(locale, nonce) {
       --radius-pill: 999px;
       --ghost-hover: rgba(232, 234, 237, 0.92);
       --ghost-active: rgba(218, 220, 224, 0.95);
+      --rail-bg: #1E40AF;
+      --rail-hover: rgba(255, 255, 255, 0.10);
+      --rail-active: rgba(255, 255, 255, 0.16);
+      --rail-muted: rgba(255, 255, 255, 0.72);
     }
     :root[data-theme="dark"] {
       color-scheme: light;
@@ -402,11 +406,13 @@ function renderPwaShellHtml(locale, nonce) {
     .app-shell { display: grid; grid-template-columns: var(--cv2-rail, 300px) minmax(0, 1fr); height: 100dvh; width: 100%; }
     .rail-hotzone { display: none; }
     @media (min-width: 961px) {
-      .app-shell > .rail-wrap { grid-column: 1; width: 100%; height: 100dvh; overflow: hidden; }
+      /* Fluid collapse: the rail track animates, and the rail hides only after it has slid shut. */
+      .app-shell { transition: grid-template-columns 280ms cubic-bezier(0.22, 1, 0.36, 1); }
+      .app-shell > .rail-wrap { grid-column: 1; width: 100%; height: 100dvh; overflow: hidden; transition: visibility 0s linear 0s; }
       .app-shell > .app-main-col { grid-column: 2; min-width: 0; }
       .app-shell[data-sidebar="open"] #header-rail-btn { display: none; }
       .app-shell[data-sidebar="collapsed"] { --cv2-rail: 0px; grid-template-columns: 0px minmax(0, 1fr); }
-      .app-shell[data-sidebar="collapsed"]:not([data-rail-peek="true"]) .rail-wrap { visibility: hidden; pointer-events: none; border-inline-end-width: 0; }
+      .app-shell[data-sidebar="collapsed"]:not([data-rail-peek="true"]) .rail-wrap { visibility: hidden; pointer-events: none; transition: visibility 0s linear 280ms; }
       .rail-top, .rail-new-btn, .rail-list, .rail-footer { min-width: 276px; }
     }
     @media (min-width: 961px) and (hover: hover) {
@@ -434,117 +440,107 @@ function renderPwaShellHtml(locale, nonce) {
       .app-shell[data-mobile-rail="open"] .rail-mobile-backdrop { display: block; }
     }
 
-    /* ── chatv2 Sidebar (ConversationRail + AccountRail from FinalYearProject) ── */
+    /* ── Gemini-style Sidebar: fixed brand + New chat on top, fading scroll list, Sign in · Register · Settings footer ── */
     .rail-wrap {
-      background-color: rgba(0, 93, 180, var(--tw-bg-opacity));
-      background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(0, 62, 128, 0.22) 100%);
-      color: #FFFFFF;
-      border-inline-end: 1px solid rgba(255, 255, 255, 0.18); display: flex; flex-direction: column;
+      background: var(--rail-bg); color: #FFFFFF; display: flex; flex-direction: column;
       overflow: hidden; height: 100dvh; contain: paint;
     }
-    .rail-top {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0.75rem 0.85rem 0.6rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.16);
-    }
-    .rail-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 0.92rem; color: #FFFFFF; }
-    .rail-mark {
-      width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #056824 0%, #004488 100%);
-      color: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.28); display: grid; place-items: center; font-weight: 800; font-size: 0.72rem;
-      letter-spacing: 0.04em; box-shadow: 0 4px 12px rgba(0, 28, 64, 0.32);
-    }
-    .rail-top-actions { display: flex; align-items: center; gap: 4px; }
+    .rail-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.7rem 0.6rem 0.35rem 1.1rem; }
+    .rail-brand { display: flex; align-items: center; gap: 0.55rem; min-width: 0; font-weight: 500; font-size: 1.05rem; letter-spacing: -0.01em; color: #FFFFFF; white-space: nowrap; }
+    .rail-mark { display: inline-flex; color: #FCD34D; }
+    .rail-mark svg { width: 20px; height: 20px; }
+    .rail-top-actions { display: flex; align-items: center; gap: 2px; }
     .rail-icon-btn {
-      width: 44px; height: 44px; border-radius: 8px; background: rgba(0, 56, 115, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.18); color: #FFFFFF; cursor: pointer;
-      display: inline-flex; align-items: center; justify-content: center; font-size: 0.86rem;
+      position: relative; width: 40px; height: 40px; border-radius: 50%; background: transparent;
+      border: 1px solid transparent; color: #FFFFFF; cursor: pointer; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center; transition: background-color 160ms ease;
     }
-    .rail-icon-btn:hover { background: rgba(0, 42, 92, 0.78); color: #FFFFFF; border-color: rgba(255, 255, 255, 0.38); }
+    .rail-icon-btn svg { width: 18px; height: 18px; }
+    .rail-icon-btn:hover { background: var(--rail-hover); }
+    .rail-icon-btn:active { background: var(--rail-active); }
+    @media (pointer: coarse) { .rail-icon-btn { width: 44px; height: 44px; } }
+    /* Gemini-style tooltip: end-aligned so it stays inside the rail; hoverable and Escape-dismissible (WCAG 1.4.13). */
+    @media (hover: hover) {
+      .rail-icon-btn[data-tip]::after {
+        content: attr(data-tip); position: absolute; top: calc(100% + 4px); inset-inline-end: 0; z-index: 70;
+        padding: 0.35rem 0.65rem; border-radius: 8px; background: #E8EAED; color: #0B192C;
+        font-size: 0.72rem; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+        opacity: 0; visibility: hidden; transform: translateY(-2px);
+        transition: opacity 120ms ease 150ms, transform 120ms ease 150ms, visibility 0s linear 270ms;
+      }
+      .rail-footer .rail-icon-btn[data-tip]::after { top: auto; bottom: calc(100% + 4px); transform: translateY(2px); }
+      .rail-icon-btn[data-tip]:hover::after, .rail-icon-btn[data-tip]:focus-visible::after {
+        opacity: 1; visibility: visible; transform: translateY(0);
+        transition: opacity 120ms ease 350ms, transform 120ms ease 350ms, visibility 0s linear 350ms;
+      }
+      :root[data-tips-hidden] .rail-icon-btn[data-tip]::after { display: none; }
+    }
 
     .rail-new-btn {
-      margin: 0.75rem 0.85rem 0.45rem; padding: 0.62rem 0.9rem; border-radius: var(--radius-md);
-      min-height: 44px;
-      background-color: #056824; background-image: linear-gradient(135deg, #067529 0%, #04561D 100%);
-      color: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.28);
-      font-weight: 700; font-size: 0.86rem; cursor: pointer;
-      display: flex; align-items: center; justify-content: space-between;
-      box-shadow: 0 6px 16px rgba(0, 28, 64, 0.26); transition: transform 0.12s ease;
+      display: flex; align-items: center; gap: 0.7rem; min-height: 40px; margin: 0.35rem 0.5rem 0.25rem; padding: 0 0.85rem 0 0.75rem;
+      border: 1px solid transparent; border-radius: 999px; background: transparent; color: #FFFFFF;
+      font: inherit; font-size: 0.8125rem; font-weight: 500; cursor: pointer; text-align: start; transition: background-color 160ms ease;
     }
-    .rail-new-btn:hover { transform: translateY(-1px); background-color: #04561D; }
+    .rail-new-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .rail-new-btn:hover { background: var(--rail-hover); }
+    .rail-new-btn.is-current { background: var(--rail-active); }
+    .rail-new-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rail-kbd { font: inherit; font-size: 0.72rem; font-weight: 400; color: var(--rail-muted); white-space: nowrap; opacity: 0; transition: opacity 160ms ease; }
+    .rail-new-btn:hover .rail-kbd, .rail-new-btn:focus-visible .rail-kbd { opacity: 1; }
+    @media (hover: none) { .rail-kbd { display: none; } }
+    .rail-device-note { margin: 0 1.1rem 0.25rem; font-size: 0.72rem; line-height: 1.4; color: var(--rail-muted); }
 
-    .rail-section-label {
-      padding: 0.55rem 1rem 0.22rem; font-size: 0.75rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.07em; color: #FFFFFF;
+    .rail-section-label { margin: 0; padding: 0.85rem 0.75rem 0.3rem; font-size: 0.75rem; font-weight: 500; color: var(--rail-muted); }
+    .rail-list {
+      --rail-fade-top: 0px; --rail-fade-bottom: 0px;
+      flex: 1; overflow-y: auto; padding: 0.1rem 0.5rem 0.5rem; display: flex; flex-direction: column; gap: 2px;
+      scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--rail-fade-top), #000 calc(100% - var(--rail-fade-bottom)), transparent 100%);
+      mask-image: linear-gradient(to bottom, transparent 0, #000 var(--rail-fade-top), #000 calc(100% - var(--rail-fade-bottom)), transparent 100%);
     }
-    .rail-list { flex: 1; overflow-y: auto; padding: 0.2rem 0.55rem; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; }
+    .rail-list[data-fade-top] { --rail-fade-top: 28px; }
+    .rail-list[data-fade-bottom] { --rail-fade-bottom: 28px; }
 
-    /* 1-line conversation row with status dot & hover actions (chatv2/sidebar.css pattern) */
-    .rail-group { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    /* 1-line conversation row: pill hover, quiet active state, hover actions (Gemini pattern) */
+    .rail-group { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
     .rail-row {
-      position: relative; display: flex; align-items: center; justify-content: space-between;
-      border-radius: var(--radius-sm); border: 1px solid transparent;
-      transition: background 0.12s ease;
+      position: relative; display: flex; align-items: center; justify-content: space-between; min-height: 36px;
+      border-radius: 999px; transition: background-color 160ms ease;
     }
-    .rail-row:hover { background: rgba(255, 255, 255, 0.12); }
-    .rail-row.active { background: rgba(0, 52, 107, 0.68); border-color: rgba(255, 255, 255, 0.28); }
+    .rail-row:hover { background: var(--rail-hover); }
+    .rail-row.active { background: var(--rail-active); }
     .rail-item {
-      flex: 1; min-width: 0; padding: 0.5rem 0.65rem; color: #FFFFFF;
-      font-size: 0.84rem; cursor: pointer; white-space: nowrap; overflow: hidden;
-      text-overflow: ellipsis; border: none; background: transparent; text-align: start;
-      font-family: inherit; display: inline-flex; align-items: center; gap: 8px;
+      flex: 1; min-width: 0; min-height: 36px; padding: 0.4rem 0.75rem; color: #FFFFFF;
+      font: inherit; font-size: 0.8125rem; font-weight: 400; cursor: pointer; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; border: none; border-radius: 999px; background: transparent; text-align: start;
+      display: inline-flex; align-items: center; gap: 8px;
     }
-    .rail-row.active .rail-item { color: #FFFFFF; font-weight: 700; }
-    .rail-item-dot {
-      width: 5px; height: 5px; border-radius: 50%; border: 1px solid #FFFFFF; flex-shrink: 0;
-    }
-    .rail-row.active .rail-item-dot { background: #FFD60A; border-color: #FFD60A; }
-    .rail-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .rail-row-actions {
-      display: none; align-items: center; gap: 2px; padding-inline-end: 6px;
-    }
+    .rail-row.active .rail-item { font-weight: 500; }
+    .rail-item-dot { display: none; }
+    .rail-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: plaintext; text-align: start; }
+    .rail-row-actions { display: none; align-items: center; gap: 0; padding-inline-end: 4px; }
     .rail-row:hover .rail-row-actions, .rail-row:focus-within .rail-row-actions { display: inline-flex; }
     @media (hover: none) { .rail-row-actions { display: inline-flex; } }
     .rail-act-mini {
-      width: 44px; height: 44px; border-radius: 6px; border: none; background: transparent;
-      color: #FFFFFF; cursor: pointer; font-size: 0.74rem; display: inline-flex;
-      align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent;
+      color: #FFFFFF; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background-color 160ms ease;
     }
-    .rail-act-mini:hover { background: rgba(255, 255, 255, 0.18); color: #FFFFFF; }
+    .rail-act-mini:hover { background: var(--rail-hover); }
+    @media (pointer: coarse) { .rail-act-mini { width: 44px; height: 44px; } }
 
-    /* AccountRail Footer & Upward Popover Menu (AccountRail.tsx pattern) */
-    .rail-footer {
-      padding: 0.65rem 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.18);
-      background: rgba(0, 68, 138, 0.45); position: relative; display: flex; flex-direction: column; gap: 0.45rem;
+    /* Footer: no divider; the list fades out above it. */
+    .rail-footer { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem max(0.7rem, env(safe-area-inset-bottom)) 0.75rem; }
+    .rail-auth { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.5rem; }
+    .rail-auth-btn {
+      flex: 1; min-width: 0; min-height: 36px; padding: 0 0.85rem; border-radius: 999px; border: 1px solid transparent;
+      font: inherit; font-size: 0.78rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+      transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
     }
-    .acct-rail-trigger {
-      width: 100%; min-height: 44px; padding: 0.5rem 0.6rem; border-radius: var(--radius-sm);
-      background: rgba(0, 52, 107, 0.68); border: 1px solid rgba(255, 255, 255, 0.24); color: #FFFFFF;
-      cursor: pointer; display: flex; align-items: center; gap: 0.6rem; text-align: start; font-family: inherit;
-    }
-    .acct-rail-trigger:hover { background: rgba(0, 42, 92, 0.88); border-color: rgba(255, 255, 255, 0.42); }
-    .acct-avatar {
-      position: relative; width: 30px; height: 30px; border-radius: 8px;
-      background: #056824; border: 1px solid rgba(255, 255, 255, 0.28); color: #FFFFFF; font-weight: 800; font-size: 0.74rem;
-      display: grid; place-items: center; flex: none;
-    }
-    .acct-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    .acct-name { font-size: 0.8rem; font-weight: 700; color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .acct-sub { font-size: 0.75rem; color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-    .acct-popover {
-      position: absolute; bottom: calc(100% + 8px); left: 0.65rem; right: 0.65rem;
-      background: #00478F; border: 1px solid rgba(255, 255, 255, 0.28); border-radius: var(--radius-md);
-      box-shadow: var(--shadow-lg); padding: 0.55rem; display: none; flex-direction: column;
-      gap: 3px; z-index: 60; color: #FFFFFF;
-    }
-    .acct-popover.open { display: flex; }
-    .acct-pop-section { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #FFFFFF; padding: 4px 8px 2px; }
-    .acct-pop-item {
-      min-height: 44px; padding: 8px; border-radius: 7px; border: none; background: transparent;
-      color: #FFFFFF; font-size: 0.78rem; font-family: inherit; cursor: pointer;
-      display: flex; align-items: center; justify-content: space-between; text-decoration: none; text-align: start; width: 100%;
-    }
-    .acct-pop-item:hover { background: rgba(255, 255, 255, 0.14); color: #FFFFFF; }
-    .acct-pop-item.active { color: #FFD60A; font-weight: 700; }
+    .rail-auth-signin { background: rgba(255, 255, 255, 0.12); color: #FFFFFF; }
+    .rail-auth-signin:hover { background: rgba(255, 255, 255, 0.2); }
+    .rail-auth-register { background: #FFFFFF; color: var(--rail-bg); }
+    .rail-auth-register:hover { background: #E8EEFF; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18); }
+    @media (pointer: coarse) { .rail-auth-btn { min-height: 44px; } }
 
     /* Main Column & In-Canvas ChatHeader: no separate bar; controls float on the main surface (Gemini pattern). */
     .app-main-col { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; position: relative; isolation: isolate; background: var(--bg-0); }
@@ -591,7 +587,7 @@ function renderPwaShellHtml(locale, nonce) {
     .hdrv2-kebab { position: relative; display: inline-flex; }
     .hdrv2-menu { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 120; min-width: 215px; padding: 6px; background: var(--bg-0); border: 1px solid var(--border-0); border-radius: 16px; box-shadow: var(--shadow-lg); display: none; flex-direction: column; gap: 2px; color: var(--text-0); }
     .hdrv2-menu.open { display: flex; }
-    .hdrv2-menu-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 12px; border: none; border-radius: 10px; background: transparent; color: var(--text-0); font: inherit; font-size: 0.82rem; text-align: start; cursor: pointer; text-decoration: none; width: 100%; transition: background-color 160ms ease; }
+    .hdrv2-menu-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 12px; border: none; border-radius: 10px; background: transparent; color: var(--text-0); font: inherit; font-size: 0.82rem; text-align: start; white-space: nowrap; cursor: pointer; text-decoration: none; width: 100%; transition: background-color 160ms ease; }
     .hdrv2-menu-item:hover:not(:disabled) { background: var(--ghost-hover); color: var(--text-0); }
     .hdrv2-menu-item:disabled { opacity: 0.48; cursor: not-allowed; }
     .chat-header .call-btn, .chat-header .call-btn:hover { color: var(--ssra-green); }
@@ -680,7 +676,7 @@ function renderPwaShellHtml(locale, nonce) {
 
     /* Two-Row Composer Dock (chatv2/composer.css, NarrationBar.tsx & interactions.css pattern) */
     .chatv2 button, .chatv2 [role="button"], .chatv2 .landing-chip { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-    .composer-dock { width: 100%; max-width: 820px; margin: 0 auto; padding: 0.65rem 1rem max(0.85rem, env(safe-area-inset-bottom)); }
+    .composer-dock { width: 100%; max-width: 820px; margin: 0 auto; padding: 0.65rem 1rem 0.35rem; }
     .narration-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.45rem; padding: 0.4rem 0.75rem; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border-2); color: var(--text-0); font-size: 0.8rem; }
     .narration-text { display: flex; align-items: center; gap: 0.5rem; min-width: 0; flex: 1; overflow: hidden; }
     .narration-label { font-weight: 700; color: var(--ssra-gold); white-space: nowrap; }
@@ -864,6 +860,11 @@ function renderPwaShellHtml(locale, nonce) {
     .search-modal { max-width: 540px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
     .search-input { width: 100%; padding: 14px 16px; border: none; border-bottom: 1px solid var(--border-1); background: transparent; color: var(--text-0); font: inherit; font-size: 0.95rem; outline: none; }
     .search-results { max-height: 320px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .acct-pop-item {
+      min-height: 44px; padding: 8px; border-radius: 7px; border: none; background: transparent;
+      font-size: 0.78rem; font-family: inherit; cursor: pointer;
+      display: flex; align-items: center; justify-content: space-between; text-decoration: none; text-align: start; width: 100%;
+    }
     .search-modal .acct-pop-item { color: var(--text-0); }
     .search-modal .acct-pop-item:hover { background: var(--surface-2); color: var(--text-0); }
     .search-modal .acct-pop-item.active { color: var(--ssra-blue); font-weight: 700; }
@@ -879,18 +880,14 @@ function renderPwaShellHtml(locale, nonce) {
 
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
     .is-hidden { display: none !important; }
-    .rail-brand-sub { font-size: 0.68rem; color: #FFFFFF; font-weight: 500; }
-    .acct-pop-hr { border: 0; border-top: 1px solid rgba(255, 255, 255, 0.20); margin: 3px 0; }
-    .acct-chevron { color: #FFFFFF; font-size: 0.75rem; }
     .active-conv-title { font-weight: 600; font-size: 0.9rem; color: var(--text-0); max-width: 34ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; unicode-bidi: plaintext; }
     .composer-hint { flex: 1; min-width: 0; font-size: 0.8rem; color: var(--text-1); }
     .composer-hint:empty { display: none; }
     .composer-keys { font-size: 0.75rem; color: var(--text-2); }
-    .composer-disclosure { margin: 0.45rem 0.4rem 0; font-size: 0.75rem; line-height: 1.45; color: var(--text-2); text-align: center; }
-    .rail-device-note { margin: 0 0.85rem 0.35rem; font-size: 0.75rem; line-height: 1.4; color: #FFFFFF; }
+    /* Pinned to the bottom of the main column: under the centred landing group, and under the docked composer in chat. */
+    .composer-disclosure { flex-shrink: 0; width: 100%; max-width: 820px; margin: 0 auto; padding: 0.2rem 1.4rem max(0.7rem, env(safe-area-inset-bottom)); font-size: 0.75rem; line-height: 1.45; color: var(--text-2); text-align: center; }
     .locale-notice { margin: 0.75rem auto 0; max-width: 820px; width: calc(100% - 2rem); padding: 0.6rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text-0); font-size: 0.84rem; line-height: 1.45; }
     .noscript-note { position: fixed; inset: auto 1rem 1rem 1rem; z-index: 200; margin: 0; padding: 1rem; border: 2px solid #005DB4; border-radius: var(--radius-md); background: var(--bg-1); color: var(--text-0); }
-    .acct-pop-note { margin: 0; padding: 4px 8px; font-size: 0.78rem; color: #FFFFFF; line-height: 1.45; }
     .confirm-modal { max-width: 440px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 1.25rem 1.4rem; display: flex; flex-direction: column; gap: 0.75rem; }
     .confirm-modal-field { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.86rem; color: var(--text-1); }
     .confirm-modal-input { min-height: 44px; padding: 0.5rem 0.7rem; border-radius: var(--radius-sm); border: 1px solid var(--border-2); background: var(--surface-1); color: var(--text-0); font: inherit; }
@@ -960,7 +957,8 @@ function renderPwaShellHtml(locale, nonce) {
       .landing { padding: 1rem 0.85rem 1.25rem; }
       .landing-prompts { padding-inline: 0; }
       .composer-keys { display: none; }
-      .composer-dock { padding: 0.45rem 0.6rem max(0.55rem, env(safe-area-inset-bottom)); }
+      .composer-dock { padding: 0.45rem 0.6rem 0.25rem; }
+      .composer-disclosure { padding: 0.15rem 0.85rem max(0.55rem, env(safe-area-inset-bottom)); }
     }
     /* Short screens (landscape phones): scroll the whole column so the conversation keeps its space. */
     @media (max-height: 500px) {
@@ -968,7 +966,8 @@ function renderPwaShellHtml(locale, nonce) {
       .app-content, .app-content[data-view="landing"], .chat-area, .message-list, .landing { flex: none; overflow: visible; }
       .message-list { mask-image: none; -webkit-mask-image: none; }
       .composer-keys { display: none; }
-      .composer-dock { padding-block: 0.35rem max(0.45rem, env(safe-area-inset-bottom)); }
+      .composer-dock { padding-block: 0.35rem 0.2rem; }
+      .composer-disclosure { padding-bottom: max(0.45rem, env(safe-area-inset-bottom)); }
     }
     /* Low-data mode and reduced transparency drop blur, decorative backgrounds, shadows and motion. */
     :root[data-low-data="true"] body::before { background: var(--bg-0); }
@@ -1005,45 +1004,29 @@ function renderPwaShellHtml(locale, nonce) {
     <aside class="rail-wrap" id="conversation-rail" aria-label="Conversation history and account">
       <div class="rail-top">
         <div class="rail-brand">
-          <div class="rail-mark" aria-hidden="true">${ICONS.ssraCrest}</div>
-          <div>
-            <div>SSRA Assist</div>
-            <div id="rail-brand-sub" class="rail-brand-sub">National Revenue Authority</div>
-          </div>
+          <span class="rail-mark" aria-hidden="true">${ICONS.ssraCrest}</span>
+          <span>SSRA Assist</span>
         </div>
         <div class="rail-top-actions">
-          <button type="button" id="rail-collapse-btn" class="rail-icon-btn" title="Collapse sidebar  Ctrl+B" aria-label="Collapse conversations sidebar" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
-          <button type="button" id="rail-search-btn" class="rail-icon-btn" title="Search conversations (Ctrl+K)" aria-label="Search conversations">${ICONS.search}</button>
+          <button type="button" id="rail-search-btn" class="rail-icon-btn" data-tip="Search conversations · Ctrl+K" aria-label="Search conversations" aria-keyshortcuts="Control+K">${ICONS.search}</button>
+          <button type="button" id="rail-collapse-btn" class="rail-icon-btn" data-tip="Collapse sidebar · Ctrl+B" aria-label="Collapse conversations sidebar" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
         </div>
       </div>
 
-      <button type="button" id="new-chat-btn" class="rail-new-btn" aria-label="New Conversation">
-        <span>${ICONS.plus} <span id="new-chat-label">New Conversation</span></span>
+      <button type="button" id="new-chat-btn" class="rail-new-btn is-current" aria-label="New Conversation" aria-keyshortcuts="Control+Shift+O">
+        ${ICONS.newChat}<span id="new-chat-label" class="rail-new-label">New Conversation</span><kbd class="rail-kbd" aria-hidden="true">Ctrl+Shift+O</kbd>
       </button>
 
-      <p id="rail-device-note" class="rail-device-note">Conversations are saved on this device only.</p>
+      <p id="rail-device-note" class="rail-device-note is-hidden" role="status"></p>
       <nav id="rail-conv-list" class="rail-list" aria-label="Saved conversations"></nav>
 
-      <!-- AccountRail Footer & Upward Popover Menu -->
+      <!-- Signed-out footer: Sign in · Register explain portal sign-in in-page; the gear opens Settings -->
       <div class="rail-footer">
-        <div id="acct-popover" class="acct-popover">
-          <div id="acct-pop-section-text" class="acct-pop-section">Public conversation</div>
-          <p id="acct-pop-note-text" class="acct-pop-note">Personal balances and filing records require secure sign-in.</p>
-          <a href="https://etax.nra.gov.ss/" class="acct-pop-item" rel="noopener noreferrer" aria-label="Open official e-Tax portal"><span id="acct-portal-label">Open official e-Tax portal</span><span>${ICONS.arrowUpRight}</span></a>
-          <button type="button" id="export-conv-report-btn" class="acct-pop-item" data-testid="export-conv-report-btn" aria-label="Download conversation report"><span>${ICONS.download} <span id="export-conv-report-label">Download conversation report</span></span></button>
-          <hr class="acct-pop-hr" />
-          <button type="button" id="open-settings-btn" class="acct-pop-item" aria-label="Settings &amp; Privacy"><span>${ICONS.settings} <span id="open-settings-label">Settings &amp; Privacy</span></span></button>
+        <div class="rail-auth" role="group" aria-label="Your e-Tax account">
+          <button type="button" id="rail-signin-btn" class="rail-auth-btn rail-auth-signin" aria-haspopup="dialog">Sign in</button>
+          <button type="button" id="rail-register-btn" class="rail-auth-btn rail-auth-register" aria-haspopup="dialog">Register</button>
         </div>
-
-        <button type="button" id="acct-rail-trigger" class="acct-rail-trigger" aria-expanded="false" aria-controls="acct-popover">
-          <div class="acct-avatar"><span id="acct-badge-text">PV</span></div>
-          <div class="acct-meta">
-            <span class="acct-name" id="acct-name-text">Public chat</span>
-            <span class="acct-sub" id="acct-sub-text">No account details are shown here</span>
-          </div>
-          <span class="acct-chevron">${ICONS.chevronUpDown}</span>
-        </button>
-
+        <button type="button" id="open-settings-btn" class="rail-icon-btn" data-tip="Settings" aria-label="Settings &amp; Privacy">${ICONS.settings}</button>
       </div>
     </aside>
 
@@ -1075,6 +1058,7 @@ function renderPwaShellHtml(locale, nonce) {
               <button type="button" id="header-menu-theme-btn" class="hdrv2-menu-item"><span id="header-menu-theme-icon" aria-hidden="true">${ICONS.moon}</span><span id="header-menu-theme-label">Theme: Dark</span></button>
               <button type="button" id="header-menu-settings-btn" class="hdrv2-menu-item">${ICONS.settings}<span id="header-menu-settings-label">Settings</span></button>
               <button type="button" id="header-menu-clear-btn" class="hdrv2-menu-item">${ICONS.trash}<span id="header-menu-clear-label">Clear conversation</span></button>
+              <button type="button" id="export-conv-report-btn" class="hdrv2-menu-item" data-testid="export-conv-report-btn">${ICONS.download}<span id="export-conv-report-label">Download conversation report</span></button>
               <a href="https://etax.nra.gov.ss/" id="header-menu-portal-link" class="hdrv2-menu-item" rel="noopener noreferrer">${ICONS.bookOpen}<span id="header-menu-portal-label">Official e-Tax portal</span><span aria-hidden="true">${ICONS.arrowUpRight}</span></a>
             </div>
           </div>
@@ -1180,8 +1164,8 @@ function renderPwaShellHtml(locale, nonce) {
               <span class="landing-chip-text" data-chip-text-idx="2">Calculate WHT on a contract invoice of 1,000,000 SSP</span>
             </button>
           </div>
-          <p class="composer-disclosure" lang="en">SSRA Assist is an automated AI assistant and can make mistakes. Check answers against the cited sources. Don’t enter your TIN, phone number, or passwords in this public chat.</p>
         </div>
+        <p class="composer-disclosure" lang="en">SSRA Assist is an automated AI assistant and can make mistakes. Check answers against the cited sources. Don’t enter your TIN, phone number, or passwords in this public chat.</p>
       </main>
     </div>
   </div>
@@ -1517,15 +1501,12 @@ function renderPwaShellHtml(locale, nonce) {
           dropFiles: "Drop files or screenshots to inspect (PDF, DOCX, XLSX, CSV, TXT, or image)",
           spokenTag: "Spoken",
           latestLabel: "Latest",
-          railBrandSub: "National Revenue Authority",
           newChatLabel: "New Conversation",
-          publicChatName: "Public chat",
-          publicChatSub: "No account details are shown here",
-          acctPopSection: "Public conversation",
-          acctPopNote: "Personal balances and filing records require secure sign-in.",
-          acctPortalLabel: "Open official e-Tax portal",
           exportReportLabel: "Download conversation report",
           openSettingsLabel: "Settings & Privacy",
+          signInLabel: "Sign in",
+          registerLabel: "Register",
+          settingsTip: "Settings",
           composerKeys: "Enter to send · Shift+Enter for a new line · Ctrl+K to search",
           menuSettingsLabel: "Settings",
           menuClearLabel: "Clear conversation",
@@ -1562,15 +1543,12 @@ function renderPwaShellHtml(locale, nonce) {
           dropFiles: "Khalli malafat aw sura ta shasha hina (PDF, DOCX, XLSX, CSV, TXT, aw sura)",
           spokenTag: "Bil sot",
           latestLabel: "Al-akhir",
-          railBrandSub: "Hay'at al-Iradat al-Qawmiya (NRA / SSRA)",
           newChatLabel: "Wanasa Jadida",
-          publicChatName: "Wanasa Aama",
-          publicChatSub: "Mafi bayanat ta hisab hina",
-          acctPopSection: "Wanasa Aama",
-          acctPopNote: "Bayanat ta rasid wa iqrarat aayiz tasjil dukhul.",
-          acctPortalLabel: "Iftah mawqi e-Tax al-rasmi",
           exportReportLabel: "Nazzil taqrir ta al-wanasa",
           openSettingsLabel: "I'dadat wa Khususiya",
+          signInLabel: "Sajjil dukhul",
+          registerLabel: "Tasjil jadid",
+          settingsTip: "I'dadat",
           composerKeys: "Enter aashan tarsil · Shift+Enter satir jadid · Ctrl+K bahis",
           menuSettingsLabel: "I'dadat",
           menuClearLabel: "Imsah al-wanasa",
@@ -1607,15 +1585,12 @@ function renderPwaShellHtml(locale, nonce) {
           dropFiles: "أفلت الملفات أو لقطات الشاشة هنا للفحص (PDF أو DOCX أو XLSX أو صورة)",
           spokenTag: "منطوق صوتياً",
           latestLabel: "الأحدث",
-          railBrandSub: "هيئة الإيرادات القومية (SSRA / NRA)",
           newChatLabel: "محادثة جديدة",
-          publicChatName: "محادثة عامة",
-          publicChatSub: "لا تظهر بيانات الحساب الشخصي هنا",
-          acctPopSection: "محادثة عامة",
-          acctPopNote: "تتطلب الأرصدة الشخصية وسجلات الإقرارات تسجيل دخول آمن.",
-          acctPortalLabel: "فتح بوابة الضرائب الرسمية e-Tax",
           exportReportLabel: "تنزيل تقرير المحادثة",
           openSettingsLabel: "الإعدادات والخصوصية",
+          signInLabel: "تسجيل الدخول",
+          registerLabel: "إنشاء حساب",
+          settingsTip: "الإعدادات",
           composerKeys: "Enter للإرسال · Shift+Enter لسطر جديد · Ctrl+K للبحث",
           menuSettingsLabel: "الإعدادات",
           menuClearLabel: "مسح المحادثة",
@@ -1682,8 +1657,6 @@ function renderPwaShellHtml(locale, nonce) {
       const convListEl = document.getElementById("rail-conv-list");
       const activeTitleEl = document.getElementById("active-conv-title");
       const hintEl = document.getElementById("composer-hint");
-      const acctTrigger = document.getElementById("acct-rail-trigger");
-      const acctPopover = document.getElementById("acct-popover");
 
       // Detect 2G / Save-Data network condition (FE-G4)
       const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -1860,6 +1833,10 @@ function renderPwaShellHtml(locale, nonce) {
       document.addEventListener("keydown", (event) => {
         if (event.key === "Tab") document.documentElement.dataset.inputModality = "keyboard";
       }, { capture: true });
+      // Escape hides rail tooltips (WCAG 1.4.13 dismissible) until the pointer moves or focus changes.
+      const showTips = () => document.documentElement.removeAttribute("data-tips-hidden");
+      document.addEventListener("pointermove", showTips, { passive: true });
+      document.addEventListener("focusin", showTips);
 
       // Rotating composer placeholder (pass-by): pauses while the composer is hovered, focused or filled and while the tab is hidden; reduced motion keeps the static native placeholder (WCAG 2.2.2).
       const placeholderTextEl = document.getElementById("composer-placeholder-text");
@@ -1915,15 +1892,11 @@ function renderPwaShellHtml(locale, nonce) {
         const openCallBtn = document.getElementById("open-call-btn");
         const dropEl = document.getElementById("composer-drop-text");
         const latestLblEl = document.getElementById("scroll-latest-label");
-        const railSubEl = document.getElementById("rail-brand-sub");
         const newChatLblEl = document.getElementById("new-chat-label");
-        const acctNameEl = document.getElementById("acct-name-text");
-        const acctSubEl = document.getElementById("acct-sub-text");
-        const acctPopSecEl = document.getElementById("acct-pop-section-text");
-        const acctPopNoteEl = document.getElementById("acct-pop-note-text");
-        const acctPortalLblEl = document.getElementById("acct-portal-label");
+        const signInBtnEl = document.getElementById("rail-signin-btn");
+        const registerBtnEl = document.getElementById("rail-register-btn");
+        const settingsBtnEl = document.getElementById("open-settings-btn");
         const exportRepLblEl = document.getElementById("export-conv-report-label");
-        const openSetLblEl = document.getElementById("open-settings-label");
         const compKeysEl = document.getElementById("composer-keys-text");
         const menuSetLblEl = document.getElementById("header-menu-settings-label");
         const menuClrLblEl = document.getElementById("header-menu-clear-label");
@@ -1943,15 +1916,12 @@ function renderPwaShellHtml(locale, nonce) {
         }
         if (dropEl && dict.dropFiles) dropEl.textContent = dict.dropFiles;
         if (latestLblEl && dict.latestLabel) latestLblEl.textContent = dict.latestLabel;
-        if (railSubEl && dict.railBrandSub) railSubEl.textContent = dict.railBrandSub;
         if (newChatLblEl && dict.newChatLabel) newChatLblEl.textContent = dict.newChatLabel;
-        if (acctNameEl && dict.publicChatName) acctNameEl.textContent = dict.publicChatName;
-        if (acctSubEl && dict.publicChatSub) acctSubEl.textContent = dict.publicChatSub;
-        if (acctPopSecEl && dict.acctPopSection) acctPopSecEl.textContent = dict.acctPopSection;
-        if (acctPopNoteEl && dict.acctPopNote) acctPopNoteEl.textContent = dict.acctPopNote;
-        if (acctPortalLblEl && dict.acctPortalLabel) acctPortalLblEl.textContent = dict.acctPortalLabel;
+        if (signInBtnEl && dict.signInLabel) signInBtnEl.textContent = dict.signInLabel;
+        if (registerBtnEl && dict.registerLabel) registerBtnEl.textContent = dict.registerLabel;
+        if (settingsBtnEl && dict.openSettingsLabel) settingsBtnEl.setAttribute("aria-label", dict.openSettingsLabel);
+        if (settingsBtnEl && dict.settingsTip) settingsBtnEl.setAttribute("data-tip", dict.settingsTip);
         if (exportRepLblEl && dict.exportReportLabel) exportRepLblEl.textContent = dict.exportReportLabel;
-        if (openSetLblEl && dict.openSettingsLabel) openSetLblEl.textContent = dict.openSettingsLabel;
         if (compKeysEl && dict.composerKeys) compKeysEl.textContent = dict.composerKeys;
         if (menuSetLblEl && dict.menuSettingsLabel) menuSetLblEl.textContent = dict.menuSettingsLabel;
         if (menuClrLblEl && dict.menuClearLabel) menuClrLblEl.textContent = dict.menuClearLabel;
@@ -2813,25 +2783,35 @@ function renderPwaShellHtml(locale, nonce) {
         if (offset > 0) prependTimer = window.setTimeout(() => prependEarlierTurns(conv.id), 0);
       }
 
+      // Gemini-style separation: the list fades under the fixed brand row and footer only when content is scrolled beneath them.
+      function syncRailScrollFade() {
+        if (!convListEl) return;
+        const { scrollTop, scrollHeight, clientHeight } = convListEl;
+        convListEl.toggleAttribute("data-fade-top", scrollTop > 1);
+        convListEl.toggleAttribute("data-fade-bottom", scrollTop + clientHeight < scrollHeight - 1);
+      }
+      convListEl?.addEventListener("scroll", syncRailScrollFade, { passive: true });
+      window.addEventListener("resize", syncRailScrollFade, { passive: true });
+
+      const newChatBtnEl = document.getElementById("new-chat-btn");
       let renderedRailHtml = null;
       function renderApp() {
         const activeConv = state.conversations.find((c) => c.id === state.activeId) || null;
+        // Saving on this device is the quiet default (explained in Settings, Privacy tab); only the off state is called out.
         const deviceNote = document.getElementById("rail-device-note");
         if (deviceNote) {
-          deviceNote.textContent = state.saveHistory
-            ? "Conversations are saved on this device only. On a shared device, delete them in Settings."
-            : "Conversations are not saved. They disappear when you close or reload this page.";
+          deviceNote.textContent = state.saveHistory ? "" : "Conversations are not saved on this device.";
+          deviceNote.classList.toggle("is-hidden", state.saveHistory);
         }
         if (convListEl) {
-          const railHtml = state.conversations.length === 0
-            ? '<p class="rail-empty-hint">No saved conversations yet. Start a conversation to keep it on this device.</p>'
-            : groupConversationRows(state.conversations).map(([label, rows]) =>
-                '<h2 class="rail-section-label">' + escapeHtml(label) + '</h2><ul class="rail-group">' + rows.map(renderConvRow).join("") + "</ul>"
-              ).join("");
+          const railHtml = groupConversationRows(state.conversations).map(([label, rows]) =>
+            '<h2 class="rail-section-label">' + escapeHtml(label) + '</h2><ul class="rail-group">' + rows.map(renderConvRow).join("") + "</ul>"
+          ).join("");
           if (railHtml !== renderedRailHtml) {
             setSafeHtml(convListEl, railHtml);
             renderedRailHtml = railHtml;
           }
+          syncRailScrollFade();
         }
         const menuClearBtn = document.getElementById("header-menu-clear-btn");
         if (menuClearBtn) menuClearBtn.disabled = !activeConv || activeConv.turns.length === 0;
@@ -2839,6 +2819,7 @@ function renderPwaShellHtml(locale, nonce) {
           landingView?.classList.remove("is-hidden");
           chatView?.classList.add("is-hidden");
           if (mainContentEl) mainContentEl.dataset.view = "landing";
+          newChatBtnEl?.classList.add("is-current");
           document.getElementById("scroll-to-latest-btn")?.classList.add("is-hidden");
           if (activeTitleEl) {
             activeTitleEl.textContent = "";
@@ -2851,6 +2832,7 @@ function renderPwaShellHtml(locale, nonce) {
           landingView?.classList.add("is-hidden");
           chatView?.classList.remove("is-hidden");
           if (mainContentEl) mainContentEl.dataset.view = "chat";
+          newChatBtnEl?.classList.remove("is-current");
           document.getElementById("scroll-to-latest-btn")?.classList.add("is-hidden");
           if (activeTitleEl) {
             const trimmedTitle = String(activeConv.title || "").trim();
@@ -3509,12 +3491,12 @@ function renderPwaShellHtml(locale, nonce) {
               : "Collapse conversations sidebar",
         );
         railCollapseBtn?.setAttribute(
-          "title",
+          "data-tip",
           isMobileViewport
             ? "Close conversations"
             : isDesktopCollapsed && isPeeking
-              ? "Open sidebar  Ctrl+B"
-              : "Collapse sidebar  Ctrl+B",
+              ? "Open sidebar · Ctrl+B"
+              : "Collapse sidebar · Ctrl+B",
         );
         if (moveFocus && isHidden) {
           focusAfterRailStateSync(headerRailBtn);
@@ -3844,23 +3826,6 @@ function renderPwaShellHtml(locale, nonce) {
       window.addEventListener("offline", syncNetworkStatusBadge);
       syncNetworkStatusBadge();
 
-      // AccountRail disclosure: Escape or leaving the footer closes it.
-      function setAcctPopover(open, returnFocus) {
-        acctPopover?.classList.toggle("open", open);
-        acctTrigger?.setAttribute("aria-expanded", String(open));
-        if (!open && returnFocus) acctTrigger?.focus();
-      }
-      acctTrigger?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        setAcctPopover(!acctPopover?.classList.contains("open"), false);
-      });
-      document.addEventListener("click", (e) => {
-        if (!e.target.closest(".rail-footer")) setAcctPopover(false, false);
-      });
-      document.querySelector(".rail-footer")?.addEventListener("focusout", (e) => {
-        if (!(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) setAcctPopover(false, false);
-      });
-
       // Modal stack (FE-G6): the page behind an open dialog is inert, Escape closes the
       // top dialog, and focus returns to the control that opened it.
       const modalStack = [];
@@ -4121,10 +4086,30 @@ function renderPwaShellHtml(locale, nonce) {
         }
       }
 
-      document.getElementById("open-settings-btn")?.addEventListener("click", () => {
-        setAcctPopover(false, false);
+      // Signed-out footer: SSRA Assist has no taxpayer sign-in yet (OQ-001/OQ-005), so both buttons say so in-page and offer the official portal.
+      const PORTAL_AUTH_DIALOGS = {
+        signin: {
+          title: "Sign in",
+          message: "Sign in isn’t available in SSRA Assist yet. To check your balance, filings or payments, sign in on the official e-Tax portal. This chat answers public questions only.",
+        },
+        register: {
+          title: "Register",
+          message: "Creating an SSRA Assist account isn’t available yet. To register for a TIN or an e-Tax account, use the official e-Tax portal. You can also ask here how TIN registration works.",
+        },
+      };
+      function explainPortalAuth(kind) {
+        const dialog = PORTAL_AUTH_DIALOGS[kind];
+        askInPage({ title: dialog.title, message: dialog.message, confirmLabel: "Open e-Tax portal" }).then((confirmed) => {
+          if (confirmed === true) window.open(OFFICIAL_PORTAL, "_blank", "noopener,noreferrer");
+        });
+      }
+      document.getElementById("rail-signin-btn")?.addEventListener("click", () => explainPortalAuth("signin"));
+      document.getElementById("rail-register-btn")?.addEventListener("click", () => explainPortalAuth("register"));
+
+      const openSettingsBtn = document.getElementById("open-settings-btn");
+      openSettingsBtn?.addEventListener("click", () => {
         renderSettingsTabContent("general");
-        openModal(settingsBackdrop, settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]'), acctTrigger);
+        openModal(settingsBackdrop, settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]'), openSettingsBtn);
       });
       document.getElementById("close-settings-btn")?.addEventListener("click", closeAllModals);
       // APG tabs: arrow keys, Home and End move and select; only the selected tab is in the Tab order.
@@ -4280,13 +4265,15 @@ function renderPwaShellHtml(locale, nonce) {
         } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b" && !openModal) {
           e.preventDefault();
           toggleSidebar();
+        } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "o" && !openModal) {
+          e.preventDefault();
+          newChatBtnEl?.click();
         } else if (e.key === "Escape") {
+          document.documentElement.setAttribute("data-tips-hidden", "");
           if (openModal) {
             closeTopModal();
           } else if (headerOptionsMenu?.classList.contains("open")) {
             setHeaderKebabMenu(false, true);
-          } else if (acctPopover?.classList.contains("open")) {
-            setAcctPopover(false, true);
           } else if (shell?.getAttribute("data-mobile-rail") === "open") {
             shell.setAttribute("data-mobile-rail", "closed");
             syncMobileRailA11y(true);
@@ -5892,7 +5879,7 @@ function renderPwaShellHtml(locale, nonce) {
       });
 
       document.getElementById("export-conv-report-btn")?.addEventListener("click", () => {
-        setAcctPopover(false, false);
+        setHeaderKebabMenu(false, false);
         const activeConv = state.conversations.find((c) => c.id === state.activeId);
         const turns = activeConv?.turns || [];
         const canonical = JSON.stringify(turns.map((t) => ({ role: t.role, content: t.content })));
