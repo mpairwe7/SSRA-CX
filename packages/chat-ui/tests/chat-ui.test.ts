@@ -8,6 +8,7 @@ import {
   buildConversationReportExport,
   buildDocumentInspectionModalView,
   buildFloatingChatHeader,
+  buildHeaderLanguageMenuModel,
   buildHumanSubtleMicrocopy,
   buildMainChatLayoutAlignment,
   buildNarrationBarView,
@@ -55,8 +56,10 @@ import {
   resolveAdaptiveVoiceNetworkProfile,
   resolveCallControlDirective,
   resolveGenerativeUIComponent,
+  resolveLanguageMenuKeyNavigation,
   resolveVoiceSpeakerOption,
   SPEECH_RATE_SLOW,
+  SSRA_LANGUAGE_MENU_OPTIONS,
   SSRA_UI_TRANSLATIONS,
   SSRA_VOICE_SAMPLES,
   SSRA_VOICE_SPEAKER_CATALOG,
@@ -1180,5 +1183,43 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(layoutAlign.composerAutoVoiceIconName).toBe("voiceWave");
     expect(layoutAlign.landingMaxWidthPx).toBe(720);
     expect(layoutAlign.iosTouchFontSizeMinPx).toBe(16);
+
+    expect(SSRA_LANGUAGE_MENU_OPTIONS).toHaveLength(9);
+    const langAutoModel = buildHeaderLanguageMenuModel({
+      locale: "en",
+      detectedLocale: "pga",
+      localeExplicit: false,
+    });
+    expect(langAutoModel.triggerCode).toBe("PGA");
+    expect(langAutoModel.showAutoBadge).toBe(true);
+    expect(langAutoModel.triggerSrLabel).toBe(
+      "Response language: Auto-detect (currently Juba Arabic)",
+    );
+    expect(langAutoModel.checkedValue).toBe("auto");
+    expect(langAutoModel.activeIndex).toBe(0);
+    expect(langAutoModel.rovingIndex).toBe(0);
+
+    const langExplicitModel = buildHeaderLanguageMenuModel({
+      locale: "ar",
+      localeExplicit: true,
+      focusIndex: 4,
+    });
+    expect(langExplicitModel.triggerCode).toBe("AR");
+    expect(langExplicitModel.showAutoBadge).toBe(false);
+    expect(langExplicitModel.triggerSrLabel).toBe("Response language: Arabic");
+    expect(langExplicitModel.checkedValue).toBe("ar");
+    expect(langExplicitModel.activeIndex).toBe(3);
+    expect(langExplicitModel.rovingIndex).toBe(4);
+    expect(langExplicitModel.options[4]?.tabIndex).toBe(0);
+
+    expect(resolveLanguageMenuKeyNavigation({ key: "ArrowDown", currentIndex: 0 })).toBe(1);
+    expect(resolveLanguageMenuKeyNavigation({ key: "ArrowUp", currentIndex: 0 })).toBe(8);
+    expect(resolveLanguageMenuKeyNavigation({ key: "Home", currentIndex: 5 })).toBe(0);
+    expect(resolveLanguageMenuKeyNavigation({ key: "End", currentIndex: 1 })).toBe(8);
+    expect(resolveLanguageMenuKeyNavigation({ key: "j", currentIndex: 0 })).toBe(2);
+    expect(resolveLanguageMenuKeyNavigation({ key: "x", currentIndex: 0 })).toBeNull();
+    expect(
+      resolveLanguageMenuKeyNavigation({ key: "ArrowDown", currentIndex: 0, options: [] }),
+    ).toBeNull();
   });
 });

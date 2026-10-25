@@ -355,6 +355,33 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(page.locator("#header-options-menu")).toBeHidden();
   await expect(kebabBtn).toBeFocused();
 
+  // Header & Sidebar background rgba(0, 93, 180, var(--tw-bg-opacity)), sharp white text, white main chat canvas & LanguageMenu.tsx dialog.
+  const headerStyles = await page.locator(".chat-header").evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { bg: s.backgroundColor, color: s.color };
+  });
+  expect(headerStyles).toEqual({ bg: "rgb(0, 93, 180)", color: "rgb(255, 255, 255)" });
+  const railStyles = await page.locator(".rail-wrap").evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { bg: s.backgroundColor, color: s.color };
+  });
+  expect(railStyles).toEqual({ bg: "rgb(0, 93, 180)", color: "rgb(255, 255, 255)" });
+  const mainBg = await page.locator(".app-content").evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(mainBg).toBe("rgb(255, 255, 255)");
+
+  const langselBtn = page.locator("#langsel-btn");
+  await expect(langselBtn).toHaveAttribute("aria-expanded", "false");
+  await langselBtn.click();
+  await expect(langselBtn).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("dialog", { name: "Response language" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: /^English/ })).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("ArrowUp");
+  await expect(page.getByRole("radio", { name: /Auto-detect/ })).toBeFocused();
+  await page.getByRole("radio", { name: /Auto-detect/ }).click();
+  await expect(langselBtn).toHaveAttribute("aria-expanded", "false");
+  await expect(langselBtn).toBeFocused();
+  await expect(page.locator("#lang-auto-badge")).toBeVisible();
+
   // Main chat composer voice mode button couples with auto-narrate, opens VoiceModeDock, and Escape cancels recording (useVoiceEscape).
   const voiceModeBtn = page.locator("#composer-voicemode-btn");
   await voiceModeBtn.click();
