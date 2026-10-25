@@ -341,7 +341,9 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(page.locator("#call-status-pill")).toHaveAttribute("data-status", "ended");
   await expect(page.locator("#call-listen-btn")).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(3);
+  await expect(page.locator("article.message-row-user .msg-spoken-tag").first()).toContainText("Spoken");
   await page.locator("#close-call-btn").click();
+  await expect(page.locator("#header-call-label")).toHaveText("Call receptionist");
 
   // Main chat composer voice mode button couples with auto-narrate, opens VoiceModeDock, and Escape cancels recording (useVoiceEscape).
   const voiceModeBtn = page.locator("#composer-voicemode-btn");
@@ -356,6 +358,27 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(voiceModeBtn).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#composer-recording-bar")).toBeHidden();
   await expect(page.locator("#voice-mode-dock")).toBeHidden();
+
+  // Dictate icon button (#voice-dictate-btn, data-testid="composer-mic") sits alongside Auto Voice in .composer-tools-right and inserts text into composer without auto-sending.
+  const dictateBtn = page.locator('.composer-tools-right [data-testid="composer-mic"]');
+  await expect(dictateBtn).toBeVisible();
+  await expect(dictateBtn).toHaveAttribute("data-tip", "Dictate");
+  await expect(page.locator('.composer-tools-right [data-testid="composer-voicemode"]')).toBeVisible();
+  const composerBox = page.getByRole("textbox", { name: "Ask SSRA Assist" });
+  await composerBox.fill("Calculate PAYE on");
+  await voiceModeBtn.click(); // enters voice mode (autoNarrate=true)
+  await page.locator("#voice-dock-end").click(); // exits voice mode & sets autoNarrate=false
+  await dictateBtn.click();
+  await expect(dictateBtn).toHaveClass(/btn-recording/);
+  await expect(page.locator("#composer-rec-confirm")).toHaveAttribute("aria-label", "Stop and insert voice text");
+  await page.evaluate(() => {
+    (window as unknown as { __voiceTest: { emitTranscript: (t: string) => void } }).__voiceTest.emitTranscript(
+      "250,000 SSP",
+    );
+  });
+  await expect(composerBox).toHaveValue("Calculate PAYE on 250,000 SSP");
+  await expect(page.locator("#composer-hint")).toContainText("Voice text added. Check it before you send.");
+  await composerBox.fill("");
 
   // Composer '+' attachment menu -> file attachment -> DocumentInspectionModal (OQ-017 truthful state) -> suggested prompt -> remove.
   await page.locator("#composer-add-btn").click();

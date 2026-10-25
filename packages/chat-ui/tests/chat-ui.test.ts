@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   AUDIO_SIGNIFIER_SPECS,
+  adoptDetectedResponseLocale,
   buildCallReceptionistScreen,
   buildChatComposerState,
+  buildComposerSpeechControls,
   buildConversationReportExport,
   buildDocumentInspectionModalView,
   buildFloatingChatHeader,
   buildHumanSubtleMicrocopy,
+  buildMainChatLayoutAlignment,
   buildNarrationBarView,
   buildPortalCopilotCardView,
   buildTruthfulAttachmentReportText,
@@ -18,6 +21,7 @@ import {
   computeCallOrbFrame,
   createRevealQueue,
   detectAttachmentKind,
+  detectClientTextLanguageHint,
   detectSpokenCallControl,
   diagnoseSsraPortalScreenshot,
   EndOfTurnDetector,
@@ -53,6 +57,7 @@ import {
   resolveGenerativeUIComponent,
   resolveVoiceSpeakerOption,
   SPEECH_RATE_SLOW,
+  SSRA_UI_TRANSLATIONS,
   SSRA_VOICE_SAMPLES,
   SSRA_VOICE_SPEAKER_CATALOG,
   sanitizeAttachmentFilename,
@@ -60,6 +65,7 @@ import {
   scrubDocumentTextForIndirectInjection,
   stripStepPrefix,
   structureCallReceptionistBlocks,
+  translateUiString,
   VOICE_PAUSE_OPTIONS,
   validateMcpAppIframe,
   validateVoiceNoteSubmission,
@@ -1000,5 +1006,170 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
       }).reason,
     ).toBe("OFFLINE_OUTBOX_CAPACITY_EXCEEDED");
     expect(vnOutbox.drainVoiceNotes()).toHaveLength(1);
+
+    // Main Chat UI/UX translations, language autodetection, speech controls & layout alignment
+    expect(Object.keys(SSRA_UI_TRANSLATIONS)).toEqual(["en", "pga", "ar"]);
+    expect(translateUiString("en", "header.callReceptionist")).toBe("Call receptionist");
+    expect(translateUiString("pga", "header.callReceptionist")).toBe("Ittasil bil istiqbal");
+    expect(translateUiString("ar", "header.callReceptionist")).toBe("موظف الاستقبال الصوتي");
+    expect(translateUiString("din", "header.callReceptionist")).toBe("Call receptionist");
+    expect(translateUiString("en", "header.languageAuto", { value: "English" })).toContain(
+      "English",
+    );
+    expect(translateUiString("en", "header.languageAuto", {})).toContain("{value}");
+
+    expect(detectClientTextLanguageHint("", "en")).toEqual({
+      detectedLocale: "en",
+      explicitSwitch: false,
+    });
+    expect(detectClientTextLanguageHint("Please answer in Juba Arabic", "en")).toEqual({
+      detectedLocale: "pga",
+      explicitSwitch: true,
+    });
+    expect(detectClientTextLanguageHint("Please reply in Arabic", "en")).toEqual({
+      detectedLocale: "ar",
+      explicitSwitch: true,
+    });
+    expect(detectClientTextLanguageHint("Please switch to English", "ar")).toEqual({
+      detectedLocale: "en",
+      explicitSwitch: true,
+    });
+    expect(detectClientTextLanguageHint("Please answer in Dinka", "en")).toEqual({
+      detectedLocale: "din",
+      explicitSwitch: true,
+    });
+    expect(detectClientTextLanguageHint("Please answer in Nuer", "en")).toEqual({
+      detectedLocale: "nus",
+      explicitSwitch: true,
+    });
+    expect(detectClientTextLanguageHint("Please answer in Bari", "en")).toEqual({
+      detectedLocale: "bfa",
+      explicitSwitch: true,
+    });
+    expect(detectClientTextLanguageHint("Please answer in Pazande", "en")).toEqual({
+      detectedLocale: "zne",
+      explicitSwitch: true,
+    });
+    expect(detectClientTextLanguageHint("Please answer in Shilluk", "en")).toEqual({
+      detectedLocale: "shk",
+      explicitSwitch: true,
+    });
+    expect(
+      detectClientTextLanguageHint("شنو المطلوب عشان اسجل الرقم الضريبي بتاع شركتي؟", "en"),
+    ).toEqual({
+      detectedLocale: "pga",
+      explicitSwitch: false,
+    });
+    expect(detectClientTextLanguageHint("ما هي نسبة ضريبة الدخل في جنوب السودان؟", "en")).toEqual({
+      detectedLocale: "ar",
+      explicitSwitch: false,
+    });
+    expect(detectClientTextLanguageHint("Kif ana agdar aml tasjil ta TIN?", "en")).toEqual({
+      detectedLocale: "pga",
+      explicitSwitch: false,
+    });
+    expect(
+      detectClientTextLanguageHint("Ye namba de ajul weu caar tene SSRA bengic?", "en"),
+    ).toEqual({
+      detectedLocale: "din",
+      explicitSwitch: false,
+    });
+    expect(detectClientTextLanguageHint("Thok naath guaath miem", "en")).toEqual({
+      detectedLocale: "nus",
+      explicitSwitch: false,
+    });
+    expect(detectClientTextLanguageHint("Kutuk na Bari nyepo konyo", "en")).toEqual({
+      detectedLocale: "bfa",
+      explicitSwitch: false,
+    });
+    expect(detectClientTextLanguageHint("Pazande marimo kumba", "en")).toEqual({
+      detectedLocale: "zne",
+      explicitSwitch: false,
+    });
+    expect(detectClientTextLanguageHint("Dhog collo jwok kwer", "en")).toEqual({
+      detectedLocale: "shk",
+      explicitSwitch: false,
+    });
+    expect(detectClientTextLanguageHint("What is the PAYE filing deadline?", "en")).toEqual({
+      detectedLocale: "en",
+      explicitSwitch: false,
+    });
+
+    const adoptedAuto = adoptDetectedResponseLocale({
+      currentLocale: "en",
+      localeExplicit: false,
+      responseLocale: "pga",
+    });
+    expect(adoptedAuto.locale).toBe("pga");
+    expect(adoptedAuto.badgeLabel).toBe("AUTO · PGA");
+    expect(adoptedAuto.shouldSwitchInterface).toBe(false);
+
+    const adoptedExplicit = adoptDetectedResponseLocale({
+      currentLocale: "en",
+      localeExplicit: false,
+      responseLocale: "ar",
+      localeSource: "explicit_request",
+    });
+    expect(adoptedExplicit.locale).toBe("ar");
+    expect(adoptedExplicit.localeExplicit).toBe(true);
+    expect(adoptedExplicit.shouldSwitchInterface).toBe(true);
+    expect(adoptedExplicit.badgeLabel).toBe("AR");
+
+    const adoptedLocked = adoptDetectedResponseLocale({
+      currentLocale: "en",
+      localeExplicit: true,
+      responseLocale: "din",
+    });
+    expect(adoptedLocked.locale).toBe("en");
+    expect(adoptedLocked.detectedLocale).toBe("din");
+
+    const speechIdle = buildComposerSpeechControls({
+      speechState: "idle",
+      voiceMode: false,
+      hasText: false,
+      isLoading: false,
+    });
+    expect(speechIdle.dictateButton.iconName).toBe("mic");
+    expect(speechIdle.dictateButton.tooltip).toBe("Dictate");
+    expect(speechIdle.autoVoiceButton.iconName).toBe("voiceWave");
+    expect(speechIdle.autoVoiceButton.isPrimarySlot).toBe(true);
+    expect(speechIdle.primarySlotMode).toBe("voicemode");
+
+    const speechStarting = buildComposerSpeechControls({
+      speechState: "starting",
+      voiceMode: false,
+      hasText: true,
+      isLoading: false,
+    });
+    expect(speechStarting.dictateButton.disabled).toBe(true);
+    expect(speechStarting.dictateButton.className).toContain("is-processing");
+    expect(speechStarting.primarySlotMode).toBe("send");
+
+    const speechListening = buildComposerSpeechControls({
+      speechState: "listening",
+      voiceMode: true,
+      hasText: false,
+      isLoading: true,
+    });
+    expect(speechListening.dictateButton.className).toContain("btn-recording");
+    expect(speechListening.autoVoiceButton.ariaPressed).toBe(true);
+    expect(speechListening.primarySlotMode).toBe("stop");
+
+    const speechProcessing = buildComposerSpeechControls({
+      speechState: "processing",
+      voiceMode: false,
+      hasText: false,
+      isLoading: false,
+      isUploading: true,
+    });
+    expect(speechProcessing.dictateButton.ariaLabel).toBe("Transcribing");
+    expect(speechProcessing.primarySlotMode).toBe("send");
+
+    const layoutAlign = buildMainChatLayoutAlignment();
+    expect(layoutAlign.headerCallIconName).toBe("phone");
+    expect(layoutAlign.composerDictateIconName).toBe("mic");
+    expect(layoutAlign.composerAutoVoiceIconName).toBe("voiceWave");
+    expect(layoutAlign.landingMaxWidthPx).toBe(720);
+    expect(layoutAlign.iosTouchFontSizeMinPx).toBe(16);
   });
 });
