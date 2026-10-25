@@ -150,6 +150,93 @@ function escapeHtml(value) {
     .replace(/\x60/g, "&#96;");
 }
 
+const ROUTE_SPECS = {
+  "/admin": {
+    roles: "ssra_admin, ssra_auditor",
+    standard: "ISO/IEC 42001 §9.1 · ADR-012",
+    surface: "Service levels, officers on duty & answer authority",
+    gate: "Server-verified passkey session + freshness provenance",
+  },
+  "/agent": {
+    roles: "ssra_staff, ssra_admin, ssra_auditor",
+    standard: "ISO/IEC 25010 §4 · OWASP ASI03",
+    surface: "One-case-at-a-time queue & Cited Copilot draft review",
+    gate: "Passkey session + Principle 1 citation & TIN redaction guard",
+  },
+  "/admin/tickets": {
+    roles: "ssra_staff, ssra_admin, ssra_auditor",
+    standard: "ISO/IEC 42001 §8.3 · SLA Triage",
+    surface: "Omnichannel escalations across Web, WhatsApp, SMS, USSD & Voice",
+    gate: "Server-verified staff session + priority SLA thresholds",
+  },
+  "/calls": {
+    roles: "ssra_staff, ssra_admin, ssra_auditor",
+    standard: "ADR-024 · ADR-025 · ADR-026",
+    surface: "Voice call lobby, officer takeover & post-call wrap-up",
+    gate: "First-claim-wins lobby lock + rule-attributed call briefs",
+  },
+  "/admin/quality": {
+    roles: "ssra_admin, ssra_auditor",
+    standard: "ISO/IEC 42001 §9.2 · NIST MEASURE 2.6",
+    surface: "Sampled 4-dimension QA rubric & discrepancy triggers",
+    gate: "Finding note required when any rubric dimension < gate",
+  },
+  "/admin/audit": {
+    roles: "ssra_admin, ssra_auditor",
+    standard: "ISO/IEC 42001 A.6.2.8 · EU AI Act Art. 12",
+    surface: "Hash-chained WORM ledger & batch integrity verification",
+    gate: "Sealing paused automatically on any hash or anchor break",
+  },
+  "/admin/replay": {
+    roles: "ssra_admin, ssra_auditor",
+    standard: "Principle 9 · NIST AI 600-1",
+    surface: "Turn-by-turn redacted input, policy decision & tool reconstruction",
+    gate: "64-hex WORM event digest + snapshot version provenance",
+  },
+  "/admin/flags": {
+    roles: "ssra_admin, ssra_auditor",
+    standard: "Section 6.4 · ADR-012 JIT Admin",
+    surface: "5-step degradation ladder & channel/tool kill switches",
+    gate: "Active JIT passkey elevation + two-officer maker-checker",
+  },
+  "/admin/discrepancies": {
+    roles: "ssra_staff, ssra_admin, ssra_auditor",
+    standard: "ISO/IEC 42001 §10.2 · Continuous Improvement",
+    surface: "Taxpayer-reported statutory discrepancies & corpus gaps",
+    gate: "Server-verified staff session + legal reviewer triage",
+  },
+  "/admin/overrides": {
+    roles: "ssra_admin, ssra_auditor",
+    standard: "Principle 1 · Section 7 Knowledge Release",
+    surface: "6-step knowledge release & exact-match answer overrides",
+    gate: "Maker-checker separation + approved sectionAnchor citation",
+  },
+  "/admin/outbox": {
+    roles: "ssra_admin, ssra_auditor",
+    standard: "Section 11 · Omnichannel Delivery",
+    surface: "Transactional SMS, WhatsApp template & email outbox queue",
+    gate: "24-hour WhatsApp window guard + GSM-7/UCS-2 segment bounds",
+  },
+  "/admin/connectors": {
+    roles: "ssra_staff, ssra_admin, ssra_auditor",
+    standard: "OQ-001 · OQ-002 · OQ-006",
+    surface: "Circuit-breaker health for e-Tax, e-Customs & BoSS FX",
+    gate: "Fail-closed circuit breakers + T3 write step-up gating",
+  },
+  "/analytics": {
+    roles: "ssra_admin, ssra_auditor",
+    standard: "OpenSLO v1 · OQ-013 Warehouse Provenance",
+    surface: "p95 TTFT, quality-adjusted containment & language parity",
+    gate: "Observation timestamp freshness <= 5 min (fail-closed)",
+  },
+  "/analytics/evaluation": {
+    roles: "ssra_admin, ssra_auditor",
+    standard: "NIST AI RMF MEASURE 2.6 · OWASP ASI01–ASI10",
+    surface: "Golden evaluation suite, groundedness & red-team gates",
+    gate: "All-gates-pass claim forbidden on illustrative fallback data",
+  },
+};
+
 function destinationMeta(route) {
   if (route === "/signin") {
     return {
@@ -294,6 +381,21 @@ function renderPreviewCard(title, group = "Work", publicAssistantUrl = "http://1
                   <div><dt>Past 24-hour SLA</dt><dd>—</dd></div>
                   <div><dt>Median first response</dt><dd>—</dd></div>
                   <div><dt>Median time to resolve</dt><dd>—</dd></div>
+                </dl>
+              </div>
+            </section>
+
+            <section id="route-spec-panel" class="ops-panel is-bare" aria-labelledby="g-h">
+              <div class="ops-panel-head">
+                <h2 id="g-h">Route governance &amp; specification</h2>
+                <div class="ops-panel-end"><span class="ops-chip is-info">Keycloak RBAC</span></div>
+              </div>
+              <div class="ops-panel-body">
+                <dl class="ov-kv">
+                  <div><dt>Permitted roles</dt><dd id="spec-roles">ssra_admin, ssra_auditor</dd></div>
+                  <div><dt>Standard anchor</dt><dd id="spec-standard">ISO/IEC 42001 §9.1 · ADR-012</dd></div>
+                  <div><dt>Workbench surface</dt><dd id="spec-surface">Service levels, officers on duty &amp; answer authority</dd></div>
+                  <div><dt>Fail-closed gate</dt><dd id="spec-gate">Server-verified passkey session + freshness provenance</dd></div>
                 </dl>
               </div>
             </section>
@@ -844,7 +946,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .staff-rail-head {
       display: flex; align-items: center; justify-content: space-between;
       gap: var(--ops-space-1); min-height: var(--ops-nav-h);
-      padding: var(--ops-space-2) var(--ops-space-3); flex: none;
+      padding: var(--ops-space-2); flex: none;
     }
     .staff-brand {
       display: flex; align-items: center; gap: var(--ops-space-2);
@@ -852,10 +954,11 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     }
     .staff-brand-mark {
       display: inline-flex; align-items: center; justify-content: center; flex: none;
-      width: 30px; height: 30px; border-radius: var(--ops-radius-sm);
+      width: 28px; height: 28px; border-radius: var(--ops-radius-sm);
       background: var(--accent); color: #0B1220;
-      font-size: 10px; font-weight: var(--ops-weight-bold); letter-spacing: 0.03em;
+      font-size: 10px; font-weight: var(--ops-weight-bold); letter-spacing: 0.02em;
     }
+    :root[data-theme="light"] .staff-brand-mark { color: #FFFFFF; }
     .staff-brand-text {
       display: flex; flex-direction: column; min-width: 0;
       line-height: var(--ops-lh-tight); font-size: var(--ops-text-sm);
@@ -906,7 +1009,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     }
     .staff-rail-group + .staff-rail-group {
       margin-top: var(--ops-space-3); padding-top: var(--ops-space-3);
-      border-top: 1px solid var(--ops-hairline);
+      border-top: 1px solid var(--ops-line);
     }
     .staff-rail-group-label {
       margin: 0 0 var(--ops-space-1); padding: 0 var(--ops-space-3);
@@ -950,9 +1053,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     }
     .staff-acct-trigger:hover { background: var(--ops-row-hover); border-color: var(--ops-line); }
     .staff-acct-avatar {
-      position: relative; width: 28px; height: 28px; border-radius: var(--ops-radius-sm);
+      position: relative; width: 26px; height: 26px; border-radius: 50%;
       background: linear-gradient(135deg, #078930, #0F47AF); color: #fff;
-      font-size: 11px; font-weight: var(--ops-weight-bold);
+      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-bold); letter-spacing: 0.02em;
       display: inline-flex; align-items: center; justify-content: center; flex: none;
     }
     .staff-acct-dot {
@@ -1117,6 +1220,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .ops-panel.is-bare .ops-panel-head h2 { font-size: var(--ops-text-lg); }
     .ops-panel-body { padding: var(--ops-space-4); overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .ops-panel.is-bare .ops-panel-body { padding: var(--ops-space-4) 0 0; }
+    .ops-page > .ops-panel.is-bare,
+    .ops-page > .ops-panel.is-glass,
+    .ops-page > .ops-panel.is-bare + *,
+    .ops-page > .ops-panel.is-glass + * {
+      margin-top: var(--ops-band);
+    }
 
     /* Lists, Tables & Chips (ink-only readings in IBM Plex Mono Light) */
     .ov-review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ops-space-2); }
@@ -1405,6 +1514,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     (() => {
       const ICONS = ${JSON.stringify(ICONS)};
       const DESTINATIONS = ${JSON.stringify(DESTINATIONS)};
+      const ROUTE_SPECS = ${JSON.stringify(ROUTE_SPECS)};
       const PUBLIC_ASSISTANT_URL = ${JSON.stringify(publicAssistantUrl)};
 
       const ROLE_META = {
@@ -1504,9 +1614,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
             groups.map((group) => {
               const destinations = DESTINATIONS.filter((item) => item.group === group && item.roles.includes(state.role));
               if (!destinations.length) return "";
+              const groupId = "rail-group-" + group.toLowerCase();
               return '<div class="staff-rail-group">' +
-                '<p class="staff-rail-group-label">' + escapeHtml(group) + "</p>" +
-                "<ul>" + destinations.map((item) => {
+                '<p class="staff-rail-group-label" id="' + escapeHtml(groupId) + '">' + escapeHtml(group) + "</p>" +
+                '<ul aria-labelledby="' + escapeHtml(groupId) + '">' + destinations.map((item) => {
                   const active = item.href === state.route;
                   return '<li><a href="' + escapeHtml(item.href) + '" data-nav="' + escapeHtml(item.href) + '" class="nav-item' + (active ? " active" : "") + '" title="' + escapeHtml(item.label) + '"' + (active ? ' aria-current="page"' : "") + ">" +
                     '<span class="staff-rail-icon" aria-hidden="true">' + item.icon + "</span>" +
@@ -1571,6 +1682,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           const verifier = randomHex(32);
           const challenge = await computePkceChallenge(verifier);
           const csrfState = randomHex(32);
+          const oidcNonce = randomHex(32);
           const selectedRadio = mainEl.querySelector('input[name="signin-role-target"]:checked');
           const targetRole = selectedRadio?.value || state.role || "ssra_admin";
           const returnTo = selectedRadio?.getAttribute("data-landing") || ROLE_META[targetRole]?.landing || "/admin";
@@ -1578,6 +1690,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           try {
             sessionStorage.setItem("ssra_pkce_verifier", verifier);
             sessionStorage.setItem("ssra_oidc_state", csrfState);
+            sessionStorage.setItem("ssra_oidc_nonce", oidcNonce);
             sessionStorage.setItem("ssra_oidc_return_to", returnTo);
           } catch {}
           const authUrl = new URL("https://sso.ssra.gov.ss/realms/ssra/protocol/openid-connect/auth");
@@ -1588,6 +1701,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           authUrl.searchParams.set("code_challenge", challenge);
           authUrl.searchParams.set("code_challenge_method", "S256");
           authUrl.searchParams.set("state", csrfState);
+          authUrl.searchParams.set("nonce", oidcNonce);
           authUrl.searchParams.set("acr_values", "urn:ssra:acr:passkey");
           if (mode === "signup") {
             authUrl.searchParams.set("prompt", "create");
@@ -1649,6 +1763,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
               verifier = sessionStorage.getItem("ssra_pkce_verifier");
               sessionStorage.removeItem("ssra_oidc_state");
               sessionStorage.removeItem("ssra_pkce_verifier");
+              sessionStorage.removeItem("ssra_oidc_nonce");
             } catch {}
             if (err) {
               lastCallbackOutcome = {
@@ -1724,6 +1839,17 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           if (titleEl) titleEl.textContent = title;
           const eyebrowEl = document.getElementById("preview-eyebrow");
           if (eyebrowEl) eyebrowEl.textContent = group + " · Preview only";
+        }
+        const spec = ROUTE_SPECS[state.route] || ROUTE_SPECS["/admin"];
+        if (spec) {
+          const rolesEl = document.getElementById("spec-roles");
+          const stdEl = document.getElementById("spec-standard");
+          const surfEl = document.getElementById("spec-surface");
+          const gateEl = document.getElementById("spec-gate");
+          if (rolesEl) rolesEl.textContent = spec.roles;
+          if (stdEl) stdEl.textContent = spec.standard;
+          if (surfEl) surfEl.textContent = spec.surface;
+          if (gateEl) gateEl.textContent = spec.gate;
         }
       }
 
@@ -1855,8 +1981,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       function setPreviewPersona(role) {
         state.role = ROLE_META[role] ? role : "ssra_admin";
         writeUiPreference("ssra-ops-preview-persona", state.role);
+        const isAuthRoute = state.route === "/signin" || state.route === "/signup" || state.route === "/signin/callback";
         const currentDest = DESTINATIONS.find((d) => d.href === state.route);
-        if (!currentDest || !currentDest.roles.includes(state.role)) {
+        if (!isAuthRoute && (!currentDest || !currentDest.roles.includes(state.role))) {
           state.route = ROLE_META[state.role]?.landing || "/admin";
           try { window.history.replaceState({}, "", state.route); } catch {}
         }

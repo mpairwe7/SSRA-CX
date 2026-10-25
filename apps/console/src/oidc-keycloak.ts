@@ -173,6 +173,34 @@ export function buildKeycloakOidcEndpoints(
   };
 }
 
+/**
+ * Validate that an OIDC `redirect_uri` uses HTTPS (or loopback HTTP), has no `@` userinfo,
+ * no query/fragment, and ends with `/signin/callback` (OAuth 2.1 §4.1.3).
+ */
+export function validateOidcRedirectUri(redirectUri: string): string {
+  const trimmed = (redirectUri || "").trim();
+  if (!trimmed || trimmed.includes("*")) {
+    throw new Error("Invalid OIDC redirect_uri: wildcards or empty values are forbidden");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error(`Invalid OIDC redirect_uri: ${redirectUri}`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("Invalid OIDC redirect_uri: userinfo credentials are forbidden");
+  }
+  const isLoopback = parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost";
+  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLoopback)) {
+    throw new Error("Invalid OIDC redirect_uri: must use https:// (or loopback http://)");
+  }
+  if (parsed.pathname !== "/signin/callback" || parsed.search || parsed.hash) {
+    throw new Error("Invalid OIDC redirect_uri: path must be exact /signin/callback");
+  }
+  return parsed.toString();
+}
+
 export interface BuildKeycloakAuthUrlParams {
   readonly issuer?: string | undefined;
   readonly clientId?: string | undefined;
@@ -197,6 +225,7 @@ export function buildKeycloakAuthorizationUrl(params: BuildKeycloakAuthUrlParams
   readonly mode: OidcAuthorizeMode;
   readonly acrValues: string | null;
 } {
+  const safeRedirectUri = validateOidcRedirectUri(params.redirectUri);
   if (!params.codeChallenge || params.codeChallenge.trim().length < 43) {
     throw new Error("PKCE S256 code_challenge must be at least 43 base64url characters");
   }
@@ -216,7 +245,7 @@ export function buildKeycloakAuthorizationUrl(params: BuildKeycloakAuthUrlParams
   const url = new URL(endpoints.authorizationEndpoint);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", params.redirectUri);
+  url.searchParams.set("redirect_uri", safeRedirectUri);
   url.searchParams.set("scope", KEYCLOAK_CONSOLE_OIDC_CONFIG.scope);
   url.searchParams.set("code_challenge", params.codeChallenge.trim());
   url.searchParams.set("code_challenge_method", "S256");

@@ -58,6 +58,8 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
   await page.getByRole("menuitemradio", { name: "Tax agent view (preview)" }).click();
   await expect(main.getByRole("heading", { name: "My queue & Copilot" })).toBeVisible();
   await expect(page.locator("#acct-display-name")).toHaveText("Tax agent preview");
+  await expect(page.locator("#acct-initials")).toHaveText("ST");
+  await expect(page.locator("#spec-standard")).toContainText("OWASP ASI03");
 
   // Sign-in (/signin), Sign-up (/signup), and Callback (/signin/callback) Keycloak 26 OIDC + Passkey flows
   await page.locator("#ops-header-signin-link").click();
@@ -69,6 +71,7 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
   await expect(page.locator("#signin-status-banner")).toContainText(
     "acr_values=urn%3Assra%3Aacr%3Apasskey",
   );
+  await expect(page.locator("#signin-status-banner")).toContainText("nonce=");
 
   await page.getByTestId("signin-different-account").click();
   await expect(page.locator("#signin-status-banner")).toContainText("prompt=login");

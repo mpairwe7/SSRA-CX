@@ -58,6 +58,7 @@ import {
   validateAdminAnswerOverride,
   validateCopilotDraftApproval,
   validateOidcCallbackParams,
+  validateOidcRedirectUri,
   validateWrapUpFormSubmission,
   waitingFor,
   waitTone,
@@ -1034,5 +1035,10 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(signInVm.targetLandingPath).toBe("/agent");
     const signUpVm = buildSignUpPageViewModel();
     expect(signUpVm.benefits).toHaveLength(3);
+    expect(validateOidcRedirectUri("https://console.ssra.gov.ss/signin/callback")).toBe(
+      "https://console.ssra.gov.ss/signin/callback",
+    );
+    expect(() => validateOidcRedirectUri("http://evil.example.com/signin/callback")).toThrow();
+    expect(() => validateOidcRedirectUri("https://console.ssra.gov.ss/other")).toThrow();
   });
 });
