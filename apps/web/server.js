@@ -4123,25 +4123,45 @@ function renderPwaShellHtml(locale, nonce) {
 
       composerRecCancelBtn?.addEventListener("click", () => {
         voiceContinuousActive = false;
+        lastHeardVoiceTranscript = "";
+        const recTextEl = document.getElementById("composer-rec-text");
+        if (recTextEl) recTextEl.textContent = "Listening…";
         stopActiveSpeechRecognition();
         syncVoiceModalButtons();
         setVoiceStatus("Voice recording cancelled.");
       });
       composerRecConfirmBtn?.addEventListener("click", () => {
-        if (activeSpeechRec) {
-          stopActiveSpeechRecognition();
-        }
+        const recTextEl = document.getElementById("composer-rec-text");
+        if (recTextEl) recTextEl.textContent = "Listening…";
         if (!voiceContinuousActive) {
-          if (input && lastHeardVoiceTranscript.trim() && !input.value.includes(lastHeardVoiceTranscript.trim())) {
-            input.value = joinDictatedText(input.value, lastHeardVoiceTranscript);
-            const lines = String(input.value || "").split("\\n").length;
-            input.rows = Math.min(5, Math.max(1, lines));
+          if (lastHeardVoiceTranscript.trim()) {
+            stopActiveSpeechRecognition();
+            if (input && !input.value.includes(lastHeardVoiceTranscript.trim())) {
+              input.value = joinDictatedText(input.value, lastHeardVoiceTranscript);
+              const lines = String(input.value || "").split("\\n").length;
+              input.rows = Math.min(5, Math.max(1, lines));
+            }
+            lastHeardVoiceTranscript = "";
+            syncComposerRecordingUi();
+            input?.focus();
+            setVoiceStatus("Voice text added. Check it before you send.");
+            return;
           }
-          lastHeardVoiceTranscript = "";
+          if (activeSpeechRec) {
+            try {
+              activeSpeechRec.stop();
+            } catch {
+              stopActiveSpeechRecognition();
+              syncComposerRecordingUi();
+            }
+            return;
+          }
           syncComposerRecordingUi();
           input?.focus();
-          setVoiceStatus("Voice text added. Check it before you send.");
           return;
+        }
+        if (activeSpeechRec) {
+          stopActiveSpeechRecognition();
         }
         syncComposerRecordingUi();
         const candidate = (input && input.value.trim()) || lastHeardVoiceTranscript.trim();
@@ -4403,7 +4423,12 @@ function renderPwaShellHtml(locale, nonce) {
 
       function startVoiceRecognition(options) {
         const continuousLoop = Boolean(options && options.continuousLoop);
-        const speechLocale = state.locale === "ar" ? "ar-SS" : state.locale === "en" ? "en-US" : null;
+        const speechLocale =
+          state.locale === "ar"
+            ? "ar-SS"
+            : state.locale === "en" || state.locale === "pga"
+              ? "en-US"
+              : null;
         if (!speechLocale) {
           voiceContinuousActive = false;
           syncVoiceModalButtons();
@@ -4426,24 +4451,33 @@ function renderPwaShellHtml(locale, nonce) {
           resetOfficerBtnUi();
           callStatusPillEl.setAttribute("data-status", "ai");
         }
-        voiceContinuousActive = continuousLoop || Boolean(state.autoNarrate);
+        voiceContinuousActive = continuousLoop;
         syncVoiceModalButtons();
 
         const rec = new SR();
         activeSpeechRec = rec;
         rec.lang = speechLocale;
         rec.continuous = false;
-        rec.interimResults = false;
+        rec.interimResults = true;
         let receivedTranscript = false;
         let hadError = false;
+        const recTextEl = document.getElementById("composer-rec-text");
+        if (recTextEl) recTextEl.textContent = "Listening…";
         setVoiceStatus(
           voiceContinuousActive
             ? "Listening… speak your question for hands-free conversation."
             : "Listening… speak your question.",
         );
         rec.onresult = (ev) => {
-          const transcript = String(ev.results?.[0]?.[0]?.transcript || "").trim();
+          const resultsArr = Array.from(ev.results || []);
+          const transcript = resultsArr
+            .map((r) => String(r?.[0]?.transcript || "").trim())
+            .filter(Boolean)
+            .join(" ")
+            .trim();
           if (!transcript) return;
+          const lastRes = resultsArr[resultsArr.length - 1];
+          const isInterim = Boolean(lastRes && lastRes.isFinal === false);
           const elapsedSinceTts = assistantCurrentlySpeaking ? 0 : Date.now() - lastTtsEndedAtMs;
           if (isLikelyAssistantEcho(transcript, lastSpokenAssistantText, elapsedSinceTts)) {
             setVoiceStatus("Ignored speaker echo. Listening for your question…");
@@ -4452,9 +4486,16 @@ function renderPwaShellHtml(locale, nonce) {
           if (assistantCurrentlySpeaking && isBackchannelUtterance(transcript)) {
             return;
           }
+          lastHeardVoiceTranscript = transcript;
+          if (isInterim) {
+            if (recTextEl) {
+              recTextEl.textContent = 'Listening… "' + transcript.slice(0, 64) + '"';
+            }
+            return;
+          }
           receivedTranscript = true;
           voiceConsecutiveEmptyRetries = 0;
-          lastHeardVoiceTranscript = transcript;
+          if (recTextEl) recTextEl.textContent = "Listening…";
           if (voiceContinuousActive) {
             if (handleSpokenCallControl(transcript)) {
               return;
@@ -4471,6 +4512,7 @@ function renderPwaShellHtml(locale, nonce) {
             setVoiceStatus('Heard: "' + transcript + '" — preparing answer…');
             sendTurn(transcript, { fromVoiceLoop: true, spoken: true });
           } else {
+            stopActiveSpeechRecognition();
             if (input) {
               input.value = joinDictatedText(input.value, transcript);
               const lines = String(input.value || "").split("\\n").length;
@@ -4543,7 +4585,7 @@ function renderPwaShellHtml(locale, nonce) {
           startVoiceRecognition({ continuousLoop: true });
           return;
         }
-        startVoiceRecognition({ continuousLoop: Boolean(state.autoNarrate) });
+        startVoiceRecognition({ continuousLoop: false });
       });
 
       callListenBtn?.addEventListener("click", () => {
