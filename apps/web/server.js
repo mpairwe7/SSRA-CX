@@ -583,8 +583,8 @@ function renderPwaShellHtml(locale, nonce) {
       .avatar.assistant { display: none; }
     }
     .bubble { max-width: min(720px, 92%); padding: 0.95rem 1.15rem; border-radius: var(--radius-lg); line-height: 1.62; font-size: 0.94rem; }
-    .bubble.user { background: var(--cv2-user-bubble); border: 1px solid var(--cv2-user-bubble-border); color: var(--text-0); border-radius: 16px; border-bottom-right-radius: 6px; border-end-end-radius: 6px; max-width: min(78%, 640px); }
-    .bubble.assistant { background: var(--surface-2); border: 1px solid var(--border-1); color: var(--text-0); border-bottom-left-radius: 6px; border-end-start-radius: 6px; box-shadow: var(--shadow-md); width: 100%; }
+    .bubble.user { background: var(--cv2-user-bubble); border: 1px solid var(--cv2-user-bubble-border); color: var(--text-0); border-radius: 16px; border-end-end-radius: 6px; max-width: min(78%, 640px); }
+    .bubble.assistant { background: var(--surface-2); border: 1px solid var(--border-1); color: var(--text-0); border-end-start-radius: 6px; box-shadow: var(--shadow-md); width: 100%; }
     .lds { display: inline-flex; align-items: center; gap: 10px; }
     .lds-grid { display: grid; grid-template-columns: repeat(3, 4px); gap: 1.5px; flex-shrink: 0; }
     .lds-cell { width: 4px; height: 4px; border-radius: 1px; background: var(--text-0); animation: pixelOn 1.2s ease-in-out infinite; }
@@ -912,7 +912,7 @@ function renderPwaShellHtml(locale, nonce) {
           <span id="net-status-badge" class="status-badge" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="net-status-text">Official sources cited per answer</span></span>
         </div>
         <div class="header-right">
-          <button type="button" id="open-call-btn" class="icon-btn call-btn hdrv2-call" aria-label="Open voice input options" title="Call receptionist">${ICONS.phone}<span id="header-call-label" class="btn-label hdrv2-call-label">Call receptionist</span></button>
+          <button type="button" id="open-call-btn" class="icon-btn call-btn hdrv2-call" aria-label="Call receptionist — Open voice input options" title="Call receptionist">${ICONS.phone}<span id="header-call-label" class="btn-label hdrv2-call-label">Call receptionist</span></button>
           <select id="locale-select" class="icon-btn" aria-label="Language">
             <optgroup label="Available">
               <option value="en" ${locale === "en" ? "selected" : ""}>English (en)</option>
@@ -1498,6 +1498,7 @@ function renderPwaShellHtml(locale, nonce) {
         const hEl = document.getElementById("landing-headline");
         const sEl = document.getElementById("landing-subtitle");
         const callLblEl = document.getElementById("header-call-label");
+        const openCallBtn = document.getElementById("open-call-btn");
         const dropEl = document.getElementById("composer-drop-text");
         const latestLblEl = document.getElementById("scroll-latest-label");
         if (eyeEl && dict.eyebrow) eyeEl.textContent = dict.eyebrow;
@@ -1505,6 +1506,10 @@ function renderPwaShellHtml(locale, nonce) {
         if (sEl) sEl.textContent = dict.subtitle;
         if (input) input.placeholder = dict.placeholder;
         if (callLblEl && dict.callLabel) callLblEl.textContent = dict.callLabel;
+        if (openCallBtn && dict.callLabel) {
+          openCallBtn.setAttribute("aria-label", dict.callLabel + " — Open voice input options");
+          openCallBtn.setAttribute("title", dict.callLabel);
+        }
         if (dropEl && dict.dropFiles) dropEl.textContent = dict.dropFiles;
         if (latestLblEl && dict.latestLabel) latestLblEl.textContent = dict.latestLabel;
         if (Array.isArray(dict.chipCats)) {
@@ -1870,12 +1875,14 @@ function renderPwaShellHtml(locale, nonce) {
         if (!activeConv || activeConv.turns.length === 0) {
           landingView?.classList.remove("is-hidden");
           chatView?.classList.add("is-hidden");
+          document.getElementById("scroll-to-latest-btn")?.classList.add("is-hidden");
           if (activeTitleEl) activeTitleEl.textContent = "New Conversation";
           window.clearTimeout(prependTimer);
           renderedTranscript = { convId: null, turnHtml: [], offset: 0 };
         } else {
           landingView?.classList.add("is-hidden");
           chatView?.classList.remove("is-hidden");
+          document.getElementById("scroll-to-latest-btn")?.classList.add("is-hidden");
           if (activeTitleEl) activeTitleEl.textContent = activeConv.title;
           if (msgList) {
             renderTranscript(activeConv);
@@ -2124,6 +2131,7 @@ function renderPwaShellHtml(locale, nonce) {
         const explicitSwitchTarget = detectExplicitLocaleSwitch(trimmed);
         if (!voiceContinuousActive && activeSpeechRec) {
           stopActiveSpeechRecognition();
+          syncComposerRecordingUi();
         }
 
         let conv = state.conversations.find((c) => c.id === state.activeId);
@@ -3772,6 +3780,7 @@ function renderPwaShellHtml(locale, nonce) {
               input.rows = Math.min(5, Math.max(1, lines));
               input.focus();
             }
+            lastHeardVoiceTranscript = "";
             setVoiceStatus("Voice text added. Check it before you send.");
           }
         };
@@ -3812,6 +3821,7 @@ function renderPwaShellHtml(locale, nonce) {
           }
         };
         try {
+          lastHeardVoiceTranscript = "";
           lastMicStartAtMs = Date.now();
           rec.start();
         } catch {
@@ -3915,7 +3925,7 @@ function renderPwaShellHtml(locale, nonce) {
       function sanitizeAttachmentName(rawName) {
         const normalizedRaw =
           !rawName || rawName === "image.png" || rawName === "blob"
-            ? "ssra_portal_screenshot_" + Date.now().toString().slice(-4) + ".png"
+            ? "pasted_image_" + Date.now().toString().slice(-4) + ".png"
             : String(rawName);
         const stripped = Array.from(normalizedRaw)
           .filter((ch) => {
@@ -4430,20 +4440,22 @@ function renderPwaShellHtml(locale, nonce) {
       });
       const composerDropOverlayEl = document.getElementById("composer-drop-overlay");
       let composerDragCounter = 0;
+      const dragHasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
       form?.addEventListener("dragenter", (e) => {
+        if (!dragHasFiles(e)) return;
         e.preventDefault();
         e.stopPropagation();
         composerDragCounter += 1;
-        if (e.dataTransfer?.items?.length) {
-          form.classList.add("composer-drag-active");
-          composerDropOverlayEl?.classList.remove("is-hidden");
-        }
+        form.classList.add("composer-drag-active");
+        composerDropOverlayEl?.classList.remove("is-hidden");
       });
       form?.addEventListener("dragover", (e) => {
+        if (!dragHasFiles(e)) return;
         e.preventDefault();
         e.stopPropagation();
       });
       form?.addEventListener("dragleave", (e) => {
+        if (!dragHasFiles(e)) return;
         e.preventDefault();
         e.stopPropagation();
         composerDragCounter = Math.max(0, composerDragCounter - 1);
@@ -4453,6 +4465,7 @@ function renderPwaShellHtml(locale, nonce) {
         }
       });
       form?.addEventListener("drop", (e) => {
+        if (!dragHasFiles(e)) return;
         e.preventDefault();
         e.stopPropagation();
         composerDragCounter = 0;
@@ -4465,6 +4478,7 @@ function renderPwaShellHtml(locale, nonce) {
       input?.addEventListener("paste", (e) => {
         const files = e.clipboardData?.files;
         if (!files || !files.length) return;
+        if (e.clipboardData?.getData?.("text/plain")) return;
         e.preventDefault();
         handleAttachFiles(files);
       });
