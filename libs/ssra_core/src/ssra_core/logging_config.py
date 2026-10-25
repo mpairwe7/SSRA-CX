@@ -51,6 +51,10 @@ _LOG_PHONE_RE = re.compile(
 _LOG_TIN_RE = re.compile(r"\b(?:\d{9,12}|\d{3}[\s-]\d{3}[\s-]?\d{4})\b")
 _LOG_EMAIL_RE = re.compile(r"\b([A-Za-z0-9._%+-]{1,64})@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b")
 _LOG_OTP_RE = re.compile(r"\b(otp|passcode|verification\s+code)\s*[:=]?\s*\d{4,8}\b", re.IGNORECASE)
+_SENSITIVE_KEY_RE = re.compile(
+    r"(otp|passcode|password|secret|token|authorization|api[_-]?key|cookie)",
+    re.IGNORECASE,
+)
 _ALLOWED_OFFICIAL_EMAIL_DOMAINS = frozenset({"nra.gov.ss", "ssra.gov.ss", "etax.nra.gov.ss"})
 
 
@@ -75,7 +79,10 @@ def _scrub_value(value: Any) -> Any:
     if isinstance(value, str):
         return redact_log_pii_text(value)
     if isinstance(value, dict):
-        return {k: _scrub_value(v) for k, v in value.items()}
+        return {
+            k: "[REDACTED]" if _SENSITIVE_KEY_RE.search(str(k)) else _scrub_value(v)
+            for k, v in value.items()
+        }
     if isinstance(value, list):
         return [_scrub_value(item) for item in value]
     if isinstance(value, tuple):
@@ -141,7 +148,11 @@ class PIISanitizingFilter(logging.Filter):
                 record.args = tuple(_scrub_value(arg) for arg in record.args)
         for key, value in list(vars(record).items()):
             if key not in _STANDARD_ATTRS and not key.startswith("_"):
-                setattr(record, key, _scrub_value(value))
+                setattr(
+                    record,
+                    key,
+                    "[REDACTED]" if _SENSITIVE_KEY_RE.search(key) else _scrub_value(value),
+                )
         if record.exc_info and not record.exc_text:
             record.exc_text = redact_log_pii_text(
                 "".join(traceback.format_exception(*record.exc_info)).strip()
@@ -205,7 +216,7 @@ class StructuredJsonFormatter(logging.Formatter):
             )
             log_data["exception"] = redact_log_pii_text(raw_exc)
 
-        return json.dumps(log_data, default=str)
+        return json.dumps(log_data, default=lambda o: redact_log_pii_text(str(o)))
 
 
 def _use_json() -> bool:

@@ -41,6 +41,7 @@ from ssra_core import (
     get_current_span_id,
     get_current_trace_id,
     install_logging,
+    metrics,
     normalise_route,
     record_chat_turn,
     record_client_error,
@@ -48,6 +49,7 @@ from ssra_core import (
     record_language_decision,
     record_mapped,
     record_mcp_security_event,
+    record_qdrant_lifecycle_observation,
     record_security_event,
     record_web_vitals,
     redact_log_pii_text,
@@ -95,8 +97,15 @@ def test_structured_logging_trace_correlation_and_pii_scrubbing() -> None:
                 "lookup for %s",
                 "taxpayer@example.com",
                 event="pii_redacted",
+                authorization="Bearer super-secret-jwt-token",
                 contacts=["+211 912 345 678", "support@nra.gov.ss"],
-                nested={"tin": "100-200-1234", "otp": "OTP: 482910", "pair": ("0912345678", 42)},
+                nested={
+                    "tin": "100-200-1234",
+                    "otp": "482910",
+                    "api_key": "sk-secret-key",
+                    "pair": ("0912345678", 42),
+                },
+                custom_set={"secret_set@example.com"},
             )
         )
     finally:
@@ -109,6 +118,9 @@ def test_structured_logging_trace_correlation_and_pii_scrubbing() -> None:
     assert line["severity_text"] == "WARNING"
     serialized = json.dumps(line)
     assert "taxpayer@example.com" not in serialized
+    assert "super-secret-jwt-token" not in serialized
+    assert "sk-secret-key" not in serialized
+    assert "secret_set@example.com" not in serialized
     assert "912 345 678" not in serialized
     assert "100-200-1234" not in serialized
     assert "482910" not in serialized
@@ -152,9 +164,11 @@ def test_structured_logging_trace_correlation_and_pii_scrubbing() -> None:
 
 def test_metrics_store_cumulative_histograms_and_bounded_labels() -> None:
     store = MetricsStore(max_series_per_metric=12)
-    store.inc("http_requests_total", labels={"method": "GET", "path": "/healthz", "status": "200"})
+    store.inc(
+        "http_requests_total", labels={"method": "GET", "path": "/healthz\\", "status": "200"}
+    )
     text = store.to_prometheus()
-    assert 'ssra_http_requests_total{method="GET",path="/healthz",status="200"} 1.0' in text
+    assert 'ssra_http_requests_total{method="GET",path="/healthz\\\\",status="200"} 1.0' in text
     assert "\nhttp_requests_total{" not in text
     assert text.count("# TYPE ssra_http_requests_total counter") == 1
 
@@ -286,6 +300,14 @@ def test_turn_recorders_security_events_client_telemetry_and_turn_audit() -> Non
         )
     )
 
+    with pytest.raises(ValueError):
+        build_turn_audit_record(
+            message="How much is PAYE on 250,000 SSP?",
+            reply="Estimated monthly PAYE is 25,000 SSP.",
+            channel="web",
+            locale="en",
+        )
+
     audit_rec = build_turn_audit_record(
         message="How much is PAYE on 250,000 SSP?",
         reply="Estimated monthly PAYE is 25,000 SSP.",
@@ -310,11 +332,21 @@ def test_turn_recorders_security_events_client_telemetry_and_turn_audit() -> Non
         ],
         input_tokens=24,
         output_tokens=32,
+        audit_hmac_key=b"test-audit-hmac-secret-key-32bytes",
     )
     assert audit_rec["schema"] == 2
     assert len(audit_rec["question_sha256"]) == 64
     assert len(audit_rec["reply_sha256"]) == 64
     assert "250,000" not in json.dumps(audit_rec)
+
+    with mock.patch.dict(os.environ, {"SSRA_AUDIT_HMAC_KEY": "env-audit-hmac-key"}):
+        env_audit = build_turn_audit_record(
+            message="TIN registration",
+            reply="Use https://etax.nra.gov.ss/",
+            channel="web",
+            locale="en",
+        )
+        assert len(env_audit["question_sha256"]) == 64
 
 
 def test_api_metrics_and_client_telemetry_endpoints() -> None:
@@ -325,13 +357,27 @@ def test_api_metrics_and_client_telemetry_endpoints() -> None:
     with mock.patch.dict(
         os.environ, {"SSRA_RUNTIME_MODE": "reference", "SSRA_METRICS_TOKEN": token}
     ):
+        ok_before_obs = client.get("/metrics", headers={"Authorization": f"Bearer {token}"})
+        assert ok_before_obs.status_code == 200
+        assert "ssra_qdrant_index_fresh" not in ok_before_obs.text
+
+        record_qdrant_lifecycle_observation(
+            index_fresh=True,
+            index_drift=False,
+            observed_at_epoch_seconds=1761350000.0,
+        )
         ok = client.get("/metrics", headers={"Authorization": f"Bearer {token}"})
         assert ok.status_code == 200
         assert "text/plain" in ok.headers.get("content-type", "")
-        assert "ssra_qdrant_index_fresh" in ok.text
+        assert "ssra_qdrant_index_fresh 1" in ok.text
+        assert "ssra_qdrant_index_status_timestamp_seconds 1761350000.0" in ok.text
 
+        key = 'security_events_total{event="authn_login_fail"}'
+        before_authn = metrics.snapshot()["counters"].get(key, 0)
         denied = client.get("/metrics", headers={"Authorization": "Bearer wrong-token"})
         assert denied.status_code == 401
+        after_authn = metrics.snapshot()["counters"].get(key, 0)
+        assert after_authn - before_authn == 1
 
     with mock.patch.dict(
         os.environ,

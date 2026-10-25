@@ -22,6 +22,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict
 from ssra_core import (
+    MAX_TELEMETRY_BODY_BYTES,
     REQUEST_ID,
     ensure_w3c_traceparent,
     extract_w3c_trace_context,
@@ -165,22 +166,24 @@ def install_api_conventions_middleware(app: FastAPI) -> None:
 
             # 2. Enforce request payload cap before/during streaming chunk consumption (CVE-2026-54283)
             route_max_bytes = (
-                16_384 if raw_path.startswith("/v1/telemetry/") else MAX_REQUEST_BODY_BYTES
+                MAX_TELEMETRY_BODY_BYTES
+                if raw_path.startswith("/v1/telemetry/")
+                else MAX_REQUEST_BODY_BYTES
             )
             bounded_body = await _read_bounded_request_body(request, route_max_bytes)
             if bounded_body is None:
                 metrics.inc(
                     "http_requests_total",
-                    labels={"method": request.method, "path": raw_path, "status": "413"},
+                    labels={"method": request.method, "path": "__unmatched__", "status": "413"},
                 )
                 metrics.inc(
                     "http_errors_total",
-                    labels={"method": request.method, "path": raw_path, "status": "413"},
+                    labels={"method": request.method, "path": "__unmatched__", "status": "413"},
                 )
                 record_http_security_event(
                     method=request.method,
                     status_code=413,
-                    route=raw_path,
+                    route="__unmatched__",
                     reason="PAYLOAD_TOO_LARGE",
                 )
                 return _problem_response(

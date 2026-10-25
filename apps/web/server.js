@@ -308,6 +308,12 @@ function renderPwaShellHtml(locale, nonce) {
       --radius-2xl: 32px;
       --radius-pill: 999px;
     }
+    :root[data-theme="dark"] {
+      color-scheme: light;
+      --bg-2: #EEF4FA;
+      --surface-3: #DCE8F6;
+      --surface-4: #CCE0F4;
+    }
     :root[data-theme="high-contrast"] {
       color-scheme: dark;
       --bg-0: #000000;
@@ -770,6 +776,10 @@ function renderPwaShellHtml(locale, nonce) {
     .search-modal { max-width: 540px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
     .search-input { width: 100%; padding: 14px 16px; border: none; border-bottom: 1px solid var(--border-1); background: transparent; color: var(--text-0); font: inherit; font-size: 0.95rem; outline: none; }
     .search-results { max-height: 320px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .search-modal .acct-pop-item { color: var(--text-0); }
+    .search-modal .acct-pop-item:hover { background: var(--surface-2); color: var(--text-0); }
+    .search-modal .acct-pop-item.active { color: var(--ssra-blue); font-weight: 700; }
+    .search-modal .rail-empty-hint { color: var(--text-2); }
 
     .settings-modal { max-width: 680px; width: 100%; min-height: 380px; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: grid; grid-template-columns: 185px 1fr; overflow: hidden; }
     @media (max-width: 640px) { .settings-modal { grid-template-columns: 1fr; } }
@@ -2481,7 +2491,7 @@ function renderPwaShellHtml(locale, nonce) {
         const payload = {
           message: trimmed,
           thread_id: conv.id,
-          locale: state.locale,
+          locale: state.localeExplicit ? state.locale : (state.detectedLocale || state.locale),
           channel: "web",
           low_data_mode: Boolean(state.lowDataMode),
           auth_level: "ANONYMOUS",

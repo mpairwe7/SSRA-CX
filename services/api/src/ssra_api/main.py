@@ -17,7 +17,6 @@ from ssra_core import (
     ensure_w3c_traceparent,
     metrics,
     record_client_error,
-    record_http_security_event,
     record_web_vitals,
 )
 from ssra_core.deployment import is_reference_mode
@@ -106,12 +105,6 @@ def create_api_app() -> FastAPI:
                 provided_token.encode("utf-8"), expected_token.encode("utf-8")
             )
         ):
-            record_http_security_event(
-                method="GET",
-                status_code=401,
-                route="/metrics",
-                reason="INVALID_METRICS_TOKEN",
-            )
             traceparent = ensure_w3c_traceparent(request.headers.get("traceparent"))
             err = SSRAError(
                 code=McpErrorCode.NOT_AUTHORIZED,

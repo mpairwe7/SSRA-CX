@@ -7,6 +7,7 @@ for SSRA Assist (October 2026 standards).
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 import math
@@ -124,8 +125,8 @@ def exported_name(name: str) -> str:
 
 
 def _clean_label_value(value: Any) -> str:
-    text = "" if value is None else str(value)
-    return text.replace("\r", " ").replace("\n", " ").replace('"', '\\"')[:_MAX_LABEL_VALUE_LEN]
+    text = "" if value is None else str(value)[:_MAX_LABEL_VALUE_LEN]
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\r", " ").replace("\n", " ")
 
 
 def _number(value: float) -> int | float:
@@ -428,28 +429,46 @@ def _snapshot_key(full_name: str, label_names: tuple[str, ...], label_vals: tupl
     return f"{base}{{{inner}}}"
 
 
+_qdrant_lifecycle_observation: dict[str, int | float] | None = None
+
+
+def record_qdrant_lifecycle_observation(
+    *,
+    index_fresh: bool,
+    index_drift: bool,
+    observed_at_epoch_seconds: float,
+    rebuild_failed: bool = False,
+    rebuild_timestamp_seconds: float = 0.0,
+    backup_required: bool = False,
+    backup_failed: bool = False,
+    backup_timestamp_seconds: float = 0.0,
+    restore_drill_failed: bool = False,
+    restore_drill_timestamp_seconds: float = 0.0,
+) -> None:
+    """Record a trusted Qdrant / KnowledgeSnapshot lifecycle observation with its observation timestamp."""
+    global _qdrant_lifecycle_observation
+    _qdrant_lifecycle_observation = {
+        "ssra_qdrant_index_fresh": int(bool(index_fresh)),
+        "ssra_qdrant_index_drift": int(bool(index_drift)),
+        "ssra_qdrant_index_status_timestamp_seconds": round(float(observed_at_epoch_seconds), 1),
+        "ssra_qdrant_rebuild_failed": int(bool(rebuild_failed)),
+        "ssra_qdrant_rebuild_timestamp_seconds": round(float(rebuild_timestamp_seconds), 1),
+        "ssra_qdrant_backup_required": int(bool(backup_required)),
+        "ssra_qdrant_backup_failed": int(bool(backup_failed)),
+        "ssra_qdrant_backup_timestamp_seconds": round(float(backup_timestamp_seconds), 1),
+        "ssra_qdrant_restore_drill_failed": int(bool(restore_drill_failed)),
+        "ssra_qdrant_restore_drill_timestamp_seconds": round(
+            float(restore_drill_timestamp_seconds), 1
+        ),
+    }
+
+
 def _index_lifecycle_prometheus_metrics() -> list[str]:
-    """Render Qdrant / KnowledgeSnapshot lifecycle gauges for Prometheus scraping."""
-    backup_required = os.getenv("QDRANT_BACKUP_REQUIRED", "false").lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    gauges: dict[str, int | float] = {
-        "ssra_qdrant_index_fresh": 1,
-        "ssra_qdrant_index_drift": 0,
-        "ssra_qdrant_index_status_timestamp_seconds": round(time.time(), 1),
-        "ssra_qdrant_rebuild_failed": 0,
-        "ssra_qdrant_rebuild_timestamp_seconds": 0.0,
-        "ssra_qdrant_backup_required": int(backup_required),
-        "ssra_qdrant_backup_failed": 0,
-        "ssra_qdrant_backup_timestamp_seconds": 0.0,
-        "ssra_qdrant_restore_drill_failed": 0,
-        "ssra_qdrant_restore_drill_timestamp_seconds": 0.0,
-    }
+    """Render Qdrant / KnowledgeSnapshot lifecycle gauges only when a trusted observation has been recorded."""
+    if _qdrant_lifecycle_observation is None:
+        return []
     lines: list[str] = []
-    for name, value in gauges.items():
+    for name, value in _qdrant_lifecycle_observation.items():
         lines.append(f"# HELP {name} {_LIFECYCLE_HELP[name]}")
         lines.append(f"# TYPE {name} gauge")
         lines.append(f"{name} {value}")
@@ -732,8 +751,21 @@ TURN_PAYLOAD_SCHEMA = 2
 _MAX_LISTED_ARTIFACTS = 10
 
 
-def _sha256_hex(text: str) -> str:
-    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+def _hmac_sha256_hex(text: str, key: bytes) -> str:
+    return hmac.new(key, (text or "").encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _resolve_audit_hmac_key(explicit_key: str | bytes | None = None) -> bytes:
+    if isinstance(explicit_key, bytes) and explicit_key:
+        return explicit_key
+    if isinstance(explicit_key, str) and explicit_key.strip():
+        return explicit_key.strip().encode("utf-8")
+    env_key = os.getenv("SSRA_AUDIT_HMAC_KEY", "").strip()
+    if env_key:
+        return env_key.encode("utf-8")
+    raise ValueError(
+        "SSRA_AUDIT_HMAC_KEY or explicit audit_hmac_key is required for turn audit digests"
+    )
 
 
 def build_turn_audit_record(
@@ -749,8 +781,10 @@ def build_turn_audit_record(
     input_tokens: int = 0,
     output_tokens: int = 0,
     knowledge_snapshot: str = "2026.10.1",
+    audit_hmac_key: str | bytes | None = None,
 ) -> dict[str, Any]:
-    """Construct a zero-PII SHA-256 digest audit payload for a completed turn (`TURN_PAYLOAD_SCHEMA = 2`)."""
+    """Construct a keyed HMAC-SHA256 digest audit payload for a completed turn (`TURN_PAYLOAD_SCHEMA = 2`)."""
+    key_bytes = _resolve_audit_hmac_key(audit_hmac_key)
     tool_digests: list[dict[str, Any]] = []
     for call in list(tool_calls)[:_MAX_LISTED_ARTIFACTS]:
         args = call.get("arguments")
@@ -758,7 +792,9 @@ def build_turn_audit_record(
             {
                 "name": str(call.get("name") or "")[:80],
                 "iteration": int(call.get("iteration") or 0),
-                "arguments_sha256": _sha256_hex(json.dumps(args, sort_keys=True, default=str))
+                "arguments_sha256": _hmac_sha256_hex(
+                    json.dumps(args, sort_keys=True, default=str), key_bytes
+                )
                 if args
                 else "",
             }
@@ -774,15 +810,15 @@ def build_turn_audit_record(
             str(cit_dict.get(field, "") or "")
             for field in ("doc_id", "section", "title", "snippet")
         )
-        citation_digests.append(_sha256_hex(key))
+        citation_digests.append(_hmac_sha256_hex(key, key_bytes))
     return {
         "schema": TURN_PAYLOAD_SCHEMA,
         "channel": channel,
         "locale": locale,
         "locale_source": locale_source,
         "retrieval_mode": retrieval_mode,
-        "question_sha256": _sha256_hex(message),
-        "reply_sha256": _sha256_hex(reply),
+        "question_sha256": _hmac_sha256_hex(message, key_bytes),
+        "reply_sha256": _hmac_sha256_hex(reply, key_bytes),
         "tool_calls": tool_digests,
         "citation_digests": citation_digests,
         "usage": {

@@ -387,16 +387,23 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
             idempotency_key=body.idempotency_key,
         )
         elapsed_ms = (time.perf_counter() - started) * 1000.0
+        retrieval_mode = (
+            "abstained"
+            if turn_resp.answer.abstained
+            else (
+                "escalated"
+                if turn_resp.handoff_ticket
+                else ("calculator" if turn_resp.artifacts else "grounded_qa")
+            )
+        )
         record_chat_turn(
             {
-                "retrieval_mode": "abstained"
-                if turn_resp.answer.abstained
-                else ("escalated" if turn_resp.handoff_ticket else "hybrid"),
+                "retrieval_mode": retrieval_mode,
                 "escalation_required": turn_resp.handoff_ticket is not None,
                 "handoff": turn_resp.handoff_ticket,
-                "faithfulness_score": 1.0 if turn_resp.citations else None,
+                "faithfulness_score": None,
                 "locale": turn_resp.locale.value,
-                "locale_source": "detected",
+                "locale_source": "",
             },
             elapsed_ms=elapsed_ms,
             channel=body.channel.value.lower(),
