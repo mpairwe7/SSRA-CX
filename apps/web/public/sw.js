@@ -2,7 +2,7 @@
 // Security Invariant: Caches ONLY verified T0 public assets; purges stale caches on activate;
 // sends ngrok-skip-browser-warning header so Ngrok interstitials (ERR_NGROK_6024 / allerrors.js) are never cached.
 
-const CACHE_NAME = "ssra-assist-public-shell-v2026.10.4";
+const CACHE_NAME = "ssra-assist-public-shell-v2026.10.6";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -55,7 +55,12 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(netReq)
       .then((res) => {
-        if (res.ok && !res.headers.get("ngrok-error-code")) {
+        const resCacheControl = (res.headers.get("cache-control") || "").toLowerCase();
+        if (
+          res.ok &&
+          !res.headers.get("ngrok-error-code") &&
+          !resCacheControl.includes("no-store")
+        ) {
           const clone = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }

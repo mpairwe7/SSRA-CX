@@ -233,6 +233,19 @@ services:
       context: ../..
       dockerfile: services/api/Dockerfile
     container_name: ssra-api
+    command:
+      - uvicorn
+      - ssra_api.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --no-access-log
+      - --reload
+      - --reload-dir
+      - /app/libs
+      - --reload-dir
+      - /app/services/api
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
@@ -247,6 +260,10 @@ services:
         source: ${SSRA_HF_CACHE_DIR:-/home/developer/huggingface_cache}
         target: /home/developer/huggingface_cache
         read_only: true
+      - ../../ai:/app/ai:ro
+      - ../../knowledge:/app/knowledge:ro
+      - ../../libs:/app/libs:ro
+      - ../../services/api:/app/services/api:ro
     ports:
       - "${SSRA_API_PUBLIC_PORT:-8083}:8000"
       - "127.0.0.1:${SSRA_API_PORT:-18000}:8000"
@@ -266,6 +283,25 @@ services:
       context: ../..
       dockerfile: services/agent-runtime/Dockerfile
     container_name: ssra-agent-runtime
+    command:
+      - uvicorn
+      - ssra_runtime.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8001"
+      - --no-access-log
+      - --reload
+      - --reload-dir
+      - /app/libs
+      - --reload-dir
+      - /app/mcp-servers
+      - --reload-dir
+      - /app/services/agent-runtime
+      - --reload-dir
+      - /app/services/voice
+      - --reload-dir
+      - /app/services/workers
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
@@ -290,6 +326,13 @@ services:
         source: ${SSRA_HF_CACHE_DIR:-/home/developer/huggingface_cache}
         target: /home/developer/huggingface_cache
         read_only: true
+      - ../../ai:/app/ai:ro
+      - ../../knowledge:/app/knowledge:ro
+      - ../../libs:/app/libs:ro
+      - ../../mcp-servers:/app/mcp-servers:ro
+      - ../../services/agent-runtime:/app/services/agent-runtime:ro
+      - ../../services/voice:/app/services/voice:ro
+      - ../../services/workers:/app/services/workers:ro
     ports:
       - "127.0.0.1:${SSRA_RUNTIME_PORT:-18001}:8001"
     networks:
@@ -318,6 +361,7 @@ services:
         INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
         INTERNAL_RUNTIME_URL: ${INTERNAL_RUNTIME_URL:-http://ssra-agent-runtime:8001}
     container_name: ssra-frontend
+    command: ["node", "--watch", "apps/web/server.js"]
     init: true
     read_only: true
     tmpfs:
@@ -326,6 +370,9 @@ services:
       NODE_ENV: production
       INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
       INTERNAL_RUNTIME_URL: ${INTERNAL_RUNTIME_URL:-http://ssra-agent-runtime:8001}
+    volumes:
+      - ../../apps/web:/app/apps/web:ro
+      - ../../packages:/app/packages:ro
     ports:
       - "${SSRA_NGROK_PORT:-3032}:3000"
       - "127.0.0.1:${SSRA_WEB_PORT:-3033}:3000"
@@ -345,6 +392,7 @@ services:
       args:
         INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
     container_name: ssra-console
+    command: ["node", "--watch", "apps/console/server.js"]
     init: true
     read_only: true
     tmpfs:
@@ -353,6 +401,9 @@ services:
       NODE_ENV: production
       INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
       INTERNAL_RUNTIME_URL: ${INTERNAL_RUNTIME_URL:-http://ssra-agent-runtime:8001}
+    volumes:
+      - ../../apps/console:/app/apps/console:ro
+      - ../../packages:/app/packages:ro
     ports:
       - "127.0.0.1:${SSRA_CONSOLE_PORT:-3034}:3001"
     networks:

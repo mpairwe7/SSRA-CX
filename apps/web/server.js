@@ -1371,10 +1371,15 @@ function renderPwaShellHtml(locale, nonce) {
       if ("serviceWorker" in navigator) {
         caches?.keys?.().then((keys) => {
           keys.forEach((k) => {
-            if (k !== "ssra-assist-public-shell-v2026.10.4") caches.delete(k);
+            if (k !== "ssra-assist-public-shell-v2026.10.6") caches.delete(k);
           });
         }).catch(() => {});
-        navigator.serviceWorker.register(scriptUrlPolicy ? scriptUrlPolicy.createScriptURL("/sw.js") : "/sw.js").catch(() => {});
+        navigator.serviceWorker
+          .register(scriptUrlPolicy ? scriptUrlPolicy.createScriptURL("/sw.js") : "/sw.js", {
+            updateViaCache: "none",
+          })
+          .then((reg) => reg.update())
+          .catch(() => {});
       }
 
       // W3C Trusted Types & 6-character HTML Escaping (FE-G3)
@@ -5260,6 +5265,7 @@ const server = http.createServer(async (req, res) => {
   if (isGetOrHead && pathname === "/sw.js") {
     res.writeHead(200, {
       "Content-Type": "application/javascript; charset=utf-8",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
       "Clear-Site-Data": '"cache"',
       ...secHeaders,
     });
