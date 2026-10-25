@@ -644,7 +644,7 @@ export function structureCallReceptionistBlocks(text: string): readonly CallCapt
         listItems.push({
           stepNumber: Number(toAsciiStepDigits(rawStepNum)),
           text: stripInlineStepBold(rawStepBody)
-            .replace(/[;؛]+$/, "")
+            .replace(/(?<![;؛])[;؛]+$/, "")
             .trim(),
         });
       } else {

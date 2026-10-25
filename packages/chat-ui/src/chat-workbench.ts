@@ -960,6 +960,8 @@ export function resolveLanguageMenuKeyNavigation(params: {
   return null;
 }
 
+const MAX_STRUCTURED_TEXT_LEN = 16_000;
+
 /**
  * Strip inline `[n]` and `[n, m]` citation markers while preserving `[1](url)` markdown links
  * and closing whitespace/punctuation seams (`FinalYearProject/App/frontend/src/lib/answerText.ts` parity).
@@ -967,10 +969,13 @@ export function resolveLanguageMenuKeyNavigation(params: {
 export function stripCitationMarkers(text: string): string {
   if (!text) return "";
   return String(text)
-    .replace(/\s*\[\d+(?:\s*[,;]\s*\d+)*\](?!\()/g, "")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/[ \t]+([.,;:!?])/g, "$1")
-    .replace(/[ \t]+$/gm, "");
+    .slice(0, MAX_STRUCTURED_TEXT_LEN)
+    .replace(/\[\d{1,3}(?:[ \t]*[,;][ \t]*\d{1,3}){0,10}\](?!\()/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ ([.,;:!?])/g, "$1")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n");
 }
 
 /**
@@ -978,8 +983,10 @@ export function stripCitationMarkers(text: string): string {
  */
 export function tidyStatutoryTypography(text: string): string {
   return String(text ?? "")
+    .slice(0, MAX_STRUCTURED_TEXT_LEN)
     .replace(/(\s)--(\s)/g, "$1—$2")
-    .replace(/[ \t]+([.,;:!?])/g, "$1");
+    .replace(/[ \t]+/g, " ")
+    .replace(/ ([.,;:!?])/g, "$1");
 }
 
 function toAsciiNumberDigits(raw: string): string {
@@ -996,8 +1003,9 @@ export interface NumberedProcedureStructure {
  * Extract an inline numbered procedure (`(1) ...; (2) ...; (3) ...` or `1. ... 2. ... 3. ...`)
  * into a lead-in paragraph, ordered list items, and an optional trailing `Note:` / `Important:` callout.
  */
-export function asNumberedProcedure(text: string): NumberedProcedureStructure | null {
-  const parenMarker = /(?:^|[\s:;.,!?؛،])\((\d{1,2}|[٠-٩]{1,2})\)\s+/g;
+export function asNumberedProcedure(rawText: string): NumberedProcedureStructure | null {
+  const text = String(rawText ?? "").slice(0, MAX_STRUCTURED_TEXT_LEN);
+  const parenMarker = /(?:^|[\s:;.,!?؛،])\((\d{1,2}|[٠-٩]{1,2})\)[ \t]+/g;
   const parenFound: { n: number; start: number; end: number }[] = [];
   let pm: RegExpExecArray | null = parenMarker.exec(text);
   while (pm !== null) {
@@ -1013,7 +1021,7 @@ export function asNumberedProcedure(text: string): NumberedProcedureStructure | 
   let found = parenFound;
   let minItems = 2;
   if (found.length < 2) {
-    const dotMarker = /(?:^|[\s:;.,!?؛،])(\d{1,2}|[٠-٩]{1,2})[).]\s+/g;
+    const dotMarker = /(?:^|[\s:;.,!?؛،])(\d{1,2}|[٠-٩]{1,2})[).][ \t]+/g;
     const dotFound: { n: number; start: number; end: number }[] = [];
     let dm: RegExpExecArray | null = dotMarker.exec(text);
     while (dm !== null) {
@@ -1047,19 +1055,21 @@ export function asNumberedProcedure(text: string): NumberedProcedureStructure | 
     let item = text.slice(cur.end, stop).trim();
     if (i + 1 < found.length) {
       item = item
-        .replace(/[;؛]+$/, ".")
-        .replace(/[,،]+$/, "")
+        .replace(/(?<![;؛])[;؛]+$/, ".")
+        .replace(/(?<![,،])[,،]+$/, "")
         .trim();
     } else {
-      const calloutSplit = /^(.*?[.!?؟])\s+(Note|Important|Warning|Caution|Tip):\s+(.+)$/is.exec(
-        item,
-      );
-      if (calloutSplit?.[1] && calloutSplit[2] && calloutSplit[3]) {
-        item = calloutSplit[1].trim();
-        trailingCallout = {
-          kind: calloutSplit[2].toLowerCase(),
-          text: calloutSplit[3].trim(),
-        };
+      const calloutMarker = /\b(Note|Important|Warning|Caution|Tip):[ \t]+/i.exec(item);
+      if (calloutMarker?.[1] && calloutMarker.index > 0) {
+        const prefix = item.slice(0, calloutMarker.index).trimEnd();
+        const suffix = item.slice(calloutMarker.index + calloutMarker[0].length).trim();
+        if (/[.!?؟]$/.test(prefix) && suffix) {
+          item = prefix;
+          trailingCallout = {
+            kind: calloutMarker[1].toLowerCase(),
+            text: suffix,
+          };
+        }
       }
     }
     if (!item) return null;
@@ -1078,7 +1088,8 @@ export interface SemicolonEnumerationStructure {
  * Convert a semicolon-delimited statutory schedule or list (`Lead-in: item 1; item 2; item 3.`)
  * into a lead-in paragraph, unordered list items, and an optional concluding sentence paragraph.
  */
-export function asSemicolonEnumeration(text: string): SemicolonEnumerationStructure | null {
+export function asSemicolonEnumeration(rawText: string): SemicolonEnumerationStructure | null {
+  const text = String(rawText ?? "").slice(0, MAX_STRUCTURED_TEXT_LEN);
   const firstSegment = text.split(/[;؛]/)[0] ?? "";
   const colon = firstSegment.indexOf(":");
   let lead = "";
@@ -1098,28 +1109,30 @@ export function asSemicolonEnumeration(text: string): SemicolonEnumerationStruct
   let trailingParagraph: string | null = null;
   const lastIdx = rawParts.length - 1;
   const lastPart = rawParts[lastIdx] ?? "";
-  const trailingSentenceMatch = /^(.+?)\.\s+([A-Z\u0600-\u06FF][^.!?؟]+[.!?؟])$/.exec(lastPart);
-  if (trailingSentenceMatch?.[1] && trailingSentenceMatch[2]) {
-    rawParts[lastIdx] = trailingSentenceMatch[1].trim();
-    trailingParagraph = trailingSentenceMatch[2].trim();
+  const trailingSentenceMatch = /\.[ \t]+([A-Z\u0600-\u06FF][^.!?؟]{2,200}[.!?؟])$/.exec(lastPart);
+  if (trailingSentenceMatch?.[1] && trailingSentenceMatch.index > 0) {
+    rawParts[lastIdx] = lastPart.slice(0, trailingSentenceMatch.index).trim();
+    trailingParagraph = trailingSentenceMatch[1].trim();
   } else {
     rawParts[lastIdx] = lastPart.replace(/\.$/, "").trim();
   }
 
   if (rawParts.some((p) => p.length > 220 || p.length === 0)) return null;
-  const items = rawParts.map((p, idx) => (idx === lastIdx ? p.replace(/^and\s+/i, "") : p));
+  const items = rawParts.map((p, idx) => (idx === lastIdx ? p.replace(/^and[ \t]+/i, "") : p));
   return { lead, items, trailingParagraph };
 }
 
 const STATUTORY_ABBREV_PROTECT_RE =
-  /\b(Sec|Secs|Reg|Regs|Art|Arts|No|Nos|Vol|VOL|Ch|Pt|Dr|Mr|Mrs|Ms|R\.E|P\.O|I|II|III|IV|V|VI|VII|VIII)\.\s+/g;
+  /\b(Sec|Secs|Reg|Regs|Art|Arts|No|Nos|Vol|VOL|Ch|Pt|Dr|Mr|Mrs|Ms|R\.E|P\.O|I|II|III|IV|V|VI|VII|VIII)\.[ \t]+/g;
 
 /**
  * Split a long flat paragraph (`>= 200` chars) into shorter scannable paragraphs at sentence boundaries
  * while preserving statutory abbreviations (`Sec. 18`, `Reg. 1.21`, `VOL. II`, `R.E. 2024`, `I. Draft`).
  */
 export function splitLongStatutoryParagraph(text: string): readonly string[] {
-  const cleaned = text.trim();
+  const cleaned = String(text ?? "")
+    .slice(0, MAX_STRUCTURED_TEXT_LEN)
+    .trim();
   if (
     cleaned.length < 200 ||
     asNumberedProcedure(cleaned) !== null ||
@@ -1129,7 +1142,7 @@ export function splitLongStatutoryParagraph(text: string): readonly string[] {
   }
   const protectedText = cleaned.replace(STATUTORY_ABBREV_PROTECT_RE, "$1<DOT> ");
   const parts = protectedText
-    .split(/(?<=[.!?؟])\s+/)
+    .split(/(?<=[.!?؟])[ \t]+/)
     .map((s) => s.replace(/<DOT>/g, ".").trim())
     .filter(Boolean);
   if (parts.length < 2) return [cleaned];
@@ -1170,7 +1183,7 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
     const para = rawPara.trim();
     if (!para) continue;
 
-    const calloutLine = /^(Note|Important|Warning|Caution|Tip):\s+(.+)$/is.exec(para);
+    const calloutLine = /^(Note|Important|Warning|Caution|Tip):[ \t]+(.+)$/is.exec(para);
     if (calloutLine?.[1] && calloutLine[2]) {
       blocks.push({
         type: "callout",

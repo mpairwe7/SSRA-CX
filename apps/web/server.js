@@ -2103,7 +2103,7 @@ function renderPwaShellHtml(locale, nonce) {
         html = html.replace(
           /(https?:\\/\\/[^\\s<]+|\\b(?:www\\.nra|etax\\.nra|ecustoms\\.nra|cms\\.nra|nra|assist\\.ssra|ssra|business\\.eservices|customs\\.eservices|www\\.trade\\.eservices|trade\\.eservices|eservices|mofp|boss|mojca)\\.gov\\.ss(?:\\/[^\\s<]*)?|\\b(?:support|info)@nra\\.gov\\.ss\\b|(?<!\\w)\\+211[ \\t-]\\d{3}[ \\t-]?\\d{3}[ \\t-]?\\d{3}\\b)/gi,
           (match) => {
-            const trailMatch = /[.,;:!?)\\]}،؛؟»]+$/.exec(match);
+            const trailMatch = /(?<![.,;:!?)\\]}،؛؟»])[.,;:!?)\\]}،؛؟»]+$/.exec(match);
             const clean = trailMatch ? match.slice(0, match.length - trailMatch[0].length) : match;
             const trail = trailMatch ? trailMatch[0] : "";
             if (!clean) return match;
@@ -2128,8 +2128,9 @@ function renderPwaShellHtml(locale, nonce) {
         return html;
       }
 
-      function parseInlineNumberedProcedure(text) {
-        const parenRe = /(?:^|[\\s:;.,!?؛،])\\((\\d{1,2}|[٠-٩]{1,2})\\)\\s+/g;
+      function parseInlineNumberedProcedure(rawText) {
+        const text = String(rawText || "").slice(0, 16000);
+        const parenRe = /(?:^|[\\s:;.,!?؛،])\\((\\d{1,2}|[٠-٩]{1,2})\\)[ \\t]+/g;
         const parenFound = [];
         let pm = parenRe.exec(text);
         while (pm !== null) {
@@ -2144,7 +2145,7 @@ function renderPwaShellHtml(locale, nonce) {
         let found = parenFound;
         let minItems = 2;
         if (found.length < 2) {
-          const dotRe = /(?:^|[\\s:;.,!?؛،])(\\d{1,2}|[٠-٩]{1,2})[).]\\s+/g;
+          const dotRe = /(?:^|[\\s:;.,!?؛،])(\\d{1,2}|[٠-٩]{1,2})[).][ \\t]+/g;
           const dotFound = [];
           let dm = dotRe.exec(text);
           while (dm !== null) {
@@ -2171,12 +2172,16 @@ function renderPwaShellHtml(locale, nonce) {
           const stop = i + 1 < found.length ? found[i + 1].start : text.length;
           let item = text.slice(found[i].end, stop).trim();
           if (i + 1 < found.length) {
-            item = item.replace(/[;؛]+$/, ".").replace(/[,،]+$/, "").trim();
+            item = item.replace(/(?<![;؛])[;؛]+$/, ".").replace(/(?<![,،])[,،]+$/, "").trim();
           } else {
-            const calloutSplit = /^(.*?[.!?؟])\\s+(Note|Important|Warning|Caution|Tip):\\s+(.+)$/is.exec(item);
-            if (calloutSplit) {
-              item = calloutSplit[1].trim();
-              trailingCallout = { kind: calloutSplit[2].toLowerCase(), label: calloutSplit[2], text: calloutSplit[3].trim() };
+            const calloutMarker = /\\b(Note|Important|Warning|Caution|Tip):[ \\t]+/i.exec(item);
+            if (calloutMarker && calloutMarker.index > 0) {
+              const prefix = item.slice(0, calloutMarker.index).trimEnd();
+              const suffix = item.slice(calloutMarker.index + calloutMarker[0].length).trim();
+              if (/[.!?؟]$/.test(prefix) && suffix) {
+                item = prefix;
+                trailingCallout = { kind: calloutMarker[1].toLowerCase(), label: calloutMarker[1], text: suffix };
+              }
             }
           }
           if (!item) return null;
@@ -2185,7 +2190,8 @@ function renderPwaShellHtml(locale, nonce) {
         return { lead, items, trailingCallout };
       }
 
-      function parseSemicolonEnumeration(text) {
+      function parseSemicolonEnumeration(rawText) {
+        const text = String(rawText || "").slice(0, 16000);
         const firstSeg = text.split(/[;؛]/)[0] || "";
         const colonIdx = firstSeg.indexOf(":");
         let lead = "";
@@ -2200,27 +2206,27 @@ function renderPwaShellHtml(locale, nonce) {
         let trailingPara = null;
         const lastIdx = parts.length - 1;
         const lastPart = parts[lastIdx] || "";
-        const trailMatch = /^(.+?)\\.\\s+([A-Z\\u0600-\\u06FF][^.!?؟]+[.!?؟])$/.exec(lastPart);
-        if (trailMatch) {
-          parts[lastIdx] = trailMatch[1].trim();
-          trailingPara = trailMatch[2].trim();
+        const trailMatch = /\\.[ \\t]+([A-Z\\u0600-\\u06FF][^.!?؟]{2,200}[.!?؟])$/.exec(lastPart);
+        if (trailMatch && trailMatch.index > 0) {
+          parts[lastIdx] = lastPart.slice(0, trailMatch.index).trim();
+          trailingPara = trailMatch[1].trim();
         } else {
           parts[lastIdx] = lastPart.replace(/\\.$/, "").trim();
         }
         if (parts.some((p) => p.length > 220 || !p.length)) return null;
-        const items = parts.map((p, idx) => (idx === lastIdx ? p.replace(/^and\\s+/i, "") : p));
+        const items = parts.map((p, idx) => (idx === lastIdx ? p.replace(/^and[ \\t]+/i, "") : p));
         return { lead, items, trailingPara };
       }
 
       function splitLongParagraphSafe(text) {
-        const cleaned = text.trim();
+        const cleaned = String(text || "").slice(0, 16000).trim();
         if (cleaned.length < 200) return cleaned ? [cleaned] : [];
         const prot = cleaned.replace(
-          /\\b(Sec|Secs|Reg|Regs|Art|Arts|No|Nos|Vol|VOL|Ch|Pt|Dr|Mr|Mrs|Ms|R\\.E|P\\.O|I|II|III|IV|V|VI|VII|VIII)\\.\\s+/g,
+          /\\b(Sec|Secs|Reg|Regs|Art|Arts|No|Nos|Vol|VOL|Ch|Pt|Dr|Mr|Mrs|Ms|R\\.E|P\\.O|I|II|III|IV|V|VI|VII|VIII)\\.[ \\t]+/g,
           "$1<DOT> ",
         );
         const parts = prot
-          .split(/(?<=[.!?؟])\\s+/)
+          .split(/(?<=[.!?؟])[ \\t]+/)
           .map((s) => s.replace(/<DOT>/g, ".").trim())
           .filter(Boolean);
         if (parts.length < 2) return [cleaned];
@@ -2241,9 +2247,11 @@ function renderPwaShellHtml(locale, nonce) {
 
       function renderStructuredAnswerHtml(rawContent) {
         const cleaned = String(rawContent || "")
-          .replace(/\\s*\\[\\d+(?:\\s*[,;]\\s*\\d+)*\\](?!\\()/g, "")
+          .slice(0, 16000)
+          .replace(/\\[\\d{1,3}(?:[ \\t]*[,;][ \\t]*\\d{1,3}){0,10}\\](?!\\()/g, "")
           .replace(/(\\s)--(\\s)/g, "$1—$2")
-          .replace(/[ \\t]+([.,;:!?])/g, "$1")
+          .replace(/[ \\t]+/g, " ")
+          .replace(/ ([.,;:!?])/g, "$1")
           .trim();
         if (!cleaned) return "";
         const blocksHtml = [];
