@@ -238,6 +238,11 @@ test("continuous voice conversation auto-advances across turns and filters speak
           rec?.onend?.();
           if (currentRec === rec) currentRec = null;
         },
+        emitInterimTranscript: (text: string) => {
+          const rec = currentRec;
+          const item = Object.assign([{ transcript: text }], { isFinal: false });
+          rec?.onresult?.({ results: [item] });
+        },
       },
     });
     window.speechSynthesis.speak = (utterance: SpeechSynthesisUtterance) => {
@@ -433,6 +438,22 @@ test("continuous voice conversation auto-advances across turns and filters speak
   });
   await expect(composerBox).toHaveValue("Calculate PAYE on 250,000 SSP");
   await expect(page.locator("#composer-hint")).toContainText("Voice text added. Check it before you send.");
+  await expect(page.locator("#ssra-chat-submit")).toBeVisible();
+  await composerBox.fill("");
+
+  // Interim speech preview & manual Confirm checkmark (#composer-rec-confirm) insertion
+  await dictateBtn.click();
+  await expect(page.locator("#composer-recording-bar")).toBeVisible();
+  await page.evaluate(() => {
+    (window as unknown as { __voiceTest: { emitInterimTranscript: (t: string) => void } }).__voiceTest.emitInterimTranscript(
+      "What is the WHT rate on technical fees?",
+    );
+  });
+  await expect(page.locator("#composer-rec-text")).toContainText("What is the WHT rate on technical fees?");
+  await page.locator("#composer-rec-confirm").click();
+  await expect(composerBox).toHaveValue("What is the WHT rate on technical fees?");
+  await expect(page.locator("#composer-recording-bar")).toBeHidden();
+  await expect(page.locator("#ssra-chat-submit")).toBeVisible();
   await composerBox.fill("");
 
   // Composer '+' attachment menu -> file attachment -> DocumentInspectionModal (OQ-017 truthful state) -> suggested prompt -> remove.
