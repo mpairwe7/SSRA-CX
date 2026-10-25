@@ -246,9 +246,19 @@ services:
       - "10"
       - --reload
       - --reload-dir
-      - /app/libs
+      - /app/libs/ssra_core/src
       - --reload-dir
-      - /app/services/api
+      - /app/libs/ssra_security/src
+      - --reload-dir
+      - /app/libs/ssra_rules/src
+      - --reload-dir
+      - /app/libs/ssra_llm/src
+      - --reload-dir
+      - /app/libs/ssra_mcp/src
+      - --reload-dir
+      - /app/libs/ssra_adapters/src
+      - --reload-dir
+      - /app/services/api/src
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
@@ -299,15 +309,45 @@ services:
       - "10"
       - --reload
       - --reload-dir
-      - /app/libs
+      - /app/libs/ssra_core/src
       - --reload-dir
-      - /app/mcp-servers
+      - /app/libs/ssra_security/src
       - --reload-dir
-      - /app/services/agent-runtime
+      - /app/libs/ssra_rules/src
       - --reload-dir
-      - /app/services/voice
+      - /app/libs/ssra_llm/src
       - --reload-dir
-      - /app/services/workers
+      - /app/libs/ssra_mcp/src
+      - --reload-dir
+      - /app/libs/ssra_adapters/src
+      - --reload-dir
+      - /app/services/agent-runtime/src
+      - --reload-dir
+      - /app/services/voice/src
+      - --reload-dir
+      - /app/services/workers/src
+      - --reload-dir
+      - /app/mcp-servers/knowledge/src
+      - --reload-dir
+      - /app/mcp-servers/tax-facts/src
+      - --reload-dir
+      - /app/mcp-servers/official-channels/src
+      - --reload-dir
+      - /app/mcp-servers/taxpayer/src
+      - --reload-dir
+      - /app/mcp-servers/ledger/src
+      - --reload-dir
+      - /app/mcp-servers/payments-info/src
+      - --reload-dir
+      - /app/mcp-servers/tcc/src
+      - --reload-dir
+      - /app/mcp-servers/customs/src
+      - --reload-dir
+      - /app/mcp-servers/cases/src
+      - --reload-dir
+      - /app/mcp-servers/appointments/src
+      - --reload-dir
+      - /app/mcp-servers/notifications/src
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
@@ -367,12 +407,7 @@ services:
         INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
         INTERNAL_RUNTIME_URL: ${INTERNAL_RUNTIME_URL:-http://ssra-agent-runtime:8001}
     container_name: ssra-frontend
-    command:
-      - node
-      - --watch
-      - --watch-path=/app/apps/web
-      - --watch-path=/app/packages
-      - apps/web/server.js
+    command: ["node", "--watch", "apps/web/server.js"]
     init: true
     read_only: true
     tmpfs:
@@ -403,12 +438,7 @@ services:
       args:
         INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
     container_name: ssra-console
-    command:
-      - node
-      - --watch
-      - --watch-path=/app/apps/console
-      - --watch-path=/app/packages
-      - apps/console/server.js
+    command: ["node", "--watch", "apps/console/server.js"]
     init: true
     read_only: true
     tmpfs:

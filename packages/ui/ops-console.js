@@ -289,7 +289,13 @@ function resolvePublicAssistantUrl(publicWebOrigin) {
 }
 
 // Rendered on the server so the preview state is readable without JavaScript.
-function renderPreviewCard(title, group = "Work", publicAssistantUrl = "http://127.0.0.1:3000/en") {
+function renderPreviewCard(
+  title,
+  group = "Work",
+  publicAssistantUrl = "http://127.0.0.1:3000/en",
+  routePath = "/admin",
+) {
+  const spec = ROUTE_SPECS[routePath] || ROUTE_SPECS["/admin"];
   return `<header class="ops-page-head">
           <div>
             <span id="preview-eyebrow" class="ops-eyebrow">${escapeHtml(group)} · Preview only</span>
@@ -392,10 +398,10 @@ function renderPreviewCard(title, group = "Work", publicAssistantUrl = "http://1
               </div>
               <div class="ops-panel-body">
                 <dl class="ov-kv">
-                  <div><dt>Permitted roles</dt><dd id="spec-roles">ssra_admin, ssra_auditor</dd></div>
-                  <div><dt>Standard anchor</dt><dd id="spec-standard">ISO/IEC 42001 §9.1 · ADR-012</dd></div>
-                  <div><dt>Workbench surface</dt><dd id="spec-surface">Service levels, officers on duty &amp; answer authority</dd></div>
-                  <div><dt>Fail-closed gate</dt><dd id="spec-gate">Server-verified passkey session + freshness provenance</dd></div>
+                  <div><dt>Permitted roles</dt><dd id="spec-roles">${escapeHtml(spec.roles)}</dd></div>
+                  <div><dt>Standard anchor</dt><dd id="spec-standard">${escapeHtml(spec.standard)}</dd></div>
+                  <div><dt>Workbench surface</dt><dd id="spec-surface">${escapeHtml(spec.surface)}</dd></div>
+                  <div><dt>Fail-closed gate</dt><dd id="spec-gate">${escapeHtml(spec.gate)}</dd></div>
                 </dl>
               </div>
             </section>
@@ -546,7 +552,26 @@ function renderRouteBody(currentPath, currentTitle, currentGroup, publicAssistan
   if (currentPath === "/signin") return renderSignInCard(publicAssistantUrl);
   if (currentPath === "/signup") return renderSignUpCard(publicAssistantUrl);
   if (currentPath === "/signin/callback") return renderSignInCallbackCard(publicAssistantUrl);
-  return renderPreviewCard(currentTitle, currentGroup, publicAssistantUrl);
+  return renderPreviewCard(currentTitle, currentGroup, publicAssistantUrl, currentPath);
+}
+
+function renderServerRailGroups(currentPath = "/admin", role = "ssra_admin") {
+  const groups = ["Work", "Audit", "Configure", "Observe"];
+  return groups
+    .map((group) => {
+      const destinations = DESTINATIONS.filter(
+        (item) => item.group === group && item.roles.includes(role),
+      );
+      if (!destinations.length) return "";
+      const groupId = `rail-group-${group.toLowerCase()}`;
+      return `<div class="staff-rail-group"><p class="staff-rail-group-label" id="${escapeHtml(groupId)}">${escapeHtml(group)}</p><ul aria-labelledby="${escapeHtml(groupId)}">${destinations
+        .map((item) => {
+          const active = item.href === currentPath;
+          return `<li><a href="${escapeHtml(item.href)}" data-nav="${escapeHtml(item.href)}" class="nav-item${active ? " active" : ""}" title="${escapeHtml(item.label)}"${active ? ' aria-current="page"' : ""}><span class="staff-rail-icon" aria-hidden="true">${item.icon}</span><span class="staff-rail-label">${escapeHtml(item.navLabel)}</span></a></li>`;
+        })
+        .join("")}</ul></div>`;
+    })
+    .join("");
 }
 
 export function isOpsDashboardPath(pathname) {
@@ -593,8 +618,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 <html lang="en" data-theme="dark" data-rail-mode="always-open">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" id="ops-theme-color" content="#091310" />
   <meta name="description" content="Non-operational preview of SSRA Assist staff navigation. No live taxpayer data, service telemetry, or staff actions." />
+  <link rel="preload" href="/fonts/IBMPlexSans-Regular.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/IBMPlexSans-SemiBold.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/IBMPlexMono-Light.woff2" as="font" type="font/woff2" crossorigin />
   <title>SSRA Operations Console Preview — ${escapeHtml(currentTitle)}</title>
   <style nonce="${nonce}">
     @font-face {
@@ -805,7 +834,15 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       margin: 0; padding: 0; min-height: 100dvh;
       font-family: var(--ops-font-sans);
       font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1, "zero" 1, "cv01" 1;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
       background: var(--bg-0); color: var(--text-1);
+    }
+    .staff-shell, .ops-page {
+      font-family: var(--ops-font-sans);
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1, "zero" 1, "cv01" 1;
     }
     body::before {
       content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
@@ -895,7 +932,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     /* ── Staff Shell & Collapsible Vertical Rail (staffGuard.css pattern) ── */
     .staff-shell {
       --rail-w-collapsed: 52px;
-      --rail-w-expanded: 208px;
+      --rail-w-expanded: 220px;
       --rail-w: var(--rail-w-collapsed);
       min-height: 100dvh;
     }
@@ -1054,10 +1091,11 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .staff-acct-trigger:hover { background: var(--ops-row-hover); border-color: var(--ops-line); }
     .staff-acct-avatar {
       position: relative; width: 26px; height: 26px; border-radius: 50%;
-      background: linear-gradient(135deg, #078930, #0F47AF); color: #fff;
+      background: var(--accent); color: #0B1220;
       font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-bold); letter-spacing: 0.02em;
       display: inline-flex; align-items: center; justify-content: center; flex: none;
     }
+    :root[data-theme="light"] .staff-acct-avatar { color: #FFFFFF; }
     .staff-acct-dot {
       position: absolute; right: -2px; bottom: -2px; width: 8px; height: 8px;
       border-radius: 50%; background: var(--ops-good-ink); border: 2px solid var(--bg-0);
@@ -1258,9 +1296,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .ops-table tr:hover td { background: var(--ops-row); }
 
     .ov-kv { margin: 0; display: grid; gap: var(--ops-space-2); }
-    .ov-kv > div { display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-3); min-height: 24px; padding: 2px 0; border-bottom: 1px solid var(--ops-hairline); }
+    .ov-kv > div { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--ops-space-1) var(--ops-space-3); min-height: 24px; padding: 2px 0; border-bottom: 1px solid var(--ops-hairline); }
     .ov-kv dt { font-size: var(--ops-text-xs); color: var(--text-3); }
-    .ov-kv dd { margin: 0; font-size: var(--ops-text-xs); font-weight: var(--ops-weight-semi); color: var(--text-1); text-align: end; font-variant-numeric: tabular-nums; }
+    .ov-kv dd { margin: 0; font-size: var(--ops-text-xs); font-weight: var(--ops-weight-semi); color: var(--text-1); text-align: end; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
     /* Command Palette Modal (CommandPalette.tsx pattern) */
     .ops-cmdk-backdrop {
@@ -1367,7 +1405,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .ov-chip { padding: 0; font-size: var(--ops-text-2xs); color: var(--text-3); }
     .ov-chip.good { color: var(--ops-good-ink); }
     .ov-chip.warn { color: var(--ops-warn-ink); }
-    .ops-chip.is-warn { color: var(--ops-warn-ink); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.1); }
+    .ops-chip.is-warn { color: var(--ops-warn-ink); }
     .ops-preview-card { margin: 0 0 var(--ops-band); padding: var(--ops-space-5); }
     .ops-preview-card p, .ops-preview-card li { line-height: 1.6; font-size: var(--ops-text-sm); }
     .ops-preview-card ul { padding-inline-start: 1.25rem; margin: var(--ops-space-2) 0 0; }
@@ -1410,8 +1448,58 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .signin-switch a:hover { text-decoration: underline; }
     .signin-switch-links { display: flex; gap: 12px; flex-wrap: wrap; }
     .signin-switch-alt { color: var(--text-2) !important; font-weight: 500 !important; }
+    /* Phone drawer overrides: always show labels, group headings, search text & account meta inside the 240px drawer regardless of desktop .is-collapsed state (staffGuard.css pattern) */
+    @media (max-width: 820px) {
+      .staff-rail .staff-rail-label,
+      .staff-rail .staff-rail-group-label,
+      .staff-rail .staff-brand-text {
+        opacity: 1;
+        height: auto;
+      }
+      .staff-rail.is-collapsed .ops-cmdk-trigger {
+        justify-content: flex-start;
+        padding-inline: var(--ops-space-2);
+      }
+      .staff-rail.is-collapsed .ops-cmdk-trigger-text {
+        display: inline;
+      }
+      .staff-rail.is-collapsed .staff-acct-trigger {
+        justify-content: flex-start;
+        padding-inline: 8px;
+      }
+      .staff-rail.is-collapsed .staff-acct-meta,
+      .staff-rail.is-collapsed .staff-acct-chevron {
+        display: flex;
+        opacity: 1;
+      }
+      .staff-rail-pin {
+        display: none;
+      }
+    }
+    @media (forced-colors: active) {
+      .staff-rail, .ops-stat, .ops-panel, .ops-btn, .role-opt, .ops-cmdk-dialog, .signin-card {
+        border: 1px solid CanvasText;
+      }
+      .staff-rail a.nav-item.active, .role-opt.active, .ops-seg-btn.active {
+        outline: 2px solid Highlight;
+        outline-offset: -2px;
+      }
+    }
+    @media print {
+      .staff-rail, .call-console-bar, .ops-cmdk-backdrop, .ssra-flag-ribbon, .ops-mobile-backdrop {
+        display: none !important;
+      }
+      .staff-shell-content {
+        margin-inline-start: 0 !important;
+      }
+      body, .ops-page, .ops-panel, .ops-stat {
+        background: #ffffff !important;
+        color: #000000 !important;
+        box-shadow: none !important;
+      }
+    }
     @media (prefers-reduced-motion: reduce) {
-      .staff-rail { transition: none !important; }
+      .staff-rail, .staff-shell-content, .staff-rail-label, .staff-rail-group-label, .staff-brand-text { transition: none !important; }
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
     }
   </style>
@@ -1442,7 +1530,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         </button>
       </div>
 
-      <div class="staff-rail-scroll" id="staff-rail-groups"></div>
+      <div class="staff-rail-scroll" id="staff-rail-groups">${renderServerRailGroups(currentPath, "ssra_admin")}</div>
 
       <div class="staff-rail-foot">
         <div id="staff-acct-menu" class="staff-acct-menu" role="menu" aria-label="Preview persona and appearance">
@@ -1569,6 +1657,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         el.innerHTML = ttPolicy ? ttPolicy.createHTML(htmlStr) : htmlStr;
       }
 
+      let lastRenderedRailKey = "";
+
       function applyChrome() {
         if (!["dark", "light", "high-contrast"].includes(state.theme)) state.theme = "dark";
         if (!ROLE_META[state.role]) state.role = "ssra_admin";
@@ -1576,6 +1666,13 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 
         document.documentElement.setAttribute("data-theme", state.theme);
         document.documentElement.setAttribute("data-rail-mode", state.railMode);
+        const themeColorMeta = document.getElementById("ops-theme-color");
+        if (themeColorMeta) {
+          themeColorMeta.setAttribute(
+            "content",
+            state.theme === "light" ? "#F6F7F2" : state.theme === "high-contrast" ? "#000000" : "#091310",
+          );
+        }
         const shouldExpandRail = state.railMode === "always-open" || Boolean(
           railEl?.matches(":hover") || railEl?.contains(document.activeElement) || acctMenu?.classList.contains("open"),
         );
@@ -1607,8 +1704,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           btn.classList.toggle("active", isSelected);
         });
 
+        const nextRailKey = state.role + "|" + state.route;
         const groups = ["Work", "Audit", "Configure", "Observe"];
-        if (railGroupsEl) {
+        if (railGroupsEl && lastRenderedRailKey !== nextRailKey) {
+          lastRenderedRailKey = nextRailKey;
           setSafeHtml(
             railGroupsEl,
             groups.map((group) => {
@@ -1656,6 +1755,16 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         return ${JSON.stringify(renderPreviewCard("__TITLE__", "__GROUP__", publicAssistantUrl))}
           .replace(/__TITLE__/g, escapeHtml(title))
           .replace(/__GROUP__/g, escapeHtml(group));
+      }
+
+      function timingSafeEqualStr(a, b) {
+        if (typeof a !== "string" || typeof b !== "string") return false;
+        const len = Math.max(a.length, b.length);
+        let diff = a.length ^ b.length;
+        for (let i = 0; i < len; i++) {
+          diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+        }
+        return diff === 0;
       }
 
       let lastCallbackOutcome = null;
@@ -1751,11 +1860,13 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 
         if (state.route === "/signin/callback") {
           const cbBanner = document.getElementById("callback-status-banner");
-          if (!lastCallbackOutcome || lastCallbackOutcome.search !== window.location.search) {
-            const params = new URLSearchParams(window.location.search);
+          if (!lastCallbackOutcome) {
+            const rawSearch = window.location.search;
+            const params = new URLSearchParams(rawSearch);
             const err = params.get("error");
             const code = params.get("code");
             const st = params.get("state");
+            const iss = params.get("iss");
             let expectedState = null;
             let verifier = null;
             try {
@@ -1765,33 +1876,40 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
               sessionStorage.removeItem("ssra_pkce_verifier");
               sessionStorage.removeItem("ssra_oidc_nonce");
             } catch {}
+            if (rawSearch) {
+              try {
+                window.history.replaceState({}, "", "/signin/callback");
+              } catch {}
+            }
+            const cleanIss = iss;
+            const expectedIss = "https://sso.ssra.gov.ss/realms/ssra";
             if (err) {
               lastCallbackOutcome = {
-                search: window.location.search,
                 ok: false,
                 text: err + ": " + (params.get("error_description") || "the identity provider refused the request"),
               };
             } else if (!code) {
               lastCallbackOutcome = {
-                search: window.location.search,
                 ok: false,
                 text: "The identity provider returned no authorization code.",
               };
-            } else if (!st || !expectedState || st !== expectedState) {
+            } else if (!st || !expectedState || !timingSafeEqualStr(st, expectedState)) {
               lastCallbackOutcome = {
-                search: window.location.search,
                 ok: false,
                 text: "State mismatch — this sign-in did not start in this browser tab. Start again from /signin.",
               };
-            } else if (!verifier || verifier.length < 43) {
+            } else if (!cleanIss || !timingSafeEqualStr(cleanIss, expectedIss)) {
               lastCallbackOutcome = {
-                search: window.location.search,
+                ok: false,
+                text: "Issuer mismatch (RFC 9207) — callback issuer does not match the configured SSRA Keycloak realm.",
+              };
+            } else if (!verifier || !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier)) {
+              lastCallbackOutcome = {
                 ok: false,
                 text: "The PKCE S256 code_verifier is missing. Start the sign-in again from /signin.",
               };
             } else {
               lastCallbackOutcome = {
-                search: window.location.search,
                 ok: true,
                 text: "Keycloak PKCE S256 & CSRF state verified. Server-side token exchange requires live Keycloak connectivity (OQ-005 / OQ-014).",
               };
@@ -1807,6 +1925,19 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       }
 
       function renderCurrentRoute() {
+        if (state.route !== "/signin/callback") {
+          lastCallbackOutcome = null;
+        }
+        const isAuthRoute = state.route === "/signin" || state.route === "/signup" || state.route === "/signin/callback";
+        if (!isAuthRoute) {
+          const matchedDest = DESTINATIONS.find((destination) => destination.href === state.route);
+          if (matchedDest && !matchedDest.roles.includes(state.role)) {
+            state.route = ROLE_META[state.role]?.landing || "/admin";
+            try {
+              window.history.replaceState({}, "", state.route);
+            } catch {}
+          }
+        }
         applyChrome();
         if (!mainEl) return;
         mainEl.setAttribute("data-route", state.route);
@@ -1859,8 +1990,18 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           window.location.assign(href === "/en" || href.startsWith("/en") ? PUBLIC_ASSISTANT_URL : href);
           return;
         }
-        state.route = href;
-        try { window.history.pushState({}, "", href); } catch {}
+        let targetPathname = href;
+        let targetSearch = "";
+        try {
+          const parsedHref = new URL(href, window.location.origin);
+          targetPathname = parsedHref.pathname || "/admin";
+          targetSearch = parsedHref.search || "";
+        } catch {}
+        if (targetSearch) {
+          lastCallbackOutcome = null;
+        }
+        state.route = targetPathname;
+        try { window.history.pushState({}, "", targetPathname + targetSearch); } catch {}
         railEl?.classList.remove("is-drawer-open");
         document.getElementById("ops-mobile-backdrop")?.classList.remove("open");
         syncStaffRailA11y(false);

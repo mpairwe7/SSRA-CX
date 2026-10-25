@@ -1,7 +1,7 @@
 # SSRA Assist — Operational Runbooks: Docker Compose Deployment, Incident Response, Rollback & DR (`docs/runbooks/README.md`)
 
-**Status:** v2.0 (Docker Compose 2026 Standardization — Kubernetes Decommissioned)  
-**Date:** 2026-10-17  
+**Status:** v2.1 (Docker Compose 2026 Standardization & Source-Scoped GPU Live-Watch — Kubernetes Decommissioned)  
+**Date:** 2026-10-25  
 **References:** [`docs/00-master-prompt.md`](../00-master-prompt.md) Sections 7, 11, 12.3, 12.5, 13, 15
 
 > **2026 Containerization Standard:** All local, staging, production, and disaster-recovery (DR) operations standardize on **Docker Compose (`docker compose` v2.39+ / Compose Specification 2026)** using [`infra/compose/docker-compose.yml`](../../infra/compose/docker-compose.yml) and [`infra/compose/docker-compose.prod.yml`](../../infra/compose/docker-compose.prod.yml). Legacy Kubernetes deployment instructions are decommissioned across operational runbooks to eliminate multi-cluster control-plane overhead at the National Communication Authority (NCA) data centre while enforcing `read_only: true` root filesystems, `cap_drop: ["ALL"]`, `no-new-privileges:true`, `pids_limit`, and `sovereign_internal_net` (`internal: true`) network segmentation.
@@ -13,7 +13,7 @@
 | Command | Action |
 |---|---|
 | `task up` | Start the local hardened Docker Compose stack (`infra/compose/docker-compose.yml`), then run the in-process synthetic regression suite (`tools/smoke_test_stack.py`) with `SSRA_RUNTIME_MODE=reference` for that test step only. To test a running stack, see [Live Regression on the GPU Profile](./live-regression.md). |
-| `docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait` | Start local sovereign GPU + local HF cache (`Sunflower-Qwen3.5-9B`, `Sunflower-Qwen3.8-27B`, `SunflowerASR`) + Qdrant + Valkey + PostgreSQL 18 + `ssra-frontend` (`:3033`) + `ssra-console` (`:3034`) stack (`127.0.0.1:18000` API, `127.0.0.1:18001` Runtime) and run `uv run python tools/run_20000_complex_ngrok_benchmark.py` |
+| `docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --wait` | Start local sovereign GPU + local HF cache (`Sunflower-Qwen3.5-9B`, `Sunflower-Qwen3.8-27B`, `SunflowerASR`) + Qdrant + Valkey + PostgreSQL 18 + `ssra-frontend` (`:3033`) + `ssra-console` (`:3034`) stack (`127.0.0.1:18000` API, `127.0.0.1:18001` Runtime) with source-scoped live-watch (explicit `libs/*/src`, `services/*/src`, and `mcp-servers/*/src` `--reload-dir` flags plus ES-module graph `node --watch apps/*/server.js` with `mtimeMs` font/SW reload) and run `uv run python tools/run_20000_complex_ngrok_benchmark.py` |
 | Live regression | Run the three-layer live regression (public BFF and staff preview, Core API and runtime, 1,000-scenario benchmark) against a running GPU profile. See [Live Regression on the GPU Profile](./live-regression.md). |
 | `task down` | Stop local Docker Compose stack cleanly (`--remove-orphans`) |
 | `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.prod.yml --profile prod up -d --wait` | Validate/start the intended production/DR stack; API and runtime remain unready by design until approved providers and durable state are implemented |

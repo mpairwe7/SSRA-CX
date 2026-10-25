@@ -1,7 +1,7 @@
 # SSRA Assist — Architecture Overview (C4 Levels 1–3)
 
 **Status:** Reference implementation architecture (phases 0–4 code present; production deployment and live integrations remain separately gated)
-**Reconciled:** 2026-10-24
+**Reconciled:** 2026-10-25
 **Source of Truth:** [`docs/00-master-prompt.md`](../00-master-prompt.md)
 **Assurance status:** R0 evidence and the open remediation register are recorded in [`docs/audit/`](../audit/). Gates R0 and R1 were approved in the active project session on 2026-10-22, with R1 limited to non-production R2 reference remediation; see [the R1 approval record](../audit/phase-R1-approval.md). This document does not authorize a production deployment.
 
@@ -432,7 +432,7 @@ flowchart LR
 2. **Public chat BFF:** `POST /api/turns` and `POST /api/chat/stream` sanitize browser payloads before forwarding to the runtime. Direct browser calls to `/v1/*` are denied except the feedback endpoint. The BFF must not accept a browser-selected `subject_ref` or use local storage as authentication.
 3. **Main chat and sidebar:** The browser client served by `apps/web/server.js` keeps anonymous T0 conversation history on the device. Search, recency groups, pin/rename/delete, and sidebar state are presentation features; they do not query a staff or taxpayer account history. Offline responses must not claim a live citation or snapshot.
 4. **Shared UI packages:** `packages/chat-ui/` contains AG-UI stream handling, offline queues/resilience, voice/document flows, and shared chat components. `packages/ui/` and `packages/i18n/` supply shared widgets, icons, and locale strings. The allow-listed generative UI surface is limited to the registered seven card types; unknown or invalid payloads must fall back safely.
-5. **Staff preview:** `apps/console/server.js` serves the staff navigation/dashboard preview. The API endpoints for scorecard, feature flags, kill switches, and runtime status fail closed until a server-verified staff session and approved roles are available. Preview persona selection is not an identity or permission.
+5. **Staff preview:** `apps/console/server.js` (backed by `packages/ui/ops-console.js` and `apps/console/src/oidc-keycloak.ts`) serves the Hercules UX/UI staff navigation/dashboard preview along with `/signin`, `/signup` (`prompt=create`), and `/signin/callback` (RFC 7636 PKCE `S256`, `CWE-208` constant-time `state`, and RFC 9207 `iss` verification). All `/api/*` and `/v1/*` endpoints for scorecard, feature flags, kill switches, and runtime status fail closed (`403`) until a server-verified staff session and approved roles are available (`OQ-013`, `OQ-014`). Preview persona selection is not an identity or permission.
 6. **Trustworthy dashboard state:** No operational metric is displayed as live without a source, observation time, and freshness state. OQ-013 and OQ-014 block operational dashboard data and staff actions (ADR-018).
 7. **Rendered assurance boundary:** `playwright.config.ts` starts the public BFF, staff preview, and a fixed synthetic runtime on loopback ports. The browser suite asserts anonymised BFF forwarding, protected-path denial, mobile drawer focus/reflow, Arabic RTL, low-data/offline recovery, and preview denial. It uses no live taxpayer/staff records, credentials, tax values, or upstreams, and does not replace assistive-technology or production evidence (ADR-021).
 

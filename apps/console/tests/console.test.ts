@@ -54,6 +54,7 @@ import {
   staffDestinationsFor,
   staffLandingPath,
   ticketRef,
+  timingSafeEqualStrings,
   toDelta,
   validateAdminAnswerOverride,
   validateCopilotDraftApproval,
@@ -976,6 +977,11 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(sanitizeReturnTo("/\t/evil.example.com")).toBeUndefined();
     expect(sanitizeReturnTo("/\\evil.example.com")).toBeUndefined();
     expect(sanitizeReturnTo("javascript:alert(1)")).toBeUndefined();
+    expect(sanitizeReturnTo("/signin")).toBeUndefined();
+    expect(sanitizeReturnTo("/signin/callback")).toBeUndefined();
+    expect(sanitizeReturnTo("/signup")).toBeUndefined();
+    expect(sanitizeReturnTo("/api/flags")).toBeUndefined();
+    expect(sanitizeReturnTo("/v1/admin/kill-switches")).toBeUndefined();
 
     const kcEndpoints = buildKeycloakOidcEndpoints("https://sso.ssra.gov.ss/realms/ssra/");
     expect(kcEndpoints.authorizationEndpoint).toBe(
@@ -1025,6 +1031,7 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
       state: "s".repeat(32),
       expectedState: "s".repeat(32),
       pkceVerifier: "v".repeat(64),
+      iss: "https://sso.ssra.gov.ss/realms/ssra",
       resolvedRole: "ssra_auditor",
     });
     expect(cbAuditor.valid).toBe(true);
@@ -1040,5 +1047,56 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     );
     expect(() => validateOidcRedirectUri("http://evil.example.com/signin/callback")).toThrow();
     expect(() => validateOidcRedirectUri("https://console.ssra.gov.ss/other")).toThrow();
+    expect(timingSafeEqualStrings("abc123", "abc123")).toBe(true);
+    expect(timingSafeEqualStrings("abc123", "abc124")).toBe(false);
+    expect(timingSafeEqualStrings("short", "longer_string")).toBe(false);
+
+    // RFC 9207 OAuth Mix-Up Attack detection on callback iss parameter (mandatory & exact match)
+    expect(
+      validateOidcCallbackParams({
+        code: "auth_code_1",
+        state: "s".repeat(32),
+        expectedState: "s".repeat(32),
+        pkceVerifier: "v".repeat(64),
+        iss: "https://evil-idp.example.com/realms/ssra",
+      }).errorReason,
+    ).toBe("RFC9207_ISSUER_MISMATCH");
+
+    expect(
+      validateOidcCallbackParams({
+        code: "auth_code_1",
+        state: "s".repeat(32),
+        expectedState: "s".repeat(32),
+        pkceVerifier: "v".repeat(64),
+      }).errorReason,
+    ).toBe("RFC9207_ISSUER_MISMATCH");
+
+    expect(
+      validateOidcCallbackParams({
+        code: "auth_code_1",
+        state: "s".repeat(32),
+        expectedState: "s".repeat(32),
+        pkceVerifier: "v".repeat(64),
+        iss: "https://sso.ssra.gov.ss/realms/ssra/",
+      }).errorReason,
+    ).toBe("RFC9207_ISSUER_MISMATCH");
+
+    expect(
+      validateOidcCallbackParams({
+        code: "auth_code_1",
+        state: "s".repeat(32),
+        expectedState: "s".repeat(32),
+        pkceVerifier: "v".repeat(64),
+        iss: "https://sso.ssra.gov.ss/realms/ssra",
+      }).valid,
+    ).toBe(true);
+    expect(
+      validateOidcCallbackParams({
+        code: "bad code with spaces",
+        state: "s".repeat(32),
+        expectedState: "s".repeat(32),
+        pkceVerifier: "v".repeat(64),
+      }).errorReason,
+    ).toBe("INVALID_AUTH_CODE");
   });
 });
