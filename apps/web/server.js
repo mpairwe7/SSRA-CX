@@ -242,6 +242,8 @@ function renderPwaShellHtml(locale, nonce) {
   <meta name="description" content="Official South Sudan Revenue Authority (SSRA / NRA) grounded AI tax assistant for TIN registration, PAYE, Withholding Tax, TCC, and customs guidance." />
   <title>SSRA Assist — South Sudan Revenue Authority Official AI Assistant</title>
   <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="preload" href="/fonts/IBMPlexSans-Regular.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/IBMPlexSans-SemiBold.woff2" as="font" type="font/woff2" crossorigin />
   <style nonce="${nonce}">
     @font-face {
       font-family: "IBM Plex Sans";
@@ -282,7 +284,7 @@ function renderPwaShellHtml(locale, nonce) {
       color-scheme: light;
       --tw-bg-opacity: 1;
       --ssra-header-sidebar-bg: rgba(0, 93, 180, var(--tw-bg-opacity));
-      --font-geist-sans: "Aptos", "Avenir Next", "Trebuchet MS", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, system-ui, sans-serif;
+      --font-geist-sans: "IBM Plex Sans", "Aptos", "Avenir Next", "Trebuchet MS", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, system-ui, sans-serif;
       --font-geist-mono: "IBM Plex Mono", "Cascadia Code", "SFMono-Regular", "Fira Code", monospace;
       --font-sans: var(--font-geist-sans);
       --font-mono: var(--font-geist-mono);

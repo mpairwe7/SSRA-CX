@@ -1657,7 +1657,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         el.innerHTML = ttPolicy ? ttPolicy.createHTML(htmlStr) : htmlStr;
       }
 
-      let lastRenderedRailKey = "";
+      let lastRenderedRailKey = "ssra_admin|" + (mainEl?.getAttribute("data-route") || "/admin");
 
       function applyChrome() {
         if (!["dark", "light", "high-contrast"].includes(state.theme)) state.theme = "dark";

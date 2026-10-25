@@ -327,8 +327,24 @@ def main() -> None:
         assert (
             "IBMPlexMono-Light.woff2" in html_ops and 'class="ops-stat-grid ov-stats"' in html_ops
         )
+        assert 'id="rail-group-work"' in html_ops and 'aria-current="page"' in html_ops
         assert "Live Sovereign GPU Stack" not in html_ops
         conn.close()
+
+        for auth_route, expected_marker in (
+            ("/signin", "urn:ssra:acr:passkey"),
+            ("/signup", "prompt=create"),
+            ("/signin/callback", "callback-status-banner"),
+            ("/analytics", "OpenSLO v1"),
+        ):
+            conn = http.client.HTTPConnection("127.0.0.1", 39124, timeout=2.0)
+            conn.request("GET", auth_route, headers={"Accept-Encoding": "identity"})
+            auth_resp = conn.getresponse()
+            auth_html = auth_resp.read().decode("utf-8")
+            assert auth_resp.status == 200 and expected_marker in auth_html, (
+                f"Expected HTTP 200 and '{expected_marker}' on console route {auth_route}"
+            )
+            conn.close()
 
         conn = http.client.HTTPConnection("127.0.0.1", 39124, timeout=2.0)
         conn.request("GET", "/fonts/IBMPlexMono-Light.woff2")
