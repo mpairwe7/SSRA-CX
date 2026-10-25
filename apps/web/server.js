@@ -1419,6 +1419,11 @@ function renderPwaShellHtml(locale, nonce) {
           menuSettingsLabel: "Settings",
           menuClearLabel: "Clear conversation",
           menuPortalLabel: "Official e-Tax portal ↗",
+          langMenuTitle: "Response language",
+          langAutoNative: "Answers follow the language you type",
+          langGroupAvailable: "Available",
+          langGroupUnreviewed: "Not yet reviewed (interface in English)",
+          langMenuFoot: "Pick a language to always answer in it, or let answers follow the language you type.",
           chipCats: ["TIN Registration", "PAYE Calculator", "Withholding Tax (WHT)", "Compliance (TCC)", "Scam & Channel Check", "Juba Arabic (pga)", "Personal e-Tax services"],
           chipTexts: [
             "How do I register for a TIN step by step?",
@@ -1460,6 +1465,11 @@ function renderPwaShellHtml(locale, nonce) {
           menuSettingsLabel: "I'dadat",
           menuClearLabel: "Imsah al-wanasa",
           menuPortalLabel: "Mawqi e-Tax al-rasmi ↗",
+          langMenuTitle: "Lugha ta al-ijaba",
+          langAutoNative: "Al-ijaba bititba al-lugha al-inta bitaktub biha",
+          langGroupAvailable: "Mutah",
+          langGroupUnreviewed: "Lissa ma tammat muraja'a (al-wajiha bil-Inglizi)",
+          langMenuFoot: "Ikhtar lugha aashan al-ijaba dayman takun biha, aw khalli al-ijaba tatba lughatak.",
           chipCats: ["Tasjil ta TIN", "Hisab ta PAYE", "Dariba ta الخصم (WHT)", "Shahada ta TCC", "Fahas ta Qanawat", "Arabi Juba (pga)", "Khadamat e-Tax"],
           chipTexts: [
             "Kif ana aml tasjil ta TIN khatwa bi khatwa?",
@@ -1501,6 +1511,11 @@ function renderPwaShellHtml(locale, nonce) {
           menuSettingsLabel: "الإعدادات",
           menuClearLabel: "مسح المحادثة",
           menuPortalLabel: "بوابة e-Tax الرسمية ↗",
+          langMenuTitle: "لغة الإجابة",
+          langAutoNative: "تتبع الإجابات اللغة التي تكتب بها تلقائياً",
+          langGroupAvailable: "اللغات المعتمدة",
+          langGroupUnreviewed: "قيد المراجعة (الواجهة بالإنجليزية)",
+          langMenuFoot: "اختر لغة للرد بها دائماً، أو اترك الإجابات تتبع اللغة التي تكتب بها.",
           chipCats: ["تسجيل الرقم الضريبي TIN", "حاسبة ضريبة الدخل PAYE", "ضريبة الاستقطاع WHT", "شهادة الامتثال TCC", "التحقق من القنوات الرسمية", "عربي جوبا (pga)", "خدمات e-Tax الشخصية"],
           chipTexts: [
             "كيف أسجل الرقم الضريبي TIN خطوة بخطوة؟",
@@ -1765,6 +1780,11 @@ function renderPwaShellHtml(locale, nonce) {
         const menuSetLblEl = document.getElementById("header-menu-settings-label");
         const menuClrLblEl = document.getElementById("header-menu-clear-label");
         const menuPorLblEl = document.getElementById("header-menu-portal-label");
+        const langTitleEl = document.getElementById("lang-menu-title");
+        const langAutoNatEl = document.getElementById("lang-opt-auto-native");
+        const langGrpAvailEl = document.getElementById("lang-group-available");
+        const langGrpUnrevEl = document.getElementById("lang-group-unreviewed");
+        const langFootEl = document.getElementById("lang-menu-foot");
         if (eyeEl && dict.eyebrow) eyeEl.textContent = dict.eyebrow;
         if (hEl) hEl.textContent = dict.headline;
         if (sEl) sEl.textContent = dict.subtitle;
@@ -1789,6 +1809,11 @@ function renderPwaShellHtml(locale, nonce) {
         if (menuSetLblEl && dict.menuSettingsLabel) menuSetLblEl.textContent = dict.menuSettingsLabel;
         if (menuClrLblEl && dict.menuClearLabel) menuClrLblEl.textContent = dict.menuClearLabel;
         if (menuPorLblEl && dict.menuPortalLabel) menuPorLblEl.textContent = dict.menuPortalLabel;
+        if (langTitleEl && dict.langMenuTitle) langTitleEl.textContent = dict.langMenuTitle;
+        if (langAutoNatEl && dict.langAutoNative) langAutoNatEl.textContent = dict.langAutoNative;
+        if (langGrpAvailEl && dict.langGroupAvailable) langGrpAvailEl.textContent = dict.langGroupAvailable;
+        if (langGrpUnrevEl && dict.langGroupUnreviewed) langGrpUnrevEl.textContent = dict.langGroupUnreviewed;
+        if (langFootEl && dict.langMenuFoot) langFootEl.textContent = dict.langMenuFoot;
         if (Array.isArray(dict.chipCats)) {
           document.querySelectorAll("[data-cat-idx]").forEach((el) => {
             const idx = Number.parseInt(el.getAttribute("data-cat-idx") || "-1", 10);

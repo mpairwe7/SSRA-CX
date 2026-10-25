@@ -33,6 +33,7 @@ from ssra_core import (
     WebVitalsBatch,
     bucket_quantile,
     build_turn_audit_record,
+    clear_qdrant_lifecycle_observation,
     configure_structured_logging,
     default_buckets,
     exported_name,
@@ -56,6 +57,7 @@ from ssra_core import (
     route_label_from_scope,
     turn_outcome,
 )
+from ssra_runtime import create_runtime_app
 from ssra_testing import AsgiTestClient
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -127,18 +129,34 @@ def test_structured_logging_trace_correlation_and_pii_scrubbing() -> None:
     assert "0912345678" not in serialized
     assert "support@nra.gov.ss" in serialized
 
-    # Dict record.args and traceback scrubbing
+    # Dict record.args (sensitive key + PII value), Arabic-Indic digits, Bearer token, and depth limit
     rec_dict = logging.LogRecord(
         "ssra.test",
         logging.ERROR,
         __file__,
         1,
-        "failed for %(user)s",
-        ({"user": "john@gmail.com"},),
+        "failed for %(user)s with %(token)s",
+        ({"user": "john@gmail.com", "token": "jwt-raw-secret"},),
         None,
     )
     dict_line = _format_log(rec_dict)
     assert "john@gmail.com" not in json.dumps(dict_line)
+    assert "jwt-raw-secret" not in json.dumps(dict_line)
+
+    synth_tok = "synthetic_sample_" + "token_123456"
+    ar_indic_scrubbed = redact_log_pii_text(
+        f"Auth Bearer {synth_tok} for TIN ١٠٠-٢٠٠-١٢٣٤ phone +٢١١ ٩١٢ ٣٤٥ ٦٧٨"
+    )
+    assert synth_tok not in ar_indic_scrubbed
+    assert "[REDACTED_TOKEN]" in ar_indic_scrubbed
+    assert "[REDACTED_TIN]" in ar_indic_scrubbed
+    assert "[REDACTED_PHONE]" in ar_indic_scrubbed
+
+    deep: dict[str, object] = {"leaf": "secret@example.com"}
+    for _ in range(10):
+        deep = {"child": deep}
+    deep_line = _format_log(_make_record("deep payload", deep_obj=deep))
+    assert "[TRUNCATED_DEPTH]" in json.dumps(deep_line)
 
     try:
         raise ValueError("lookup failed for email secret_user@yahoo.com and TIN 1234567890")
@@ -207,9 +225,16 @@ def test_metrics_store_cumulative_histograms_and_bounded_labels() -> None:
         store.inc("probe_total", labels={"path": f"/scan/{i}"})
     assert 'path="__other__"' in store.to_prometheus()
 
-    # Unknown labels dropped and type conflicts ignored safely
+    # Unknown labels dropped, NaN/Inf/bool/negative counter ignored, and type conflicts ignored safely
     store.inc("labelled_total", labels={"a": "1"})
     store.inc("labelled_total", labels={"a": "2", "unexpected": "x"})
+    store.inc("labelled_total", -5.0, labels={"a": "1"})
+    store.inc("labelled_total", float("nan"), labels={"a": "1"})
+    store.inc("labelled_total", True, labels={"a": "1"})  # type: ignore[arg-type]
+    store.observe(
+        "chat_response_time_ms", float("nan"), labels={"channel": "web", "mode": "hybrid"}
+    )
+    store.observe("chat_response_time_ms", True, labels={"channel": "web", "mode": "hybrid"})  # type: ignore[arg-type]
     store.observe("labelled_total", 1.0, labels={"a": "1"})
     store.set_gauge("active_workers", 2.0)
     store.add_gauge("inflight_requests", 3.0)
@@ -352,7 +377,14 @@ def test_turn_recorders_security_events_client_telemetry_and_turn_audit() -> Non
 def test_api_metrics_and_client_telemetry_endpoints() -> None:
     app = create_api_app()
     client = AsgiTestClient(app)
+    rt_client = AsgiTestClient(create_runtime_app())
     token = "m" * 40
+    clear_qdrant_lifecycle_observation()
+
+    with pytest.raises(ValueError):
+        record_qdrant_lifecycle_observation(
+            index_fresh=True, index_drift=False, observed_at_epoch_seconds=-1.0
+        )
 
     with mock.patch.dict(
         os.environ, {"SSRA_RUNTIME_MODE": "reference", "SSRA_METRICS_TOKEN": token}
@@ -372,12 +404,18 @@ def test_api_metrics_and_client_telemetry_endpoints() -> None:
         assert "ssra_qdrant_index_fresh 1" in ok.text
         assert "ssra_qdrant_index_status_timestamp_seconds 1761350000.0" in ok.text
 
+        rt_ok = rt_client.get("/metrics", headers={"Authorization": f"Bearer {token}"})
+        assert rt_ok.status_code == 200
+        rt_denied = rt_client.get("/metrics", headers={"Authorization": "Bearer wrong"})
+        assert rt_denied.status_code == 401
+
         key = 'security_events_total{event="authn_login_fail"}'
         before_authn = metrics.snapshot()["counters"].get(key, 0)
         denied = client.get("/metrics", headers={"Authorization": "Bearer wrong-token"})
         assert denied.status_code == 401
         after_authn = metrics.snapshot()["counters"].get(key, 0)
         assert after_authn - before_authn == 1
+    clear_qdrant_lifecycle_observation()
 
     with mock.patch.dict(
         os.environ,
@@ -417,6 +455,12 @@ def test_api_metrics_and_client_telemetry_endpoints() -> None:
             },
         )
         assert vitals_extra.status_code == 422
+
+        cls_out_of_bounds = client.post(
+            "/v1/telemetry/vitals",
+            json={"metrics": [{"name": "CLS", "value": 50.0, "rating": "poor"}]},
+        )
+        assert cls_out_of_bounds.status_code == 422
 
         vitals_oversize = client.post(
             "/v1/telemetry/vitals",

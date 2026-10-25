@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import os
 import re
 import socket
@@ -15,6 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ssra_core import (
+    METRICS_CONTENT_TYPE,
     AuthLevel,
     ChannelName,
     LocaleCode,
@@ -22,7 +24,9 @@ from ssra_core import (
     SSRAError,
     ensure_w3c_traceparent,
     get_default_feature_flag_engine,
+    metrics,
     record_chat_turn,
+    record_http_security_event,
 )
 from ssra_core.deployment import is_reference_mode
 from ssra_security import (
@@ -270,6 +274,76 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         """Return runtime service health status."""
         return {"status": "ok", "service": "ssra-agent-runtime"}
 
+    @app.get("/metrics", include_in_schema=False)
+    async def runtime_prometheus_metrics(
+        request: Request,
+        authorization: str | None = Header(default=None, alias="Authorization"),
+    ) -> Response:
+        """Return Prometheus text exposition for agent-runtime gated by `METRICS_TOKEN`."""
+        expected_token = (
+            os.getenv("SSRA_METRICS_TOKEN", "").strip() or os.getenv("METRICS_TOKEN", "").strip()
+        )
+        raw_auth = (authorization or "").strip()
+        provided_token = raw_auth[7:].strip() if raw_auth.lower().startswith("bearer ") else ""
+        if (
+            not expected_token
+            or not provided_token
+            or not hmac.compare_digest(
+                provided_token.encode("utf-8"), expected_token.encode("utf-8")
+            )
+        ):
+            record_http_security_event(
+                method="GET",
+                status_code=401,
+                route="/metrics",
+                reason="INVALID_METRICS_TOKEN",
+            )
+            tp = ensure_w3c_traceparent(request.headers.get("traceparent"))
+            err = SSRAError(
+                McpErrorCode.NOT_AUTHORIZED,
+                "Valid Bearer METRICS_TOKEN required to scrape /metrics.",
+                status_code=401,
+            )
+            return JSONResponse(
+                status_code=401,
+                content=err.to_problem_details(instance="/metrics", trace_id=tp).model_dump(
+                    mode="json"
+                ),
+                media_type="application/problem+json",
+                headers={"traceparent": tp, **_RUNTIME_SECURITY_HEADERS},
+            )
+        return Response(
+            content=metrics.to_prometheus(),
+            status_code=200,
+            media_type=METRICS_CONTENT_TYPE,
+            headers=_RUNTIME_SECURITY_HEADERS,
+        )
+
+    def _record_runtime_turn_metrics(
+        turn_resp: RuntimeTurnResponse, *, elapsed_ms: float, channel: str
+    ) -> None:
+        retrieval_mode = (
+            "abstained"
+            if turn_resp.answer.abstained
+            else (
+                "escalated"
+                if turn_resp.handoff_ticket
+                else ("calculator" if turn_resp.artifacts else "grounded_qa")
+            )
+        )
+        record_chat_turn(
+            {
+                "retrieval_mode": retrieval_mode,
+                "escalation_required": turn_resp.handoff_ticket is not None,
+                "handoff": turn_resp.handoff_ticket,
+                "faithfulness_score": None,
+                "locale": turn_resp.locale.value,
+                "locale_source": "",
+            },
+            elapsed_ms=elapsed_ms,
+            channel=channel,
+        )
+
     @app.get("/v1/runtime/stack-status")
     def runtime_stack_status() -> dict[str, object]:
         """Return sovereign GPU, local HF cache models, Qdrant vector store, and Valkey/Redis health."""
@@ -387,26 +461,8 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
             idempotency_key=body.idempotency_key,
         )
         elapsed_ms = (time.perf_counter() - started) * 1000.0
-        retrieval_mode = (
-            "abstained"
-            if turn_resp.answer.abstained
-            else (
-                "escalated"
-                if turn_resp.handoff_ticket
-                else ("calculator" if turn_resp.artifacts else "grounded_qa")
-            )
-        )
-        record_chat_turn(
-            {
-                "retrieval_mode": retrieval_mode,
-                "escalation_required": turn_resp.handoff_ticket is not None,
-                "handoff": turn_resp.handoff_ticket,
-                "faithfulness_score": None,
-                "locale": turn_resp.locale.value,
-                "locale_source": "",
-            },
-            elapsed_ms=elapsed_ms,
-            channel=body.channel.value.lower(),
+        _record_runtime_turn_metrics(
+            turn_resp, elapsed_ms=elapsed_ms, channel=body.channel.value.lower()
         )
         return turn_resp
 
@@ -420,6 +476,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
             _verify_turn_subject_consistency(item, x_ssra_subject_ref)
         out: list[RuntimeTurnResponse] = []
         for item in body.items:
+            started_item = time.perf_counter()
             ev = make_conversation_event(
                 item.message,
                 locale=item.locale,
@@ -428,15 +485,19 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
                 rich_ui=not item.low_data_mode,
                 metadata=item.metadata,
             )
-            out.append(
-                active_runtime.run_turn(
-                    ev,
-                    auth_level=item.auth_level,
-                    subject_ref=item.subject_ref,
-                    confirmation_token=item.confirmation_token,
-                    idempotency_key=item.idempotency_key,
-                )
+            item_resp = active_runtime.run_turn(
+                ev,
+                auth_level=item.auth_level,
+                subject_ref=item.subject_ref,
+                confirmation_token=item.confirmation_token,
+                idempotency_key=item.idempotency_key,
             )
+            _record_runtime_turn_metrics(
+                item_resp,
+                elapsed_ms=(time.perf_counter() - started_item) * 1000.0,
+                channel=item.channel.value.lower(),
+            )
+            out.append(item_resp)
         return out
 
     @app.get("/v1/turns/{thread_id}/replay", response_model=list[ReconstructedTurnRecord])
@@ -464,6 +525,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
     ) -> StreamingResponse:
         """Stream AG-UI protocol events over Server-Sent Events with Last-Event-ID resumption."""
         _verify_turn_subject_consistency(body, x_ssra_subject_ref)
+        started_sse = time.perf_counter()
         event = make_conversation_event(
             body.message,
             locale=body.locale,
@@ -478,6 +540,11 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
             subject_ref=body.subject_ref,
             confirmation_token=body.confirmation_token,
             idempotency_key=body.idempotency_key,
+        )
+        _record_runtime_turn_metrics(
+            turn,
+            elapsed_ms=(time.perf_counter() - started_sse) * 1000.0,
+            channel="sse",
         )
         return StreamingResponse(
             stream_agui_events(turn, last_event_id=last_event_id),
