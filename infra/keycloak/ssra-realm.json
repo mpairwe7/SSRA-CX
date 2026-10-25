@@ -390,5 +390,23 @@
         "token.exchange.standard.enabled": "true"
       }
     }
+  ],
+  "scopeMappings": [
+    {
+      "client": "ssra-staff-console",
+      "clientId": "ssra-staff-console",
+      "roles": [
+        "ssra_staff",
+        "ssra_admin",
+        "ssra_auditor",
+        "agent",
+        "supervisor",
+        "qa",
+        "legal_approver",
+        "secops",
+        "admin",
+        "auditor"
+      ]
+    }
   ]
 }

@@ -967,7 +967,7 @@ function renderPwaShellHtml(locale, nonce) {
               <button type="button" id="header-menu-theme-btn" class="hdrv2-menu-item"><span id="header-menu-theme-icon" aria-hidden="true">${ICONS.moon}</span><span id="header-menu-theme-label">Theme: Dark</span></button>
               <button type="button" id="header-menu-settings-btn" class="hdrv2-menu-item">${ICONS.settings}<span id="header-menu-settings-label">Settings</span></button>
               <button type="button" id="header-menu-clear-btn" class="hdrv2-menu-item">${ICONS.trash}<span id="header-menu-clear-label">Clear conversation</span></button>
-              <a href="https://etax.nra.gov.ss/" id="header-menu-portal-link" class="hdrv2-menu-item" rel="noopener noreferrer">${ICONS.bookOpen}<span id="header-menu-portal-label">Official e-Tax portal ↗</span></a>
+              <a href="https://etax.nra.gov.ss/" id="header-menu-portal-link" class="hdrv2-menu-item" rel="noopener noreferrer">${ICONS.bookOpen}<span id="header-menu-portal-label">Official e-Tax portal</span><span aria-hidden="true">${ICONS.arrowUpRight}</span></a>
             </div>
           </div>
         </div>
@@ -1437,7 +1437,7 @@ function renderPwaShellHtml(locale, nonce) {
           composerKeys: "Enter to send · Shift+Enter for a new line · Ctrl+K to search",
           menuSettingsLabel: "Settings",
           menuClearLabel: "Clear conversation",
-          menuPortalLabel: "Official e-Tax portal ↗",
+          menuPortalLabel: "Official e-Tax portal",
           langMenuTitle: "Response language",
           langSelectionLabel: "Language selection",
           langCloseLabel: "Close language picker",
@@ -1488,7 +1488,7 @@ function renderPwaShellHtml(locale, nonce) {
           composerKeys: "Enter aashan tarsil · Shift+Enter satir jadid · Ctrl+K bahis",
           menuSettingsLabel: "I'dadat",
           menuClearLabel: "Imsah al-wanasa",
-          menuPortalLabel: "Mawqi e-Tax al-rasmi ↗",
+          menuPortalLabel: "Mawqi e-Tax al-rasmi",
           langMenuTitle: "Lugha ta al-ijaba",
           langSelectionLabel: "Ikhtiyar al-lugha",
           langCloseLabel: "Aqfil qayima ta al-lugha",
@@ -1539,7 +1539,7 @@ function renderPwaShellHtml(locale, nonce) {
           composerKeys: "Enter للإرسال · Shift+Enter لسطر جديد · Ctrl+K للبحث",
           menuSettingsLabel: "الإعدادات",
           menuClearLabel: "مسح المحادثة",
-          menuPortalLabel: "بوابة e-Tax الرسمية ↗",
+          menuPortalLabel: "بوابة e-Tax الرسمية",
           langMenuTitle: "لغة الإجابة",
           langSelectionLabel: "اختيار اللغة",
           langCloseLabel: "إغلاق قائمة اللغات",

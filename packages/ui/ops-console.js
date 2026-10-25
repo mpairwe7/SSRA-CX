@@ -824,6 +824,22 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       width: var(--rail-w-expanded);
       box-shadow: var(--ops-elev-3);
     }
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .staff-rail, .call-console-bar, .ops-stat, .ops-panel.is-glass {
+        background: var(--ops-glass-solid);
+        border-color: var(--ops-line);
+        box-shadow: var(--ops-elev-1);
+      }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      .staff-rail, .call-console-bar, .ops-stat, .ops-panel.is-glass {
+        background: var(--ops-glass-solid);
+        border-color: var(--ops-line);
+        box-shadow: var(--ops-elev-1);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+    }
 
     .staff-rail-head {
       display: flex; align-items: center; justify-content: space-between;
@@ -872,8 +888,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-2);
     }
     .ops-cmdk-trigger:hover { background: var(--ops-row-hover); color: var(--text-0); border-color: var(--ops-line-strong); }
+    .staff-rail.is-collapsed .ops-cmdk-trigger { justify-content: center; padding-inline: 0; }
     .staff-rail.is-collapsed .ops-cmdk-trigger-text,
     .staff-rail.is-collapsed .ops-cmdk-kbd { display: none; }
+    .staff-rail.is-collapsed .staff-acct-trigger { justify-content: center; padding-inline: 0; }
+    .staff-rail.is-collapsed .staff-acct-meta,
+    .staff-rail.is-collapsed .staff-acct-chevron { display: none; }
     .ops-kbd {
       font-family: var(--ops-font-mono); font-size: 10px; padding: 1px 5px;
       border-radius: 4px; background: var(--ops-row-active); border: 1px solid var(--ops-line);
@@ -977,7 +997,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       border: 1px solid rgba(251, 191, 36, 0.4); color: var(--ops-warn-ink); font-weight: var(--ops-weight-semi);
     }
 
-    /* ── OpsPage, OpsPanel & StatCard (ops.css + admin.css pattern) ── */
+    /* ── OpsPage, OpsPanel & StatCard (Hercules + ops.css + admin.css pattern) ── */
     .ops-page {
       max-width: var(--ops-max-w); width: 100%; margin: 0 auto;
       padding: var(--ops-space-6) var(--ops-space-5) var(--ops-space-12);
@@ -987,95 +1007,105 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       display: flex; align-items: flex-end; justify-content: space-between;
       gap: var(--ops-space-4); flex-wrap: wrap; margin-bottom: var(--ops-space-5);
     }
+    .ops-page-head > * { min-width: 0; }
     .ops-eyebrow {
-      display: block; margin-bottom: var(--ops-space-1);
+      display: block; margin-bottom: var(--ops-space-2);
       font-family: var(--ops-font-mono); font-size: var(--ops-text-2xs);
-      letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent);
+      font-weight: var(--ops-weight-light); letter-spacing: var(--ops-tracking-meta);
+      text-transform: uppercase; color: var(--text-3);
     }
     .ops-page-head h1 {
       margin: 0; font-size: var(--ops-text-xl); line-height: var(--ops-lh-tight);
-      font-weight: var(--ops-weight-semi); letter-spacing: -0.01em; color: var(--text-0);
+      font-weight: var(--ops-weight-semi); letter-spacing: var(--ops-tracking-tight); color: var(--text-0);
     }
     .ops-page-desc {
-      margin: var(--ops-space-2) 0 0; max-width: 70ch;
+      margin: var(--ops-space-2) 0 0; max-width: 68ch;
       font-size: var(--ops-text-sm); line-height: var(--ops-lh-normal); color: var(--text-2);
     }
-    .ops-page-actions { display: flex; align-items: center; gap: var(--ops-space-2); flex-wrap: wrap; }
+    .ops-page-actions { display: flex; align-items: center; gap: var(--ops-space-2); flex-wrap: wrap; max-width: 100%; }
+    .ops-page-actions > * { min-width: 0; }
 
     .ops-segmented {
-      display: inline-flex; padding: 2px; border-radius: var(--ops-radius-sm);
+      display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--ops-radius-sm);
       background: var(--ops-row); border: 1px solid var(--ops-line);
     }
     .ops-seg-btn {
-      min-height: 28px; min-width: 36px; padding: 5px 10px; border-radius: var(--ops-radius-xs); border: none;
+      min-height: 28px; min-width: 36px; padding: 4px 11px; border-radius: var(--ops-radius-xs); border: none;
       background: transparent; color: var(--text-2); font-size: var(--ops-text-xs);
-      font-weight: var(--ops-weight-medium); cursor: pointer; font-family: inherit;
+      font-weight: var(--ops-weight-semi); cursor: pointer; font-family: inherit;
       display: inline-flex; align-items: center; justify-content: center;
+      transition: background var(--ops-dur-fast) var(--ops-ease), color var(--ops-dur-fast) var(--ops-ease);
     }
-    .ops-seg-btn.active { background: var(--ops-row-active); color: var(--text-0); font-weight: var(--ops-weight-semi); }
+    .ops-seg-btn.active { background: var(--ops-panel); color: var(--text-0); box-shadow: var(--ops-elev-1), inset 0 0 0 1px var(--ops-line); }
 
     .ops-btn {
-      min-height: 32px; padding: 0 12px; border-radius: var(--ops-radius-sm);
-      background: var(--ops-row); border: 1px solid var(--ops-line); color: var(--text-0);
-      font-size: var(--ops-text-xs); font-weight: var(--ops-weight-medium);
-      cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+      min-height: 36px; padding: 8px 14px; border-radius: var(--ops-radius-sm);
+      background: var(--ops-row-active); border: 1px solid var(--ops-line-strong); color: var(--text-0);
+      font-size: var(--ops-text-sm); font-weight: var(--ops-weight-semi);
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: var(--ops-space-2); text-decoration: none; white-space: nowrap;
+      transition: background var(--ops-dur-fast) var(--ops-ease), border-color var(--ops-dur-fast) var(--ops-ease);
     }
-    .ops-btn:hover { background: var(--ops-row-hover); border-color: var(--ops-line-strong); }
-    .ops-btn.primary { background: linear-gradient(135deg, #07792B 0%, #0D6E38 50%, #0F47AF 100%); color: #fff; border-color: rgba(255,255,255,0.18); }
+    .ops-btn:hover { background: var(--surface-4); border-color: var(--ops-line-strong); }
+    a.ops-btn { color: var(--text-0); }
+    .ops-btn.primary, a.ops-btn.primary, a.ops-btn.primary:hover { background: linear-gradient(135deg, #07792B 0%, #0D6E38 50%, #0F47AF 100%); color: #fff; border-color: rgba(255,255,255,0.18); box-shadow: var(--ops-elev-1); }
     .ops-btn.gold { background: var(--accent); color: #0B1220; border-color: transparent; font-weight: var(--ops-weight-bold); }
     :root[data-theme="light"] .ops-btn.gold { color: #FFFFFF; }
 
-    /* StatCard Grid */
+    /* StatCard Grid (Hercules tabular/proportional figure hierarchy) */
     .ops-stat-grid {
       display: grid;
       grid-template-columns: repeat(var(--ops-stat-cols, 3), minmax(0, 1fr));
       gap: var(--ops-space-3); margin-bottom: var(--ops-band);
     }
-    @media (max-width: 1024px) { .ops-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 600px) { .ops-stat-grid { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 1100px) { .ops-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px) { .ops-stat-grid { grid-template-columns: minmax(0, 1fr); } }
 
     .ops-stat {
       position: relative; display: flex; flex-direction: column; gap: var(--ops-space-1);
-      padding: var(--ops-space-4) var(--ops-space-5); border-radius: var(--ops-radius-md);
+      padding: var(--ops-space-5); border-radius: var(--ops-radius-md);
       background: var(--ops-glass-bg); border: 1px solid var(--ops-glass-line);
       box-shadow: var(--ops-glass-spec), var(--ops-glass-cast);
       -webkit-backdrop-filter: var(--ops-glass-blur); backdrop-filter: var(--ops-glass-blur);
       contain: paint; text-decoration: none; color: inherit;
       transition: border-color var(--ops-dur-fast) var(--ops-ease), background var(--ops-dur-fast) var(--ops-ease);
     }
-    .ops-stat:hover { border-color: var(--ops-line-strong); }
+    .ops-stat:hover { border-color: var(--ops-line-strong); background: var(--ops-row-hover); }
     .ops-stat-label {
-      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-semi);
-      letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3);
+      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-light);
+      letter-spacing: var(--ops-tracking-meta); text-transform: uppercase; color: var(--text-3);
     }
-    .ops-stat-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--ops-space-2); margin-top: 2px; }
+    .ops-stat-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--ops-space-2); flex-wrap: wrap; margin-top: 2px; }
     .ops-stat-value {
       font-size: var(--ops-text-xl); line-height: var(--ops-lh-tight);
-      font-weight: var(--ops-weight-semi); color: var(--text-0);
+      min-height: calc(var(--ops-text-xl) * var(--ops-lh-tight));
+      font-weight: var(--ops-weight-semi); letter-spacing: var(--ops-tracking-tight);
+      color: var(--text-0); font-variant-numeric: proportional-nums; text-wrap: balance;
     }
-    .ops-stat-unit { font-size: var(--ops-text-sm); font-weight: var(--ops-weight-normal); color: var(--text-2); }
+    .ops-stat-unit { font-size: 0.6em; font-weight: var(--ops-weight-normal); letter-spacing: 0; color: var(--text-2); white-space: pre; }
     .ops-delta {
+      display: inline-flex; align-items: center; gap: 3px;
       font-family: var(--ops-font-mono); font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-semi);
-      padding: 2px 6px; border-radius: var(--ops-radius-xs); background: var(--ops-row); color: var(--text-2);
+      font-variant-numeric: tabular-nums; color: var(--text-3);
     }
-    .ops-delta.is-good { color: var(--ops-good-ink); background: rgba(52, 211, 153, 0.12); }
-    .ops-delta.is-bad { color: var(--ops-bad-ink); background: rgba(251, 113, 133, 0.12); }
-    .ops-stat-hint { font-size: var(--ops-text-xs); color: var(--text-2); line-height: var(--ops-lh-snug); }
-    .ops-sparkline { width: 100%; height: 28px; margin-top: 4px; overflow: visible; }
+    .ops-delta.is-good { color: var(--ops-good-ink); }
+    .ops-delta.is-bad { color: var(--ops-bad-ink); }
+    .ops-stat-hint { font-size: var(--ops-text-2xs); color: var(--text-3); line-height: var(--ops-lh-snug); }
+    .ops-sparkline { width: 100%; height: 28px; margin-top: var(--ops-space-1); overflow: visible; }
 
     /* OpsPanel & Two-Column Layouts */
     .ov-cols { display: grid; grid-template-columns: 1.45fr 1fr; gap: var(--ops-band); align-items: start; }
-    @media (max-width: 980px) { .ov-cols { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 900px) { .ov-cols { grid-template-columns: minmax(0, 1fr); } }
     .ov-side { display: grid; gap: var(--ops-band); }
 
     .ops-panel {
       background: var(--ops-panel); border: 1px solid var(--ops-line);
       border-radius: var(--ops-radius-md); overflow: hidden;
     }
-    .ops-panel.is-bare { background: none; border: 0; border-radius: 0; }
+    .ops-panel.is-bare { background: none; border: 0; border-radius: 0; box-shadow: none; }
     .ops-panel.is-glass {
       background: var(--ops-glass-bg); border-color: var(--ops-glass-line);
-      box-shadow: var(--ops-glass-spec), var(--ops-glass-cast);
+      border-radius: var(--ops-radius-lg);
+      box-shadow: var(--ops-glass-spec), var(--ops-elev-2);
       -webkit-backdrop-filter: var(--ops-glass-blur); backdrop-filter: var(--ops-glass-blur);
     }
     .ops-panel-head {
@@ -1088,37 +1118,40 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .ops-panel-body { padding: var(--ops-space-4); overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .ops-panel.is-bare .ops-panel-body { padding: var(--ops-space-4) 0 0; }
 
-    /* Lists, Tables & Chips */
+    /* Lists, Tables & Chips (ink-only readings in IBM Plex Mono Light) */
     .ov-review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ops-space-2); }
     .ov-review-item {
-      display: grid; gap: 4px; padding: var(--ops-space-3) var(--ops-space-4);
+      display: grid; gap: var(--ops-space-1); padding: var(--ops-space-3) var(--ops-space-4);
       border: 1px solid var(--ops-hairline); border-radius: var(--ops-radius-sm); background: var(--ops-row);
     }
     .ov-review-top { display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-2); }
     .ops-chip {
-      display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
-      border-radius: var(--ops-radius-pill); font-size: var(--ops-text-2xs);
-      font-weight: var(--ops-weight-semi); background: var(--ops-row-active); border: 1px solid var(--ops-line);
+      display: inline-flex; align-items: center; gap: 5px; padding: 0;
+      border: 0; border-radius: 0; background: none;
+      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-light); color: var(--text-3); white-space: nowrap;
     }
-    .ops-chip.good { color: var(--ops-good-ink); border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.1); }
-    .ops-chip.warn { color: var(--ops-warn-ink); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.1); }
-    .ops-chip.bad { color: var(--ops-bad-ink); border-color: rgba(251, 113, 133, 0.35); background: rgba(251, 113, 133, 0.1); }
-    .ops-chip.info { color: var(--ops-info-ink); border-color: rgba(96, 165, 250, 0.35); background: rgba(96, 165, 250, 0.1); }
+    .ops-chip + .ops-chip { margin-inline-start: var(--ops-space-3); }
+    .ops-chip.good, .ops-chip.is-good { color: var(--ops-good-ink); }
+    .ops-chip.warn, .ops-chip.is-warn { color: var(--ops-warn-ink); }
+    .ops-chip.bad, .ops-chip.is-danger { color: var(--ops-bad-ink); }
+    .ops-chip.info, .ops-chip.is-info { color: var(--ops-info-ink); }
 
-    .ops-table { width: 100%; border-collapse: collapse; font-size: var(--ops-text-xs); }
+    .ops-table { width: 100%; border-collapse: collapse; font-size: var(--ops-text-sm); }
     .ops-table th, .ops-table td {
-      padding: 10px 12px; text-align: start; border-bottom: 1px solid var(--ops-hairline);
+      padding: var(--ops-space-3) var(--ops-space-4); text-align: start; border-bottom: 1px solid var(--ops-hairline);
     }
     .ops-table th {
+      padding: var(--ops-space-2) var(--ops-space-4);
       font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-semi);
-      text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3);
+      text-transform: uppercase; letter-spacing: var(--ops-tracking-caps); color: var(--text-3);
+      border-bottom: 1px solid var(--ops-line);
     }
-    .ops-table tr:hover td { background: var(--ops-row-hover); }
+    .ops-table tr:hover td { background: var(--ops-row); }
 
     .ov-kv { margin: 0; display: grid; gap: var(--ops-space-2); }
-    .ov-kv > div { display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-3); padding: 4px 0; border-bottom: 1px solid var(--ops-hairline); }
+    .ov-kv > div { display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-3); min-height: 24px; padding: 2px 0; border-bottom: 1px solid var(--ops-hairline); }
     .ov-kv dt { font-size: var(--ops-text-xs); color: var(--text-3); }
-    .ov-kv dd { margin: 0; font-size: var(--ops-text-xs); font-weight: var(--ops-weight-semi); color: var(--text-0); }
+    .ov-kv dd { margin: 0; font-size: var(--ops-text-xs); font-weight: var(--ops-weight-semi); color: var(--text-1); text-align: end; font-variant-numeric: tabular-nums; }
 
     /* Command Palette Modal (CommandPalette.tsx pattern) */
     .ops-cmdk-backdrop {
@@ -1318,8 +1351,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
             <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.contrast} High contrast</span></button>
           </div>
           <hr class="staff-acct-hr" role="separator" />
-          <a href="/signin" data-nav="/signin" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.shieldCheck} Sign in with Keycloak SSO</span></a>
-          <a href="/signup" data-nav="/signup" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.plus} Create an account</span></a>
+          <a href="/signin" data-nav="/signin" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.logIn} Sign in with Keycloak SSO</span></a>
+          <a href="/signup" data-nav="/signup" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.userPlus} Create an account</span></a>
           <a href="${escapeHtml(publicAssistantUrl)}" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.messageSquare} Return to the public assistant</span><span>${ICONS.arrowUpRight}</span></a>
         </div>
         <button type="button" id="staff-acct-trigger" class="staff-acct-trigger" aria-label="Preview persona menu; not signed in" aria-expanded="false" aria-haspopup="menu">
@@ -1362,7 +1395,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       <ul id="cmdk-list" class="ops-cmdk-list" role="listbox" aria-label="Available commands"></ul>
       <p id="cmdk-count" class="ops-sr-only" role="status" aria-live="polite"></p>
       <div class="ops-cmdk-foot">
-        <span>↑↓ to navigate · Enter to open · Esc to close</span>
+        <span>${ICONS.chevronUpDown} Up/Down to navigate · Enter to open · Esc to close</span>
         <span>Preview only · no staff session</span>
       </div>
     </div>
@@ -1375,9 +1408,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       const PUBLIC_ASSISTANT_URL = ${JSON.stringify(publicAssistantUrl)};
 
       const ROLE_META = {
-        ssra_admin: { initials: "P", name: "Administrator preview", label: "Not signed in · preview only", landing: "/admin" },
-        ssra_staff: { initials: "P", name: "Tax agent preview", label: "Not signed in · preview only", landing: "/agent" },
-        ssra_auditor: { initials: "P", name: "Auditor preview (read-only)", label: "Not signed in · preview only", landing: "/analytics" },
+        ssra_admin: { initials: "AD", name: "Administrator preview", label: "Not signed in · preview only", landing: "/admin" },
+        ssra_staff: { initials: "ST", name: "Tax agent preview", label: "Not signed in · preview only", landing: "/agent" },
+        ssra_auditor: { initials: "AU", name: "Auditor preview (read-only)", label: "Not signed in · preview only", landing: "/analytics" },
       };
 
       const mainEl = document.getElementById("staff-main");
@@ -1452,8 +1485,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           }
         });
         const roleMeta = ROLE_META[state.role] || ROLE_META.ssra_admin;
+        const acctInitialsEl = document.getElementById("acct-initials");
         const acctNameEl = document.getElementById("acct-display-name");
         const acctRoleEl = document.getElementById("acct-role-label");
+        if (acctInitialsEl) acctInitialsEl.textContent = roleMeta.initials;
         if (acctNameEl) acctNameEl.textContent = roleMeta.name;
         if (acctRoleEl) acctRoleEl.textContent = roleMeta.label;
         document.querySelectorAll("[data-set-theme]").forEach((btn) => {
@@ -1512,6 +1547,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           .replace(/__GROUP__/g, escapeHtml(group));
       }
 
+      let lastCallbackOutcome = null;
+
       function wireAuthViewInteractions() {
         if (!mainEl) return;
         const roleRadios = Array.from(mainEl.querySelectorAll('input[name="signin-role-target"]'));
@@ -1537,6 +1574,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           const selectedRadio = mainEl.querySelector('input[name="signin-role-target"]:checked');
           const targetRole = selectedRadio?.value || state.role || "ssra_admin";
           const returnTo = selectedRadio?.getAttribute("data-landing") || ROLE_META[targetRole]?.landing || "/admin";
+          lastCallbackOutcome = null;
           try {
             sessionStorage.setItem("ssra_pkce_verifier", verifier);
             sessionStorage.setItem("ssra_oidc_state", csrfState);
@@ -1562,6 +1600,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           if (bannerEl) {
             bannerEl.classList.remove("is-hidden", "error");
             bannerEl.classList.add("ok");
+            bannerEl.setAttribute("role", "status");
             bannerEl.setAttribute("data-auth-url", authUrl.toString());
             bannerEl.textContent =
               (mode === "signup"
@@ -1573,43 +1612,81 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           }
         };
 
+        const runKeycloakRedirect = (mode, promptVal) => {
+          startKeycloakRedirect(mode, promptVal).catch(() => {
+            const bannerId = mode === "signup" ? "signup-status-banner" : "signin-status-banner";
+            const bannerEl = document.getElementById(bannerId);
+            if (!bannerEl) return;
+            bannerEl.classList.remove("is-hidden", "ok");
+            bannerEl.classList.add("error");
+            bannerEl.setAttribute("role", "alert");
+            bannerEl.textContent =
+              "Could not prepare the sign-in request. A secure (HTTPS) browser context is required for Web Crypto PKCE S256.";
+          });
+        };
+
         document.getElementById("keycloak-signin-btn")?.addEventListener("click", () => {
-          void startKeycloakRedirect("signin", undefined);
+          runKeycloakRedirect("signin", undefined);
         });
         document.getElementById("keycloak-switch-account-btn")?.addEventListener("click", () => {
-          void startKeycloakRedirect("signin", "login");
+          runKeycloakRedirect("signin", "login");
         });
         document.getElementById("keycloak-signup-btn")?.addEventListener("click", () => {
-          void startKeycloakRedirect("signup", undefined);
+          runKeycloakRedirect("signup", undefined);
         });
 
         if (state.route === "/signin/callback") {
           const cbBanner = document.getElementById("callback-status-banner");
-          const params = new URLSearchParams(window.location.search);
-          const err = params.get("error");
-          const code = params.get("code");
-          const st = params.get("state");
-          let expectedState = null;
-          let verifier = null;
-          try {
-            expectedState = sessionStorage.getItem("ssra_oidc_state");
-            verifier = sessionStorage.getItem("ssra_pkce_verifier");
-          } catch {}
-          if (cbBanner) {
+          if (!lastCallbackOutcome || lastCallbackOutcome.search !== window.location.search) {
+            const params = new URLSearchParams(window.location.search);
+            const err = params.get("error");
+            const code = params.get("code");
+            const st = params.get("state");
+            let expectedState = null;
+            let verifier = null;
+            try {
+              expectedState = sessionStorage.getItem("ssra_oidc_state");
+              verifier = sessionStorage.getItem("ssra_pkce_verifier");
+              sessionStorage.removeItem("ssra_oidc_state");
+              sessionStorage.removeItem("ssra_pkce_verifier");
+            } catch {}
             if (err) {
-              cbBanner.textContent = err + ": " + (params.get("error_description") || "the identity provider refused the request");
+              lastCallbackOutcome = {
+                search: window.location.search,
+                ok: false,
+                text: err + ": " + (params.get("error_description") || "the identity provider refused the request"),
+              };
             } else if (!code) {
-              cbBanner.textContent = "The identity provider returned no authorization code.";
+              lastCallbackOutcome = {
+                search: window.location.search,
+                ok: false,
+                text: "The identity provider returned no authorization code.",
+              };
             } else if (!st || !expectedState || st !== expectedState) {
-              cbBanner.textContent = "State mismatch — this sign-in did not start in this browser tab. Start again from /signin.";
+              lastCallbackOutcome = {
+                search: window.location.search,
+                ok: false,
+                text: "State mismatch — this sign-in did not start in this browser tab. Start again from /signin.",
+              };
             } else if (!verifier || verifier.length < 43) {
-              cbBanner.textContent = "The PKCE S256 code_verifier is missing. Start the sign-in again from /signin.";
+              lastCallbackOutcome = {
+                search: window.location.search,
+                ok: false,
+                text: "The PKCE S256 code_verifier is missing. Start the sign-in again from /signin.",
+              };
             } else {
-              cbBanner.classList.remove("error");
-              cbBanner.classList.add("ok");
-              cbBanner.setAttribute("role", "status");
-              cbBanner.textContent = "Keycloak PKCE S256 & CSRF state verified. Server-side token exchange requires live Keycloak connectivity (OQ-005 / OQ-014).";
+              lastCallbackOutcome = {
+                search: window.location.search,
+                ok: true,
+                text: "Keycloak PKCE S256 & CSRF state verified. Server-side token exchange requires live Keycloak connectivity (OQ-005 / OQ-014).",
+              };
             }
+          }
+          if (cbBanner && lastCallbackOutcome) {
+            cbBanner.classList.toggle("ok", lastCallbackOutcome.ok);
+            cbBanner.classList.toggle("error", !lastCallbackOutcome.ok);
+            cbBanner.setAttribute("role", lastCallbackOutcome.ok ? "status" : "alert");
+            cbBanner.textContent = lastCallbackOutcome.text;
           }
         }
       }
