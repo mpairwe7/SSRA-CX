@@ -853,7 +853,19 @@ function renderPwaShellHtml(locale, nonce) {
     .settings-pane-title { margin: 0; color: var(--text-0); font-size: 1.05rem; }
     .settings-pane-body { font-size: 0.86rem; color: var(--text-2); line-height: 1.55; }
     .settings-actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
-    .turn-content-text { white-space: pre-wrap; }
+    .turn-content-text { display: flex; flex-direction: column; gap: 0.6rem; line-height: 1.64; color: var(--text-0); }
+    .turn-content-text .md-p { margin: 0; white-space: pre-wrap; line-height: 1.64; }
+    .turn-content-text .md-list { margin: 0.15rem 0; padding-inline-start: 1.45rem; display: flex; flex-direction: column; gap: 0.42rem; max-width: 70ch; }
+    .turn-content-text .md-list li { margin: 0; padding-inline-start: 0.15rem; line-height: 1.58; color: var(--text-0); }
+    .turn-content-text .md-list li::marker { color: var(--ssra-blue-bright); font-weight: 700; }
+    .turn-content-text .md-ol { list-style-type: decimal; }
+    .turn-content-text .md-inline-code { padding: 0.12em 0.38em; background: var(--surface-2); border: 1px solid var(--border-1); border-radius: 5px; font-family: var(--font-mono); font-size: 0.86em; color: var(--ssra-blue-bright); }
+    .turn-content-text .md-link { color: var(--ssra-blue-bright); font-weight: 600; text-decoration: underline; text-decoration-color: rgba(0, 93, 180, 0.4); text-underline-offset: 2px; }
+    .turn-content-text .md-link:hover { color: var(--ssra-green); text-decoration-color: currentColor; }
+    .turn-content-text .md-callout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.45rem; align-items: baseline; margin: 0.2rem 0 0; padding: 0.65rem 0.85rem; background: var(--surface-1); border: 1px solid var(--border-1); border-inline-start: 3.5px solid var(--ssra-green); border-radius: var(--radius-sm); font-size: 0.88rem; line-height: 1.55; color: var(--text-1); }
+    .turn-content-text .md-callout strong { color: var(--ssra-green); font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .turn-content-text .md-callout-warning, .turn-content-text .md-callout-caution, .turn-content-text .md-callout-important { border-inline-start-color: var(--warning); }
+    .turn-content-text .md-callout-warning strong, .turn-content-text .md-callout-caution strong, .turn-content-text .md-callout-important strong { color: var(--warning); }
     .bubble, .landing-chip-text, .citation-pill, .gen-ui-card p, .gen-kv dd, .locale-notice, .composer-disclosure { overflow-wrap: anywhere; }
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: #FFFFFF; }
     :focus-visible { outline: 3px solid #005DB4; outline-offset: 2px; }
@@ -2079,6 +2091,226 @@ function renderPwaShellHtml(locale, nonce) {
         return '<div class="turn-meta-bar">' + pills.join("") + "</div>";
       }
 
+      function renderInlineAnswerHtml(rawText) {
+        let html = escapeHtml(rawText);
+        html = html
+          .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
+          .replace(/\\x60([^\\x60]+)\\x60/g, '<code class="md-inline-code">$1</code>')
+          .replace(
+            /^(ESTIMATE ONLY(?: \\([^)]+\\))?:|OFFICIAL_VERIFIED:|UNVERIFIED_OR_SCAM:)/,
+            "<strong>$1</strong>",
+          );
+        html = html.replace(
+          /(https?:\\/\\/[^\\s<]+|\\b(?:www\\.nra|etax\\.nra|ecustoms\\.nra|cms\\.nra|nra|assist\\.ssra|ssra|business\\.eservices|customs\\.eservices|www\\.trade\\.eservices|trade\\.eservices|eservices|mofp|boss|mojca)\\.gov\\.ss(?:\\/[^\\s<]*)?|\\b(?:support|info)@nra\\.gov\\.ss\\b|(?<!\\w)\\+211[ \\t-]\\d{3}[ \\t-]?\\d{3}[ \\t-]?\\d{3}\\b)/gi,
+          (match) => {
+            const trailMatch = /[.,;:!?)\\]}،؛؟»]+$/.exec(match);
+            const clean = trailMatch ? match.slice(0, match.length - trailMatch[0].length) : match;
+            const trail = trailMatch ? trailMatch[0] : "";
+            if (!clean) return match;
+            if (clean.includes("@") && !/^https?:/i.test(clean)) {
+              return '<a class="md-link" href="mailto:' + clean + '">' + clean + "</a>" + trail;
+            }
+            if (clean.startsWith("+211")) {
+              const digits = clean.replace(/[\\s-]/g, "");
+              return '<a class="md-link" href="tel:' + digits + '">' + clean + "</a>" + trail;
+            }
+            const href = /^https?:\\/\\//i.test(clean) ? clean : "https://" + clean;
+            return (
+              '<a class="md-link" href="' +
+              href +
+              '" target="_blank" rel="noopener noreferrer">' +
+              clean +
+              "</a>" +
+              trail
+            );
+          },
+        );
+        return html;
+      }
+
+      function parseInlineNumberedProcedure(text) {
+        const parenRe = /(?:^|[\\s:;.,!?؛،])\\((\\d{1,2}|[٠-٩]{1,2})\\)\\s+/g;
+        const parenFound = [];
+        let pm = parenRe.exec(text);
+        while (pm !== null) {
+          const openIdx = pm[0].indexOf("(");
+          parenFound.push({
+            n: Number(toAsciiSpeechDigits(pm[1] || "0")),
+            start: pm.index + Math.max(0, openIdx),
+            end: pm.index + pm[0].length,
+          });
+          pm = parenRe.exec(text);
+        }
+        let found = parenFound;
+        let minItems = 2;
+        if (found.length < 2) {
+          const dotRe = /(?:^|[\\s:;.,!?؛،])(\\d{1,2}|[٠-٩]{1,2})[).]\\s+/g;
+          const dotFound = [];
+          let dm = dotRe.exec(text);
+          while (dm !== null) {
+            const digitMatch = /\\d{1,2}|[٠-٩]{1,2}/.exec(dm[0]);
+            const digitOffset = digitMatch ? digitMatch.index : 0;
+            dotFound.push({
+              n: Number(toAsciiSpeechDigits(dm[1] || "0")),
+              start: dm.index + digitOffset,
+              end: dm.index + dm[0].length,
+            });
+            dm = dotRe.exec(text);
+          }
+          found = dotFound;
+          minItems = 3;
+        }
+        if (found.length < minItems || found[0].n !== 1) return null;
+        for (let i = 1; i < found.length; i += 1) {
+          if (found[i].n !== found[i - 1].n + 1) return null;
+        }
+        const lead = text.slice(0, found[0].start).trim();
+        const items = [];
+        let trailingCallout = null;
+        for (let i = 0; i < found.length; i += 1) {
+          const stop = i + 1 < found.length ? found[i + 1].start : text.length;
+          let item = text.slice(found[i].end, stop).trim();
+          if (i + 1 < found.length) {
+            item = item.replace(/[;؛]+$/, ".").replace(/[,،]+$/, "").trim();
+          } else {
+            const calloutSplit = /^(.*?[.!?؟])\\s+(Note|Important|Warning|Caution|Tip):\\s+(.+)$/is.exec(item);
+            if (calloutSplit) {
+              item = calloutSplit[1].trim();
+              trailingCallout = { kind: calloutSplit[2].toLowerCase(), label: calloutSplit[2], text: calloutSplit[3].trim() };
+            }
+          }
+          if (!item) return null;
+          items.push(item);
+        }
+        return { lead, items, trailingCallout };
+      }
+
+      function parseSemicolonEnumeration(text) {
+        const firstSeg = text.split(/[;؛]/)[0] || "";
+        const colonIdx = firstSeg.indexOf(":");
+        let lead = "";
+        let rest = text.trim();
+        if (colonIdx >= 0) {
+          lead = text.slice(0, colonIdx + 1).trim();
+          rest = text.slice(colonIdx + 1).trim();
+        }
+        if (!rest || rest.length < 80) return null;
+        const parts = rest.split(/[;؛]/).map((p) => p.trim()).filter(Boolean);
+        if (parts.length < 3) return null;
+        let trailingPara = null;
+        const lastIdx = parts.length - 1;
+        const lastPart = parts[lastIdx] || "";
+        const trailMatch = /^(.+?)\\.\\s+([A-Z\\u0600-\\u06FF][^.!?؟]+[.!?؟])$/.exec(lastPart);
+        if (trailMatch) {
+          parts[lastIdx] = trailMatch[1].trim();
+          trailingPara = trailMatch[2].trim();
+        } else {
+          parts[lastIdx] = lastPart.replace(/\\.$/, "").trim();
+        }
+        if (parts.some((p) => p.length > 220 || !p.length)) return null;
+        const items = parts.map((p, idx) => (idx === lastIdx ? p.replace(/^and\\s+/i, "") : p));
+        return { lead, items, trailingPara };
+      }
+
+      function splitLongParagraphSafe(text) {
+        const cleaned = text.trim();
+        if (cleaned.length < 200) return cleaned ? [cleaned] : [];
+        const prot = cleaned.replace(
+          /\\b(Sec|Secs|Reg|Regs|Art|Arts|No|Nos|Vol|VOL|Ch|Pt|Dr|Mr|Mrs|Ms|R\\.E|P\\.O|I|II|III|IV|V|VI|VII|VIII)\\.\\s+/g,
+          "$1<DOT> ",
+        );
+        const parts = prot
+          .split(/(?<=[.!?؟])\\s+/)
+          .map((s) => s.replace(/<DOT>/g, ".").trim())
+          .filter(Boolean);
+        if (parts.length < 2) return [cleaned];
+        const chunks = [];
+        let buf = "";
+        for (let i = 0; i < parts.length; i += 1) {
+          const part = parts[i];
+          if (!buf) buf = part;
+          else if (buf.length + part.length < 190) buf += " " + part;
+          else {
+            chunks.push(buf);
+            buf = part;
+          }
+        }
+        if (buf) chunks.push(buf);
+        return chunks.length >= 2 ? chunks : [cleaned];
+      }
+
+      function renderStructuredAnswerHtml(rawContent) {
+        const cleaned = String(rawContent || "")
+          .replace(/\\s*\\[\\d+(?:\\s*[,;]\\s*\\d+)*\\](?!\\()/g, "")
+          .replace(/(\\s)--(\\s)/g, "$1—$2")
+          .replace(/[ \\t]+([.,;:!?])/g, "$1")
+          .trim();
+        if (!cleaned) return "";
+        const blocksHtml = [];
+        const rawParas = cleaned.split(/\\n(?:[ \\t]*\\n)+/);
+        for (let pIdx = 0; pIdx < rawParas.length; pIdx += 1) {
+          const para = rawParas[pIdx].trim();
+          if (!para) continue;
+          const calloutMatch = /^(Note|Important|Warning|Caution|Tip):\\s+(.+)$/is.exec(para);
+          if (calloutMatch) {
+            const cKind = calloutMatch[1].toLowerCase();
+            blocksHtml.push(
+              '<aside class="md-callout md-callout-' +
+                escapeHtml(cKind) +
+                '"><strong>' +
+                escapeHtml(calloutMatch[1]) +
+                ':</strong> <span>' +
+                renderInlineAnswerHtml(calloutMatch[2].trim()) +
+                "</span></aside>",
+            );
+            continue;
+          }
+          const proc = parseInlineNumberedProcedure(para);
+          if (proc) {
+            if (proc.lead) {
+              blocksHtml.push('<p class="md-p">' + renderInlineAnswerHtml(proc.lead) + "</p>");
+            }
+            blocksHtml.push(
+              '<ol class="md-list md-ol">' +
+                proc.items.map((it) => "<li>" + renderInlineAnswerHtml(it) + "</li>").join("") +
+                "</ol>",
+            );
+            if (proc.trailingCallout) {
+              blocksHtml.push(
+                '<aside class="md-callout md-callout-' +
+                  escapeHtml(proc.trailingCallout.kind) +
+                  '"><strong>' +
+                  escapeHtml(proc.trailingCallout.label) +
+                  ':</strong> <span>' +
+                  renderInlineAnswerHtml(proc.trailingCallout.text) +
+                  "</span></aside>",
+              );
+            }
+            continue;
+          }
+          const enumBlock = parseSemicolonEnumeration(para);
+          if (enumBlock) {
+            if (enumBlock.lead) {
+              blocksHtml.push('<p class="md-p">' + renderInlineAnswerHtml(enumBlock.lead) + "</p>");
+            }
+            blocksHtml.push(
+              '<ul class="md-list">' +
+                enumBlock.items.map((it) => "<li>" + renderInlineAnswerHtml(it) + "</li>").join("") +
+                "</ul>",
+            );
+            if (enumBlock.trailingPara) {
+              blocksHtml.push('<p class="md-p">' + renderInlineAnswerHtml(enumBlock.trailingPara) + "</p>");
+            }
+            continue;
+          }
+          const subParas = splitLongParagraphSafe(para);
+          for (let sIdx = 0; sIdx < subParas.length; sIdx += 1) {
+            blocksHtml.push('<p class="md-p">' + renderInlineAnswerHtml(subParas[sIdx]) + "</p>");
+          }
+        }
+        return blocksHtml.join("");
+      }
+
       function renderTurnHtml(turn, index) {
         if (turn.role === "user") {
           const spokenDict = LOCALE_UI_STRINGS[state.locale] || LOCALE_UI_STRINGS.en;
@@ -2106,7 +2338,7 @@ function renderPwaShellHtml(locale, nonce) {
           '<div class="avatar assistant" aria-hidden="true">' + ICONS.ssraCrest + "</div>" +
           '<div class="bubble assistant">' +
             renderTrustPills(meta) +
-            '<div class="turn-content-text">' + escapeHtml(turn.content) + "</div>" +
+            '<div class="turn-content-text">' + renderStructuredAnswerHtml(turn.content) + "</div>" +
             (meta.kind === "failure" ? "" : renderPublicCard(meta.ui_component, citationCount)) +
             (meta.needs_sign_in || meta.pending_confirmation ? cardHtml("Secure sign-in needed", "<p>" + escapeHtml(SIGN_IN_NOTICE) + "</p>") : "") +
             renderCitations(meta.citations) +
@@ -2410,8 +2642,8 @@ function renderPwaShellHtml(locale, nonce) {
           .replace(/(?<![\\w+])\\(?(0[19]\\d{2})\\)?[ \\t-](\\d{3})[ \\t-](\\d{3})\\b/g, (_, a, b, c) => a.split("").join(" ") + ", " + b.split("").join(" ") + ", " + c.split("").join(" "))
           .replace(/\\b0800[ \\t-]*(\\d{3})[ \\t-]*(\\d{3})\\b/g, (_, a, b) => "0 800, " + a.split("").join(" ") + ", " + b.split("").join(" "))
           .replace(/\\bP\\.?[ \\t]?O\\.?[ \\t]?Box[ \\t]{1,4}(\\d{1,6})\\b/gi, (_, box) => poBoxW + " " + box.split("").join(" "))
-          .replace(/^[ \\t]*(\\d{1,2}|[٠-٩]{1,2})[.)][ \\t]+/gm, (_, n) => stepW + " " + toAsciiSpeechDigits(n) + ": ")
-          .replace(/(?<=[:.!?؟؛;])[ \\t]+(\\d{1,2}|[٠-٩]{1,2})[.)][ \\t]+(?=[A-Za-z0-9\\u0600-\\u06FF\\u00C0-\\u024F])/g, (_, n) => " " + stepW + " " + toAsciiSpeechDigits(n) + ": ")
+          .replace(/^[ \\t]*(?:\\((\\d{1,2}|[٠-٩]{1,2})\\)|(\\d{1,2}|[٠-٩]{1,2})[.)])[ \\t]+/gm, (_, n1, n2) => stepW + " " + toAsciiSpeechDigits(n1 || n2) + ": ")
+          .replace(/(?<=[:.!?؟؛;])[ \\t]+(?:\\((\\d{1,2}|[٠-٩]{1,2})\\)|(\\d{1,2}|[٠-٩]{1,2})[.)])[ \\t]+(?=[A-Za-z0-9\\u0600-\\u06FF\\u00C0-\\u024F])/g, (_, n1, n2) => " " + stepW + " " + toAsciiSpeechDigits(n1 || n2) + ": ")
           .replace(/\\bSec\\.\\s*(\\d+[A-Za-z]?)\\b/g, secW + " $1")
           .replace(/\\bArt\\.\\s*(\\d+[A-Za-z]?)\\b/g, artW + " $1")
           .replace(/[*_\\x60#~>-]+/g, " ")
@@ -3790,7 +4022,7 @@ function renderPwaShellHtml(locale, nonce) {
           const s = document.createElement("div");
           s.className = "call-say";
           const lines = String(text || "")
-            .replace(/(?<=[:.!?؟؛;])\\s+(?=(?:(?:\\d{1,2}|[٠-٩]{1,2})[.)]|(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)\\s+(?:\\d{1,2}|[٠-٩]{1,2})[:.)])\\s+\\S)/gi, "\\n")
+            .replace(/(?<=[:.!?؟؛;])\\s+(?=(?:\\((?:\\d{1,2}|[٠-٩]{1,2})\\)|(?:\\d{1,2}|[٠-٩]{1,2})[.)]|(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)\\s+(?:\\d{1,2}|[٠-٩]{1,2})[:.)])\\s+\\S)/gi, "\\n")
             .split(/\\n+/)
             .map((l) => l.trim())
             .filter(Boolean);
@@ -3799,9 +4031,10 @@ function renderPwaShellHtml(locale, nonce) {
           } else {
             let activeOl = null;
             lines.forEach((line) => {
-              const stepMatch = /^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)\\s+)?(\\d{1,2}|[٠-٩]{1,2})[:.)]\\s+(.+)$/i.exec(line);
+              const stepMatch = /^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)\\s+)?(?:\\((\\d{1,2}|[٠-٩]{1,2})\\)|(\\d{1,2}|[٠-٩]{1,2})[:.)])\\s+(.+)$/i.exec(line);
               if (stepMatch) {
-                const stepNum = Number.parseInt(toAsciiSpeechDigits(stepMatch[1]), 10) || 1;
+                const rawStepNum = stepMatch[1] || stepMatch[2] || "1";
+                const stepNum = Number.parseInt(toAsciiSpeechDigits(rawStepNum), 10) || 1;
                 if (!activeOl) {
                   activeOl = document.createElement("ol");
                   activeOl.className = "call-say-steps";
@@ -3810,7 +4043,7 @@ function renderPwaShellHtml(locale, nonce) {
                 }
                 const li = document.createElement("li");
                 li.value = stepNum;
-                li.textContent = stepMatch[2].replace(/\\*\\*([^*]+)\\*\\*|__([^_]+)__/g, "$1$2").trim();
+                li.textContent = stepMatch[3].replace(/\\*\\*([^*]+)\\*\\*|__([^_]+)__/g, "$1$2").replace(/[;؛]+$/, "").trim();
                 activeOl.appendChild(li);
               } else {
                 activeOl = null;

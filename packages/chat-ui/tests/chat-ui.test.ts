@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIO_SIGNIFIER_SPECS,
   adoptDetectedResponseLocale,
+  asNumberedProcedure,
+  asSemicolonEnumeration,
   buildCallReceptionistScreen,
   buildChatComposerState,
   buildComposerSpeechControls,
@@ -51,6 +53,7 @@ import {
   PAUSE_SHOWN_FROM,
   POST_TTS_ECHO_COOLDOWN_MS,
   parseAguiSseStream,
+  parseStructuredAnswerBlocks,
   reconcileClientDocumentText,
   renderGenerativeUICard,
   resolveAdaptiveVoiceNetworkProfile,
@@ -66,8 +69,11 @@ import {
   sanitizeAttachmentFilename,
   sanitizeCopilotReturnUrl,
   scrubDocumentTextForIndirectInjection,
+  splitLongStatutoryParagraph,
+  stripCitationMarkers,
   stripStepPrefix,
   structureCallReceptionistBlocks,
+  tidyStatutoryTypography,
   translateUiString,
   VOICE_PAUSE_OPTIONS,
   validateMcpAppIframe,
@@ -1221,5 +1227,46 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     expect(
       resolveLanguageMenuKeyNavigation({ key: "ArrowDown", currentIndex: 0, options: [] }),
     ).toBeNull();
+
+    // Content Structuring, Paragraphing, Numbering/Bulleting & Punctuation (Markdown.tsx & answerText.ts parity)
+    expect(stripCitationMarkers("File on portal. [1, 3] Keep [1](https://etax.nra.gov.ss/).")).toBe(
+      "File on portal. Keep [1](https://etax.nra.gov.ss/).",
+    );
+    expect(tidyStatutoryTypography("Domestic tax -- PAYE , WHT .")).toBe(
+      "Domestic tax — PAYE, WHT.",
+    );
+
+    const tinProc = asNumberedProcedure(
+      "TIN registration is online: (1) Citizens need Jinsia; (2) Foreigners need passport; (3) Businesses validate at MoJ. Note: NRA was renamed SSRA in October 2023.",
+    );
+    expect(tinProc?.lead).toBe("TIN registration is online:");
+    expect(tinProc?.items).toHaveLength(3);
+    expect(tinProc?.trailingCallout).toEqual({
+      kind: "note",
+      text: "NRA was renamed SSRA in October 2023.",
+    });
+
+    const exciseEnum = asSemicolonEnumeration(
+      "Excise Tax applies to goods: Mineral waters (HS 22.01) 15%; Beer (HS 22.03) 50%; Wine (HS 22.04) 50%; Spirits (HS 22.08) 100%. Aviation fuel is exempt with a certificate.",
+    );
+    expect(exciseEnum?.lead).toBe("Excise Tax applies to goods:");
+    expect(exciseEnum?.items).toHaveLength(4);
+    expect(exciseEnum?.trailingParagraph).toBe("Aviation fuel is exempt with a certificate.");
+
+    const longProse =
+      "Under Section 49 of the Taxation Act 2009 and Reg. 1.50, tax disputes are heard by the Appeals Board. Employers must remit PAYE via https://etax.nra.gov.ss/ by the 15th of the following month. Manual cash collection is strictly prohibited under Circular No. 2026/07/01.";
+    const splitParas = splitLongStatutoryParagraph(longProse);
+    expect(splitParas.length).toBeGreaterThanOrEqual(2);
+
+    const blocks = parseStructuredAnswerBlocks(
+      "Under Module 2: (1) Filing is free; (2) Log in with TIN and OTP. Note: Keep your receipt.",
+    );
+    expect(blocks.map((b) => b.type)).toEqual(["paragraph", "ol", "callout"]);
+
+    const parenCallBlocks = structureCallReceptionistBlocks(
+      "Under Module 2: (1) Filing is free; (2) Log in with TIN and OTP.",
+    );
+    expect(parenCallBlocks).toHaveLength(2);
+    expect(parenCallBlocks[1]?.kind).toBe("numbered_list");
   });
 });

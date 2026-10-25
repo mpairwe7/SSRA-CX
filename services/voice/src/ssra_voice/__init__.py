@@ -2108,11 +2108,11 @@ class CallReceptionistBlock:
 
 
 _INLINE_STEP_SPLIT_RE = re.compile(
-    r"(?<=[:.!?؟؛;])[ \t]+(?=(?:(?:\d{1,2}|[٠-٩]{1,2})[.)]|(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+(?:\d{1,2}|[٠-٩]{1,2})[:.)])[ \t]+\S)",
+    r"(?<=[:.!?؟؛;])[ \t]+(?=(?:\((?:\d{1,2}|[٠-٩]{1,2})\)|(?:\d{1,2}|[٠-٩]{1,2})[.)]|(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+(?:\d{1,2}|[٠-٩]{1,2})[:.)])[ \t]+\S)",
     flags=re.IGNORECASE,
 )
 _STEP_ITEM_LINE_RE = re.compile(
-    r"^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+)?(\d{1,2}|[٠-٩]{1,2})[:.)][ \t]+(.+)$",
+    r"^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+)?(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[:.)])[ \t]+(.+)$",
     flags=re.IGNORECASE,
 )
 
@@ -2131,9 +2131,10 @@ def structure_receptionist_answer_blocks(text: str) -> list[CallReceptionistBloc
         for line in lines:
             m = _STEP_ITEM_LINE_RE.match(line)
             if m:
-                step_num = int(_ascii_digits(m.group(1)))
+                raw_num = m.group(1) or m.group(2) or "1"
+                step_num = int(_ascii_digits(raw_num))
                 step_body = _SPEECH_BOLD_RE.sub(
-                    lambda b: b.group(1) or b.group(2) or "", m.group(2)
+                    lambda b: b.group(1) or b.group(2) or "", m.group(3)
                 ).strip()
                 step_items.append((step_num, step_body))
             else:
@@ -3811,9 +3812,12 @@ _SPEECH_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _SPEECH_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _SPEECH_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*|__([^_]+)__")
 _SPEECH_HEADER_BULLET_RE = re.compile(r"^\s*(?:#{1,6}|[-*+])\s+", re.MULTILINE)
-_SPEECH_NUMBERED_LINE_RE = re.compile(r"^[ \t]*(\d{1,2}|[٠-٩]{1,2})[.)][ \t]+", re.MULTILINE)
+_SPEECH_NUMBERED_LINE_RE = re.compile(
+    r"^[ \t]*(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]+",
+    re.MULTILINE,
+)
 _SPEECH_NUMBERED_INLINE_RE = re.compile(
-    r"(?<=[:.!?؟؛;])[ \t]+(\d{1,2}|[٠-٩]{1,2})[.)][ \t]+(?=(?:\*{0,2})?[A-Za-z0-9\u0600-\u06FF\u00C0-\u024F])"
+    r"(?<=[:.!?؟؛;])[ \t]+(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]+(?=(?:\*{0,2})?[A-Za-z0-9\u0600-\u06FF\u00C0-\u024F])"
 )
 _SPEECH_VISUAL_FOOTER_RE = re.compile(
     r"(?:^|\n)[ \t]*(?:\*\*)?(?:You might also want to know|Related questions)\b.*",
@@ -3876,9 +3880,11 @@ def clean_text_for_speech(text: str, locale: LocaleCode = LocaleCode.EN) -> str:
     out = _SPEECH_INLINE_CODE_RE.sub(r"\1", out)
     out = _SPEECH_BOLD_RE.sub(lambda m: m.group(1) or m.group(2) or "", out)
     out = _SPEECH_HEADER_BULLET_RE.sub("", out)
-    out = _SPEECH_NUMBERED_LINE_RE.sub(lambda m: f"{step_word} {_ascii_digits(m.group(1))}: ", out)
+    out = _SPEECH_NUMBERED_LINE_RE.sub(
+        lambda m: f"{step_word} {_ascii_digits(m.group(1) or m.group(2) or '1')}: ", out
+    )
     out = _SPEECH_NUMBERED_INLINE_RE.sub(
-        lambda m: f" {step_word} {_ascii_digits(m.group(1))}: ", out
+        lambda m: f" {step_word} {_ascii_digits(m.group(1) or m.group(2) or '1')}: ", out
     )
     for marker, spoken_label in _REDACTED_SPEECH_MAP:
         out = out.replace(marker, spoken_label)
