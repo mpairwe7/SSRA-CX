@@ -1175,13 +1175,46 @@ export function splitLongStatutoryParagraph(text: string): readonly string[] {
   return chunks.length >= 2 ? chunks : [cleaned];
 }
 
+/**
+ * Allowlist URL schemes for LLM/RAG-authored `[text](url)` links (`FinalYearProject` `safeHref` parity).
+ * Permits `http(s)://`, `mailto:`, `tel:`, site-relative `/path` (rejecting protocol-relative `//`), and `#anchor`.
+ * Rejects `javascript:`, `data:`, `vbscript:`, `file:`, `blob:`, etc.
+ */
+export function sanitizeMarkdownHref(href: string): string | null {
+  const h = String(href ?? "").trim();
+  if (!h) return null;
+  const probe = Array.from(h)
+    .filter((ch) => ch.charCodeAt(0) > 32)
+    .join("");
+  return /^(?:https?:\/\/|mailto:|tel:|\/(?!\/)|#)/i.test(probe) ? h : null;
+}
+
+/**
+ * Clean assistant reply text for the Copy button and screen-reader announcer (`answerText.ts` 3-surface parity).
+ * Strips inline `[n]` citation markers, normalizes ` -- ` to ` — `, and unwraps raw `**bold**` / `[label](url)` markdown.
+ */
+export function formatCleanAnswerCopyText(rawText: string): string {
+  const cleaned = tidyStatutoryTypography(stripCitationMarkers(rawText)).trim();
+  if (!cleaned) return "";
+  return cleaned
+    .replace(/\[([^\]\n]{1,120})\]\(([^)\s<]+)\)/g, (_, label: string, url: string) => {
+      const safe = sanitizeMarkdownHref(url);
+      return safe && /^https?:\/\//i.test(safe) && safe !== label ? `${label} (${safe})` : label;
+    })
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .trim();
+}
+
 export type StructuredAnswerBlock =
   | { readonly type: "heading"; readonly level: number; readonly text: string }
   | { readonly type: "paragraph"; readonly text: string }
   | { readonly type: "ol"; readonly items: readonly string[] }
   | { readonly type: "ul"; readonly items: readonly string[] }
   | { readonly type: "blockquote"; readonly text: string }
-  | { readonly type: "callout"; readonly kind: string; readonly text: string };
+  | { readonly type: "callout"; readonly kind: string; readonly text: string }
+  | { readonly type: "code"; readonly lang: string; readonly text: string }
+  | { readonly type: "hr" }
+  | { readonly type: "table"; readonly rows: readonly (readonly string[])[] };
 
 const LINE_HEADING_RE = /^(#{1,4})[ \t]+(.+)$/;
 const LINE_CALLOUT_RE = /^(Note|Important|Warning|Caution|Tip|Summary):[ \t]+(.+)$/i;
@@ -1189,8 +1222,33 @@ const LINE_UL_ITEM_RE = /^(?:[-*+•])[ \t]+(.+)$/;
 const LINE_OL_ITEM_RE =
   /^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+)?(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]+(.+)$/i;
 
+function isMarkdownTableSeparator(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.includes("|") || !trimmed.includes("-")) return false;
+  const cells = trimmed
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((c) => c.trim());
+  return cells.length >= 2 && cells.every((c) => /^:?-{3,}:?$/.test(c));
+}
+
+function isMarkdownTableRow(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.includes("|") && !isMarkdownTableSeparator(trimmed);
+}
+
+function parseMarkdownTableRow(line: string): readonly string[] {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
 /**
- * Parse an assistant answer into structured blocks (`heading`, `paragraph`, `ol`, `ul`, `blockquote`, `callout`)
+ * Parse an assistant answer into structured blocks (`heading`, `paragraph`, `ol`, `ul`, `blockquote`, `callout`, `code`, `hr`, `table`)
  * so both line-by-line Markdown and inline statutory rules/schedules/long prose are scannable.
  */
 export function parseStructuredAnswerBlocks(rawText: string): readonly StructuredAnswerBlock[] {
@@ -1240,10 +1298,48 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
 
   let i = 0;
   while (i < lines.length) {
-    const line = (lines[i] ?? "").trim();
+    const rawLine = lines[i] ?? "";
+    const line = rawLine.trim();
     if (!line) {
       flushProse();
       i += 1;
+      continue;
+    }
+
+    if (line.startsWith("```")) {
+      flushProse();
+      const lang = line.slice(3).trim();
+      const codeLines: string[] = [];
+      i += 1;
+      while (i < lines.length && !(lines[i] ?? "").trim().startsWith("```")) {
+        codeLines.push(lines[i] ?? "");
+        i += 1;
+      }
+      if (i < lines.length) i += 1;
+      blocks.push({ type: "code", lang, text: codeLines.join("\n") });
+      continue;
+    }
+
+    if (/^-{3,}$/.test(line)) {
+      flushProse();
+      blocks.push({ type: "hr" });
+      i += 1;
+      continue;
+    }
+
+    if (
+      isMarkdownTableRow(line) &&
+      i + 1 < lines.length &&
+      isMarkdownTableSeparator(lines[i + 1] ?? "")
+    ) {
+      flushProse();
+      const rows: (readonly string[])[] = [parseMarkdownTableRow(line)];
+      i += 2;
+      while (i < lines.length && isMarkdownTableRow(lines[i] ?? "")) {
+        rows.push(parseMarkdownTableRow(lines[i] ?? ""));
+        i += 1;
+      }
+      blocks.push({ type: "table", rows });
       continue;
     }
 
@@ -1292,10 +1388,22 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       flushProse();
       const items: string[] = [];
       while (i < lines.length) {
-        const m = LINE_UL_ITEM_RE.exec((lines[i] ?? "").trim());
-        if (!m?.[1]) break;
-        items.push(m[1].trim());
-        i += 1;
+        const curLine = (lines[i] ?? "").trim();
+        const m = LINE_UL_ITEM_RE.exec(curLine);
+        if (m?.[1]) {
+          items.push(m[1].trim());
+          i += 1;
+        } else if (!curLine) {
+          let next = i + 1;
+          while (next < lines.length && !(lines[next] ?? "").trim()) next += 1;
+          if (next < lines.length && LINE_UL_ITEM_RE.test((lines[next] ?? "").trim())) {
+            i = next;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
       }
       blocks.push({ type: "ul", items });
       continue;
@@ -1304,18 +1412,31 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
     const olMatch = LINE_OL_ITEM_RE.exec(line);
     if (olMatch?.[3]) {
       flushProse();
-      const items: string[] = [];
+      const rawItems: string[] = [];
       while (i < lines.length) {
-        const m = LINE_OL_ITEM_RE.exec((lines[i] ?? "").trim());
-        if (!m?.[3]) break;
-        items.push(
-          m[3]
-            .replace(/(?:[,;،؛][ \t]+)?\band$/i, "")
-            .replace(/(?<![;؛])[;؛]+$/, ".")
-            .trim(),
-        );
-        i += 1;
+        const curLine = (lines[i] ?? "").trim();
+        const m = LINE_OL_ITEM_RE.exec(curLine);
+        if (m?.[3]) {
+          rawItems.push(
+            m[3]
+              .replace(/(?:[,;،؛][ \t]+)?\band$/i, "")
+              .replace(/(?<![;؛])[;؛]+$/, ".")
+              .trim(),
+          );
+          i += 1;
+        } else if (!curLine) {
+          let next = i + 1;
+          while (next < lines.length && !(lines[next] ?? "").trim()) next += 1;
+          if (next < lines.length && LINE_OL_ITEM_RE.test((lines[next] ?? "").trim())) {
+            i = next;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
       }
+      const items = rawItems.flatMap((it) => asNumberedProcedure(it)?.items ?? [it]);
       blocks.push({ type: "ol", items });
       continue;
     }

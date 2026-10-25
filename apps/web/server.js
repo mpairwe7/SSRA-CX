@@ -869,8 +869,17 @@ function renderPwaShellHtml(locale, nonce) {
     .turn-content-text .md-callout strong { color: var(--ssra-green); font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
     .turn-content-text .md-callout-warning, .turn-content-text .md-callout-caution, .turn-content-text .md-callout-important { border-inline-start-color: var(--warning); }
     .turn-content-text .md-callout-warning strong, .turn-content-text .md-callout-caution strong, .turn-content-text .md-callout-important strong { color: var(--warning); }
+    .turn-content-text .md-hr { border: 0; border-top: 1px solid var(--border-1); margin: 0.45rem 0; }
+    .turn-content-text .md-hr + .md-p { font-size: 0.8rem; color: var(--text-3); font-style: italic; line-height: 1.5; }
+    .turn-content-text .md-code-block { margin: 0.35rem 0; padding: 0.75rem 0.9rem; background: var(--surface-2); border: 1px solid var(--border-1); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.83rem; overflow-x: auto; white-space: pre; unicode-bidi: isolate; }
+    .turn-content-text .md-table-wrap { margin: 0.35rem 0; overflow-x: auto; border: 1px solid var(--border-1); border-radius: var(--radius-sm); }
+    .turn-content-text .md-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+    .turn-content-text .md-table th, .turn-content-text .md-table td { padding: 0.48rem 0.7rem; text-align: start; border-bottom: 1px solid var(--border-1); }
+    .turn-content-text .md-table th { background: var(--surface-2); color: var(--text-0); font-weight: 700; }
+    .turn-content-text .md-table tbody tr:last-child td { border-bottom: 0; }
+    .turn-content-text .md-table tbody tr:nth-child(even) { background: var(--surface-1); }
     @media (forced-colors: active) {
-      .turn-content-text .md-callout, .turn-content-text .md-blockquote { border: 1px solid CanvasText; border-inline-start-width: 4px; }
+      .turn-content-text .md-callout, .turn-content-text .md-blockquote, .turn-content-text .md-table-wrap { border: 1px solid CanvasText; border-inline-start-width: 4px; }
     }
     .bubble, .landing-chip-text, .citation-pill, .gen-ui-card p, .gen-kv dd, .locale-notice, .composer-disclosure { overflow-wrap: anywhere; }
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: #FFFFFF; }
@@ -2097,25 +2106,57 @@ function renderPwaShellHtml(locale, nonce) {
         return '<div class="turn-meta-bar">' + pills.join("") + "</div>";
       }
 
+      function safeMarkdownHref(rawHref) {
+        const h = String(rawHref || "").trim();
+        if (!h) return null;
+        const probe = Array.from(h).filter((ch) => ch.charCodeAt(0) > 32).join("");
+        return /^(?:https?:\\/\\/|mailto:|tel:|\\/(?!\\/)|#)/i.test(probe) ? h : null;
+      }
+
+      function cleanAnswerTextForCopy(rawText) {
+        return String(rawText || "")
+          .slice(0, 16000)
+          .replace(/\\[\\d{1,3}(?:[ \\t]*[,;][ \\t]*\\d{1,3}){0,10}\\](?!\\()/g, "")
+          .replace(/(\\s)--(\\s)/g, "$1—$2")
+          .replace(/[ \\t]+/g, " ")
+          .replace(/ ([.,;:!?])/g, "$1")
+          .replace(/\\[([^\\]\\n]{1,120})\\]\\(([^)\\s<]+)\\)/g, (_, label, url) => {
+            const safe = safeMarkdownHref(url);
+            return safe && /^https?:\\/\\//i.test(safe) && safe !== label ? label + " (" + safe + ")" : label;
+          })
+          .replace(/\\*\\*([^*]+)\\*\\*/g, "$1")
+          .trim();
+      }
+
       function renderInlineAnswerHtml(rawText) {
         let html = escapeHtml(rawText);
         const mdLinks = [];
         html = html.replace(
-          /\\[([^\\]\\n]{1,120})\\]\\((https?:\\/\\/[^)\\s<]+)\\)/gi,
-          (_, label, href) => {
+          /\\[([^\\]\\n]{1,120})\\]\\(([^)\\n]{1,300})\\)/g,
+          (_, label, rawHref) => {
             const idx = mdLinks.length;
-            mdLinks.push(
-              '<a class="md-link" dir="ltr" href="' +
-                href +
-                '" target="_blank" rel="noopener noreferrer">' +
-                label +
-                "</a>",
-            );
+            const formattedLabel = label.replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
+            const safe = safeMarkdownHref(rawHref.replace(/&amp;/g, "&"));
+            if (safe) {
+              const ext = /^https?:\\/\\//i.test(safe);
+              mdLinks.push(
+                '<a class="md-link" dir="ltr" href="' +
+                  escapeHtml(safe) +
+                  '"' +
+                  (ext ? ' target="_blank" rel="noopener noreferrer"' : "") +
+                  ">" +
+                  formattedLabel +
+                  "</a>",
+              );
+            } else {
+              mdLinks.push('<span class="md-link">' + formattedLabel + "</span>");
+            }
             return "\\u0000MDLINK_" + idx + "\\u0000";
           },
         );
         html = html
           .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
+          .replace(/(?<![*\\w])\\*([^\\s*][^*]{0,120}?[^\\s*])\\*(?![*\\w])/g, "<em>$1</em>")
           .replace(/\\x60([^\\x60]+)\\x60/g, '<code class="md-inline-code">$1</code>')
           .replace(
             /^(ESTIMATE ONLY(?: \\([^)]+\\))?:|OFFICIAL_VERIFIED:|UNVERIFIED_OR_SCAM:)/,
@@ -2283,6 +2324,27 @@ function renderPwaShellHtml(locale, nonce) {
         return chunks.length >= 2 ? chunks : [cleaned];
       }
 
+      function isMdTableSeparator(line) {
+        const trimmed = String(line || "").trim();
+        if (!trimmed.includes("|") || !trimmed.includes("-")) return false;
+        const cells = trimmed.replace(/^\\|/, "").replace(/\\|$/, "").split("|").map((c) => c.trim());
+        return cells.length >= 2 && cells.every((c) => /^:?-{3,}:?$/.test(c));
+      }
+
+      function isMdTableRow(line) {
+        const trimmed = String(line || "").trim();
+        return trimmed.includes("|") && !isMdTableSeparator(trimmed);
+      }
+
+      function parseMdTableRow(line) {
+        return String(line || "")
+          .trim()
+          .replace(/^\\|/, "")
+          .replace(/\\|$/, "")
+          .split("|")
+          .map((c) => c.trim());
+      }
+
       function renderStructuredAnswerHtml(rawContent) {
         const cleaned = String(rawContent || "")
           .slice(0, 16000)
@@ -2354,10 +2416,56 @@ function renderPwaShellHtml(locale, nonce) {
 
         let lIdx = 0;
         while (lIdx < lines.length) {
-          const line = (lines[lIdx] || "").trim();
+          const rawLine = lines[lIdx] || "";
+          const line = rawLine.trim();
           if (!line) {
             flushProseLines();
             lIdx += 1;
+            continue;
+          }
+          if (line.startsWith("\\x60\\x60\\x60")) {
+            flushProseLines();
+            const codeLines = [];
+            lIdx += 1;
+            while (lIdx < lines.length && !(lines[lIdx] || "").trim().startsWith("\\x60\\x60\\x60")) {
+              codeLines.push(lines[lIdx] || "");
+              lIdx += 1;
+            }
+            if (lIdx < lines.length) lIdx += 1;
+            blocksHtml.push('<pre class="md-code-block"><code>' + escapeHtml(codeLines.join("\\n")) + "</code></pre>");
+            continue;
+          }
+          if (/^-{3,}$/.test(line)) {
+            flushProseLines();
+            blocksHtml.push('<hr class="md-hr" />');
+            lIdx += 1;
+            continue;
+          }
+          if (isMdTableRow(line) && lIdx + 1 < lines.length && isMdTableSeparator(lines[lIdx + 1])) {
+            flushProseLines();
+            const headRow = parseMdTableRow(line);
+            const bodyRows = [];
+            lIdx += 2;
+            while (lIdx < lines.length && isMdTableRow(lines[lIdx])) {
+              bodyRows.push(parseMdTableRow(lines[lIdx]));
+              lIdx += 1;
+            }
+            const theadHtml =
+              "<thead><tr>" +
+              headRow.map((cell) => '<th scope="col">' + renderInlineAnswerHtml(cell) + "</th>").join("") +
+              "</tr></thead>";
+            const tbodyHtml =
+              "<tbody>" +
+              bodyRows
+                .map(
+                  (row) =>
+                    "<tr>" +
+                    headRow.map((_, cIdx) => "<td>" + renderInlineAnswerHtml(row[cIdx] || "") + "</td>").join("") +
+                    "</tr>",
+                )
+                .join("") +
+              "</tbody>";
+            blocksHtml.push('<div class="md-table-wrap"><table class="md-table">' + theadHtml + tbodyHtml + "</table></div>");
             continue;
           }
           const hMatch = lineHeadingRe.exec(line);
@@ -2406,10 +2514,22 @@ function renderPwaShellHtml(locale, nonce) {
             flushProseLines();
             const ulItems = [];
             while (lIdx < lines.length) {
-              const m = lineUlRe.exec((lines[lIdx] || "").trim());
-              if (!m) break;
-              ulItems.push(m[1].trim());
-              lIdx += 1;
+              const cur = (lines[lIdx] || "").trim();
+              const m = lineUlRe.exec(cur);
+              if (m) {
+                ulItems.push(m[1].trim());
+                lIdx += 1;
+              } else if (!cur) {
+                let nxt = lIdx + 1;
+                while (nxt < lines.length && !(lines[nxt] || "").trim()) nxt += 1;
+                if (nxt < lines.length && lineUlRe.test((lines[nxt] || "").trim())) {
+                  lIdx = nxt;
+                } else {
+                  break;
+                }
+              } else {
+                break;
+              }
             }
             blocksHtml.push(
               '<ul class="md-list">' +
@@ -2421,17 +2541,40 @@ function renderPwaShellHtml(locale, nonce) {
           const olMatch = lineOlRe.exec(line);
           if (olMatch) {
             flushProseLines();
-            const olItems = [];
+            const rawOlItems = [];
             while (lIdx < lines.length) {
-              const m = lineOlRe.exec((lines[lIdx] || "").trim());
-              if (!m) break;
-              olItems.push(
-                m[3]
-                  .replace(/(?:[,;،؛][ \\t]+)?\\band$/i, "")
-                  .replace(/(?<![;؛])[;؛]+$/, ".")
-                  .trim(),
-              );
-              lIdx += 1;
+              const cur = (lines[lIdx] || "").trim();
+              const m = lineOlRe.exec(cur);
+              if (m) {
+                rawOlItems.push(
+                  m[3]
+                    .replace(/(?:[,;،؛][ \\t]+)?\\band$/i, "")
+                    .replace(/(?<![;؛])[;؛]+$/, ".")
+                    .trim(),
+                );
+                lIdx += 1;
+              } else if (!cur) {
+                let nxt = lIdx + 1;
+                while (nxt < lines.length && !(lines[nxt] || "").trim()) nxt += 1;
+                if (nxt < lines.length && lineOlRe.test((lines[nxt] || "").trim())) {
+                  lIdx = nxt;
+                } else {
+                  break;
+                }
+              } else {
+                break;
+              }
+            }
+            const olItems = [];
+            for (let oIdx = 0; oIdx < rawOlItems.length; oIdx += 1) {
+              const subProc = parseInlineNumberedProcedure(rawOlItems[oIdx]);
+              if (subProc && subProc.items.length > 0) {
+                for (let sIdx = 0; sIdx < subProc.items.length; sIdx += 1) {
+                  olItems.push(subProc.items[sIdx]);
+                }
+              } else {
+                olItems.push(rawOlItems[oIdx]);
+              }
             }
             blocksHtml.push(
               '<ol class="md-list md-ol">' +
@@ -2461,10 +2604,11 @@ function renderPwaShellHtml(locale, nonce) {
           return '<article class="message-row message-row-assistant" aria-busy="true"><div class="avatar assistant" aria-hidden="true">' + ICONS.ssraCrest + '</div><div class="bubble assistant"><div class="lds">' + grid + '<div class="turn-content-text">' + escapeHtml(turn.content) + "</div></div></div></article>";
         }
         const citationCount = Array.isArray(meta.citations) ? meta.citations.length : 0;
+        const cleanCopy = cleanAnswerTextForCopy(turn.content);
         const actions = meta.kind === "failure"
           ? (isFilledText(meta.retry_text) ? '<button type="button" class="turn-act-btn" data-retry-turn="' + index + '">' + ICONS.refresh + " Try again</button>" : "")
-          : '<button type="button" class="turn-act-btn" data-speak="' + escapeHtml(turn.content) + '">' + ICONS.speaker + " Listen</button>" +
-            '<button type="button" class="turn-act-btn" data-copy="' + escapeHtml(turn.content) + '">' + ICONS.copy + " Copy</button>" +
+          : '<button type="button" class="turn-act-btn" data-speak="' + escapeHtml(cleanCopy) + '">' + ICONS.speaker + " Listen</button>" +
+            '<button type="button" class="turn-act-btn" data-copy="' + escapeHtml(cleanCopy) + '">' + ICONS.copy + " Copy</button>" +
             (isFilledText(meta.thread_id)
               ? '<button type="button" class="turn-act-btn" data-csat="5" data-thread-id="' + escapeHtml(meta.thread_id) + '">' + ICONS.thumbUp + " Helpful</button>" +
                 '<button type="button" class="turn-act-btn" data-csat="1" data-thread-id="' + escapeHtml(meta.thread_id) + '">' + ICONS.thumbDown + " Not helpful</button>"
@@ -2885,7 +3029,7 @@ function renderPwaShellHtml(locale, nonce) {
         }, 60);
       }
       function announceReply(reply) {
-        const text = String(reply.content || "");
+        const text = cleanAnswerTextForCopy(reply.content || "");
         const summary = text.length > 280 ? text.slice(0, 277) + "…" : text;
         announce((reply.meta?.kind === "failure" ? "Not answered. " : "Answer received. ") + summary);
       }
@@ -5184,11 +5328,11 @@ function renderPwaShellHtml(locale, nonce) {
         }
         const sample = new TextDecoder("latin1").decode(uint8.subarray(0, Math.min(uint8.byteLength, 256 * 1024)));
         const findings = [];
-        if (new RegExp("/Encrypt\\\\b").test(sample)) {
+        if (/\\/Encrypt\\b/.test(sample)) {
           findings.push("Encrypted or password-protected PDF documents are not accepted.");
         }
         const badTokens = sample.match(
-          new RegExp("/(?:JavaScript|JS|Launch|SubmitForm|ImportData|GoToR|RichMedia|EmbeddedFiles|XFA)\\\\b", "g"),
+          /\\/(?:JavaScript|JS|Launch|SubmitForm|ImportData|GoToR|RichMedia|EmbeddedFiles|XFA)\\b/g,
         );
         if (badTokens && badTokens.length) {
           findings.push("PDF contains active or embedded content (" + Array.from(new Set(badTokens)).join(", ") + ").");
