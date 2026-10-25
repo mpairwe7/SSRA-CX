@@ -129,19 +129,23 @@ def test_structured_logging_trace_correlation_and_pii_scrubbing() -> None:
     assert "0912345678" not in serialized
     assert "support@nra.gov.ss" in serialized
 
-    # Dict record.args (sensitive key + PII value), Arabic-Indic digits, Bearer token, and depth limit
+    # Dict record.args (sensitive key + PII value + numeric %d token_count), Arabic-Indic digits, short/long Bearer token, and depth limit
     rec_dict = logging.LogRecord(
         "ssra.test",
         logging.ERROR,
         __file__,
         1,
-        "failed for %(user)s with %(token)s",
-        ({"user": "john@gmail.com", "token": "jwt-raw-secret"},),
+        "failed for %(user)s with %(token)s (tokens=%(token_count)d)",
+        ({"user": "john@gmail.com", "token": "jwt-raw-secret", "token_count": 42},),
         None,
     )
     dict_line = _format_log(rec_dict)
     assert "john@gmail.com" not in json.dumps(dict_line)
     assert "jwt-raw-secret" not in json.dumps(dict_line)
+    assert "tokens=42" in str(dict_line.get("message", ""))
+
+    short_bearer = redact_log_pii_text("Authorization: Bearer abc")
+    assert short_bearer == "Authorization: Bearer [REDACTED_TOKEN]"
 
     synth_tok = "synthetic_sample_" + "token_123456"
     ar_indic_scrubbed = redact_log_pii_text(

@@ -1420,6 +1420,8 @@ function renderPwaShellHtml(locale, nonce) {
           menuClearLabel: "Clear conversation",
           menuPortalLabel: "Official e-Tax portal ↗",
           langMenuTitle: "Response language",
+          langSelectionLabel: "Language selection",
+          langCloseLabel: "Close language picker",
           langAutoNative: "Answers follow the language you type",
           langGroupAvailable: "Available",
           langGroupUnreviewed: "Not yet reviewed (interface in English)",
@@ -1466,6 +1468,8 @@ function renderPwaShellHtml(locale, nonce) {
           menuClearLabel: "Imsah al-wanasa",
           menuPortalLabel: "Mawqi e-Tax al-rasmi ↗",
           langMenuTitle: "Lugha ta al-ijaba",
+          langSelectionLabel: "Ikhtiyar al-lugha",
+          langCloseLabel: "Aqfil qayima ta al-lugha",
           langAutoNative: "Al-ijaba bititba al-lugha al-inta bitaktub biha",
           langGroupAvailable: "Mutah",
           langGroupUnreviewed: "Lissa ma tammat muraja'a (al-wajiha bil-Inglizi)",
@@ -1512,6 +1516,8 @@ function renderPwaShellHtml(locale, nonce) {
           menuClearLabel: "مسح المحادثة",
           menuPortalLabel: "بوابة e-Tax الرسمية ↗",
           langMenuTitle: "لغة الإجابة",
+          langSelectionLabel: "اختيار اللغة",
+          langCloseLabel: "إغلاق قائمة اللغات",
           langAutoNative: "تتبع الإجابات اللغة التي تكتب بها تلقائياً",
           langGroupAvailable: "اللغات المعتمدة",
           langGroupUnreviewed: "قيد المراجعة (الواجهة بالإنجليزية)",
@@ -1781,6 +1787,8 @@ function renderPwaShellHtml(locale, nonce) {
         const menuClrLblEl = document.getElementById("header-menu-clear-label");
         const menuPorLblEl = document.getElementById("header-menu-portal-label");
         const langTitleEl = document.getElementById("lang-menu-title");
+        const langDialogEl = document.getElementById("lang-menu-dialog");
+        const langCloseBtnEl = document.getElementById("close-lang-menu-btn");
         const langAutoNatEl = document.getElementById("lang-opt-auto-native");
         const langGrpAvailEl = document.getElementById("lang-group-available");
         const langGrpUnrevEl = document.getElementById("lang-group-unreviewed");
@@ -1810,6 +1818,9 @@ function renderPwaShellHtml(locale, nonce) {
         if (menuClrLblEl && dict.menuClearLabel) menuClrLblEl.textContent = dict.menuClearLabel;
         if (menuPorLblEl && dict.menuPortalLabel) menuPorLblEl.textContent = dict.menuPortalLabel;
         if (langTitleEl && dict.langMenuTitle) langTitleEl.textContent = dict.langMenuTitle;
+        if (langDialogEl && dict.langMenuTitle) langDialogEl.setAttribute("aria-label", dict.langMenuTitle);
+        if (langMenuList && dict.langSelectionLabel) langMenuList.setAttribute("aria-label", dict.langSelectionLabel);
+        if (langCloseBtnEl && dict.langCloseLabel) langCloseBtnEl.setAttribute("aria-label", dict.langCloseLabel);
         if (langAutoNatEl && dict.langAutoNative) langAutoNatEl.textContent = dict.langAutoNative;
         if (langGrpAvailEl && dict.langGroupAvailable) langGrpAvailEl.textContent = dict.langGroupAvailable;
         if (langGrpUnrevEl && dict.langGroupUnreviewed) langGrpUnrevEl.textContent = dict.langGroupUnreviewed;
