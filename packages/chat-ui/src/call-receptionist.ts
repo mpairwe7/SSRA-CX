@@ -607,13 +607,13 @@ function stripInlineStepBold(raw: string): string {
 }
 
 const INLINE_STEP_SPLIT_RE =
-  /(?<=[:.!?؟؛;])[ \t]+(?=(?:(?:\d{1,2}|[٠-٩]{1,2})[.)]|(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+(?:\d{1,2}|[٠-٩]{1,2})[:.)])[ \t]+\S)/gi;
+  /(?<=[:.!?؟؛;])[ \t]+(?=(?:\((?:\d{1,2}|[٠-٩]{1,2})\)|(?:\d{1,2}|[٠-٩]{1,2})[.)]|(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+(?:\d{1,2}|[٠-٩]{1,2})[:.)])[ \t]+\S)/gi;
 const STEP_LINE_MATCH_RE =
-  /^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+)?(\d{1,2}|[٠-٩]{1,2})[:.)][ \t]+(.+)$/i;
+  /^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+)?(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[:.)])[ \t]+(.+)$/i;
 
 /**
  * Structure a Call Receptionist agent caption into paragraphs and numbered step items
- * so procedures (`1. ... 2. ...`, `Step 1: ...`, `الخطوة 1: ...`, `١. ...`) are never rendered as a flat wall of text.
+ * so procedures (`1. ... 2. ...`, `(1) ... (2) ...`, `Step 1: ...`, `الخطوة 1: ...`, `١. ...`) are never rendered as a flat wall of text.
  */
 export function structureCallReceptionistBlocks(text: string): readonly CallCaptionBlock[] {
   const footerMatch =
@@ -638,10 +638,14 @@ export function structureCallReceptionistBlocks(text: string): readonly CallCapt
     const listItems: { stepNumber: number; text: string }[] = [];
     for (const line of normalizedLines) {
       const m = STEP_LINE_MATCH_RE.exec(line);
-      if (m?.[1] && m[2]) {
+      const rawStepNum = m?.[1] || m?.[2];
+      const rawStepBody = m?.[3];
+      if (rawStepNum && rawStepBody) {
         listItems.push({
-          stepNumber: Number(toAsciiStepDigits(m[1])),
-          text: stripInlineStepBold(m[2]),
+          stepNumber: Number(toAsciiStepDigits(rawStepNum)),
+          text: stripInlineStepBold(rawStepBody)
+            .replace(/(?<![;؛])[;؛]+$/, "")
+            .trim(),
         });
       } else {
         if (listItems.length > 0) {
