@@ -49,16 +49,25 @@ test("public chat renders a safe answer through the subject-stripping BFF", asyn
   ).toBeVisible();
   await expect(page.locator("#rail-conv-list .rail-item-dot")).toHaveCount(1);
 
-  // Desktop Ctrl+B collapse & left-edge hover-peek (chatv2/shell.css pattern)
-  await page.mouse.move(640, 360);
-  await page.keyboard.press("Control+b");
+  // Desktop collapse button click, Ctrl+B & left-edge hover-peek (chatv2/shell.css pattern)
+  await page.locator("#rail-collapse-btn").click();
   await expect(page.locator("#ssra-app-shell")).toHaveAttribute("data-sidebar", "collapsed");
+  await expect(page.locator("#header-rail-btn")).toBeVisible();
+  // Ensure focus restoration to #header-rail-btn does NOT auto-trigger data-rail-peek after collapse
+  await page.waitForTimeout(200);
+  await expect(page.locator("#ssra-app-shell")).not.toHaveAttribute("data-rail-peek", "true");
+  await page.mouse.move(640, 360);
+  await page.waitForTimeout(450);
   await page.locator("#rail-hotzone").dispatchEvent("mouseenter");
   await expect(page.locator("#ssra-app-shell")).toHaveAttribute("data-rail-peek", "true");
-  await page.locator("#conversation-rail").dispatchEvent("mouseleave");
-  await expect(page.locator("#ssra-app-shell")).not.toHaveAttribute("data-rail-peek", "true");
-  await page.keyboard.press("Control+b");
+  await expect(page.locator("#conversation-rail")).not.toHaveAttribute("inert", "");
+  const mainWidthDuringPeek = await page.locator(".app-main-col").evaluate((el) => el.getBoundingClientRect().width);
+  expect(mainWidthDuringPeek).toBeGreaterThan(600);
+  // Clicking #rail-collapse-btn while peeking docks the sidebar open
+  await page.locator("#rail-collapse-btn").click();
   await expect(page.locator("#ssra-app-shell")).toHaveAttribute("data-sidebar", "open");
+  await expect(page.locator("#ssra-app-shell")).not.toHaveAttribute("data-rail-peek", "true");
+  await expect(page.locator("#header-rail-btn")).toBeHidden();
 
   const [captured] = await getRuntimeRequests(request);
   expect(captured?.body).toMatchObject({
