@@ -996,12 +996,13 @@ function toAsciiNumberDigits(raw: string): string {
 export interface NumberedProcedureStructure {
   readonly lead: string;
   readonly items: readonly string[];
+  readonly trailingParagraph?: string | null;
   readonly trailingCallout: { readonly kind: string; readonly text: string } | null;
 }
 
 /**
  * Extract an inline numbered procedure (`(1) ...; (2) ...; (3) ...` or `1. ... 2. ... 3. ...`)
- * into a lead-in paragraph, ordered list items, and an optional trailing `Note:` / `Important:` callout.
+ * into a lead-in paragraph, ordered list items, and an optional trailing paragraph or callout.
  */
 export function asNumberedProcedure(rawText: string): NumberedProcedureStructure | null {
   const text = String(rawText ?? "").slice(0, MAX_STRUCTURED_TEXT_LEN);
@@ -1046,6 +1047,7 @@ export function asNumberedProcedure(rawText: string): NumberedProcedureStructure
 
   const lead = text.slice(0, found[0].start).trim();
   const items: string[] = [];
+  let trailingParagraph: string | null = null;
   let trailingCallout: { readonly kind: string; readonly text: string } | null = null;
 
   for (let i = 0; i < found.length; i++) {
@@ -1055,11 +1057,12 @@ export function asNumberedProcedure(rawText: string): NumberedProcedureStructure
     let item = text.slice(cur.end, stop).trim();
     if (i + 1 < found.length) {
       item = item
+        .replace(/(?:[,;،؛][ \t]+)?\band$/i, "")
         .replace(/(?<![;؛])[;؛]+$/, ".")
         .replace(/(?<![,،])[,،]+$/, "")
         .trim();
     } else {
-      const calloutMarker = /\b(Note|Important|Warning|Caution|Tip):[ \t]+/i.exec(item);
+      const calloutMarker = /\b(Note|Important|Warning|Caution|Tip|Summary):[ \t]+/i.exec(item);
       if (calloutMarker?.[1] && calloutMarker.index > 0) {
         const prefix = item.slice(0, calloutMarker.index).trimEnd();
         const suffix = item.slice(calloutMarker.index + calloutMarker[0].length).trim();
@@ -1071,11 +1074,20 @@ export function asNumberedProcedure(rawText: string): NumberedProcedureStructure
           };
         }
       }
+      const dotIdx = item.indexOf(". ");
+      if (dotIdx > 3 && dotIdx <= 95 && items.every((prev) => prev.length <= 95)) {
+        const firstClause = item.slice(0, dotIdx + 1).trim();
+        const restSentence = item.slice(dotIdx + 2).trim();
+        if (/^[A-Z\u0600-\u06FF]/.test(restSentence) && restSentence.length >= 20) {
+          item = firstClause;
+          trailingParagraph = restSentence;
+        }
+      }
     }
     if (!item) return null;
     items.push(item);
   }
-  return { lead, items, trailingCallout };
+  return { lead, items, trailingParagraph, trailingCallout };
 }
 
 export interface SemicolonEnumerationStructure {
@@ -1164,39 +1176,43 @@ export function splitLongStatutoryParagraph(text: string): readonly string[] {
 }
 
 export type StructuredAnswerBlock =
+  | { readonly type: "heading"; readonly level: number; readonly text: string }
   | { readonly type: "paragraph"; readonly text: string }
   | { readonly type: "ol"; readonly items: readonly string[] }
   | { readonly type: "ul"; readonly items: readonly string[] }
+  | { readonly type: "blockquote"; readonly text: string }
   | { readonly type: "callout"; readonly kind: string; readonly text: string };
 
+const LINE_HEADING_RE = /^(#{1,4})[ \t]+(.+)$/;
+const LINE_CALLOUT_RE = /^(Note|Important|Warning|Caution|Tip|Summary):[ \t]+(.+)$/i;
+const LINE_UL_ITEM_RE = /^(?:[-*+•])[ \t]+(.+)$/;
+const LINE_OL_ITEM_RE =
+  /^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+)?(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]+(.+)$/i;
+
 /**
- * Parse an assistant answer into structured blocks (`paragraph`, `ol`, `ul`, `callout`)
- * so numbered statutory rules, semicolon schedules, callouts, and long prose are scannable.
+ * Parse an assistant answer into structured blocks (`heading`, `paragraph`, `ol`, `ul`, `blockquote`, `callout`)
+ * so both line-by-line Markdown and inline statutory rules/schedules/long prose are scannable.
  */
 export function parseStructuredAnswerBlocks(rawText: string): readonly StructuredAnswerBlock[] {
   const cleaned = tidyStatutoryTypography(stripCitationMarkers(rawText)).trim();
   if (!cleaned) return [];
   const blocks: StructuredAnswerBlock[] = [];
-  const rawParagraphs = cleaned.split(/\n(?:[ \t]*\n)+/);
+  const lines = cleaned.split("\n");
+  const proseLines: string[] = [];
 
-  for (const rawPara of rawParagraphs) {
-    const para = rawPara.trim();
-    if (!para) continue;
-
-    const calloutLine = /^(Note|Important|Warning|Caution|Tip):[ \t]+(.+)$/is.exec(para);
-    if (calloutLine?.[1] && calloutLine[2]) {
-      blocks.push({
-        type: "callout",
-        kind: calloutLine[1].toLowerCase(),
-        text: calloutLine[2].trim(),
-      });
-      continue;
-    }
+  const flushProse = () => {
+    if (proseLines.length === 0) return;
+    const para = proseLines.join(" ").trim();
+    proseLines.length = 0;
+    if (!para) return;
 
     const procedure = asNumberedProcedure(para);
     if (procedure) {
       if (procedure.lead) blocks.push({ type: "paragraph", text: procedure.lead });
       blocks.push({ type: "ol", items: procedure.items });
+      if (procedure.trailingParagraph) {
+        blocks.push({ type: "paragraph", text: procedure.trailingParagraph });
+      }
       if (procedure.trailingCallout) {
         blocks.push({
           type: "callout",
@@ -1204,7 +1220,7 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
           text: procedure.trailingCallout.text,
         });
       }
-      continue;
+      return;
     }
 
     const enumeration = asSemicolonEnumeration(para);
@@ -1214,12 +1230,99 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       if (enumeration.trailingParagraph) {
         blocks.push({ type: "paragraph", text: enumeration.trailingParagraph });
       }
-      continue;
+      return;
     }
 
     for (const chunk of splitLongStatutoryParagraph(para)) {
       blocks.push({ type: "paragraph", text: chunk });
     }
+  };
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = (lines[i] ?? "").trim();
+    if (!line) {
+      flushProse();
+      i += 1;
+      continue;
+    }
+
+    const headingMatch = LINE_HEADING_RE.exec(line);
+    if (headingMatch?.[1] && headingMatch[2]) {
+      flushProse();
+      blocks.push({
+        type: "heading",
+        level: Math.min(4, Math.max(2, headingMatch[1].length)),
+        text: headingMatch[2].trim(),
+      });
+      i += 1;
+      continue;
+    }
+
+    const calloutMatch = LINE_CALLOUT_RE.exec(line);
+    if (calloutMatch?.[1] && calloutMatch[2]) {
+      flushProse();
+      blocks.push({
+        type: "callout",
+        kind: calloutMatch[1].toLowerCase(),
+        text: calloutMatch[2].trim(),
+      });
+      i += 1;
+      continue;
+    }
+
+    if (line.startsWith(">")) {
+      flushProse();
+      const quoteParts: string[] = [];
+      while (i < lines.length) {
+        const qLine = (lines[i] ?? "").trim();
+        if (!qLine.startsWith(">")) break;
+        const stripped = qLine.replace(/^>[ \t]*/, "").trim();
+        if (stripped) quoteParts.push(stripped);
+        i += 1;
+      }
+      if (quoteParts.length > 0) {
+        blocks.push({ type: "blockquote", text: quoteParts.join(" ") });
+      }
+      continue;
+    }
+
+    const ulMatch = LINE_UL_ITEM_RE.exec(line);
+    if (ulMatch?.[1]) {
+      flushProse();
+      const items: string[] = [];
+      while (i < lines.length) {
+        const m = LINE_UL_ITEM_RE.exec((lines[i] ?? "").trim());
+        if (!m?.[1]) break;
+        items.push(m[1].trim());
+        i += 1;
+      }
+      blocks.push({ type: "ul", items });
+      continue;
+    }
+
+    const olMatch = LINE_OL_ITEM_RE.exec(line);
+    if (olMatch?.[3]) {
+      flushProse();
+      const items: string[] = [];
+      while (i < lines.length) {
+        const m = LINE_OL_ITEM_RE.exec((lines[i] ?? "").trim());
+        if (!m?.[3]) break;
+        items.push(
+          m[3]
+            .replace(/(?:[,;،؛][ \t]+)?\band$/i, "")
+            .replace(/(?<![;؛])[;؛]+$/, ".")
+            .trim(),
+        );
+        i += 1;
+      }
+      blocks.push({ type: "ol", items });
+      continue;
+    }
+
+    proseLines.push(line);
+    i += 1;
   }
+  flushProse();
   return blocks;
 }
