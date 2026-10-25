@@ -15,14 +15,14 @@ export const ICONS = {
     '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><polygon points="12 7.5 13.3 10.3 16.3 10.7 14.1 12.8 14.6 15.8 12 14.3 9.4 15.8 9.9 12.8 7.7 10.7 10.7 10.3 12 7.5" fill="currentColor" stroke="none"/>',
     16,
   ),
-  search: svgWrap('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>', 15),
-  panelLeft: svgWrap('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>', 16),
+  search: svgWrap('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>', 18),
+  panelLeft: svgWrap('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>', 18),
   chevronsLeft: svgWrap('<path d="m12.5 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>', 15),
   chevronsRight: svgWrap('<path d="m11.5 7 5 5-5 5"/><path d="m6 7 5 5-5 5"/>', 15),
   chevronUpDown: svgWrap('<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>', 14),
-  plus: svgWrap('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 15),
-  close: svgWrap('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 15),
-  check: svgWrap('<polyline points="20 6 9 17 4 12"/>', 14),
+  plus: svgWrap('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 18),
+  close: svgWrap('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 18),
+  check: svgWrap('<polyline points="20 6 9 17 4 12"/>', 16),
   arrowUpRight: svgWrap('<path d="M8 16 16 8"/><path d="M9.5 8H16v6.5"/>', 14),
   refresh: svgWrap(
     '<path d="M20 11a8 8 0 0 0-13.7-5.3L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 13.7 5.3L20 16"/><path d="M20 20v-4h-4"/>',
@@ -30,24 +30,24 @@ export const ICONS = {
   ),
   phone: svgWrap(
     '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
-    15,
+    18,
   ),
   mic: svgWrap(
     '<path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 12a7 7 0 0 1-14 0"/><path d="M12 19v3"/>',
-    15,
+    18,
   ),
   speaker: svgWrap(
     '<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
-    14,
+    15,
   ),
   speakerOff: svgWrap(
     '<path d="M11 5 6 9H2v6h4l5 4V5Z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/>',
-    14,
+    15,
   ),
-  stop: svgWrap('<rect x="6" y="6" width="12" height="12" rx="2"/>', 14),
+  stop: svgWrap('<rect x="6" y="6" width="12" height="12" rx="2"/>', 15),
   copy: svgWrap(
     '<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/>',
-    14,
+    16,
   ),
   thumbUp: svgWrap(
     '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
@@ -59,29 +59,29 @@ export const ICONS = {
   ),
   pin: svgWrap(
     '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16h14v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1 1 1 0 0 1 1 1z"/>',
-    13,
+    15,
   ),
-  edit: svgWrap('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>', 13),
+  edit: svgWrap('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>', 15),
   trash: svgWrap(
     '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
-    13,
+    15,
   ),
   messageSquare: svgWrap(
     '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z"/>',
-    14,
+    16,
   ),
   sun: svgWrap(
     '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
-    15,
+    18,
   ),
-  moon: svgWrap('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>', 15),
+  moon: svgWrap('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>', 18),
   contrast: svgWrap(
     '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"/>',
-    15,
+    18,
   ),
   globe: svgWrap(
     '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z"/>',
-    15,
+    16,
   ),
   gauge: svgWrap(
     '<path d="M4 18a8 8 0 1 1 16 0"/><path d="m14.5 10.5-2.9 4"/><circle cx="12" cy="18" r="1.2"/>',
@@ -152,12 +152,12 @@ export const ICONS = {
   ),
   chevronDown: svgWrap('<path d="m6 9 6 6 6-6"/>', 13),
   kebab:
-    '<svg class="ui-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>',
+    '<svg class="ui-icon" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>',
   voiceWave: svgWrap(
     '<path d="M3 11v2"/><path d="M7.5 7.5v9"/><path d="M12 4v16"/><path d="M16.5 7.5v9"/><path d="M21 11v2"/>',
-    16,
+    18,
   ),
-  sendUp: svgWrap('<line x1="12" y1="17" x2="12" y2="7"/><polyline points="7 12 12 7 17 12"/>', 16),
+  sendUp: svgWrap('<line x1="12" y1="17" x2="12" y2="7"/><polyline points="7 12 12 7 17 12"/>', 18),
   helpCircle: svgWrap(
     '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.9.6c0 1.7-2.5 2-2.5 3.6"/><path d="M12 17.3h.01"/>',
     15,
@@ -172,20 +172,20 @@ export const ICONS = {
   ),
   micOff: svgWrap(
     '<line x1="2" y1="2" x2="22" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" y1="19" x2="12" y2="22"/>',
-    15,
+    18,
   ),
   phoneOff: svgWrap(
     '<path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="22" y1="2" x2="2" y2="22"/>',
-    15,
+    18,
   ),
   pause: svgWrap(
     '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>',
-    14,
+    15,
   ),
-  play: svgWrap('<polygon points="5 3 19 12 5 21 5 3"/>', 14),
+  play: svgWrap('<polygon points="5 3 19 12 5 21 5 3"/>', 15),
   user: svgWrap(
     '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-    15,
+    18,
   ),
   file: svgWrap(
     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
@@ -193,7 +193,7 @@ export const ICONS = {
   ),
   camera: svgWrap(
     '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
-    15,
+    18,
   ),
   eye: svgWrap(
     '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',

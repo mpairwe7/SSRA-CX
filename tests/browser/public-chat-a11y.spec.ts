@@ -343,7 +343,17 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(page.locator("article.message-row-assistant:not([aria-busy])")).toHaveCount(3);
   await expect(page.locator("article.message-row-user .msg-spoken-tag").first()).toContainText("Spoken");
   await page.locator("#close-call-btn").click();
-  await expect(page.locator("#header-call-label")).toHaveText("Call receptionist");
+  await expect(page.locator("#open-call-btn")).toHaveAttribute("title", "Call receptionist");
+
+  // Header 3-dot Kebab menu (#header-kebab-btn -> #header-options-menu) opens and Escape closes & returns focus.
+  const kebabBtn = page.locator("#header-kebab-btn");
+  await kebabBtn.click();
+  await expect(kebabBtn).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#header-options-menu")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(kebabBtn).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#header-options-menu")).toBeHidden();
+  await expect(kebabBtn).toBeFocused();
 
   // Main chat composer voice mode button couples with auto-narrate, opens VoiceModeDock, and Escape cancels recording (useVoiceEscape).
   const voiceModeBtn = page.locator("#composer-voicemode-btn");
@@ -359,15 +369,22 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(page.locator("#composer-recording-bar")).toBeHidden();
   await expect(page.locator("#voice-mode-dock")).toBeHidden();
 
-  // Dictate icon button (#voice-dictate-btn, data-testid="composer-mic") sits alongside Auto Voice in .composer-tools-right and inserts text into composer without auto-sending.
+  // Single primary circle slot transition: empty composer shows Auto Voice (#composer-voicemode-btn); typing transitions to Send (#ssra-chat-submit).
   const dictateBtn = page.locator('.composer-tools-right [data-testid="composer-mic"]');
   await expect(dictateBtn).toBeVisible();
   await expect(dictateBtn).toHaveAttribute("data-tip", "Dictate");
-  await expect(page.locator('.composer-tools-right [data-testid="composer-voicemode"]')).toBeVisible();
+  await expect(voiceModeBtn).toBeVisible();
+  await expect(page.locator("#ssra-chat-submit")).toBeHidden();
   const composerBox = page.getByRole("textbox", { name: "Ask SSRA Assist" });
   await composerBox.fill("Calculate PAYE on");
+  await expect(voiceModeBtn).toBeHidden();
+  await expect(page.locator("#ssra-chat-submit")).toBeVisible();
+  await composerBox.fill("");
+  await expect(voiceModeBtn).toBeVisible();
+  await expect(page.locator("#ssra-chat-submit")).toBeHidden();
   await voiceModeBtn.click(); // enters voice mode (autoNarrate=true)
   await page.locator("#voice-dock-end").click(); // exits voice mode & sets autoNarrate=false
+  await composerBox.fill("Calculate PAYE on");
   await dictateBtn.click();
   await expect(dictateBtn).toHaveClass(/btn-recording/);
   await expect(page.locator("#composer-rec-confirm")).toHaveAttribute("aria-label", "Stop and insert voice text");

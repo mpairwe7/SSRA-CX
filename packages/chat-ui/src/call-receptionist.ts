@@ -598,35 +598,57 @@ export type CallCaptionBlock =
       readonly items: readonly { readonly stepNumber: number; readonly text: string }[];
     };
 
+function toAsciiStepDigits(raw: string): string {
+  return raw.replace(/[٠-٩]/g, (ch) => String(ch.charCodeAt(0) - 0x0660));
+}
+
+function stripInlineStepBold(raw: string): string {
+  return raw.replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, "$1$2").trim();
+}
+
+const INLINE_STEP_SPLIT_RE =
+  /(?<=[:.!?؟؛;])[ \t]+(?=(?:(?:\d{1,2}|[٠-٩]{1,2})[.)]|(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+(?:\d{1,2}|[٠-٩]{1,2})[:.)])[ \t]+\S)/gi;
+const STEP_LINE_MATCH_RE =
+  /^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+)?(\d{1,2}|[٠-٩]{1,2})[:.)][ \t]+(.+)$/i;
+
 /**
  * Structure a Call Receptionist agent caption into paragraphs and numbered step items
- * so procedures (`1. ... 2. ...`) are never rendered as a flat unparagraphing wall of text.
+ * so procedures (`1. ... 2. ...`, `Step 1: ...`, `الخطوة 1: ...`, `١. ...`) are never rendered as a flat wall of text.
  */
 export function structureCallReceptionistBlocks(text: string): readonly CallCaptionBlock[] {
-  const cleaned = String(text ?? "").trim();
+  const footerMatch =
+    /(?:^|\n)[ \t]*(?:\*\*)?(?:You might also want to know|Related questions)\b/i.exec(
+      String(text ?? ""),
+    );
+  const rawWithoutFooter = footerMatch
+    ? String(text ?? "").slice(0, footerMatch.index)
+    : String(text ?? "");
+  const cleaned = rawWithoutFooter.trim();
   if (!cleaned) return [];
   const blocks: CallCaptionBlock[] = [];
   const rawParagraphs = cleaned.split(/\n(?:[ \t]*\n)+/);
   for (const para of rawParagraphs) {
     const trimmedPara = para.trim();
     if (!trimmedPara) continue;
-    // Split inline numbered steps ("To register: 1. Open portal. 2. Enter TIN.") into separate lines
     const normalizedLines = trimmedPara
-      .replace(/(?<=[:.!?؟])[ \t]+(?=\d{1,2}[.)][ \t]+[A-Z\u0600-\u06FF])/g, "\n")
+      .replace(INLINE_STEP_SPLIT_RE, "\n")
       .split(/\n+/)
       .map((l) => l.trim())
       .filter(Boolean);
     const listItems: { stepNumber: number; text: string }[] = [];
     for (const line of normalizedLines) {
-      const m = /^(\d{1,2})[.)][ \t]+(.+)$/.exec(line);
+      const m = STEP_LINE_MATCH_RE.exec(line);
       if (m?.[1] && m[2]) {
-        listItems.push({ stepNumber: Number(m[1]), text: m[2].trim() });
+        listItems.push({
+          stepNumber: Number(toAsciiStepDigits(m[1])),
+          text: stripInlineStepBold(m[2]),
+        });
       } else {
         if (listItems.length > 0) {
           blocks.push({ kind: "numbered_list", items: [...listItems] });
           listItems.length = 0;
         }
-        blocks.push({ kind: "paragraph", text: line });
+        blocks.push({ kind: "paragraph", text: stripInlineStepBold(line) });
       }
     }
     if (listItems.length > 0) {

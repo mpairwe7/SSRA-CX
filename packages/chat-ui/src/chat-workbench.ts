@@ -233,15 +233,23 @@ function formatDomainForSpeech(domain: string, locale = "en"): string {
   return labels.map((lbl) => map[lbl] ?? lbl).join(dotWord);
 }
 
+function toAsciiDigitsForSpeech(raw: string): string {
+  return raw.replace(/[٠-٩]/g, (ch) => String(ch.charCodeAt(0) - 0x0660));
+}
+
 function formatEmailLocalForSpeech(user: string, locale = "en"): string {
-  const dotWord = locale === "ar" ? " دوت " : " dot ";
+  const isAr = locale === "ar";
+  const dotWord = isAr ? " دوت " : " dot ";
+  const underWord = isAr ? " شرطة سفلية " : " underscore ";
+  const dashWord = isAr ? " شرطة " : " dash ";
+  const plusWord = isAr ? " زائد " : " plus ";
   return user
     .replace(/\./g, dotWord)
-    .replace(/_/g, " underscore ")
-    .replace(/-/g, " dash ")
-    .replace(/\+/g, " plus ")
-    .replace(/\betax\b/gi, "e-tax")
-    .replace(/\becustoms\b/gi, "e-customs")
+    .replace(/_/g, underWord)
+    .replace(/-/g, dashWord)
+    .replace(/\+/g, plusWord)
+    .replace(/\betax\b/gi, isAr ? "إي تاكس" : "e-tax")
+    .replace(/\becustoms\b/gi, isAr ? "إي كاستمز" : "e-customs")
     .replace(/\d/g, (d) => ` ${d} `)
     .replace(/[ \t]+/g, " ")
     .trim();
@@ -264,11 +272,16 @@ const STEP_WORDS_BY_LOCALE: Record<string, string> = {
  */
 export function cleanMarkdownForSpeech(text: string, locale = "en"): string {
   const isAr = locale === "ar";
+  const isPga = locale === "pga";
   const starWord = isAr ? "نجمة" : "star";
-  const hashWord = isAr ? "شباك" : locale === "pga" ? "shibak" : "hash";
+  const hashWord = isAr ? "شباك" : isPga ? "shibak" : "hash";
   const atWord = isAr ? "آت" : "at";
   const plusWord = isAr ? "زائد" : "plus";
   const tinEndPrefix = isAr ? "الرقم الضريبي المنتهي بـ" : "T I N ending in";
+  const tinPrefix = isAr ? "الرقم الضريبي" : "T I N";
+  const poBoxWord = isAr ? "صندوق بريد" : isPga ? "Sandug Barid" : "P O Box";
+  const secWord = isAr ? "المادة" : isPga ? "Madda" : "Section";
+  const artWord = isAr ? "المادة" : isPga ? "Madda" : "Article";
   const webLinkWord = isAr ? "رابط إلكتروني" : "web link";
   const stepWord = STEP_WORDS_BY_LOCALE[locale] ?? "Step";
 
@@ -290,7 +303,7 @@ export function cleanMarkdownForSpeech(text: string, locale = "en"): string {
     .replace(
       /\b(?:T-?I-?N|T\.I\.N\.)(?::|[ \t]+(?:is|number|no\.?))?[ \t]{0,4}(\d{3})-(\d{3})-(\d{4})\b/gi,
       (_m, g1: string, g2: string, g3: string) =>
-        `T I N ${g1.split("").join(" ")}, ${g2.split("").join(" ")}, ${g3.split("").join(" ")}`,
+        `${tinPrefix} ${g1.split("").join(" ")}, ${g2.split("").join(" ")}, ${g3.split("").join(" ")}`,
     )
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, "$1$2")
@@ -302,7 +315,7 @@ export function cleanMarkdownForSpeech(text: string, locale = "en"): string {
         `${formatEmailLocalForSpeech(user, locale)} ${atWord} ${formatDomainForSpeech(domain, locale)}`,
     )
     .replace(
-      /(?<![A-Za-z0-9@.-])(?:https?:\/\/)?((?:www\.)?(?:etax\.nra|ecustoms\.nra|cms\.nra|nra|etax\.ssra|assist\.ssra|ssra|business\.eservices|customs\.eservices|trade\.eservices|eservices|mofp|boss|mojca)\.gov\.ss)(?:\/(?![^\s]*@)[^\s.,;:!?)]*)?(?=$|\s|[,;:!?)](?=$|\s)|\.+(?=$|\s))/gi,
+      /(?<![A-Za-z0-9@.-])<?(?:https?:\/\/)?((?:www\.)?(?:etax\.nra|ecustoms\.nra|cms\.nra|nra|etax\.ssra|assist\.ssra|ssra|business\.eservices|customs\.eservices|trade\.eservices|eservices|mofp|boss|mojca)\.gov\.ss)(?:\/(?![^\s]*@)[^\s.,;:!?)>\]"'،؛؟»]*)?>?(?=$|\s|[,;:!?)>\]"'،؛؟»](?=$|\s)|\.+(?=$|\s))/gi,
       (_m, host: string) => formatDomainForSpeech(host, locale),
     )
     .replace(/https?:\/\/\S+/gi, webLinkWord)
@@ -322,10 +335,18 @@ export function cleanMarkdownForSpeech(text: string, locale = "en"): string {
     )
     .replace(
       /\bP\.?[ \t]?O\.?[ \t]?Box[ \t]{1,4}(\d{1,6})\b/gi,
-      (_m, box: string) => `P O Box ${box.split("").join(" ")}`,
+      (_m, box: string) => `${poBoxWord} ${box.split("").join(" ")}`,
     )
-    .replace(/^[ \t]*(\d{1,2})[.)][ \t]+/gm, `${stepWord} $1: `)
-    .replace(/(?<=[:.!?؟])[ \t]+(\d{1,2})\.[ \t]+(?=[A-Z\u0600-\u06FF])/g, ` ${stepWord} $1: `)
+    .replace(/\bSec\.\s*(\d+[A-Za-z]?)\b/g, `${secWord} $1`)
+    .replace(/\bArt\.\s*(\d+[A-Za-z]?)\b/g, `${artWord} $1`)
+    .replace(
+      /^[ \t]*(\d{1,2}|[٠-٩]{1,2})[.)][ \t]+/gm,
+      (_m, num: string) => `${stepWord} ${toAsciiDigitsForSpeech(num)}: `,
+    )
+    .replace(
+      /(?<=[:.!?؟؛;])[ \t]+(\d{1,2}|[٠-٩]{1,2})[.)][ \t]+(?=[A-Za-z0-9\u0600-\u06FF\u00C0-\u024F])/g,
+      (_m, num: string) => ` ${stepWord} ${toAsciiDigitsForSpeech(num)}: `,
+    )
     .replace(/^[ \t]*[-*+][ \t]+/gm, " ")
     .replace(/[*_~>#]+/g, " ")
     .replace(/\s+/g, " ")

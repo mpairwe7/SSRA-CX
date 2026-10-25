@@ -2077,10 +2077,17 @@ def _ends_mid_procedure_sentence(sentence: str) -> bool:
     return re.search(rf"(?:^|\s){number - 1}\.\s", sentence) is not None
 
 
+_NEWLINE_UNPUNCTUATED_STEP_RE = re.compile(
+    r"(?<![.!?؟:;؛])\n(?=[ \t]*(?:(?:\d{1,2}|[٠-٩]{1,2})[.)]|(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+(?:\d{1,2}|[٠-٩]{1,2})[:.)])[ \t]+)",
+    flags=re.IGNORECASE,
+)
+
+
 def split_receptionist_spoken_sentences(text: str) -> list[str]:
     """Split text into sentences while keeping numbered procedures and abbreviations attached (`brain.py`)."""
+    normalized = _NEWLINE_UNPUNCTUATED_STEP_RE.sub(".\n", text.strip())
     sentences: list[str] = []
-    for piece in re.split(r"(?<=[.!?؟])\s+", text.strip()):
+    for piece in re.split(r"(?<=[.!?؟])\s+", normalized):
         piece = piece.strip()
         if not piece:
             continue
@@ -2089,6 +2096,59 @@ def split_receptionist_spoken_sentences(text: str) -> list[str]:
         else:
             sentences.append(piece)
     return sentences
+
+
+@dataclass(frozen=True)
+class CallReceptionistBlock:
+    """Structured paragraph or numbered-step list block for Call Receptionist captions."""
+
+    kind: Literal["paragraph", "numbered_list"]
+    text: str = ""
+    items: tuple[tuple[int, str], ...] = ()
+
+
+_INLINE_STEP_SPLIT_RE = re.compile(
+    r"(?<=[:.!?؟؛;])[ \t]+(?=(?:(?:\d{1,2}|[٠-٩]{1,2})[.)]|(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+(?:\d{1,2}|[٠-٩]{1,2})[:.)])[ \t]+\S)",
+    flags=re.IGNORECASE,
+)
+_STEP_ITEM_LINE_RE = re.compile(
+    r"^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+)?(\d{1,2}|[٠-٩]{1,2})[:.)][ \t]+(.+)$",
+    flags=re.IGNORECASE,
+)
+
+
+def structure_receptionist_answer_blocks(text: str) -> list[CallReceptionistBlock]:
+    """Structure a Call Receptionist answer into paragraphs and numbered step items across all 8 languages."""
+    cleaned = _SPEECH_VISUAL_FOOTER_RE.sub("", text or "").strip()
+    if not cleaned:
+        return []
+    blocks: list[CallReceptionistBlock] = []
+    for para in (p.strip() for p in re.split(r"\n(?:[ \t]*\n)+", cleaned) if p.strip()):
+        lines = [
+            ln.strip() for ln in _INLINE_STEP_SPLIT_RE.sub("\n", para).split("\n") if ln.strip()
+        ]
+        step_items: list[tuple[int, str]] = []
+        for line in lines:
+            m = _STEP_ITEM_LINE_RE.match(line)
+            if m:
+                step_num = int(_ascii_digits(m.group(1)))
+                step_body = _SPEECH_BOLD_RE.sub(
+                    lambda b: b.group(1) or b.group(2) or "", m.group(2)
+                ).strip()
+                step_items.append((step_num, step_body))
+            else:
+                if step_items:
+                    blocks.append(
+                        CallReceptionistBlock(kind="numbered_list", items=tuple(step_items))
+                    )
+                    step_items = []
+                plain_line = _SPEECH_BOLD_RE.sub(
+                    lambda b: b.group(1) or b.group(2) or "", line
+                ).strip()
+                blocks.append(CallReceptionistBlock(kind="paragraph", text=plain_line))
+        if step_items:
+            blocks.append(CallReceptionistBlock(kind="numbered_list", items=tuple(step_items)))
+    return blocks
 
 
 @dataclass(frozen=True)
@@ -2863,7 +2923,7 @@ _ALLOWED_GOV_SS_HOSTS_PATTERN = (
     r"business\.eservices|customs\.eservices|trade\.eservices|eservices|mofp|boss|mojca)\.gov\.ss)"
 )
 _OFFICIAL_GOV_SS_URL_SPEECH_RE = re.compile(
-    rf"(?<![A-Za-z0-9@.-])(?:https?://)?({_ALLOWED_GOV_SS_HOSTS_PATTERN})(?:/(?![^\s]*@)[^\s.,;:!?)]*)?(?=$|\s|[,;:!?)](?=$|\s)|\.+(?=$|\s))",
+    rf"(?<![A-Za-z0-9@.-])<?(?:https?://)?({_ALLOWED_GOV_SS_HOSTS_PATTERN})(?:/(?![^\s]*@)[^\s.,;:!?)>\]\"'،؛؟»]*)?>?(?=$|\s|[,;:!?)>\]\"'،؛؟»](?=$|\s)|\.+(?=$|\s))",
     flags=re.IGNORECASE,
 )
 _EMAIL_SPEECH_RE = re.compile(
@@ -2920,15 +2980,19 @@ def _format_domain_for_speech(domain: str, locale: LocaleCode = LocaleCode.EN) -
 
 def _format_email_local_for_speech(user: str, locale: LocaleCode = LocaleCode.EN) -> str:
     """Format an email local-part so dots, underscores, hyphens, pluses, and digits are spoken naturally."""
-    dot_word = " دوت " if locale == LocaleCode.AR else " dot "
+    is_ar = locale == LocaleCode.AR
+    dot_word = " دوت " if is_ar else " dot "
+    under_word = " شرطة سفلية " if is_ar else " underscore "
+    dash_word = " شرطة " if is_ar else " dash "
+    plus_word = " زائد " if is_ar else " plus "
     out = (
         user.replace(".", dot_word)
-        .replace("_", " underscore ")
-        .replace("-", " dash ")
-        .replace("+", " plus ")
+        .replace("_", under_word)
+        .replace("-", dash_word)
+        .replace("+", plus_word)
     )
-    out = re.sub(r"\betax\b", "e-tax", out, flags=re.IGNORECASE)
-    out = re.sub(r"\becustoms\b", "e-customs", out, flags=re.IGNORECASE)
+    out = re.sub(r"\betax\b", "إي تاكس" if is_ar else "e-tax", out, flags=re.IGNORECASE)
+    out = re.sub(r"\becustoms\b", "إي كاستمز" if is_ar else "e-customs", out, flags=re.IGNORECASE)
     out = re.sub(r"\d", lambda d: f" {d.group(0)} ", out)
     return re.sub(r"[ \t]+", " ", out).strip()
 
@@ -2946,10 +3010,13 @@ def _format_ussd_for_speech(code_body: str, locale: LocaleCode = LocaleCode.EN) 
 def normalize_statutory_text_for_speech(text: str, locale: LocaleCode = LocaleCode.EN) -> str:
     """Expand statutory anchors, masked TINs, contact details, and verified official portal URLs for natural TTS pronunciation."""
     is_ar = locale == LocaleCode.AR
+    is_pga = locale == LocaleCode.PGA
     tin_end_prefix = "الرقم الضريبي المنتهي بـ" if is_ar else "T I N ending in"
+    tin_prefix = "الرقم الضريبي" if is_ar else "T I N"
     at_word = "آت" if is_ar else "at"
     plus_word = "زائد" if is_ar else "plus"
     web_link_word = "رابط إلكتروني" if is_ar else "web link"
+    po_box_word = "صندوق بريد" if is_ar else ("Sandug Barid" if is_pga else "P O Box")
 
     out = _SPOOFED_USERINFO_URL_SPEECH_RE.sub(web_link_word, text)
     out = _USSD_CODE_SPEECH_RE.sub(
@@ -2961,11 +3028,17 @@ def normalize_statutory_text_for_speech(text: str, locale: LocaleCode = LocaleCo
         out,
     )
     out = _EXPLICIT_TIN_HYPHEN_SPEECH_RE.sub(
-        lambda m: f"T I N {' '.join(m.group(1))}, {' '.join(m.group(2))}, {' '.join(m.group(3))}",
+        lambda m: (
+            f"{tin_prefix} {' '.join(m.group(1))}, {' '.join(m.group(2))}, {' '.join(m.group(3))}"
+        ),
         out,
     )
     out = _SEC_ANCHOR_SPEECH_RE.sub(
-        lambda m: f"Part {m.group(1)}, Section {m.group(2)}",
+        lambda m: (
+            f"الجزء {m.group(1)}، المادة {m.group(2)}"
+            if is_ar
+            else f"Part {m.group(1)}, Section {m.group(2)}"
+        ),
         out,
     )
     out = _EMAIL_SPEECH_RE.sub(
@@ -2995,7 +3068,7 @@ def normalize_statutory_text_for_speech(text: str, locale: LocaleCode = LocaleCo
         out,
     )
     out = _PO_BOX_SPEECH_RE.sub(
-        lambda m: f"P O Box {' '.join(m.group(1))}",
+        lambda m: f"{po_box_word} {' '.join(m.group(1))}",
         out,
     )
     return out
@@ -3738,9 +3811,9 @@ _SPEECH_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _SPEECH_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _SPEECH_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*|__([^_]+)__")
 _SPEECH_HEADER_BULLET_RE = re.compile(r"^\s*(?:#{1,6}|[-*+])\s+", re.MULTILINE)
-_SPEECH_NUMBERED_LINE_RE = re.compile(r"^[ \t]*(\d{1,2})[.)][ \t]+", re.MULTILINE)
+_SPEECH_NUMBERED_LINE_RE = re.compile(r"^[ \t]*(\d{1,2}|[٠-٩]{1,2})[.)][ \t]+", re.MULTILINE)
 _SPEECH_NUMBERED_INLINE_RE = re.compile(
-    r"(?<=[:.!?؟])[ \t]+(\d{1,2})\.[ \t]+(?=[A-Z\u0600-\u06FF])"
+    r"(?<=[:.!?؟؛;])[ \t]+(\d{1,2}|[٠-٩]{1,2})[.)][ \t]+(?=(?:\*{0,2})?[A-Za-z0-9\u0600-\u06FF\u00C0-\u024F])"
 )
 _SPEECH_VISUAL_FOOTER_RE = re.compile(
     r"(?:^|\n)[ \t]*(?:\*\*)?(?:You might also want to know|Related questions)\b.*",
@@ -3803,12 +3876,24 @@ def clean_text_for_speech(text: str, locale: LocaleCode = LocaleCode.EN) -> str:
     out = _SPEECH_INLINE_CODE_RE.sub(r"\1", out)
     out = _SPEECH_BOLD_RE.sub(lambda m: m.group(1) or m.group(2) or "", out)
     out = _SPEECH_HEADER_BULLET_RE.sub("", out)
-    out = _SPEECH_NUMBERED_LINE_RE.sub(rf"{step_word} \1: ", out)
-    out = _SPEECH_NUMBERED_INLINE_RE.sub(rf" {step_word} \1: ", out)
+    out = _SPEECH_NUMBERED_LINE_RE.sub(lambda m: f"{step_word} {_ascii_digits(m.group(1))}: ", out)
+    out = _SPEECH_NUMBERED_INLINE_RE.sub(
+        lambda m: f" {step_word} {_ascii_digits(m.group(1))}: ", out
+    )
     for marker, spoken_label in _REDACTED_SPEECH_MAP:
         out = out.replace(marker, spoken_label)
-    out = _SPEECH_SEC_SHORTHAND_RE.sub(r"Section \1", out)
-    out = _SPEECH_ART_SHORTHAND_RE.sub(r"Article \1", out)
+    sec_word = (
+        "المادة"
+        if locale == LocaleCode.AR
+        else ("Madda" if locale == LocaleCode.PGA else "Section")
+    )
+    art_word = (
+        "المادة"
+        if locale == LocaleCode.AR
+        else ("Madda" if locale == LocaleCode.PGA else "Article")
+    )
+    out = _SPEECH_SEC_SHORTHAND_RE.sub(rf"{sec_word} \1", out)
+    out = _SPEECH_ART_SHORTHAND_RE.sub(rf"{art_word} \1", out)
     out = normalize_statutory_text_for_speech(out, locale=locale)
     out = re.sub(r"\bhttps?://\S+", web_link_word, out, flags=re.IGNORECASE)
     return re.sub(r"\s+", " ", out).strip()

@@ -539,6 +539,14 @@ function renderPwaShellHtml(locale, nonce) {
     .langsel-auto { display: inline-flex; align-items: center; padding: 0.14rem 0.45rem; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--border-1); color: var(--ssra-gold); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
     .icon-btn { min-height: 44px; min-width: 44px; padding: 0.36rem 0.68rem; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-0); border: 1px solid var(--border-1); cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; text-decoration: none; }
     .icon-btn:hover { background: var(--surface-3); border-color: var(--border-2); }
+    .top-bar-icon-btn { width: 40px; height: 40px; min-width: 40px; min-height: 40px; padding: 0; border-radius: 10px; justify-content: center; flex-shrink: 0; }
+    @media (pointer: coarse), (max-width: 640px) { .top-bar-icon-btn { width: 44px; height: 44px; min-width: 44px; min-height: 44px; } }
+    .hdrv2-kebab { position: relative; display: inline-flex; }
+    .hdrv2-menu { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 120; min-width: 215px; padding: 6px; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: 12px; box-shadow: var(--shadow-lg); display: none; flex-direction: column; gap: 2px; }
+    .hdrv2-menu.open { display: flex; }
+    .hdrv2-menu-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 10px; border: none; border-radius: 8px; background: transparent; color: var(--text-0); font: inherit; font-size: 0.84rem; text-align: start; cursor: pointer; text-decoration: none; width: 100%; }
+    .hdrv2-menu-item:hover:not(:disabled) { background: var(--surface-2); }
+    .hdrv2-menu-item:disabled { opacity: 0.42; cursor: not-allowed; }
     .call-btn { background: linear-gradient(135deg, rgba(7, 137, 48, 0.24), rgba(15, 71, 175, 0.28)); border-color: rgba(46, 204, 113, 0.45); color: var(--text-0); }
     .ops-link-btn { border-color: rgba(244, 196, 48, 0.45); color: var(--ssra-gold); }
     .status-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.28rem 0.65rem; border-radius: var(--radius-pill); background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.32); color: var(--success); font-size: 0.73rem; font-weight: 600; }
@@ -674,9 +682,9 @@ function renderPwaShellHtml(locale, nonce) {
     .doc-modal-prompt-btn { display: inline-flex; align-items: center; gap: 0.45rem; width: 100%; min-height: 40px; padding: 0.4rem 0.65rem; border-radius: 8px; border: 1px solid var(--border-1); background: var(--surface-2); color: var(--text-0); font: inherit; font-size: 0.8rem; cursor: pointer; text-align: start; }
     .doc-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; padding-top: 0.4rem; border-top: 1px solid var(--border-1); }
     .camera-video { width: 100%; max-height: 280px; border-radius: 10px; background: #000; object-fit: cover; }
-    .voicemode-circle-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--surface-1); border: 1px solid var(--border-2); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-    .voicemode-circle-btn.is-primary-slot { border-color: rgba(46, 204, 113, 0.52); background: linear-gradient(135deg, rgba(7, 137, 48, 0.2), rgba(15, 71, 175, 0.22)); }
-    .voicemode-circle-btn.is-active { background: rgba(7, 137, 48, 0.24); border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.28); color: #2ECC71; }
+    .voicemode-circle-btn, .send-circle-btn { width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; border-radius: 50%; background: var(--grad-primary); border: 1px solid rgba(46, 204, 113, 0.48); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .voicemode-circle-btn.is-active { background: rgba(7, 137, 48, 0.28); border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.28); color: #2ECC71; }
+    .stop-circle-btn { background: var(--text-0) !important; color: var(--bg-0) !important; border-color: var(--text-0) !important; }
     .voice-dock { --vd-floor: var(--border-1); display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; padding: 0.5rem 0.75rem; margin-bottom: 0.45rem; background: var(--bg-1); border: 1px solid var(--vd-floor); border-radius: 14px; box-shadow: var(--shadow-md); }
     .voice-dock[data-floor="listening"] { --vd-floor: #2ECC71; }
     .voice-dock[data-floor="thinking"] { --vd-floor: #FCDD09; }
@@ -803,16 +811,17 @@ function renderPwaShellHtml(locale, nonce) {
     /* Responsive overrides come after the base rules so they take effect. */
     @media (max-width: 640px) {
       .chat-header {
-        display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 0.35rem 0.4rem;
-        grid-template-areas: "rail title voice theme" "status status status locale"; padding: 0.4rem 0.6rem;
+        display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 0.3rem 0.35rem;
+        grid-template-areas: "rail title voice theme kebab" "status status status locale locale"; padding: 0.4rem 0.55rem;
       }
       .header-left, .header-right { display: contents; }
       #header-rail-btn { grid-area: rail; }
       #active-conv-title { grid-area: title; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #open-call-btn { grid-area: voice; }
       #theme-toggle-btn { grid-area: theme; }
+      #header-kebab-wrap { grid-area: kebab; }
       #net-status-badge { grid-area: status; justify-self: start; min-width: 0; }
-      #locale-select { grid-area: locale; max-width: 9.5rem; }
+      #locale-select { grid-area: locale; max-width: 9.5rem; justify-self: end; }
       .chat-header .btn-label, .langsel-auto { display: none; }
       .landing { padding: 1rem 0.85rem 1.5rem; gap: 0.9rem; justify-content: flex-start; }
       .landing-prompts { grid-template-columns: minmax(0, 1fr); }
@@ -864,7 +873,7 @@ function renderPwaShellHtml(locale, nonce) {
           <div class="rail-mark" aria-hidden="true">${ICONS.ssraCrest}</div>
           <div>
             <div>SSRA Assist</div>
-            <div class="rail-brand-sub">National Revenue Authority</div>
+            <div id="rail-brand-sub" class="rail-brand-sub">National Revenue Authority</div>
           </div>
         </div>
         <div class="rail-top-actions">
@@ -873,8 +882,8 @@ function renderPwaShellHtml(locale, nonce) {
         </div>
       </div>
 
-      <button type="button" id="new-chat-btn" class="rail-new-btn">
-        <span>${ICONS.plus} New Conversation</span>
+      <button type="button" id="new-chat-btn" class="rail-new-btn" aria-label="New Conversation">
+        <span>${ICONS.plus} <span id="new-chat-label">New Conversation</span></span>
       </button>
 
       <p id="rail-device-note" class="rail-device-note">Conversations are saved on this device only.</p>
@@ -883,12 +892,12 @@ function renderPwaShellHtml(locale, nonce) {
       <!-- AccountRail Footer & Upward Popover Menu -->
       <div class="rail-footer">
         <div id="acct-popover" class="acct-popover">
-          <div class="acct-pop-section">Public conversation</div>
-          <p class="acct-pop-note">Personal balances and filing records require secure sign-in.</p>
-          <a href="https://etax.nra.gov.ss/" class="acct-pop-item" rel="noopener noreferrer"><span>Open official e-Tax portal</span><span>${ICONS.arrowUpRight}</span></a>
-          <button type="button" id="export-conv-report-btn" class="acct-pop-item" data-testid="export-conv-report-btn"><span>${ICONS.download} Download conversation report</span></button>
+          <div id="acct-pop-section-text" class="acct-pop-section">Public conversation</div>
+          <p id="acct-pop-note-text" class="acct-pop-note">Personal balances and filing records require secure sign-in.</p>
+          <a href="https://etax.nra.gov.ss/" class="acct-pop-item" rel="noopener noreferrer" aria-label="Open official e-Tax portal"><span id="acct-portal-label">Open official e-Tax portal</span><span>${ICONS.arrowUpRight}</span></a>
+          <button type="button" id="export-conv-report-btn" class="acct-pop-item" data-testid="export-conv-report-btn" aria-label="Download conversation report"><span>${ICONS.download} <span id="export-conv-report-label">Download conversation report</span></span></button>
           <hr class="acct-pop-hr" />
-          <button type="button" id="open-settings-btn" class="acct-pop-item"><span>${ICONS.settings} Settings &amp; Privacy</span></button>
+          <button type="button" id="open-settings-btn" class="acct-pop-item" aria-label="Settings &amp; Privacy"><span>${ICONS.settings} <span id="open-settings-label">Settings &amp; Privacy</span></span></button>
         </div>
 
         <button type="button" id="acct-rail-trigger" class="acct-rail-trigger" aria-expanded="false" aria-controls="acct-popover">
@@ -907,12 +916,12 @@ function renderPwaShellHtml(locale, nonce) {
     <div class="app-main-col">
       <header class="chat-header hdrv2">
         <div class="header-left">
-          <button type="button" id="header-rail-btn" class="icon-btn" aria-label="Open conversations" aria-expanded="false" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
+          <button type="button" id="header-rail-btn" class="top-bar-icon-btn icon-btn" aria-label="Open conversations" aria-expanded="false" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
           <span id="active-conv-title" class="active-conv-title">New Conversation</span>
           <span id="net-status-badge" class="status-badge" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="net-status-text">Official sources cited per answer</span></span>
         </div>
         <div class="header-right">
-          <button type="button" id="open-call-btn" class="icon-btn call-btn hdrv2-call" aria-label="Call receptionist — Open voice input options" title="Call receptionist">${ICONS.phone}<span id="header-call-label" class="btn-label hdrv2-call-label">Call receptionist</span></button>
+          <button type="button" id="open-call-btn" class="top-bar-icon-btn icon-btn call-btn hdrv2-call" aria-label="Open voice input options" title="Call receptionist">${ICONS.phone}</button>
           <select id="locale-select" class="icon-btn" aria-label="Language">
             <optgroup label="Available">
               <option value="en" ${locale === "en" ? "selected" : ""}>English (en)</option>
@@ -928,7 +937,16 @@ function renderPwaShellHtml(locale, nonce) {
             </optgroup>
           </select>
           <span id="lang-auto-badge" class="langsel-auto" data-testid="lang-auto-badge" aria-hidden="true">AUTO · ${locale.toUpperCase()}</span>
-          <button type="button" id="theme-toggle-btn" class="icon-btn">${ICONS.moon}<span class="btn-label">Dark</span></button>
+          <button type="button" id="theme-toggle-btn" class="top-bar-icon-btn icon-btn" aria-label="Colour theme: Dark. Change theme" title="Change theme">${ICONS.moon}</button>
+          <div id="header-kebab-wrap" class="hdrv2-kebab">
+            <button type="button" id="header-kebab-btn" class="top-bar-icon-btn icon-btn" data-testid="header-kebab-btn" aria-label="More options" aria-expanded="false" aria-controls="header-options-menu" title="More options">${ICONS.kebab}</button>
+            <div id="header-options-menu" class="hdrv2-menu" role="group" aria-label="More options">
+              <button type="button" id="header-menu-theme-btn" class="hdrv2-menu-item"><span id="header-menu-theme-icon" aria-hidden="true">${ICONS.moon}</span><span id="header-menu-theme-label">Theme: Dark</span></button>
+              <button type="button" id="header-menu-settings-btn" class="hdrv2-menu-item">${ICONS.settings}<span id="header-menu-settings-label">Settings</span></button>
+              <button type="button" id="header-menu-clear-btn" class="hdrv2-menu-item">${ICONS.trash}<span id="header-menu-clear-label">Clear conversation</span></button>
+              <a href="https://etax.nra.gov.ss/" id="header-menu-portal-link" class="hdrv2-menu-item" rel="noopener noreferrer">${ICONS.bookOpen}<span id="header-menu-portal-label">Official e-Tax portal ↗</span></a>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -943,33 +961,33 @@ function renderPwaShellHtml(locale, nonce) {
           </div>
 
           <div class="landing-prompts" role="group" aria-label="Suggested tax questions">
-            <button type="button" class="landing-chip" data-prompt="How do I register for a TIN step by step?">
+            <button type="button" class="landing-chip" data-chip-idx="0" data-prompt="How do I register for a TIN step by step?">
               <span class="ldv2-cat" data-cat-idx="0">TIN Registration</span>
-              <span class="landing-chip-text">How do I register for a TIN step by step?</span>
+              <span class="landing-chip-text" data-chip-text-idx="0">How do I register for a TIN step by step?</span>
             </button>
-            <button type="button" class="landing-chip" data-prompt="How much is PAYE salary tax on 250,000 SSP per month?">
+            <button type="button" class="landing-chip" data-chip-idx="1" data-prompt="How much is PAYE salary tax on 250,000 SSP per month?">
               <span class="ldv2-cat" data-cat-idx="1">PAYE Calculator</span>
-              <span class="landing-chip-text">How much is PAYE salary tax on 250,000 SSP per month?</span>
+              <span class="landing-chip-text" data-chip-text-idx="1">How much is PAYE salary tax on 250,000 SSP per month?</span>
             </button>
-            <button type="button" class="landing-chip" data-prompt="Please calculate withholding tax WHT on a contract invoice of 1,000,000 SSP">
+            <button type="button" class="landing-chip" data-chip-idx="2" data-prompt="Please calculate withholding tax WHT on a contract invoice of 1,000,000 SSP">
               <span class="ldv2-cat" data-cat-idx="2">Withholding Tax (WHT)</span>
-              <span class="landing-chip-text">Calculate WHT on a contract invoice of 1,000,000 SSP</span>
+              <span class="landing-chip-text" data-chip-text-idx="2">Calculate WHT on a contract invoice of 1,000,000 SSP</span>
             </button>
-            <button type="button" class="landing-chip" data-prompt="How do I apply for a Tax Compliance Certificate (TCC) on the SSRA e-Tax portal?">
+            <button type="button" class="landing-chip" data-chip-idx="3" data-prompt="How do I apply for a Tax Compliance Certificate (TCC) on the SSRA e-Tax portal?">
               <span class="ldv2-cat" data-cat-idx="3">Compliance (TCC)</span>
-              <span class="landing-chip-text">How do I apply for a Tax Compliance Certificate (TCC)?</span>
+              <span class="landing-chip-text" data-chip-text-idx="3">How do I apply for a Tax Compliance Certificate (TCC)?</span>
             </button>
-            <button type="button" class="landing-chip" data-prompt="Is this really SSRA? Please verify account https://etax.nra.gov.ss/ before I pay.">
+            <button type="button" class="landing-chip" data-chip-idx="4" data-prompt="Is this really SSRA? Please verify account https://etax.nra.gov.ss/ before I pay.">
               <span class="ldv2-cat" data-cat-idx="4">Scam &amp; Channel Check</span>
-              <span class="landing-chip-text">Is this really SSRA? Verify https://etax.nra.gov.ss/</span>
+              <span class="landing-chip-text" data-chip-text-idx="4">Is this really SSRA? Verify https://etax.nra.gov.ss/</span>
             </button>
-            <button type="button" class="landing-chip" data-prompt="Kif ana aml tasjil ta TIN fi SSRA?">
+            <button type="button" class="landing-chip" data-chip-idx="5" data-prompt="Kif ana aml tasjil ta TIN fi SSRA?">
               <span class="ldv2-cat" data-cat-idx="5">Juba Arabic (pga)</span>
-              <span class="landing-chip-text">Kif ana aml tasjil ta TIN fi SSRA?</span>
+              <span class="landing-chip-text" data-chip-text-idx="5">Kif ana aml tasjil ta TIN fi SSRA?</span>
             </button>
             <a class="landing-chip" href="https://etax.nra.gov.ss/" rel="noopener noreferrer">
               <span class="ldv2-cat" data-cat-idx="6">Personal e-Tax services</span>
-              <span class="landing-chip-text">Sign in to check your own balance or filing status</span>
+              <span class="landing-chip-text" data-chip-text-idx="6">Sign in to check your own balance or filing status</span>
             </a>
           </div>
         </div>
@@ -1040,12 +1058,12 @@ function renderPwaShellHtml(locale, nonce) {
               <div class="composer-tools-left">
                 <button type="button" id="composer-add-btn" class="composer-circle-btn add-circle-btn" data-testid="composer-add-btn" data-tip="Add to conversation" aria-haspopup="dialog" aria-expanded="false" aria-label="Add file or photo" title="Add file, screenshot, or photo">${ICONS.plus}</button>
                 <span id="composer-hint" class="composer-hint" role="status" aria-live="polite"></span>
-                <span class="composer-keys">Enter to send · Shift+Enter for a new line · Ctrl+K to search</span>
+                <span id="composer-keys-text" class="composer-keys">Enter to send · Shift+Enter for a new line · Ctrl+K to search</span>
               </div>
               <div class="composer-tools-right">
                 <button type="button" id="voice-dictate-btn" class="composer-circle-btn mic-circle-btn" data-testid="composer-mic" data-tip="Dictate" title="Dictate into message" aria-label="Start speaking">${ICONS.mic}</button>
                 <button type="button" id="composer-voicemode-btn" class="composer-circle-btn voicemode-circle-btn is-primary-slot" data-testid="composer-voicemode" data-tip="Enter voice mode" aria-pressed="false" aria-label="Enter voice conversation mode" title="Toggle hands-free voice conversation">${ICONS.voiceWave}</button>
-                <button type="submit" id="ssra-chat-submit" class="send-btn" data-testid="composer-send" data-tip="Send message">${ICONS.send} Send</button>
+                <button type="submit" id="ssra-chat-submit" class="composer-circle-btn send-circle-btn send-btn is-hidden" data-testid="composer-send" data-tip="Send message" aria-label="Send message">${ICONS.sendUp}</button>
               </div>
             </div>
           </form>
@@ -1299,7 +1317,37 @@ function renderPwaShellHtml(locale, nonce) {
           dropFiles: "Drop files or screenshots to inspect (PDF, DOCX, XLSX, CSV, TXT, or image)",
           spokenTag: "Spoken",
           latestLabel: "Latest",
+          railBrandSub: "National Revenue Authority",
+          newChatLabel: "New Conversation",
+          publicChatName: "Public chat",
+          publicChatSub: "No account details are shown here",
+          acctPopSection: "Public conversation",
+          acctPopNote: "Personal balances and filing records require secure sign-in.",
+          acctPortalLabel: "Open official e-Tax portal",
+          exportReportLabel: "Download conversation report",
+          openSettingsLabel: "Settings & Privacy",
+          composerKeys: "Enter to send · Shift+Enter for a new line · Ctrl+K to search",
+          menuSettingsLabel: "Settings",
+          menuClearLabel: "Clear conversation",
+          menuPortalLabel: "Official e-Tax portal ↗",
           chipCats: ["TIN Registration", "PAYE Calculator", "Withholding Tax (WHT)", "Compliance (TCC)", "Scam & Channel Check", "Juba Arabic (pga)", "Personal e-Tax services"],
+          chipTexts: [
+            "How do I register for a TIN step by step?",
+            "How much is PAYE salary tax on 250,000 SSP per month?",
+            "Calculate WHT on a contract invoice of 1,000,000 SSP",
+            "How do I apply for a Tax Compliance Certificate (TCC)?",
+            "Is this really SSRA? Verify https://etax.nra.gov.ss/",
+            "Kif ana aml tasjil ta TIN fi SSRA?",
+            "Sign in to check your own balance or filing status",
+          ],
+          chipPrompts: [
+            "How do I register for a TIN step by step?",
+            "How much is PAYE salary tax on 250,000 SSP per month?",
+            "Please calculate withholding tax WHT on a contract invoice of 1,000,000 SSP",
+            "How do I apply for a Tax Compliance Certificate (TCC) on the SSRA e-Tax portal?",
+            "Is this really SSRA? Please verify account https://etax.nra.gov.ss/ before I pay.",
+            "Kif ana aml tasjil ta TIN fi SSRA?",
+          ],
         },
         pga: {
           eyebrow: "Jumhuriya ta South Sudan · Musaa'id SSRA / NRA",
@@ -1310,7 +1358,37 @@ function renderPwaShellHtml(locale, nonce) {
           dropFiles: "Khalli malafat aw sura ta shasha hina (PDF, DOCX, XLSX, CSV, TXT, aw sura)",
           spokenTag: "Bil sot",
           latestLabel: "Al-akhir",
+          railBrandSub: "Hay'at al-Iradat al-Qawmiya (NRA / SSRA)",
+          newChatLabel: "Wanasa Jadida",
+          publicChatName: "Wanasa Aama",
+          publicChatSub: "Mafi bayanat ta hisab hina",
+          acctPopSection: "Wanasa Aama",
+          acctPopNote: "Bayanat ta rasid wa iqrarat aayiz tasjil dukhul.",
+          acctPortalLabel: "Iftah mawqi e-Tax al-rasmi",
+          exportReportLabel: "Nazzil taqrir ta al-wanasa",
+          openSettingsLabel: "I'dadat wa Khususiya",
+          composerKeys: "Enter aashan tarsil · Shift+Enter satir jadid · Ctrl+K bahis",
+          menuSettingsLabel: "I'dadat",
+          menuClearLabel: "Imsah al-wanasa",
+          menuPortalLabel: "Mawqi e-Tax al-rasmi ↗",
           chipCats: ["Tasjil ta TIN", "Hisab ta PAYE", "Dariba ta الخصم (WHT)", "Shahada ta TCC", "Fahas ta Qanawat", "Arabi Juba (pga)", "Khadamat e-Tax"],
+          chipTexts: [
+            "Kif ana aml tasjil ta TIN khatwa bi khatwa?",
+            "Kam dariba ta PAYE ala ماهية 250,000 SSP fi al-shahar?",
+            "Ahseb withholding tax WHT ala fatura ta 1,000,000 SSP",
+            "Kif ana aqaddim ala shahada ta TCC fi e-Tax?",
+            "Hal https://etax.nra.gov.ss/ mawqi rasmi ta SSRA?",
+            "Kif ana aml tasjil ta TIN fi SSRA?",
+            "Sajjil dukhul fi e-Tax aashan tashuf rasid bitaak",
+          ],
+          chipPrompts: [
+            "Kif ana aml tasjil ta TIN fi SSRA?",
+            "How much is PAYE salary tax on 250,000 SSP per month?",
+            "Please calculate withholding tax WHT on a contract invoice of 1,000,000 SSP",
+            "How do I apply for a Tax Compliance Certificate (TCC) on the SSRA e-Tax portal?",
+            "Is this really SSRA? Please verify account https://etax.nra.gov.ss/ before I pay.",
+            "Kif ana aml tasjil ta TIN fi SSRA?",
+          ],
         },
         ar: {
           eyebrow: "جمهورية جنوب السودان · المساعد الذكي لهيئة الإيرادات (SSRA / NRA)",
@@ -1321,7 +1399,37 @@ function renderPwaShellHtml(locale, nonce) {
           dropFiles: "أفلت الملفات أو لقطات الشاشة هنا للفحص (PDF أو DOCX أو XLSX أو صورة)",
           spokenTag: "منطوق صوتياً",
           latestLabel: "الأحدث",
+          railBrandSub: "هيئة الإيرادات القومية (SSRA / NRA)",
+          newChatLabel: "محادثة جديدة",
+          publicChatName: "محادثة عامة",
+          publicChatSub: "لا تظهر بيانات الحساب الشخصي هنا",
+          acctPopSection: "محادثة عامة",
+          acctPopNote: "تتطلب الأرصدة الشخصية وسجلات الإقرارات تسجيل دخول آمن.",
+          acctPortalLabel: "فتح بوابة الضرائب الرسمية e-Tax",
+          exportReportLabel: "تنزيل تقرير المحادثة",
+          openSettingsLabel: "الإعدادات والخصوصية",
+          composerKeys: "Enter للإرسال · Shift+Enter لسطر جديد · Ctrl+K للبحث",
+          menuSettingsLabel: "الإعدادات",
+          menuClearLabel: "مسح المحادثة",
+          menuPortalLabel: "بوابة e-Tax الرسمية ↗",
           chipCats: ["تسجيل الرقم الضريبي TIN", "حاسبة ضريبة الدخل PAYE", "ضريبة الاستقطاع WHT", "شهادة الامتثال TCC", "التحقق من القنوات الرسمية", "عربي جوبا (pga)", "خدمات e-Tax الشخصية"],
+          chipTexts: [
+            "كيف أسجل الرقم الضريبي TIN خطوة بخطوة؟",
+            "كم تبلغ ضريبة الدخل PAYE على راتب شهري 250,000 جنيه؟",
+            "احسب ضريبة الاستقطاع WHT على فاتورة عقد بقيمة 1,000,000 جنيه",
+            "كيف أتقدم بطلب للحصول على شهادة الامتثال الضريبي TCC؟",
+            "هل https://etax.nra.gov.ss/ قناة دفع رسمية تابعة لهيئة الإيرادات؟",
+            "Kif ana aml tasjil ta TIN fi SSRA?",
+            "سجل الدخول للتحقق من رصيدك الضريبي أو حالة إقراراتك",
+          ],
+          chipPrompts: [
+            "كيف أسجل الرقم الضريبي TIN خطوة بخطوة؟",
+            "How much is PAYE salary tax on 250,000 SSP per month?",
+            "Please calculate withholding tax WHT on a contract invoice of 1,000,000 SSP",
+            "How do I apply for a Tax Compliance Certificate (TCC) on the SSRA e-Tax portal?",
+            "Is this really SSRA? Please verify account https://etax.nra.gov.ss/ before I pay.",
+            "Kif ana aml tasjil ta TIN fi SSRA?",
+          ],
         },
       };
 
@@ -1352,6 +1460,7 @@ function renderPwaShellHtml(locale, nonce) {
         if (window.matchMedia?.("(prefers-contrast: more)")?.matches) return "high-contrast";
         return window.matchMedia?.("(prefers-color-scheme: light)")?.matches ? "light" : "dark";
       }
+      const urlExplicitLocale = window.location.pathname && window.location.pathname !== "/";
       let state = {
         locale: shell?.dataset.locale || "en",
         detectedLocale: shell?.dataset.locale || "en",
@@ -1368,12 +1477,13 @@ function renderPwaShellHtml(locale, nonce) {
       try {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
         if (saved && Array.isArray(saved.conversations)) {
+          const initialLocale = urlExplicitLocale ? state.locale : (saved.locale || state.locale);
           state = {
             ...state,
             theme: saved.theme || state.theme,
             themeChosen: Boolean(saved.theme),
-            locale: saved.locale || state.locale,
-            detectedLocale: saved.locale || state.locale,
+            locale: initialLocale,
+            detectedLocale: initialLocale,
             localeExplicit: Boolean(saved.localeExplicit),
             lowDataMode: saved.lowDataMode ?? state.lowDataMode,
             autoNarrate: Boolean(saved.autoNarrate),
@@ -1497,25 +1607,62 @@ function renderPwaShellHtml(locale, nonce) {
         const eyeEl = document.getElementById("landing-eyebrow-text");
         const hEl = document.getElementById("landing-headline");
         const sEl = document.getElementById("landing-subtitle");
-        const callLblEl = document.getElementById("header-call-label");
         const openCallBtn = document.getElementById("open-call-btn");
         const dropEl = document.getElementById("composer-drop-text");
         const latestLblEl = document.getElementById("scroll-latest-label");
+        const railSubEl = document.getElementById("rail-brand-sub");
+        const newChatLblEl = document.getElementById("new-chat-label");
+        const acctNameEl = document.getElementById("acct-name-text");
+        const acctSubEl = document.getElementById("acct-sub-text");
+        const acctPopSecEl = document.getElementById("acct-pop-section-text");
+        const acctPopNoteEl = document.getElementById("acct-pop-note-text");
+        const acctPortalLblEl = document.getElementById("acct-portal-label");
+        const exportRepLblEl = document.getElementById("export-conv-report-label");
+        const openSetLblEl = document.getElementById("open-settings-label");
+        const compKeysEl = document.getElementById("composer-keys-text");
+        const menuSetLblEl = document.getElementById("header-menu-settings-label");
+        const menuClrLblEl = document.getElementById("header-menu-clear-label");
+        const menuPorLblEl = document.getElementById("header-menu-portal-label");
         if (eyeEl && dict.eyebrow) eyeEl.textContent = dict.eyebrow;
         if (hEl) hEl.textContent = dict.headline;
         if (sEl) sEl.textContent = dict.subtitle;
         if (input) input.placeholder = dict.placeholder;
-        if (callLblEl && dict.callLabel) callLblEl.textContent = dict.callLabel;
         if (openCallBtn && dict.callLabel) {
-          openCallBtn.setAttribute("aria-label", dict.callLabel + " — Open voice input options");
+          openCallBtn.setAttribute("aria-label", "Open voice input options");
           openCallBtn.setAttribute("title", dict.callLabel);
         }
         if (dropEl && dict.dropFiles) dropEl.textContent = dict.dropFiles;
         if (latestLblEl && dict.latestLabel) latestLblEl.textContent = dict.latestLabel;
+        if (railSubEl && dict.railBrandSub) railSubEl.textContent = dict.railBrandSub;
+        if (newChatLblEl && dict.newChatLabel) newChatLblEl.textContent = dict.newChatLabel;
+        if (!state.activeId && activeTitleEl && dict.newChatLabel) activeTitleEl.textContent = dict.newChatLabel;
+        if (acctNameEl && dict.publicChatName) acctNameEl.textContent = dict.publicChatName;
+        if (acctSubEl && dict.publicChatSub) acctSubEl.textContent = dict.publicChatSub;
+        if (acctPopSecEl && dict.acctPopSection) acctPopSecEl.textContent = dict.acctPopSection;
+        if (acctPopNoteEl && dict.acctPopNote) acctPopNoteEl.textContent = dict.acctPopNote;
+        if (acctPortalLblEl && dict.acctPortalLabel) acctPortalLblEl.textContent = dict.acctPortalLabel;
+        if (exportRepLblEl && dict.exportReportLabel) exportRepLblEl.textContent = dict.exportReportLabel;
+        if (openSetLblEl && dict.openSettingsLabel) openSetLblEl.textContent = dict.openSettingsLabel;
+        if (compKeysEl && dict.composerKeys) compKeysEl.textContent = dict.composerKeys;
+        if (menuSetLblEl && dict.menuSettingsLabel) menuSetLblEl.textContent = dict.menuSettingsLabel;
+        if (menuClrLblEl && dict.menuClearLabel) menuClrLblEl.textContent = dict.menuClearLabel;
+        if (menuPorLblEl && dict.menuPortalLabel) menuPorLblEl.textContent = dict.menuPortalLabel;
         if (Array.isArray(dict.chipCats)) {
           document.querySelectorAll("[data-cat-idx]").forEach((el) => {
             const idx = Number.parseInt(el.getAttribute("data-cat-idx") || "-1", 10);
             if (dict.chipCats[idx]) el.textContent = dict.chipCats[idx];
+          });
+        }
+        if (Array.isArray(dict.chipTexts)) {
+          document.querySelectorAll("[data-chip-text-idx]").forEach((el) => {
+            const idx = Number.parseInt(el.getAttribute("data-chip-text-idx") || "-1", 10);
+            if (dict.chipTexts[idx]) el.textContent = dict.chipTexts[idx];
+          });
+        }
+        if (Array.isArray(dict.chipPrompts)) {
+          document.querySelectorAll("[data-chip-idx]").forEach((el) => {
+            const idx = Number.parseInt(el.getAttribute("data-chip-idx") || "-1", 10);
+            if (dict.chipPrompts[idx]) el.setAttribute("data-prompt", dict.chipPrompts[idx]);
           });
         }
         syncLangAutoBadge();
@@ -1539,12 +1686,18 @@ function renderPwaShellHtml(locale, nonce) {
         state.theme = t;
         document.documentElement.setAttribute("data-theme", t);
         const btn = document.getElementById("theme-toggle-btn");
+        const iconHtml = t === "dark" ? ICONS.moon : t === "light" ? ICONS.sun : ICONS.contrast;
+        const label = t === "dark" ? "Dark" : t === "light" ? "Light" : "High contrast";
         if (btn) {
-          const label = t === "dark" ? "Dark" : t === "light" ? "Light" : "High contrast";
-          setSafeHtml(btn, (t === "dark" ? ICONS.moon : t === "light" ? ICONS.sun : ICONS.contrast) + '<span class="btn-label">' + label + "</span>");
+          setSafeHtml(btn, iconHtml);
           document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => meta.setAttribute("content", THEME_COLORS[t]));
           btn.setAttribute("aria-label", "Colour theme: " + label + ". Change theme");
+          btn.setAttribute("title", "Theme: " + label);
         }
+        const menuThemeIcon = document.getElementById("header-menu-theme-icon");
+        const menuThemeLabel = document.getElementById("header-menu-theme-label");
+        if (menuThemeIcon) setSafeHtml(menuThemeIcon, iconHtml);
+        if (menuThemeLabel) menuThemeLabel.textContent = "Theme: " + label;
         saveState();
       }
       applyTheme(state.theme);
@@ -1872,11 +2025,14 @@ function renderPwaShellHtml(locale, nonce) {
             renderedRailHtml = railHtml;
           }
         }
+        const menuClearBtn = document.getElementById("header-menu-clear-btn");
+        if (menuClearBtn) menuClearBtn.disabled = !activeConv || activeConv.turns.length === 0;
         if (!activeConv || activeConv.turns.length === 0) {
           landingView?.classList.remove("is-hidden");
           chatView?.classList.add("is-hidden");
           document.getElementById("scroll-to-latest-btn")?.classList.add("is-hidden");
-          if (activeTitleEl) activeTitleEl.textContent = "New Conversation";
+          const uiDict = LOCALE_UI_STRINGS[LOCALE_UI_STRINGS[state.locale] ? state.locale : "en"];
+          if (activeTitleEl) activeTitleEl.textContent = uiDict.newChatLabel || "New Conversation";
           window.clearTimeout(prependTimer);
           renderedTranscript = { convId: null, turnHtml: [], offset: 0 };
         } else {
@@ -1976,30 +2132,45 @@ function renderPwaShellHtml(locale, nonce) {
         return String(host || "").trim().toLowerCase().replace(/^www\\./, "").split(".").filter(Boolean).map((l) => map[l] || l).join(dotW);
       }
 
+      const SPEECH_STEP_WORDS = { en: "Step", ar: "الخطوة", pga: "Khatwa", din: "Dhöl", nus: "Dia", bfa: "Daket", zne: "Di", shk: "Yoo" };
+
+      function toAsciiSpeechDigits(s) {
+        return String(s || "").replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660));
+      }
+
       function cleanTextForSpeech(raw) {
         const isAr = state.locale === "ar";
+        const isPga = state.locale === "pga";
         const starW = isAr ? "نجمة" : "star";
-        const hashW = isAr ? "شباك" : state.locale === "pga" ? "shibak" : "hash";
+        const hashW = isAr ? "شباك" : isPga ? "shibak" : "hash";
         const atW = isAr ? "آت" : "at";
         const plusW = isAr ? "زائد" : "plus";
         const tinW = isAr ? "الرقم الضريبي المنتهي بـ" : "T I N ending in";
+        const tinFullW = isAr ? "الرقم الضريبي" : "T I N";
+        const poBoxW = isAr ? "صندوق بريد" : isPga ? "Sandug Barid" : "P O Box";
+        const secW = isAr ? "المادة" : isPga ? "Madda" : "Section";
+        const artW = isAr ? "المادة" : isPga ? "Madda" : "Article";
         const linkW = isAr ? "رابط إلكتروني" : "web link";
-        const stepW = isAr ? "الخطوة" : state.locale === "pga" ? "Khatwa" : "Step";
+        const stepW = SPEECH_STEP_WORDS[state.locale] || "Step";
         return String(raw || "")
           .replace(/\\bhttps?:\\/\\/[^\\s/@]{1,128}@[^\\s.,;:!?)]{1,256}/gi, linkW)
           .replace(/(?<!\\w)\\*(\\d{2,4}(?:\\*\\d{1,4}){0,5})#(?!\\w)/g, (_, c) => starW + " " + c.split("*").map((s) => s.split("").join(" ")).join(" " + starW + " ") + " " + hashW)
           .replace(/(?:(?:\\bTIN|\\bT\\.I\\.N\\.)[ \\t]+)?(?:••••|\\*{4,8})(\\d{4})\\b/gi, (_, d) => tinW + " " + d.split("").join(" "))
+          .replace(/\\b(?:T-?I-?N|T\\.I\\.N\\.)(?::|[ \\t]+(?:is|number|no\\.?))?[ \\t]{0,4}(\\d{3})-(\\d{3})-(\\d{4})\\b/gi, (_, g1, g2, g3) => tinFullW + " " + g1.split("").join(" ") + ", " + g2.split("").join(" ") + ", " + g3.split("").join(" "))
           .replace(/\\s*\\[\\d+(?:\\s*[,;]\\s*\\d+)*\\](?!\\()/g, "")
           .replace(/\\[([^\\]]+)\\]\\([^\\)]+\\)/g, "$1")
           .replace(/\\*\\*([^*]+)\\*\\*|__([^_]+)__/g, "$1$2")
-          .replace(/(?<![:/A-Za-z0-9._%+-])\\b([A-Za-z0-9._%+-]{1,64})@([A-Za-z0-9-]{1,63}(?:\\.[A-Za-z0-9-]{1,63}){1,4})\\b(?![/])/gi, (_, u, d) => u.replace(/\\./g, isAr ? " دوت " : " dot ").replace(/_/g, " underscore ").replace(/-/g, " dash ") + " " + atW + " " + formatGovDomainSpeech(d))
-          .replace(/(?<![A-Za-z0-9@.-])(?:https?:\\/\\/)?((?:www\\.)?(?:etax\\.nra|ecustoms\\.nra|cms\\.nra|nra|etax\\.ssra|assist\\.ssra|ssra|business\\.eservices|customs\\.eservices|trade\\.eservices|eservices|mofp|boss|mojca)\\.gov\\.ss)(?:\\/(?![^\\s]*@)[^\\s.,;:!?)]*)?(?=$|\\s|[,;:!?)](?=$|\\s)|\\.+(?=$|\\s))/gi, (_, h) => formatGovDomainSpeech(h))
+          .replace(/(?<![:/A-Za-z0-9._%+-])\\b([A-Za-z0-9._%+-]{1,64})@([A-Za-z0-9-]{1,63}(?:\\.[A-Za-z0-9-]{1,63}){1,4})\\b(?![/])/gi, (_, u, d) => u.replace(/\\./g, isAr ? " دوت " : " dot ").replace(/_/g, isAr ? " شرطة سفلية " : " underscore ").replace(/-/g, isAr ? " شرطة " : " dash ").replace(/\\+/g, isAr ? " زائد " : " plus ") + " " + atW + " " + formatGovDomainSpeech(d))
+          .replace(/(?<![A-Za-z0-9@.-])<?(?:https?:\\/\\/)?((?:www\\.)?(?:etax\\.nra|ecustoms\\.nra|cms\\.nra|nra|etax\\.ssra|assist\\.ssra|ssra|business\\.eservices|customs\\.eservices|trade\\.eservices|eservices|mofp|boss|mojca)\\.gov\\.ss)(?:\\/(?![^\\s]*@)[^\\s.,;:!?)>\\]"'،؛؟»]*)?>?(?=$|\\s|[,;:!?)>\\]"'،؛؟»](?=$|\\s)|\\.+(?=$|\\s))/gi, (_, h) => formatGovDomainSpeech(h))
           .replace(/https?:\\/\\/\\S+/gi, linkW)
           .replace(/(?<!\\w)\\+211[ \\t-]?(?:\\(0\\)[ \\t-]?)?\\(?0?([19]\\d{2})\\)?[ \\t-]?(\\d{3})[ \\t-]?(\\d{3})\\b/g, (_, a, b, c) => plusW + " 2 1 1, " + a.split("").join(" ") + ", " + b.split("").join(" ") + ", " + c.split("").join(" "))
-          .replace(/^[ \\t]*(\\d{1,2})[.)][ \\t]+/gm, stepW + " $1: ")
-          .replace(/(?<=[:.!?؟])[ \\t]+(\\d{1,2})\\.[ \\t]+(?=[A-Z\\u0600-\\u06FF])/g, " " + stepW + " $1: ")
-          .replace(/\\bSec\\.\\s*(\\d+[A-Za-z]?)\\b/g, "Section $1")
-          .replace(/\\bArt\\.\\s*(\\d+[A-Za-z]?)\\b/g, "Article $1")
+          .replace(/(?<![\\w+])\\(?(0[19]\\d{2})\\)?[ \\t-](\\d{3})[ \\t-](\\d{3})\\b/g, (_, a, b, c) => a.split("").join(" ") + ", " + b.split("").join(" ") + ", " + c.split("").join(" "))
+          .replace(/\\b0800[ \\t-]*(\\d{3})[ \\t-]*(\\d{3})\\b/g, (_, a, b) => "0 800, " + a.split("").join(" ") + ", " + b.split("").join(" "))
+          .replace(/\\bP\\.?[ \\t]?O\\.?[ \\t]?Box[ \\t]{1,4}(\\d{1,6})\\b/gi, (_, box) => poBoxW + " " + box.split("").join(" "))
+          .replace(/^[ \\t]*(\\d{1,2}|[٠-٩]{1,2})[.)][ \\t]+/gm, (_, n) => stepW + " " + toAsciiSpeechDigits(n) + ": ")
+          .replace(/(?<=[:.!?؟؛;])[ \\t]+(\\d{1,2}|[٠-٩]{1,2})[.)][ \\t]+(?=[A-Za-z0-9\\u0600-\\u06FF\\u00C0-\\u024F])/g, (_, n) => " " + stepW + " " + toAsciiSpeechDigits(n) + ": ")
+          .replace(/\\bSec\\.\\s*(\\d+[A-Za-z]?)\\b/g, secW + " $1")
+          .replace(/\\bArt\\.\\s*(\\d+[A-Za-z]?)\\b/g, artW + " $1")
           .replace(/[*_\\x60#~>-]+/g, " ")
           .replace(/\\s+/g, " ")
           .trim();
@@ -2192,10 +2363,7 @@ function renderPwaShellHtml(locale, nonce) {
           timedOut = true;
           controller.abort();
         }, TURN_TIMEOUT_MS);
-        if (submitBtn) {
-          submitBtn.type = "button";
-          setSafeHtml(submitBtn, ICONS.stop + " Stop");
-        }
+        syncComposerRecordingUi();
         let reply;
         try {
           const res = await fetch("/api/turns", {
@@ -2255,10 +2423,6 @@ function renderPwaShellHtml(locale, nonce) {
         } finally {
           window.clearTimeout(timeoutId);
           activeTurnAbortController = null;
-          if (submitBtn) {
-            submitBtn.type = "submit";
-            setSafeHtml(submitBtn, ICONS.send + " Send");
-          }
           syncComposerRecordingUi();
         }
         conv.turns[conv.turns.length - 1] = reply;
@@ -2558,7 +2722,60 @@ function renderPwaShellHtml(locale, nonce) {
       localeSelect?.addEventListener("change", () => {
         state.localeExplicit = true;
         applyLocaleStrings(localeSelect.value);
+        try {
+          window.history?.replaceState?.(null, "", "/" + state.locale);
+        } catch {}
         saveState();
+      });
+
+      const headerKebabBtn = document.getElementById("header-kebab-btn");
+      const headerOptionsMenu = document.getElementById("header-options-menu");
+      function setHeaderKebabMenu(open, returnFocus) {
+        headerOptionsMenu?.classList.toggle("open", open);
+        headerKebabBtn?.setAttribute("aria-expanded", String(open));
+        if (!open && returnFocus) headerKebabBtn?.focus();
+      }
+      headerKebabBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setHeaderKebabMenu(!headerOptionsMenu?.classList.contains("open"), false);
+      });
+      document.getElementById("header-menu-theme-btn")?.addEventListener("click", () => {
+        const next = state.theme === "dark" ? "light" : state.theme === "light" ? "high-contrast" : "dark";
+        state.themeChosen = true;
+        applyTheme(next);
+      });
+      document.getElementById("header-menu-settings-btn")?.addEventListener("click", () => {
+        setHeaderKebabMenu(false, false);
+        renderSettingsTabContent("general");
+        openModal(settingsBackdrop, settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]'), headerKebabBtn);
+      });
+      document.getElementById("header-menu-clear-btn")?.addEventListener("click", () => {
+        setHeaderKebabMenu(false, false);
+        if (!state.activeId) return;
+        askInPage({
+          title: "Clear this conversation?",
+          message: "All messages in the current conversation will be removed from this device.",
+          confirmLabel: "Clear conversation",
+          destructive: true,
+        }).then((confirmed) => {
+          if (confirmed !== true) return;
+          state.conversations = state.conversations.filter((x) => x.id !== state.activeId);
+          state.activeId = null;
+          saveState();
+          renderApp();
+          input?.focus();
+        });
+      });
+      document.getElementById("header-menu-portal-link")?.addEventListener("click", () => {
+        setHeaderKebabMenu(false, false);
+      });
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#header-kebab-wrap")) setHeaderKebabMenu(false, false);
+      });
+      document.getElementById("header-kebab-wrap")?.addEventListener("focusout", (e) => {
+        if (!(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) {
+          setHeaderKebabMenu(false, false);
+        }
       });
 
       // Online / Offline Network Indicator (FE-G4)
@@ -3019,6 +3236,8 @@ function renderPwaShellHtml(locale, nonce) {
         } else if (e.key === "Escape") {
           if (openModal) {
             closeTopModal();
+          } else if (headerOptionsMenu?.classList.contains("open")) {
+            setHeaderKebabMenu(false, true);
           } else if (acctPopover?.classList.contains("open")) {
             setAcctPopover(false, true);
           } else if (shell?.getAttribute("data-mobile-rail") === "open") {
@@ -3106,30 +3325,33 @@ function renderPwaShellHtml(locale, nonce) {
           const s = document.createElement("div");
           s.className = "call-say";
           const lines = String(text || "")
-            .replace(/(?<=[:.!?؟])\\s+(?=\\d{1,2}[.)]\\s+[A-Z\\u0600-\\u06FF])/g, "\\n")
+            .replace(/(?<=[:.!?؟؛;])\\s+(?=(?:(?:\\d{1,2}|[٠-٩]{1,2})[.)]|(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)\\s+(?:\\d{1,2}|[٠-٩]{1,2})[:.)])\\s+\\S)/gi, "\\n")
             .split(/\\n+/)
             .map((l) => l.trim())
             .filter(Boolean);
           if (lines.length <= 1) {
-            s.textContent = text;
+            s.textContent = String(text || "").replace(/\\*\\*([^*]+)\\*\\*|__([^_]+)__/g, "$1$2").trim();
           } else {
             let activeOl = null;
             lines.forEach((line) => {
-              const stepMatch = /^(\\d{1,2})[.)]\\s+(.+)$/.exec(line);
+              const stepMatch = /^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)\\s+)?(\\d{1,2}|[٠-٩]{1,2})[:.)]\\s+(.+)$/i.exec(line);
               if (stepMatch) {
+                const stepNum = Number.parseInt(toAsciiSpeechDigits(stepMatch[1]), 10) || 1;
                 if (!activeOl) {
                   activeOl = document.createElement("ol");
                   activeOl.className = "call-say-steps";
+                  activeOl.start = stepNum;
                   s.appendChild(activeOl);
                 }
                 const li = document.createElement("li");
-                li.textContent = stepMatch[2];
+                li.value = stepNum;
+                li.textContent = stepMatch[2].replace(/\\*\\*([^*]+)\\*\\*|__([^_]+)__/g, "$1$2").trim();
                 activeOl.appendChild(li);
               } else {
                 activeOl = null;
                 const p = document.createElement("p");
                 p.className = "call-say-p";
-                p.textContent = line;
+                p.textContent = line.replace(/\\*\\*([^*]+)\\*\\*|__([^_]+)__/g, "$1$2").trim();
                 s.appendChild(p);
               }
             });
@@ -3189,11 +3411,14 @@ function renderPwaShellHtml(locale, nonce) {
             voiceContinuousActive ? "Send voice recording" : "Stop and insert voice text",
           );
         }
+        const isThinking = Boolean(activeTurnAbortController);
+        const hasTypedText = Boolean(input && input.value.trim().length > 0);
+        const showSubmitInPrimarySlot = isThinking || hasTypedText;
         if (composerVoiceModeBtn) {
           const vmOn = Boolean(voiceContinuousActive);
-          const hasTypedText = Boolean(input && input.value.trim().length > 0);
+          composerVoiceModeBtn.classList.toggle("is-hidden", showSubmitInPrimarySlot);
           composerVoiceModeBtn.classList.toggle("is-active", vmOn);
-          composerVoiceModeBtn.classList.toggle("is-primary-slot", !activeTurnAbortController && !hasTypedText);
+          composerVoiceModeBtn.classList.toggle("is-primary-slot", !showSubmitInPrimarySlot);
           composerVoiceModeBtn.setAttribute("aria-pressed", String(vmOn));
           composerVoiceModeBtn.setAttribute("data-tip", vmOn ? "Exit voice mode" : "Enter voice mode");
           composerVoiceModeBtn.setAttribute(
@@ -3201,7 +3426,14 @@ function renderPwaShellHtml(locale, nonce) {
             vmOn ? "Exit voice conversation mode" : "Enter voice conversation mode",
           );
         }
-        const isThinking = Boolean(activeTurnAbortController);
+        if (submitBtn) {
+          submitBtn.classList.toggle("is-hidden", !showSubmitInPrimarySlot);
+          submitBtn.classList.toggle("stop-circle-btn", isThinking);
+          submitBtn.type = isThinking ? "button" : "submit";
+          submitBtn.setAttribute("aria-label", isThinking ? "Stop generating" : "Send message");
+          submitBtn.setAttribute("data-tip", isThinking ? "Stop" : "Send message");
+          setSafeHtml(submitBtn, isThinking ? ICONS.stop : ICONS.sendUp);
+        }
         const orbMode = assistantCurrentlySpeaking
           ? "speaking"
           : isThinking
