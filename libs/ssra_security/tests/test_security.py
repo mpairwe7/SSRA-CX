@@ -343,6 +343,24 @@ def test_keycloak_26_realm_export_and_docker_invariants() -> None:
         validate_keycloak_realm_export(
             {**realm_data, "clients": [no_dpop_client, *realm_data["clients"][1:]]}
         )
+    wildcard_redirect_client = {
+        **realm_data["clients"][0],
+        "redirectUris": ["https://assist.ssra.gov.ss/*"],
+    }
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export(
+            {**realm_data, "clients": [wildcard_redirect_client, *realm_data["clients"][1:]]}
+        )
+    non_loopback_http_client = {
+        **realm_data["clients"][0],
+        "redirectUris": ["http://attacker.example:3034/signin/callback"],
+    }
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export(
+            {**realm_data, "clients": [non_loopback_http_client, *realm_data["clients"][1:]]}
+        )
+    with pytest.raises(SSRAError):
+        validate_keycloak_realm_export({**realm_data, "scopeMappings": []})
     with pytest.raises(SSRAError):
         validate_keycloak_realm_export({**realm_data, "eventsEnabled": False})
     with pytest.raises(SSRAError):

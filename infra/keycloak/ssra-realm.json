@@ -100,6 +100,19 @@
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
       "frontchannelLogout": false,
+      "baseUrl": "/en",
+      "redirectUris": [
+        "https://assist.ssra.gov.ss/signin/callback",
+        "http://127.0.0.1:3032/signin/callback",
+        "http://127.0.0.1:3033/signin/callback",
+        "http://localhost:3000/signin/callback"
+      ],
+      "webOrigins": [
+        "https://assist.ssra.gov.ss",
+        "http://127.0.0.1:3032",
+        "http://127.0.0.1:3033",
+        "http://localhost:3000"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "token.exchange.standard.enabled": "true",
@@ -107,9 +120,23 @@
         "backchannel.logout.session.required": "true",
         "backchannel.logout.revoke.offline.tokens": "true",
         "backchannel.logout.url": "https://assist.ssra.gov.ss/api/auth/backchannel-logout",
+        "post.logout.redirect.uris": "https://assist.ssra.gov.ss/en##http://127.0.0.1:3032/en##http://localhost:3000/en",
         "use.refresh.tokens": "true",
         "client.offline.session.idle.timeout": "0"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "ssra-web-audience-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "ssra-web-bff",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "clientId": "ssra-staff-console",
@@ -121,6 +148,17 @@
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
       "frontchannelLogout": false,
+      "baseUrl": "/admin",
+      "redirectUris": [
+        "https://console.ssra.gov.ss/signin/callback",
+        "http://127.0.0.1:3034/signin/callback",
+        "http://localhost:3034/signin/callback"
+      ],
+      "webOrigins": [
+        "https://console.ssra.gov.ss",
+        "http://127.0.0.1:3034",
+        "http://localhost:3034"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "default.acr.values": "urn:ssra:acr:passkey",
@@ -130,8 +168,50 @@
         "require.pushed.authorization.requests": "true",
         "backchannel.logout.session.required": "true",
         "backchannel.logout.revoke.offline.tokens": "true",
-        "backchannel.logout.url": "https://console.ssra.gov.ss/api/auth/backchannel-logout"
-      }
+        "backchannel.logout.url": "https://console.ssra.gov.ss/api/auth/backchannel-logout",
+        "post.logout.redirect.uris": "https://console.ssra.gov.ss/signin##http://127.0.0.1:3034/signin##http://localhost:3034/signin"
+      },
+      "protocolMappers": [
+        {
+          "name": "ssra-console-audience-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "ssra-staff-console",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "ssra-realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "ssra-office-code-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "office_code",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "office_code",
+            "jsonType.label": "String"
+          }
+        }
+      ]
     },
     {
       "clientId": "ssra-api",
@@ -309,6 +389,24 @@
         "pkce.code.challenge.method": "S256",
         "token.exchange.standard.enabled": "true"
       }
+    }
+  ],
+  "scopeMappings": [
+    {
+      "client": "ssra-staff-console",
+      "clientId": "ssra-staff-console",
+      "roles": [
+        "ssra_staff",
+        "ssra_admin",
+        "ssra_auditor",
+        "agent",
+        "supervisor",
+        "qa",
+        "legal_approver",
+        "secops",
+        "admin",
+        "auditor"
+      ]
     }
   ]
 }

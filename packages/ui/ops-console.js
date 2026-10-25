@@ -20,6 +20,8 @@ const OPS_ROUTE_PREFIXES = [
   "/queue",
   "/auditor",
   "/ops",
+  "/signin",
+  "/signup",
 ];
 
 // Preview destinations. Every route renders the same non-operational preview card.
@@ -149,6 +151,30 @@ function escapeHtml(value) {
 }
 
 function destinationMeta(route) {
+  if (route === "/signin") {
+    return {
+      href: "/signin",
+      label: "Sign in",
+      navLabel: "Sign in",
+      group: "Account",
+    };
+  }
+  if (route === "/signup") {
+    return {
+      href: "/signup",
+      label: "Create an account",
+      navLabel: "Create account",
+      group: "Account",
+    };
+  }
+  if (route === "/signin/callback") {
+    return {
+      href: "/signin/callback",
+      label: "Signing you in",
+      navLabel: "Callback",
+      group: "Account",
+    };
+  }
   return (
     DESTINATIONS.find((destination) => destination.href === route) || {
       href: "/admin",
@@ -185,6 +211,8 @@ function renderPreviewCard(title, group = "Work", publicAssistantUrl = "http://1
           </div>
           <div class="ops-page-actions">
             <span class="ops-fresh"><span class="ops-fresh-dot is-stale" aria-hidden="true"></span>Session unverified · preview only</span>
+            <a class="ops-btn" id="ops-header-signin-link" href="/signin" data-nav="/signin">Sign in</a>
+            <a class="ops-btn" id="ops-header-signup-link" href="/signup" data-nav="/signup">Create account</a>
             <a class="ops-btn is-primary primary" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Open the public assistant ${ICONS.arrowUpRight}</a>
           </div>
         </header>
@@ -271,6 +299,152 @@ function renderPreviewCard(title, group = "Work", publicAssistantUrl = "http://1
             </section>
           </div>
         </div>`;
+}
+
+function renderSignInCard(publicAssistantUrl = "http://127.0.0.1:3000/en") {
+  return `<div class="signin-wrap">
+          <div class="signin-card">
+            <header class="signin-head">
+              <div class="signin-mark" aria-hidden="true">${ICONS.ssraCrest}</div>
+              <span id="preview-eyebrow" class="ops-eyebrow">Keycloak 26.4.11 · OAuth 2.1 + PKCE S256 + Passkey AAL3</span>
+              <h1 id="preview-title">Sign in</h1>
+              <p class="signin-sub">South Sudan Revenue Authority (SSRA) — Admin, Staff &amp; Auditor Console</p>
+            </header>
+
+            <section class="signin-block" aria-labelledby="oidc-h">
+              <h2 id="oidc-h">Sign in with your SSRA Keycloak account</h2>
+              <p class="signin-note">
+                Accounts, hardware-backed WebAuthn passkeys (<code>urn:ssra:acr:passkey</code>), and role assignments are managed by the SSRA sovereign Keycloak identity realm (<code>https://sso.ssra.gov.ss/realms/ssra</code>). OAuth 2.1 tokens are bound via PKCE <code>S256</code> and RFC 9449 DPoP.
+              </p>
+
+              <fieldset class="signin-roles">
+                <legend>Target console workspace upon sign-in</legend>
+                <label class="role-opt active" data-role-card="ssra_admin">
+                  <input type="radio" name="signin-role-target" value="ssra_admin" data-landing="/admin" checked />
+                  <span class="role-name">Administrator (ssra_admin) — /admin</span>
+                  <span class="role-hint">Operations overview, 5-step degradation ladder, 6-step knowledge release governance, and JIT passkey elevation.</span>
+                </label>
+                <label class="role-opt" data-role-card="ssra_staff">
+                  <input type="radio" name="signin-role-target" value="ssra_staff" data-landing="/agent" />
+                  <span class="role-name">Tax Agent &amp; Officer (ssra_staff) — /agent</span>
+                  <span class="role-hint">One-case-at-a-time escalation queue, Cited Copilot drafts, phone call takeover desk, and T3 two-officer maker-checker.</span>
+                </label>
+                <label class="role-opt" data-role-card="ssra_auditor">
+                  <input type="radio" name="signin-role-target" value="ssra_auditor" data-landing="/analytics" />
+                  <span class="role-name">Forensic &amp; QA Auditor (ssra_auditor) — /analytics</span>
+                  <span class="role-hint">Read-only Separation of Duties (ISO/IEC 42001 Clause 9.2): WORM ledger inspector, forensic turn replay, and QA rubric scoring.</span>
+                </label>
+              </fieldset>
+
+              <button type="button" id="keycloak-signin-btn" class="signin-primary" data-testid="keycloak-signin-btn">
+                Continue with SSRA Keycloak Passkey SSO
+              </button>
+              <button type="button" id="keycloak-switch-account-btn" class="signin-secondary" data-testid="signin-different-account">
+                Sign in as a different user (prompt=login)
+              </button>
+
+              <dl class="ov-kv signin-kv" aria-label="Keycloak OIDC client configuration">
+                <div><dt>Keycloak realm</dt><dd><code>ssra</code></dd></div>
+                <div><dt>Console client ID</dt><dd><code>ssra-staff-console</code></dd></div>
+                <div><dt>Required passkey ACR</dt><dd><code>urn:ssra:acr:passkey</code> (ES256 / EdDSA)</dd></div>
+                <div><dt>Redirect URI</dt><dd><code>/signin/callback</code> (PKCE S256 + PAR + DPoP)</dd></div>
+              </dl>
+            </section>
+
+            <p id="signin-status-banner" class="signin-status is-hidden" role="status" aria-live="polite"></p>
+
+            <footer class="signin-switch">
+              <p>No account yet? <a href="/signup" data-nav="/signup">Create one</a></p>
+              <div class="signin-switch-links">
+                <a class="signin-switch-alt" href="/admin" data-nav="/admin">Back to console preview</a>
+                <a class="signin-switch-alt" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Back to the assistant</a>
+              </div>
+            </footer>
+          </div>
+        </div>`;
+}
+
+function renderSignUpCard(publicAssistantUrl = "http://127.0.0.1:3000/en") {
+  return `<div class="signin-wrap">
+          <div class="signin-card">
+            <header class="signin-head">
+              <div class="signin-mark" aria-hidden="true">${ICONS.ssraCrest}</div>
+              <span id="preview-eyebrow" class="ops-eyebrow">Keycloak 26.4.11 · OIDC User Registration (prompt=create)</span>
+              <h1 id="preview-title">Create an account</h1>
+              <p class="signin-sub">South Sudan Revenue Authority (SSRA) — Identity &amp; Role Provisioning</p>
+            </header>
+
+            <section class="signin-block" aria-labelledby="signup-h">
+              <h2 id="signup-h">Register with the SSRA Keycloak identity provider</h2>
+              <p class="signin-note">
+                Accounts, passkeys, and security recovery are managed by SSRA&#39;s configured Keycloak identity provider — this application never sees a password. Clicking below initiates an OAuth 2.1 + PKCE <code>S256</code> registration request (<code>prompt=create&amp;screen_hint=signup</code>).
+              </p>
+              <button type="button" id="keycloak-signup-btn" class="signin-primary" data-testid="keycloak-signup-btn">
+                Continue to registration
+              </button>
+            </section>
+
+            <section class="signin-block" aria-labelledby="signup-what">
+              <h2 id="signup-what">What an account changes</h2>
+              <ul class="signin-benefits">
+                <li>
+                  <strong>Ask without an account (T0 Public Assistant)</strong>
+                  <span>Tax questions, statutory rates, deadlines, PAYE/WHT calculators, and document preflight checks all work signed out with zero PII stored.</span>
+                </li>
+                <li>
+                  <strong>Taxpayer e-Tax continuity (T1–T3 Progressive Proofing)</strong>
+                  <span>Registering a taxpayer account links saved guidance preferences and enables deterministic TIN + OTP step-up verification outside the LLM.</span>
+                </li>
+                <li>
+                  <strong>SSRA employees, officers, administrators &amp; auditors</strong>
+                  <span>Staff (<code>ssra_staff</code>), administrator (<code>ssra_admin</code>), and read-only auditor (<code>ssra_auditor</code>) roles are predefined and assigned by SSRA Identity Governance in the <code>ssra</code> Keycloak realm with mandatory FIDO2 passkey enrollment. Staff accounts are not self-registered here — sign in directly on <a href="/signin" data-nav="/signin">/signin</a>.</span>
+                </li>
+              </ul>
+            </section>
+
+            <p id="signup-status-banner" class="signin-status is-hidden" role="status" aria-live="polite"></p>
+
+            <footer class="signin-switch">
+              <p>Already have an account? <a href="/signin" data-nav="/signin">Sign in</a></p>
+              <div class="signin-switch-links">
+                <a class="signin-switch-alt" href="/admin" data-nav="/admin">Back to console preview</a>
+                <a class="signin-switch-alt" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Continue without an account</a>
+              </div>
+            </footer>
+          </div>
+        </div>`;
+}
+
+function renderSignInCallbackCard(publicAssistantUrl = "http://127.0.0.1:3000/en") {
+  return `<div class="signin-wrap">
+          <div class="signin-card">
+            <header class="signin-head">
+              <div class="signin-mark" aria-hidden="true">${ICONS.ssraCrest}</div>
+              <span id="preview-eyebrow" class="ops-eyebrow">Keycloak 26.4.11 · OIDC Authorization Code Callback</span>
+              <h1 id="preview-title">Signing you in</h1>
+              <p class="signin-sub">South Sudan Revenue Authority (SSRA) — Verifying PKCE &amp; CSRF State</p>
+            </header>
+
+            <p id="callback-status-banner" class="signin-status error" role="alert" aria-live="polite">
+              Verifying OAuth 2.1 authorization code, CSRF state, and PKCE S256 verifier…
+            </p>
+
+            <nav class="signin-onward" aria-label="Continue to">
+              <a href="/signin" data-nav="/signin">Back to sign-in (/signin)</a>
+              <a href="/admin" data-nav="/admin">Operations overview preview (/admin)</a>
+              <a href="/agent" data-nav="/agent">Tax agent queue preview (/agent)</a>
+              <a href="/analytics" data-nav="/analytics">Auditor &amp; analytics preview (/analytics)</a>
+              <a href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Open the public assistant</a>
+            </nav>
+          </div>
+        </div>`;
+}
+
+function renderRouteBody(currentPath, currentTitle, currentGroup, publicAssistantUrl) {
+  if (currentPath === "/signin") return renderSignInCard(publicAssistantUrl);
+  if (currentPath === "/signup") return renderSignUpCard(publicAssistantUrl);
+  if (currentPath === "/signin/callback") return renderSignInCallbackCard(publicAssistantUrl);
+  return renderPreviewCard(currentTitle, currentGroup, publicAssistantUrl);
 }
 
 export function isOpsDashboardPath(pathname) {
@@ -650,6 +824,22 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       width: var(--rail-w-expanded);
       box-shadow: var(--ops-elev-3);
     }
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .staff-rail, .call-console-bar, .ops-stat, .ops-panel.is-glass {
+        background: var(--ops-glass-solid);
+        border-color: var(--ops-line);
+        box-shadow: var(--ops-elev-1);
+      }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      .staff-rail, .call-console-bar, .ops-stat, .ops-panel.is-glass {
+        background: var(--ops-glass-solid);
+        border-color: var(--ops-line);
+        box-shadow: var(--ops-elev-1);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+    }
 
     .staff-rail-head {
       display: flex; align-items: center; justify-content: space-between;
@@ -698,8 +888,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-2);
     }
     .ops-cmdk-trigger:hover { background: var(--ops-row-hover); color: var(--text-0); border-color: var(--ops-line-strong); }
+    .staff-rail.is-collapsed .ops-cmdk-trigger { justify-content: center; padding-inline: 0; }
     .staff-rail.is-collapsed .ops-cmdk-trigger-text,
     .staff-rail.is-collapsed .ops-cmdk-kbd { display: none; }
+    .staff-rail.is-collapsed .staff-acct-trigger { justify-content: center; padding-inline: 0; }
+    .staff-rail.is-collapsed .staff-acct-meta,
+    .staff-rail.is-collapsed .staff-acct-chevron { display: none; }
     .ops-kbd {
       font-family: var(--ops-font-mono); font-size: 10px; padding: 1px 5px;
       border-radius: 4px; background: var(--ops-row-active); border: 1px solid var(--ops-line);
@@ -803,7 +997,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       border: 1px solid rgba(251, 191, 36, 0.4); color: var(--ops-warn-ink); font-weight: var(--ops-weight-semi);
     }
 
-    /* ── OpsPage, OpsPanel & StatCard (ops.css + admin.css pattern) ── */
+    /* ── OpsPage, OpsPanel & StatCard (Hercules + ops.css + admin.css pattern) ── */
     .ops-page {
       max-width: var(--ops-max-w); width: 100%; margin: 0 auto;
       padding: var(--ops-space-6) var(--ops-space-5) var(--ops-space-12);
@@ -813,95 +1007,105 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       display: flex; align-items: flex-end; justify-content: space-between;
       gap: var(--ops-space-4); flex-wrap: wrap; margin-bottom: var(--ops-space-5);
     }
+    .ops-page-head > * { min-width: 0; }
     .ops-eyebrow {
-      display: block; margin-bottom: var(--ops-space-1);
+      display: block; margin-bottom: var(--ops-space-2);
       font-family: var(--ops-font-mono); font-size: var(--ops-text-2xs);
-      letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent);
+      font-weight: var(--ops-weight-light); letter-spacing: var(--ops-tracking-meta);
+      text-transform: uppercase; color: var(--text-3);
     }
     .ops-page-head h1 {
       margin: 0; font-size: var(--ops-text-xl); line-height: var(--ops-lh-tight);
-      font-weight: var(--ops-weight-semi); letter-spacing: -0.01em; color: var(--text-0);
+      font-weight: var(--ops-weight-semi); letter-spacing: var(--ops-tracking-tight); color: var(--text-0);
     }
     .ops-page-desc {
-      margin: var(--ops-space-2) 0 0; max-width: 70ch;
+      margin: var(--ops-space-2) 0 0; max-width: 68ch;
       font-size: var(--ops-text-sm); line-height: var(--ops-lh-normal); color: var(--text-2);
     }
-    .ops-page-actions { display: flex; align-items: center; gap: var(--ops-space-2); flex-wrap: wrap; }
+    .ops-page-actions { display: flex; align-items: center; gap: var(--ops-space-2); flex-wrap: wrap; max-width: 100%; }
+    .ops-page-actions > * { min-width: 0; }
 
     .ops-segmented {
-      display: inline-flex; padding: 2px; border-radius: var(--ops-radius-sm);
+      display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--ops-radius-sm);
       background: var(--ops-row); border: 1px solid var(--ops-line);
     }
     .ops-seg-btn {
-      min-height: 28px; min-width: 36px; padding: 5px 10px; border-radius: var(--ops-radius-xs); border: none;
+      min-height: 28px; min-width: 36px; padding: 4px 11px; border-radius: var(--ops-radius-xs); border: none;
       background: transparent; color: var(--text-2); font-size: var(--ops-text-xs);
-      font-weight: var(--ops-weight-medium); cursor: pointer; font-family: inherit;
+      font-weight: var(--ops-weight-semi); cursor: pointer; font-family: inherit;
       display: inline-flex; align-items: center; justify-content: center;
+      transition: background var(--ops-dur-fast) var(--ops-ease), color var(--ops-dur-fast) var(--ops-ease);
     }
-    .ops-seg-btn.active { background: var(--ops-row-active); color: var(--text-0); font-weight: var(--ops-weight-semi); }
+    .ops-seg-btn.active { background: var(--ops-panel); color: var(--text-0); box-shadow: var(--ops-elev-1), inset 0 0 0 1px var(--ops-line); }
 
     .ops-btn {
-      min-height: 32px; padding: 0 12px; border-radius: var(--ops-radius-sm);
-      background: var(--ops-row); border: 1px solid var(--ops-line); color: var(--text-0);
-      font-size: var(--ops-text-xs); font-weight: var(--ops-weight-medium);
-      cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+      min-height: 36px; padding: 8px 14px; border-radius: var(--ops-radius-sm);
+      background: var(--ops-row-active); border: 1px solid var(--ops-line-strong); color: var(--text-0);
+      font-size: var(--ops-text-sm); font-weight: var(--ops-weight-semi);
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: var(--ops-space-2); text-decoration: none; white-space: nowrap;
+      transition: background var(--ops-dur-fast) var(--ops-ease), border-color var(--ops-dur-fast) var(--ops-ease);
     }
-    .ops-btn:hover { background: var(--ops-row-hover); border-color: var(--ops-line-strong); }
-    .ops-btn.primary { background: linear-gradient(135deg, #07792B 0%, #0D6E38 50%, #0F47AF 100%); color: #fff; border-color: rgba(255,255,255,0.18); }
+    .ops-btn:hover { background: var(--surface-4); border-color: var(--ops-line-strong); }
+    a.ops-btn { color: var(--text-0); }
+    .ops-btn.primary, a.ops-btn.primary, a.ops-btn.primary:hover { background: linear-gradient(135deg, #07792B 0%, #0D6E38 50%, #0F47AF 100%); color: #fff; border-color: rgba(255,255,255,0.18); box-shadow: var(--ops-elev-1); }
     .ops-btn.gold { background: var(--accent); color: #0B1220; border-color: transparent; font-weight: var(--ops-weight-bold); }
     :root[data-theme="light"] .ops-btn.gold { color: #FFFFFF; }
 
-    /* StatCard Grid */
+    /* StatCard Grid (Hercules tabular/proportional figure hierarchy) */
     .ops-stat-grid {
       display: grid;
       grid-template-columns: repeat(var(--ops-stat-cols, 3), minmax(0, 1fr));
       gap: var(--ops-space-3); margin-bottom: var(--ops-band);
     }
-    @media (max-width: 1024px) { .ops-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 600px) { .ops-stat-grid { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 1100px) { .ops-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px) { .ops-stat-grid { grid-template-columns: minmax(0, 1fr); } }
 
     .ops-stat {
       position: relative; display: flex; flex-direction: column; gap: var(--ops-space-1);
-      padding: var(--ops-space-4) var(--ops-space-5); border-radius: var(--ops-radius-md);
+      padding: var(--ops-space-5); border-radius: var(--ops-radius-md);
       background: var(--ops-glass-bg); border: 1px solid var(--ops-glass-line);
       box-shadow: var(--ops-glass-spec), var(--ops-glass-cast);
       -webkit-backdrop-filter: var(--ops-glass-blur); backdrop-filter: var(--ops-glass-blur);
       contain: paint; text-decoration: none; color: inherit;
       transition: border-color var(--ops-dur-fast) var(--ops-ease), background var(--ops-dur-fast) var(--ops-ease);
     }
-    .ops-stat:hover { border-color: var(--ops-line-strong); }
+    .ops-stat:hover { border-color: var(--ops-line-strong); background: var(--ops-row-hover); }
     .ops-stat-label {
-      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-semi);
-      letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3);
+      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-light);
+      letter-spacing: var(--ops-tracking-meta); text-transform: uppercase; color: var(--text-3);
     }
-    .ops-stat-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--ops-space-2); margin-top: 2px; }
+    .ops-stat-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--ops-space-2); flex-wrap: wrap; margin-top: 2px; }
     .ops-stat-value {
       font-size: var(--ops-text-xl); line-height: var(--ops-lh-tight);
-      font-weight: var(--ops-weight-semi); color: var(--text-0);
+      min-height: calc(var(--ops-text-xl) * var(--ops-lh-tight));
+      font-weight: var(--ops-weight-semi); letter-spacing: var(--ops-tracking-tight);
+      color: var(--text-0); font-variant-numeric: proportional-nums; text-wrap: balance;
     }
-    .ops-stat-unit { font-size: var(--ops-text-sm); font-weight: var(--ops-weight-normal); color: var(--text-2); }
+    .ops-stat-unit { font-size: 0.6em; font-weight: var(--ops-weight-normal); letter-spacing: 0; color: var(--text-2); white-space: pre; }
     .ops-delta {
+      display: inline-flex; align-items: center; gap: 3px;
       font-family: var(--ops-font-mono); font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-semi);
-      padding: 2px 6px; border-radius: var(--ops-radius-xs); background: var(--ops-row); color: var(--text-2);
+      font-variant-numeric: tabular-nums; color: var(--text-3);
     }
-    .ops-delta.is-good { color: var(--ops-good-ink); background: rgba(52, 211, 153, 0.12); }
-    .ops-delta.is-bad { color: var(--ops-bad-ink); background: rgba(251, 113, 133, 0.12); }
-    .ops-stat-hint { font-size: var(--ops-text-xs); color: var(--text-2); line-height: var(--ops-lh-snug); }
-    .ops-sparkline { width: 100%; height: 28px; margin-top: 4px; overflow: visible; }
+    .ops-delta.is-good { color: var(--ops-good-ink); }
+    .ops-delta.is-bad { color: var(--ops-bad-ink); }
+    .ops-stat-hint { font-size: var(--ops-text-2xs); color: var(--text-3); line-height: var(--ops-lh-snug); }
+    .ops-sparkline { width: 100%; height: 28px; margin-top: var(--ops-space-1); overflow: visible; }
 
     /* OpsPanel & Two-Column Layouts */
     .ov-cols { display: grid; grid-template-columns: 1.45fr 1fr; gap: var(--ops-band); align-items: start; }
-    @media (max-width: 980px) { .ov-cols { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 900px) { .ov-cols { grid-template-columns: minmax(0, 1fr); } }
     .ov-side { display: grid; gap: var(--ops-band); }
 
     .ops-panel {
       background: var(--ops-panel); border: 1px solid var(--ops-line);
       border-radius: var(--ops-radius-md); overflow: hidden;
     }
-    .ops-panel.is-bare { background: none; border: 0; border-radius: 0; }
+    .ops-panel.is-bare { background: none; border: 0; border-radius: 0; box-shadow: none; }
     .ops-panel.is-glass {
       background: var(--ops-glass-bg); border-color: var(--ops-glass-line);
-      box-shadow: var(--ops-glass-spec), var(--ops-glass-cast);
+      border-radius: var(--ops-radius-lg);
+      box-shadow: var(--ops-glass-spec), var(--ops-elev-2);
       -webkit-backdrop-filter: var(--ops-glass-blur); backdrop-filter: var(--ops-glass-blur);
     }
     .ops-panel-head {
@@ -914,37 +1118,40 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .ops-panel-body { padding: var(--ops-space-4); overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .ops-panel.is-bare .ops-panel-body { padding: var(--ops-space-4) 0 0; }
 
-    /* Lists, Tables & Chips */
+    /* Lists, Tables & Chips (ink-only readings in IBM Plex Mono Light) */
     .ov-review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ops-space-2); }
     .ov-review-item {
-      display: grid; gap: 4px; padding: var(--ops-space-3) var(--ops-space-4);
+      display: grid; gap: var(--ops-space-1); padding: var(--ops-space-3) var(--ops-space-4);
       border: 1px solid var(--ops-hairline); border-radius: var(--ops-radius-sm); background: var(--ops-row);
     }
     .ov-review-top { display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-2); }
     .ops-chip {
-      display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
-      border-radius: var(--ops-radius-pill); font-size: var(--ops-text-2xs);
-      font-weight: var(--ops-weight-semi); background: var(--ops-row-active); border: 1px solid var(--ops-line);
+      display: inline-flex; align-items: center; gap: 5px; padding: 0;
+      border: 0; border-radius: 0; background: none;
+      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-light); color: var(--text-3); white-space: nowrap;
     }
-    .ops-chip.good { color: var(--ops-good-ink); border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.1); }
-    .ops-chip.warn { color: var(--ops-warn-ink); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.1); }
-    .ops-chip.bad { color: var(--ops-bad-ink); border-color: rgba(251, 113, 133, 0.35); background: rgba(251, 113, 133, 0.1); }
-    .ops-chip.info { color: var(--ops-info-ink); border-color: rgba(96, 165, 250, 0.35); background: rgba(96, 165, 250, 0.1); }
+    .ops-chip + .ops-chip { margin-inline-start: var(--ops-space-3); }
+    .ops-chip.good, .ops-chip.is-good { color: var(--ops-good-ink); }
+    .ops-chip.warn, .ops-chip.is-warn { color: var(--ops-warn-ink); }
+    .ops-chip.bad, .ops-chip.is-danger { color: var(--ops-bad-ink); }
+    .ops-chip.info, .ops-chip.is-info { color: var(--ops-info-ink); }
 
-    .ops-table { width: 100%; border-collapse: collapse; font-size: var(--ops-text-xs); }
+    .ops-table { width: 100%; border-collapse: collapse; font-size: var(--ops-text-sm); }
     .ops-table th, .ops-table td {
-      padding: 10px 12px; text-align: start; border-bottom: 1px solid var(--ops-hairline);
+      padding: var(--ops-space-3) var(--ops-space-4); text-align: start; border-bottom: 1px solid var(--ops-hairline);
     }
     .ops-table th {
+      padding: var(--ops-space-2) var(--ops-space-4);
       font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-semi);
-      text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3);
+      text-transform: uppercase; letter-spacing: var(--ops-tracking-caps); color: var(--text-3);
+      border-bottom: 1px solid var(--ops-line);
     }
-    .ops-table tr:hover td { background: var(--ops-row-hover); }
+    .ops-table tr:hover td { background: var(--ops-row); }
 
     .ov-kv { margin: 0; display: grid; gap: var(--ops-space-2); }
-    .ov-kv > div { display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-3); padding: 4px 0; border-bottom: 1px solid var(--ops-hairline); }
+    .ov-kv > div { display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-3); min-height: 24px; padding: 2px 0; border-bottom: 1px solid var(--ops-hairline); }
     .ov-kv dt { font-size: var(--ops-text-xs); color: var(--text-3); }
-    .ov-kv dd { margin: 0; font-size: var(--ops-text-xs); font-weight: var(--ops-weight-semi); color: var(--text-0); }
+    .ov-kv dd { margin: 0; font-size: var(--ops-text-xs); font-weight: var(--ops-weight-semi); color: var(--text-1); text-align: end; font-variant-numeric: tabular-nums; }
 
     /* Command Palette Modal (CommandPalette.tsx pattern) */
     .ops-cmdk-backdrop {
@@ -1056,6 +1263,44 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .ops-preview-card p, .ops-preview-card li { line-height: 1.6; font-size: var(--ops-text-sm); }
     .ops-preview-card ul { padding-inline-start: 1.25rem; margin: var(--ops-space-2) 0 0; }
     .ops-preview-chip { display: inline-block; padding: 4px 9px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-weight: 700; margin-bottom: var(--ops-space-2); }
+    .is-hidden { display: none !important; }
+    .signin-wrap { display: grid; place-items: center; padding: var(--ops-space-4) 0 var(--ops-space-8); }
+    .signin-card { width: 100%; max-width: 560px; background: var(--ops-panel); border: 1px solid var(--ops-line-strong); border-radius: var(--ops-radius-lg); box-shadow: var(--ops-elev-2); padding: clamp(20px, 4vw, 34px); }
+    .signin-head { text-align: center; margin-bottom: 22px; }
+    .signin-mark { width: 52px; height: 52px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 14px; background: linear-gradient(135deg, #07792B 0%, #0F47AF 100%); color: #fff; box-shadow: var(--ops-elev-1); }
+    .signin-head h1 { margin: 4px 0 0; font-size: 24px; font-weight: 700; color: var(--text-0); }
+    .signin-sub { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
+    .signin-block { padding: 18px 0; border-top: 1px solid var(--ops-hairline); }
+    .signin-block h2 { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--text-0); }
+    .signin-note { margin: 0 0 14px; font-size: 13px; line-height: 1.55; color: var(--text-2); }
+    .signin-roles { margin: 0 0 14px; padding: 0; border: 0; display: grid; gap: 8px; }
+    .signin-roles legend { padding: 0; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text-2); }
+    .role-opt { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "radio name" "radio hint"; gap: 2px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius-sm); background: var(--ops-row); cursor: pointer; }
+    .role-opt.active { border-color: var(--accent); background: var(--ops-row-active); }
+    .role-opt input { grid-area: radio; width: 16px; height: 16px; accent-color: var(--accent); }
+    .role-name { grid-area: name; font-size: 13px; font-weight: 600; color: var(--text-0); }
+    .role-hint { grid-area: hint; font-size: 11.5px; color: var(--text-2); line-height: 1.45; }
+    .signin-primary, .signin-secondary { width: 100%; min-height: 44px; padding: 10px 16px; border-radius: var(--ops-radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-family: inherit; }
+    .signin-primary { background: linear-gradient(135deg, #07792B 0%, #0D6E38 50%, #0F47AF 100%); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); }
+    .signin-secondary { margin-top: 10px; background: var(--ops-row); color: var(--text-0); border: 1px solid var(--ops-line-strong); }
+    .signin-secondary:hover { background: var(--ops-row-hover); }
+    .signin-kv { margin-top: 14px; }
+    .signin-benefits { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+    .signin-benefits li { padding: 12px 14px; border-radius: var(--ops-radius-sm); background: var(--ops-row); border: 1px solid var(--ops-hairline); display: grid; gap: 4px; }
+    .signin-benefits strong { font-size: 13px; color: var(--text-0); }
+    .signin-benefits span { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+    .signin-status { margin: 12px 0 0; padding: 11px 13px; border-radius: var(--ops-radius-sm); font-size: 12.5px; line-height: 1.5; border: 1px solid var(--ops-line); background: var(--ops-row); color: var(--text-1); overflow-wrap: anywhere; }
+    .signin-status.ok { border-color: rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.1); color: var(--ops-good-ink); }
+    .signin-status.error { border-color: rgba(251, 113, 133, 0.45); background: rgba(251, 113, 133, 0.1); color: var(--ops-bad-ink); }
+    .signin-onward { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ops-hairline); display: grid; gap: 8px; }
+    .signin-onward a { padding: 9px 12px; border-radius: var(--ops-radius-sm); background: var(--ops-row); border: 1px solid var(--ops-line); color: var(--text-0); font-size: 13px; text-decoration: none; }
+    .signin-onward a:hover { background: var(--ops-row-hover); }
+    .signin-switch { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--ops-hairline); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 13px; color: var(--text-2); }
+    .signin-switch p { margin: 0; }
+    .signin-switch a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    .signin-switch a:hover { text-decoration: underline; }
+    .signin-switch-links { display: flex; gap: 12px; flex-wrap: wrap; }
+    .signin-switch-alt { color: var(--text-2) !important; font-weight: 500 !important; }
     @media (prefers-reduced-motion: reduce) {
       .staff-rail { transition: none !important; }
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -1106,6 +1351,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
             <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.contrast} High contrast</span></button>
           </div>
           <hr class="staff-acct-hr" role="separator" />
+          <a href="/signin" data-nav="/signin" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.logIn} Sign in with Keycloak SSO</span></a>
+          <a href="/signup" data-nav="/signup" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.userPlus} Create an account</span></a>
           <a href="${escapeHtml(publicAssistantUrl)}" class="staff-acct-item" role="menuitem" tabindex="-1"><span>${ICONS.messageSquare} Return to the public assistant</span><span>${ICONS.arrowUpRight}</span></a>
         </div>
         <button type="button" id="staff-acct-trigger" class="staff-acct-trigger" aria-label="Preview persona menu; not signed in" aria-expanded="false" aria-haspopup="menu">
@@ -1129,12 +1376,14 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           <span>No live calls, taxpayer records, or service telemetry are shown.</span>
         </div>
         <div class="call-bar-right">
+          <a href="/signin" data-nav="/signin" class="ops-btn">Sign in</a>
+          <a href="/signup" data-nav="/signup" class="ops-btn">Sign up</a>
           <a href="${escapeHtml(publicAssistantUrl)}" class="ops-btn primary">${ICONS.messageSquare} Taxpayer MainChat</a>
         </div>
       </div>
 
       <main id="staff-main" class="ops-page" data-route="${escapeHtml(currentPath)}" tabindex="-1">
-        ${renderPreviewCard(currentTitle, currentMeta.group, publicAssistantUrl)}
+        ${renderRouteBody(currentPath, currentTitle, currentMeta.group, publicAssistantUrl)}
       </main>
     </div>
   </div>
@@ -1146,7 +1395,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       <ul id="cmdk-list" class="ops-cmdk-list" role="listbox" aria-label="Available commands"></ul>
       <p id="cmdk-count" class="ops-sr-only" role="status" aria-live="polite"></p>
       <div class="ops-cmdk-foot">
-        <span>↑↓ to navigate · Enter to open · Esc to close</span>
+        <span>${ICONS.chevronUpDown} Up/Down to navigate · Enter to open · Esc to close</span>
         <span>Preview only · no staff session</span>
       </div>
     </div>
@@ -1159,9 +1408,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       const PUBLIC_ASSISTANT_URL = ${JSON.stringify(publicAssistantUrl)};
 
       const ROLE_META = {
-        ssra_admin: { initials: "P", name: "Administrator preview", label: "Not signed in · preview only", landing: "/admin" },
-        ssra_staff: { initials: "P", name: "Tax agent preview", label: "Not signed in · preview only", landing: "/agent" },
-        ssra_auditor: { initials: "P", name: "Auditor preview (read-only)", label: "Not signed in · preview only", landing: "/analytics" },
+        ssra_admin: { initials: "AD", name: "Administrator preview", label: "Not signed in · preview only", landing: "/admin" },
+        ssra_staff: { initials: "ST", name: "Tax agent preview", label: "Not signed in · preview only", landing: "/agent" },
+        ssra_auditor: { initials: "AU", name: "Auditor preview (read-only)", label: "Not signed in · preview only", landing: "/analytics" },
       };
 
       const mainEl = document.getElementById("staff-main");
@@ -1236,8 +1485,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           }
         });
         const roleMeta = ROLE_META[state.role] || ROLE_META.ssra_admin;
+        const acctInitialsEl = document.getElementById("acct-initials");
         const acctNameEl = document.getElementById("acct-display-name");
         const acctRoleEl = document.getElementById("acct-role-label");
+        if (acctInitialsEl) acctInitialsEl.textContent = roleMeta.initials;
         if (acctNameEl) acctNameEl.textContent = roleMeta.name;
         if (acctRoleEl) acctRoleEl.textContent = roleMeta.label;
         document.querySelectorAll("[data-set-theme]").forEach((btn) => {
@@ -1267,17 +1518,213 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         }
       }
 
+      function randomHex(bytes = 32) {
+        const buf = new Uint8Array(bytes);
+        crypto.getRandomValues(buf);
+        return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
+      }
+
+      async function computePkceChallenge(verifier) {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+        return btoa(String.fromCharCode(...new Uint8Array(digest)))
+          .replace(/\\+/g, "-")
+          .replace(/\\//g, "_")
+          .replace(/=+$/, "");
+      }
+
+      function buildSignInHtml() {
+        return ${JSON.stringify(renderSignInCard(publicAssistantUrl))};
+      }
+      function buildSignUpHtml() {
+        return ${JSON.stringify(renderSignUpCard(publicAssistantUrl))};
+      }
+      function buildCallbackHtml() {
+        return ${JSON.stringify(renderSignInCallbackCard(publicAssistantUrl))};
+      }
+      function buildPreviewHtml(title, group) {
+        return ${JSON.stringify(renderPreviewCard("__TITLE__", "__GROUP__", publicAssistantUrl))}
+          .replace(/__TITLE__/g, escapeHtml(title))
+          .replace(/__GROUP__/g, escapeHtml(group));
+      }
+
+      let lastCallbackOutcome = null;
+
+      function wireAuthViewInteractions() {
+        if (!mainEl) return;
+        const roleRadios = Array.from(mainEl.querySelectorAll('input[name="signin-role-target"]'));
+        roleRadios.forEach((radio) => {
+          if (radio.value === state.role) {
+            radio.checked = true;
+          }
+          radio.closest(".role-opt")?.classList.toggle("active", radio.checked);
+          radio.addEventListener("change", () => {
+            roleRadios.forEach((r) => r.closest(".role-opt")?.classList.toggle("active", r.checked));
+            if (ROLE_META[radio.value]) {
+              state.role = radio.value;
+              writeUiPreference("ssra-ops-preview-persona", state.role);
+              applyChrome();
+            }
+          });
+        });
+
+        const startKeycloakRedirect = async (mode, promptVal) => {
+          const verifier = randomHex(32);
+          const challenge = await computePkceChallenge(verifier);
+          const csrfState = randomHex(32);
+          const selectedRadio = mainEl.querySelector('input[name="signin-role-target"]:checked');
+          const targetRole = selectedRadio?.value || state.role || "ssra_admin";
+          const returnTo = selectedRadio?.getAttribute("data-landing") || ROLE_META[targetRole]?.landing || "/admin";
+          lastCallbackOutcome = null;
+          try {
+            sessionStorage.setItem("ssra_pkce_verifier", verifier);
+            sessionStorage.setItem("ssra_oidc_state", csrfState);
+            sessionStorage.setItem("ssra_oidc_return_to", returnTo);
+          } catch {}
+          const authUrl = new URL("https://sso.ssra.gov.ss/realms/ssra/protocol/openid-connect/auth");
+          authUrl.searchParams.set("response_type", "code");
+          authUrl.searchParams.set("client_id", "ssra-staff-console");
+          authUrl.searchParams.set("redirect_uri", window.location.origin + "/signin/callback");
+          authUrl.searchParams.set("scope", "openid profile email");
+          authUrl.searchParams.set("code_challenge", challenge);
+          authUrl.searchParams.set("code_challenge_method", "S256");
+          authUrl.searchParams.set("state", csrfState);
+          authUrl.searchParams.set("acr_values", "urn:ssra:acr:passkey");
+          if (mode === "signup") {
+            authUrl.searchParams.set("prompt", "create");
+            authUrl.searchParams.set("screen_hint", "signup");
+          } else if (promptVal) {
+            authUrl.searchParams.set("prompt", promptVal);
+          }
+          const bannerId = mode === "signup" ? "signup-status-banner" : "signin-status-banner";
+          const bannerEl = document.getElementById(bannerId);
+          if (bannerEl) {
+            bannerEl.classList.remove("is-hidden", "error");
+            bannerEl.classList.add("ok");
+            bannerEl.setAttribute("role", "status");
+            bannerEl.setAttribute("data-auth-url", authUrl.toString());
+            bannerEl.textContent =
+              (mode === "signup"
+                ? "Prepared Keycloak 26.4.11 OIDC Registration request (prompt=create, PKCE S256) for realm ssra -> "
+                : promptVal === "login"
+                  ? "Prepared Keycloak 26.4.11 OIDC Re-Authentication request (prompt=login, acr_values=urn:ssra:acr:passkey) -> "
+                  : "Prepared Keycloak 26.4.11 OIDC Passkey SSO request (acr_values=urn:ssra:acr:passkey, returnTo=" + returnTo + ") -> ") +
+              authUrl.toString();
+          }
+        };
+
+        const runKeycloakRedirect = (mode, promptVal) => {
+          startKeycloakRedirect(mode, promptVal).catch(() => {
+            const bannerId = mode === "signup" ? "signup-status-banner" : "signin-status-banner";
+            const bannerEl = document.getElementById(bannerId);
+            if (!bannerEl) return;
+            bannerEl.classList.remove("is-hidden", "ok");
+            bannerEl.classList.add("error");
+            bannerEl.setAttribute("role", "alert");
+            bannerEl.textContent =
+              "Could not prepare the sign-in request. A secure (HTTPS) browser context is required for Web Crypto PKCE S256.";
+          });
+        };
+
+        document.getElementById("keycloak-signin-btn")?.addEventListener("click", () => {
+          runKeycloakRedirect("signin", undefined);
+        });
+        document.getElementById("keycloak-switch-account-btn")?.addEventListener("click", () => {
+          runKeycloakRedirect("signin", "login");
+        });
+        document.getElementById("keycloak-signup-btn")?.addEventListener("click", () => {
+          runKeycloakRedirect("signup", undefined);
+        });
+
+        if (state.route === "/signin/callback") {
+          const cbBanner = document.getElementById("callback-status-banner");
+          if (!lastCallbackOutcome || lastCallbackOutcome.search !== window.location.search) {
+            const params = new URLSearchParams(window.location.search);
+            const err = params.get("error");
+            const code = params.get("code");
+            const st = params.get("state");
+            let expectedState = null;
+            let verifier = null;
+            try {
+              expectedState = sessionStorage.getItem("ssra_oidc_state");
+              verifier = sessionStorage.getItem("ssra_pkce_verifier");
+              sessionStorage.removeItem("ssra_oidc_state");
+              sessionStorage.removeItem("ssra_pkce_verifier");
+            } catch {}
+            if (err) {
+              lastCallbackOutcome = {
+                search: window.location.search,
+                ok: false,
+                text: err + ": " + (params.get("error_description") || "the identity provider refused the request"),
+              };
+            } else if (!code) {
+              lastCallbackOutcome = {
+                search: window.location.search,
+                ok: false,
+                text: "The identity provider returned no authorization code.",
+              };
+            } else if (!st || !expectedState || st !== expectedState) {
+              lastCallbackOutcome = {
+                search: window.location.search,
+                ok: false,
+                text: "State mismatch — this sign-in did not start in this browser tab. Start again from /signin.",
+              };
+            } else if (!verifier || verifier.length < 43) {
+              lastCallbackOutcome = {
+                search: window.location.search,
+                ok: false,
+                text: "The PKCE S256 code_verifier is missing. Start the sign-in again from /signin.",
+              };
+            } else {
+              lastCallbackOutcome = {
+                search: window.location.search,
+                ok: true,
+                text: "Keycloak PKCE S256 & CSRF state verified. Server-side token exchange requires live Keycloak connectivity (OQ-005 / OQ-014).",
+              };
+            }
+          }
+          if (cbBanner && lastCallbackOutcome) {
+            cbBanner.classList.toggle("ok", lastCallbackOutcome.ok);
+            cbBanner.classList.toggle("error", !lastCallbackOutcome.ok);
+            cbBanner.setAttribute("role", lastCallbackOutcome.ok ? "status" : "alert");
+            cbBanner.textContent = lastCallbackOutcome.text;
+          }
+        }
+      }
+
       function renderCurrentRoute() {
         applyChrome();
         if (!mainEl) return;
+        mainEl.setAttribute("data-route", state.route);
+        if (state.route === "/signin") {
+          document.title = "SSRA Operations Console Preview — Sign in";
+          setSafeHtml(mainEl, buildSignInHtml());
+          wireAuthViewInteractions();
+          return;
+        }
+        if (state.route === "/signup") {
+          document.title = "SSRA Operations Console Preview — Create an account";
+          setSafeHtml(mainEl, buildSignUpHtml());
+          wireAuthViewInteractions();
+          return;
+        }
+        if (state.route === "/signin/callback") {
+          document.title = "SSRA Operations Console Preview — Signing you in";
+          setSafeHtml(mainEl, buildCallbackHtml());
+          wireAuthViewInteractions();
+          return;
+        }
         const route = DESTINATIONS.find((destination) => destination.href === state.route);
         const title = route?.label || "Operations overview";
         const group = route?.group || "Work";
         document.title = "SSRA Operations Console Preview — " + title;
-        const titleEl = document.getElementById("preview-title");
-        if (titleEl) titleEl.textContent = title;
-        const eyebrowEl = document.getElementById("preview-eyebrow");
-        if (eyebrowEl) eyebrowEl.textContent = group + " · Preview only";
+        if (!document.getElementById("nr-h")) {
+          setSafeHtml(mainEl, buildPreviewHtml(title, group));
+        } else {
+          const titleEl = document.getElementById("preview-title");
+          if (titleEl) titleEl.textContent = title;
+          const eyebrowEl = document.getElementById("preview-eyebrow");
+          if (eyebrowEl) eyebrowEl.textContent = group + " · Preview only";
+        }
       }
 
       function navigateTo(href) {
@@ -1477,6 +1924,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
             hint: d.group,
             run: () => navigateTo(d.href),
           })),
+          { label: "Sign in — Keycloak 26 OIDC + Passkey (/signin)", hint: "Auth", run: () => navigateTo("/signin") },
+          { label: "Create an account — Keycloak Registration (/signup)", hint: "Auth", run: () => navigateTo("/signup") },
           { label: "Open Taxpayer MainChat (/en)", hint: "Surface", run: () => window.location.assign(PUBLIC_ASSISTANT_URL) },
           { label: "Preview persona: Administrator", hint: "Preview", run: () => setPreviewPersona("ssra_admin") },
           { label: "Preview persona: Tax Agent", hint: "Preview", run: () => setPreviewPersona("ssra_staff") },

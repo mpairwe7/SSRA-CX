@@ -347,5 +347,6 @@ export * from "./admin-workbench.js";
 export * from "./auditor-workbench.js";
 export * from "./dashboards.js";
 export * from "./document-inspection.js";
+export * from "./oidc-keycloak.js";
 export * from "./roles-and-audit.js";
 export * from "./staff-workbench.js";

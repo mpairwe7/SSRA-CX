@@ -16,6 +16,7 @@ import hmac
 import threading
 from datetime import datetime, timedelta
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field
 from ssra_core import McpErrorCode, SSRAError, new_id, utc_now
@@ -45,6 +46,24 @@ REQUIRED_KEYCLOAK_CLIENTS: frozenset[str] = frozenset(
         "mcp-notifications",
     }
 )
+
+
+def _is_valid_bff_uri(uri: Any, *, expected_paths: tuple[str, ...]) -> bool:
+    if not isinstance(uri, str) or "*" in uri:
+        return False
+    parsed = urlparse(uri)
+    return (
+        parsed.username is None
+        and parsed.password is None
+        and parsed.path in expected_paths
+        and not parsed.query
+        and not parsed.fragment
+        and bool(parsed.hostname)
+        and (
+            parsed.scheme == "https"
+            or (parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost"})
+        )
+    )
 
 
 def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
@@ -101,9 +120,23 @@ def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
         dpop_client = client_map[dpop_cid]
         dpop_attrs = dpop_client.get("attributes", {})
         is_interactive_bff = dpop_cid in ("ssra-web-bff", "ssra-staff-console")
+        redirect_uris = dpop_client.get("redirectUris", [])
+        web_origins = dpop_client.get("webOrigins", [])
+        redirect_ok = not is_interactive_bff or (
+            isinstance(redirect_uris, list)
+            and bool(redirect_uris)
+            and all(
+                _is_valid_bff_uri(u, expected_paths=("/signin/callback",)) for u in redirect_uris
+            )
+            and isinstance(web_origins, list)
+            and bool(web_origins)
+            and all(_is_valid_bff_uri(o, expected_paths=("", "/")) for o in web_origins)
+            and bool(str(dpop_attrs.get("post.logout.redirect.uris") or "").strip())
+        )
         bcl_url_ok = not is_interactive_bff or (
             dpop_client.get("frontchannelLogout") is False
             and bool(str(dpop_attrs.get("backchannel.logout.url") or "").strip())
+            and redirect_ok
         )
         dpop_ok = (
             dpop_attrs.get("oauth2.dpop.bound.access.tokens") == "true"
@@ -129,6 +162,23 @@ def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
         raise SSRAError(
             McpErrorCode.VALIDATION_FAILED,
             "Keycloak identityProviders must enforce trustEmail=False (CVE-2026-14781) and validateSignature='true' (CVE-2026-18569)",
+            status_code=400,
+        )
+    scope_mappings = realm_data.get("scopeMappings", [])
+    console_scope_roles: set[str] = set()
+    if isinstance(scope_mappings, list):
+        for sm in scope_mappings:
+            if (
+                isinstance(sm, dict)
+                and (sm.get("client") or sm.get("clientId")) == "ssra-staff-console"
+            ):
+                roles_list = sm.get("roles", [])
+                if isinstance(roles_list, list):
+                    console_scope_roles.update(str(r) for r in roles_list)
+    if not {"ssra_staff", "ssra_admin", "ssra_auditor"}.issubset(console_scope_roles):
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            "Keycloak realm scopeMappings for 'ssra-staff-console' must allow ssra_staff, ssra_admin, and ssra_auditor roles",
             status_code=400,
         )
     events_ok = (

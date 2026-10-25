@@ -58,6 +58,26 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
   await page.getByRole("menuitemradio", { name: "Tax agent view (preview)" }).click();
   await expect(main.getByRole("heading", { name: "My queue & Copilot" })).toBeVisible();
   await expect(page.locator("#acct-display-name")).toHaveText("Tax agent preview");
+
+  // Sign-in (/signin), Sign-up (/signup), and Callback (/signin/callback) Keycloak 26 OIDC + Passkey flows
+  await page.locator("#ops-header-signin-link").click();
+  await expect(main.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
+  await page.getByTestId("keycloak-signin-btn").click();
+  await expect(page.locator("#signin-status-banner")).toContainText(
+    "https://sso.ssra.gov.ss/realms/ssra/protocol/openid-connect/auth",
+  );
+  await expect(page.locator("#signin-status-banner")).toContainText(
+    "acr_values=urn%3Assra%3Aacr%3Apasskey",
+  );
+
+  await page.getByTestId("signin-different-account").click();
+  await expect(page.locator("#signin-status-banner")).toContainText("prompt=login");
+
+  await main.getByRole("link", { name: "Create one" }).click();
+  await expect(main.getByRole("heading", { level: 1, name: "Create an account" })).toBeVisible();
+  await page.getByTestId("keycloak-signup-btn").click();
+  await expect(page.locator("#signup-status-banner")).toContainText("prompt=create");
+  await expect(page.locator("#signup-status-banner")).toContainText("screen_hint=signup");
 });
 
 test("the staff dashboard mobile rail returns focus after Escape", async ({ page }) => {

@@ -140,7 +140,7 @@ def main() -> None:
     import re
 
     icons_src = (ROOT / "packages" / "ui" / "icons.js").read_text(encoding="utf-8")
-    emoji_re = re.compile(r"[\U0001F300-\U0001FAFF\U0001F1E6-\U0001F1FF]")
+    emoji_re = re.compile(r"[\U0001F300-\U0001FAFF\U0001F1E6-\U0001F1FF\u2600-\u27BF\u2190-\u21FF]")
     assert (
         '<svg class="ui-icon"' in icons_src
         and "ICONS." in web_srv_src
