@@ -801,12 +801,18 @@ function renderPwaShellHtml(locale, nonce) {
     .call-ctl--hangup { background: rgba(251, 113, 133, 0.2); border-color: var(--danger); color: var(--danger); }
     .call-orb-wrap { width: 76px; height: 60px; display: flex; align-items: center; justify-content: center; flex: none; }
     .call-orb { position: relative; width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: transform 0.08s linear; }
-    .call-orb-core { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 28%, rgba(249, 199, 79, 0.55), transparent 42%), radial-gradient(circle at 60% 65%, #0F47AF, #078930 78%); box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.18); }
+    .call-orb::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.14); pointer-events: none; }
+    :root[data-theme="light"] .call-orb::after { border-color: rgba(0, 48, 135, 0.18); }
+    .call-orb-core { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 28%, rgba(249, 199, 79, 0.55), transparent 42%), radial-gradient(circle at 60% 65%, #0F47AF, #078930 78%); box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.18); transition: background 0.2s ease, filter 0.2s ease; }
     .call-orb-halo { position: absolute; inset: -12px; border-radius: 50%; background: radial-gradient(circle, rgba(15, 71, 175, 0.42), transparent 68%); opacity: 0.25; pointer-events: none; transition: opacity 0.08s linear; }
-    .call-orb[data-mode="listening"] .call-orb-core { background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.5), transparent 42%), radial-gradient(circle at 60% 65%, #2ECC71, #078930 74%); }
-    .call-orb[data-mode="listening"] .call-orb-halo { background: radial-gradient(circle, rgba(46, 204, 113, 0.45), transparent 68%); opacity: 0.65; }
+    .call-orb[data-mode="listening"] .call-orb-core, .call-orb[data-state="listening"] .call-orb-core { background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.5), transparent 42%), radial-gradient(circle at 60% 65%, #2ECC71, #078930 74%); }
+    .call-orb[data-mode="listening"] .call-orb-halo, .call-orb[data-state="listening"] .call-orb-halo { background: radial-gradient(circle, rgba(46, 204, 113, 0.45), transparent 68%); opacity: 0.65; }
     .call-orb[data-mode="thinking"] .call-orb-core { background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.45), transparent 42%), radial-gradient(circle at 60% 65%, #FCDD09, #D97706 76%); }
     .call-orb[data-mode="thinking"] .call-orb-halo { background: radial-gradient(circle, rgba(252, 221, 9, 0.48), transparent 68%); opacity: 0.72; }
+    .call-orb[data-state="thinking"]::after { inset: -4px; border: 2px solid transparent; border-top-color: var(--ssra-gold, #FCDD09); border-right-color: rgba(252, 221, 9, 0.45); animation: callOrbSpin 1.1s linear infinite; }
+    @keyframes callOrbSpin { to { transform: rotate(360deg); } }
+    .call-orb[data-state="idle"] .call-orb-core { filter: saturate(0.55) brightness(0.92); }
+    .call-orb[data-state="idle"] .call-orb-halo { opacity: 0.12; }
     .call-orb[data-mode="speaking"] { transform: scale(1.1); }
     .call-orb[data-mode="speaking"] .call-orb-halo { opacity: 0.85; }
     .call-orb[data-mode="idle"], .call-orb[data-mode="thinking"] { animation: orbPulse 2.8s ease-in-out infinite; }
@@ -817,8 +823,13 @@ function renderPwaShellHtml(locale, nonce) {
     .call-text-input { flex: 1; min-width: 0; min-height: 38px; padding: 0.35rem 0.65rem; border-radius: 10px; border: 1px solid var(--border-2); background: var(--surface-1); color: var(--text-0); font: inherit; font-size: 0.84rem; }
     .call-text-send { min-height: 38px; padding: 0 0.85rem; border-radius: 10px; border: none; background: var(--grad-primary); color: #fff; font: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
     @keyframes orbPulse { 0%, 100% { transform: scale(0.97); } 50% { transform: scale(1.03); } }
+    @media (max-width: 720px) {
+      .composer-dock .voice-dock, .composer-dock .narration-bar { pointer-events: auto; }
+      .voice-dock { border-radius: 20px; }
+    }
     @media (prefers-reduced-motion: reduce) {
-      .call-orb, .call-orb[data-mode="idle"], .call-orb[data-mode="thinking"], .call-orb[data-mode="speaking"], .call-status-pill[data-status="ai"] .call-status-dot, .composer-rec-dot { animation: none; transform: none; transition: none; }
+      .call-orb, .call-orb[data-mode="idle"], .call-orb[data-mode="thinking"], .call-orb[data-mode="speaking"], .call-status-pill[data-status="ai"] .call-status-dot, .composer-rec-dot, .voice-dock, .voice-dock-btn { animation: none; transform: none; transition: none; }
+      .call-orb[data-state="thinking"]::after { animation: none; border-style: dashed; border-color: var(--ssra-gold, #FCDD09); }
     }
 
     .search-modal { max-width: 540px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
@@ -4456,6 +4467,7 @@ function renderPwaShellHtml(locale, nonce) {
           callOrbEl.setAttribute("data-mode", orbMode);
         }
         const voiceDockEl = document.getElementById("voice-mode-dock");
+        const voiceDockSrEl = document.getElementById("voice-dock-sr");
         const voiceDockOrbEl = document.getElementById("voice-dock-orb");
         const voiceDockLabelEl = document.getElementById("voice-dock-label");
         const voiceDockDetailEl = document.getElementById("voice-dock-detail");
@@ -4480,19 +4492,29 @@ function renderPwaShellHtml(locale, nonce) {
             voiceDockOrbEl.setAttribute("data-mode", orbMode);
             voiceDockOrbEl.setAttribute("data-state", orbMode);
           }
+          const dockLabelText =
+            dockPhase === "paused"
+              ? "Paused"
+              : dockPhase === "speaking"
+                ? "Speaking"
+                : dockPhase === "thinking"
+                  ? "Working on your answer…"
+                  : dockPhase === "listening"
+                    ? lastHeardVoiceTranscript
+                      ? "Hearing you…"
+                      : "Listening"
+                    : "Tap the mic to talk";
           if (voiceDockLabelEl) {
-            voiceDockLabelEl.textContent =
-              dockPhase === "paused"
-                ? "Paused"
-                : dockPhase === "speaking"
-                  ? "Speaking"
-                  : dockPhase === "thinking"
-                    ? "Working on your answer…"
-                    : dockPhase === "listening"
-                      ? lastHeardVoiceTranscript
-                        ? "Hearing you…"
-                        : "Listening"
-                      : "Tap the mic to talk";
+            voiceDockLabelEl.textContent = dockLabelText;
+          }
+          if (voiceDockSrEl) {
+            // WCAG 2.2 SC 4.1.3 (VoiceModeDock.tsx lines 190-199): never announce while mic is open so screen reader isn't recorded.
+            voiceDockSrEl.textContent =
+              !showDock || dockPhase === "listening" || dockPhase === "speaking"
+                ? ""
+                : dockPhase === "thinking"
+                  ? "Working on your answer…"
+                  : dockLabelText;
           }
           if (voiceDockDetailEl) {
             const isReadingPhase = dockPhase === "speaking" || dockPhase === "paused";
@@ -4743,6 +4765,9 @@ function renderPwaShellHtml(locale, nonce) {
         }
         voiceConsecutiveEmptyRetries = 0;
         startVoiceRecognition({ continuousLoop: true });
+        window.requestAnimationFrame(() => {
+          document.getElementById("voice-dock-primary")?.focus({ preventScroll: true });
+        });
       });
 
       document.getElementById("voice-dock-end")?.addEventListener("click", () => {
