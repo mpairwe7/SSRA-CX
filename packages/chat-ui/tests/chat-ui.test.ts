@@ -852,12 +852,21 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
 
     expect(structureCallReceptionistBlocks("")).toHaveLength(0);
     const callBlocks = structureCallReceptionistBlocks(
-      "To register for a TIN: 1. Open https://etax.nra.gov.ss/. 2. Upload your ID.\n\nKeep your receipt.",
+      "To register for a TIN: 1. **Open** https://etax.nra.gov.ss/. ٢. Upload your ID.\nKeep your receipt.\n\nRelated questions: BPT",
     );
     expect(callBlocks).toHaveLength(3);
     expect(callBlocks[0]?.kind).toBe("paragraph");
     expect(callBlocks[1]?.kind).toBe("numbered_list");
     expect(callBlocks[2]?.kind).toBe("paragraph");
+    expect(
+      cleanMarkdownForSpeech(
+        "١. قم بزيارة <https://etax.nra.gov.ss/>، أو راسل help_1-a+b@nra.gov.ss في P.O. Box 12 بموجب Sec. 18.",
+        "ar",
+      ),
+    ).toContain("الخطوة 1:");
+    expect(cleanMarkdownForSpeech("1. Shuf P.O. Box 12 wa Sec. 18.", "pga")).toContain(
+      "Sandug Barid 1 2",
+    );
 
     expect(Object.keys(SSRA_VOICE_SPEAKER_CATALOG)).toHaveLength(8);
     expect(Object.keys(SSRA_VOICE_SAMPLES)).toHaveLength(8);

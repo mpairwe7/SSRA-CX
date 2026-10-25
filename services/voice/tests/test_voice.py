@@ -1731,6 +1731,36 @@ def test_multilingual_contact_url_pronunciation_and_receptionist_structuring() -
     short_turn = session.prepare_spoken_answer("Your return is filed on https://etax.nra.gov.ss/.")
     assert short_turn == "Your return is filed on e-tax dot n r a dot gov dot s s."
 
+    # Arabic punctuation around .gov.ss URLs, Arabic email symbols, P.O. Box, Section/Article & structure_receptionist_answer_blocks
+    from ssra_voice import structure_receptionist_answer_blocks
+
+    assert structure_receptionist_answer_blocks("") == []
+    ar_rich = clean_text_for_speech(
+        "١. قم بزيارة <https://etax.nra.gov.ss/>، أو راسل help_desk-1+tax@nra.gov.ss.\n"
+        "٢. راجع TIN 100-200-1234 في P.O. Box 456 بموجب Sec. 18 و Art. 12 (Part-IV-Sec-18).",
+        locale=LocaleCode.AR,
+    )
+    assert "الخطوة 1: قم بزيارة إي تاكس دوت إن آر إيه دوت جوف دوت إس إس" in ar_rich
+    assert "help شرطة سفلية desk شرطة 1 زائد tax آت إن آر إيه دوت جوف دوت إس إس" in ar_rich
+    assert "الرقم الضريبي 1 0 0, 2 0 0, 1 2 3 4" in ar_rich
+    assert "صندوق بريد 4 5 6" in ar_rich
+    assert "المادة 18" in ar_rich
+    assert "المادة 12" in ar_rich
+    assert "الجزء IV، المادة 18" in ar_rich
+
+    pga_rich = clean_text_for_speech("1. Shuf P.O. Box 12 wa Sec. 18.", locale=LocaleCode.PGA)
+    assert "Sandug Barid 1 2" in pga_rich
+    assert "Madda 18" in pga_rich
+
+    rec_blocks = structure_receptionist_answer_blocks(
+        "To register: 1. **Open** https://etax.nra.gov.ss/; 2. **Upload** ID.\nNote: keep your receipt.\n\nRelated questions: BPT?"
+    )
+    assert len(rec_blocks) == 3
+    assert rec_blocks[0].kind == "paragraph"
+    assert rec_blocks[1].kind == "numbered_list"
+    assert rec_blocks[1].items == ((1, "Open https://etax.nra.gov.ss/;"), (2, "Upload ID."))
+    assert rec_blocks[2].text == "Note: keep your receipt."
+
     # Voice Speaker & Regional Dialect profiles across all 8 South Sudan languages
     from ssra_voice import (
         TTS_SPEAKER_PROFILES,
