@@ -289,7 +289,13 @@ function resolvePublicAssistantUrl(publicWebOrigin) {
 }
 
 // Rendered on the server so the preview state is readable without JavaScript.
-function renderPreviewCard(title, group = "Work", publicAssistantUrl = "http://127.0.0.1:3000/en") {
+function renderPreviewCard(
+  title,
+  group = "Work",
+  publicAssistantUrl = "http://127.0.0.1:3000/en",
+  routePath = "/admin",
+) {
+  const spec = ROUTE_SPECS[routePath] || ROUTE_SPECS["/admin"];
   return `<header class="ops-page-head">
           <div>
             <span id="preview-eyebrow" class="ops-eyebrow">${escapeHtml(group)} · Preview only</span>
@@ -392,10 +398,10 @@ function renderPreviewCard(title, group = "Work", publicAssistantUrl = "http://1
               </div>
               <div class="ops-panel-body">
                 <dl class="ov-kv">
-                  <div><dt>Permitted roles</dt><dd id="spec-roles">ssra_admin, ssra_auditor</dd></div>
-                  <div><dt>Standard anchor</dt><dd id="spec-standard">ISO/IEC 42001 §9.1 · ADR-012</dd></div>
-                  <div><dt>Workbench surface</dt><dd id="spec-surface">Service levels, officers on duty &amp; answer authority</dd></div>
-                  <div><dt>Fail-closed gate</dt><dd id="spec-gate">Server-verified passkey session + freshness provenance</dd></div>
+                  <div><dt>Permitted roles</dt><dd id="spec-roles">${escapeHtml(spec.roles)}</dd></div>
+                  <div><dt>Standard anchor</dt><dd id="spec-standard">${escapeHtml(spec.standard)}</dd></div>
+                  <div><dt>Workbench surface</dt><dd id="spec-surface">${escapeHtml(spec.surface)}</dd></div>
+                  <div><dt>Fail-closed gate</dt><dd id="spec-gate">${escapeHtml(spec.gate)}</dd></div>
                 </dl>
               </div>
             </section>
@@ -546,7 +552,7 @@ function renderRouteBody(currentPath, currentTitle, currentGroup, publicAssistan
   if (currentPath === "/signin") return renderSignInCard(publicAssistantUrl);
   if (currentPath === "/signup") return renderSignUpCard(publicAssistantUrl);
   if (currentPath === "/signin/callback") return renderSignInCallbackCard(publicAssistantUrl);
-  return renderPreviewCard(currentTitle, currentGroup, publicAssistantUrl);
+  return renderPreviewCard(currentTitle, currentGroup, publicAssistantUrl, currentPath);
 }
 
 export function isOpsDashboardPath(pathname) {
@@ -1658,6 +1664,16 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           .replace(/__GROUP__/g, escapeHtml(group));
       }
 
+      function timingSafeEqualStr(a, b) {
+        if (typeof a !== "string" || typeof b !== "string") return false;
+        const len = Math.max(a.length, b.length);
+        let diff = a.length ^ b.length;
+        for (let i = 0; i < len; i++) {
+          diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+        }
+        return diff === 0;
+      }
+
       let lastCallbackOutcome = null;
 
       function wireAuthViewInteractions() {
@@ -1751,11 +1767,13 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 
         if (state.route === "/signin/callback") {
           const cbBanner = document.getElementById("callback-status-banner");
-          if (!lastCallbackOutcome || lastCallbackOutcome.search !== window.location.search) {
-            const params = new URLSearchParams(window.location.search);
+          if (!lastCallbackOutcome) {
+            const rawSearch = window.location.search;
+            const params = new URLSearchParams(rawSearch);
             const err = params.get("error");
             const code = params.get("code");
             const st = params.get("state");
+            const iss = params.get("iss");
             let expectedState = null;
             let verifier = null;
             try {
@@ -1765,33 +1783,40 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
               sessionStorage.removeItem("ssra_pkce_verifier");
               sessionStorage.removeItem("ssra_oidc_nonce");
             } catch {}
+            if (rawSearch) {
+              try {
+                window.history.replaceState({}, "", "/signin/callback");
+              } catch {}
+            }
+            const cleanIss = iss ? iss.trim().replace(/\\/+$/, "") : null;
+            const expectedIss = "https://sso.ssra.gov.ss/realms/ssra";
             if (err) {
               lastCallbackOutcome = {
-                search: window.location.search,
                 ok: false,
                 text: err + ": " + (params.get("error_description") || "the identity provider refused the request"),
               };
             } else if (!code) {
               lastCallbackOutcome = {
-                search: window.location.search,
                 ok: false,
                 text: "The identity provider returned no authorization code.",
               };
-            } else if (!st || !expectedState || st !== expectedState) {
+            } else if (!st || !expectedState || !timingSafeEqualStr(st, expectedState)) {
               lastCallbackOutcome = {
-                search: window.location.search,
                 ok: false,
                 text: "State mismatch — this sign-in did not start in this browser tab. Start again from /signin.",
               };
-            } else if (!verifier || verifier.length < 43) {
+            } else if (cleanIss !== null && !timingSafeEqualStr(cleanIss, expectedIss)) {
               lastCallbackOutcome = {
-                search: window.location.search,
+                ok: false,
+                text: "Issuer mismatch (RFC 9207) — callback issuer does not match the configured SSRA Keycloak realm.",
+              };
+            } else if (!verifier || !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier)) {
+              lastCallbackOutcome = {
                 ok: false,
                 text: "The PKCE S256 code_verifier is missing. Start the sign-in again from /signin.",
               };
             } else {
               lastCallbackOutcome = {
-                search: window.location.search,
                 ok: true,
                 text: "Keycloak PKCE S256 & CSRF state verified. Server-side token exchange requires live Keycloak connectivity (OQ-005 / OQ-014).",
               };

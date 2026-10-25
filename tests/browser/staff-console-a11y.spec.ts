@@ -84,6 +84,7 @@ test("the preview state is rendered without JavaScript and claims no live capabi
     await page.goto(`${consoleBaseUrl}/analytics`);
     await expect(page.getByRole("heading", { level: 1, name: "Analytics & CX Scorecard" })).toBeVisible();
     await expect(page.locator("#staff-main")).toContainText("not connected to an authenticated staff session");
+    await expect(page.locator("#spec-standard")).toContainText("OpenSLO v1");
     await expect(page).toHaveTitle("SSRA Operations Console Preview — Analytics & CX Scorecard");
     const html = await page.content();
     expect(html).not.toMatch(/AI phone receptionist|served right now|Merkle seal proof|blurb/);

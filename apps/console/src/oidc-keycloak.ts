@@ -81,6 +81,23 @@ export function looksLikeJwt(token: string): boolean {
   );
 }
 
+const PKCE_CHALLENGE_B64URL_RE = /^[A-Za-z0-9_-]{43,128}$/;
+const PKCE_VERIFIER_RFC7636_RE = /^[A-Za-z0-9._~-]{43,128}$/;
+const OPAQUE_TOKEN_NO_SPACE_RE = /^[\x21-\x7E]{32,256}$/;
+
+/**
+ * Constant-time string comparison (mitigates CWE-208 timing side-channels on OAuth `state`, `nonce`, and PKCE checks per GHSA-xpv3-w29h-x7cv).
+ */
+export function timingSafeEqualStrings(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const len = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < len; i++) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diff === 0;
+}
+
 function hasAsciiControlChar(value: string): boolean {
   for (let i = 0; i < value.length; i++) {
     const code = value.charCodeAt(i);
@@ -226,11 +243,23 @@ export function buildKeycloakAuthorizationUrl(params: BuildKeycloakAuthUrlParams
   readonly acrValues: string | null;
 } {
   const safeRedirectUri = validateOidcRedirectUri(params.redirectUri);
-  if (!params.codeChallenge || params.codeChallenge.trim().length < 43) {
-    throw new Error("PKCE S256 code_challenge must be at least 43 base64url characters");
+  const cleanChallenge = (params.codeChallenge || "").trim();
+  if (!PKCE_CHALLENGE_B64URL_RE.test(cleanChallenge)) {
+    throw new Error(
+      "PKCE S256 code_challenge must be 43..128 base64url characters without padding",
+    );
   }
-  if (!params.state || params.state.trim().length < 32) {
-    throw new Error("OIDC CSRF state parameter must be at least 32 characters");
+  const cleanState = (params.state || "").trim();
+  if (!OPAQUE_TOKEN_NO_SPACE_RE.test(cleanState)) {
+    throw new Error("OIDC CSRF state parameter must be 32..256 printable ASCII characters");
+  }
+  const cleanNonce = params.nonce?.trim();
+  if (
+    cleanNonce !== undefined &&
+    cleanNonce.length > 0 &&
+    !OPAQUE_TOKEN_NO_SPACE_RE.test(cleanNonce)
+  ) {
+    throw new Error("OIDC nonce parameter must be 32..256 printable ASCII characters");
   }
   const endpoints = buildKeycloakOidcEndpoints(
     params.issuer ?? KEYCLOAK_CONSOLE_OIDC_CONFIG.issuer,
@@ -279,6 +308,8 @@ export interface OidcCallbackValidationInput {
   readonly state?: string | null | undefined;
   readonly expectedState?: string | null | undefined;
   readonly pkceVerifier?: string | null | undefined;
+  readonly iss?: string | null | undefined;
+  readonly expectedIssuer?: string | null | undefined;
   readonly error?: string | null | undefined;
   readonly errorDescription?: string | null | undefined;
   readonly resolvedRole?: string | null | undefined;
@@ -295,7 +326,8 @@ export interface OidcCallbackValidationResult {
 }
 
 /**
- * Validate OIDC `/signin/callback` query parameters against stored CSRF `state` and RFC 7636 PKCE `code_verifier`,
+ * Validate OIDC `/signin/callback` query parameters against stored CSRF `state` (constant-time),
+ * RFC 9207 `iss` (OAuth Mix-Up defense), and RFC 7636 PKCE `code_verifier`,
  * and resolve the role-scoped dashboard landing route (`/admin`, `/agent`, `/analytics`, or `/en`).
  */
 export function validateOidcCallbackParams(
@@ -322,10 +354,12 @@ export function validateOidcCallbackParams(
       allowedDestinations: [],
     };
   }
+  const cleanState = input.state?.trim() ?? "";
+  const cleanExpectedState = input.expectedState?.trim() ?? "";
   if (
-    !input.state?.trim() ||
-    !input.expectedState?.trim() ||
-    input.state.trim() !== input.expectedState.trim()
+    !cleanState ||
+    !cleanExpectedState ||
+    !timingSafeEqualStrings(cleanState, cleanExpectedState)
   ) {
     return {
       valid: false,
@@ -337,8 +371,25 @@ export function validateOidcCallbackParams(
       allowedDestinations: [],
     };
   }
+  if (input.iss !== undefined && input.iss !== null) {
+    const cleanIss = input.iss.trim().replace(/\/+$/, "");
+    const expectedIss = (input.expectedIssuer ?? KEYCLOAK_CONSOLE_OIDC_CONFIG.issuer)
+      .trim()
+      .replace(/\/+$/, "");
+    if (!cleanIss || !timingSafeEqualStrings(cleanIss, expectedIss)) {
+      return {
+        valid: false,
+        phase: "error",
+        errorReason: "RFC9207_ISSUER_MISMATCH",
+        detailMessage:
+          "Issuer mismatch (RFC 9207) — callback issuer does not match the configured SSRA Keycloak realm.",
+        targetPath: "/signin",
+        allowedDestinations: [],
+      };
+    }
+  }
   const verifier = input.pkceVerifier?.trim() ?? "";
-  if (verifier.length < 43 || verifier.length > 128) {
+  if (!PKCE_VERIFIER_RFC7636_RE.test(verifier)) {
     return {
       valid: false,
       phase: "error",

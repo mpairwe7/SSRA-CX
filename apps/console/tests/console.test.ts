@@ -54,6 +54,7 @@ import {
   staffDestinationsFor,
   staffLandingPath,
   ticketRef,
+  timingSafeEqualStrings,
   toDelta,
   validateAdminAnswerOverride,
   validateCopilotDraftApproval,
@@ -1040,5 +1041,29 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     );
     expect(() => validateOidcRedirectUri("http://evil.example.com/signin/callback")).toThrow();
     expect(() => validateOidcRedirectUri("https://console.ssra.gov.ss/other")).toThrow();
+    expect(timingSafeEqualStrings("abc123", "abc123")).toBe(true);
+    expect(timingSafeEqualStrings("abc123", "abc124")).toBe(false);
+    expect(timingSafeEqualStrings("short", "longer_string")).toBe(false);
+
+    // RFC 9207 OAuth Mix-Up Attack detection on callback iss parameter
+    expect(
+      validateOidcCallbackParams({
+        code: "auth_code_1",
+        state: "s".repeat(32),
+        expectedState: "s".repeat(32),
+        pkceVerifier: "v".repeat(64),
+        iss: "https://evil-idp.example.com/realms/ssra",
+      }).errorReason,
+    ).toBe("RFC9207_ISSUER_MISMATCH");
+
+    expect(
+      validateOidcCallbackParams({
+        code: "auth_code_1",
+        state: "s".repeat(32),
+        expectedState: "s".repeat(32),
+        pkceVerifier: "v".repeat(64),
+        iss: "https://sso.ssra.gov.ss/realms/ssra/",
+      }).valid,
+    ).toBe(true);
   });
 });
