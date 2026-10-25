@@ -974,6 +974,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 
     .mobile-nav-btn { display: none; }
     .ops-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 25; }
+    @media (pointer: coarse), (max-width: 820px) {
+      .staff-rail-pin, .ops-cmdk-trigger, .ops-btn, .staff-acct-trigger, .staff-acct-item, .staff-rail a.nav-item {
+        min-height: 44px;
+      }
+      .staff-rail-pin { min-width: 44px; }
+    }
     @media (max-width: 820px) {
       .staff-shell { --rail-w: 0px !important; }
       .staff-rail { transform: translateX(-100%); visibility: hidden; width: min(240px, 84vw) !important; transition: transform var(--ops-dur-base) var(--ops-ease), visibility 0s linear var(--ops-dur-base); }
@@ -1153,9 +1159,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       const PUBLIC_ASSISTANT_URL = ${JSON.stringify(publicAssistantUrl)};
 
       const ROLE_META = {
-        ssra_admin: { initials: "P", name: "Preview persona", label: "Not signed in · preview only" },
-        ssra_staff: { initials: "P", name: "Preview persona", label: "Not signed in · preview only" },
-        ssra_auditor: { initials: "P", name: "Preview persona", label: "Not signed in · preview only" },
+        ssra_admin: { initials: "P", name: "Administrator preview", label: "Not signed in · preview only", landing: "/admin" },
+        ssra_staff: { initials: "P", name: "Tax agent preview", label: "Not signed in · preview only", landing: "/agent" },
+        ssra_auditor: { initials: "P", name: "Auditor preview (read-only)", label: "Not signed in · preview only", landing: "/analytics" },
       };
 
       const mainEl = document.getElementById("staff-main");
@@ -1229,6 +1235,11 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
             setSafeHtml(checkSpan, isSelected ? ICONS.check : "");
           }
         });
+        const roleMeta = ROLE_META[state.role] || ROLE_META.ssra_admin;
+        const acctNameEl = document.getElementById("acct-display-name");
+        const acctRoleEl = document.getElementById("acct-role-label");
+        if (acctNameEl) acctNameEl.textContent = roleMeta.name;
+        if (acctRoleEl) acctRoleEl.textContent = roleMeta.label;
         document.querySelectorAll("[data-set-theme]").forEach((btn) => {
           const isSelected = btn.getAttribute("data-set-theme") === state.theme;
           btn.setAttribute("aria-checked", String(isSelected));
@@ -1397,6 +1408,11 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       function setPreviewPersona(role) {
         state.role = ROLE_META[role] ? role : "ssra_admin";
         writeUiPreference("ssra-ops-preview-persona", state.role);
+        const currentDest = DESTINATIONS.find((d) => d.href === state.route);
+        if (!currentDest || !currentDest.roles.includes(state.role)) {
+          state.route = ROLE_META[state.role]?.landing || "/admin";
+          try { window.history.replaceState({}, "", state.route); } catch {}
+        }
         renderCurrentRoute();
       }
       acctTrigger?.addEventListener("click", (e) => {

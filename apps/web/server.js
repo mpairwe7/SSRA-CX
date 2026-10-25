@@ -375,11 +375,13 @@ function renderPwaShellHtml(locale, nonce) {
     .skip-link:focus { top: 10px; }
 
     /* App Shell Grid & Hover-Peek (chatv2/shell.css pattern) */
-    .app-shell { display: grid; grid-template-columns: var(--cv2-rail, 300px) minmax(0, 1fr); height: 100dvh; width: 100%; transition: grid-template-columns 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+    .app-shell { display: grid; grid-template-columns: var(--cv2-rail, 300px) minmax(0, 1fr); height: 100dvh; width: 100%; }
     .rail-hotzone { display: none; }
     @media (min-width: 961px) {
+      .app-shell[data-sidebar="open"] #header-rail-btn { display: none; }
       .app-shell[data-sidebar="collapsed"] { --cv2-rail: 0px; grid-template-columns: 0px minmax(0, 1fr); }
       .app-shell[data-sidebar="collapsed"]:not([data-rail-peek="true"]) .rail-wrap { visibility: hidden; pointer-events: none; border-inline-end-width: 0; }
+      .rail-top, .rail-new-btn, .rail-list, .rail-footer { min-width: 276px; }
     }
     @media (min-width: 961px) and (hover: hover) {
       .app-shell[data-sidebar="collapsed"] .rail-hotzone {
@@ -389,6 +391,8 @@ function renderPwaShellHtml(locale, nonce) {
         position: fixed; inset: 0 auto 0 0; width: 300px; z-index: 55; visibility: visible; pointer-events: auto;
         box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32); animation: railPeekIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
       }
+      .app-shell[data-sidebar="collapsed"][data-rail-peek="true"] .rail-brand { display: none; }
+      .app-shell[data-sidebar="collapsed"][data-rail-peek="true"] .rail-top-actions { margin-inline-start: 0; }
       :root[dir="rtl"] .app-shell[data-sidebar="collapsed"][data-rail-peek="true"] .rail-wrap {
         inset: 0 0 0 auto; animation: railPeekInRtl 0.2s cubic-bezier(0.22, 1, 0.36, 1);
       }
@@ -902,8 +906,8 @@ function renderPwaShellHtml(locale, nonce) {
           </div>
         </div>
         <div class="rail-top-actions">
+          <button type="button" id="rail-collapse-btn" class="rail-icon-btn" title="Collapse sidebar  Ctrl+B" aria-label="Collapse conversations sidebar" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
           <button type="button" id="rail-search-btn" class="rail-icon-btn" title="Search conversations (Ctrl+K)" aria-label="Search conversations">${ICONS.search}</button>
-          <button type="button" id="rail-collapse-btn" class="rail-icon-btn" title="Collapse sidebar" aria-label="Collapse conversations sidebar" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
         </div>
       </div>
 
@@ -941,7 +945,7 @@ function renderPwaShellHtml(locale, nonce) {
     <div class="app-main-col">
       <header class="chat-header hdrv2">
         <div class="header-left">
-          <button type="button" id="header-rail-btn" class="top-bar-icon-btn icon-btn" aria-label="Open conversations" aria-expanded="false" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
+          <button type="button" id="header-rail-btn" class="top-bar-icon-btn icon-btn hdrv2-collapse" aria-label="Open conversations" title="Open sidebar  Ctrl+B" aria-expanded="false" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
           <span id="active-conv-title" class="active-conv-title is-hidden" dir="auto"></span>
           <span id="net-status-badge" class="status-badge is-hidden" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="net-status-text"></span></span>
         </div>
@@ -2879,11 +2883,33 @@ function renderPwaShellHtml(locale, nonce) {
         }
         document.querySelector(".app-main-col")?.toggleAttribute("inert", Boolean(isMobileViewport && isMobOpen));
         const headerRailBtn = document.getElementById("header-rail-btn");
+        const railCollapseBtn = document.getElementById("rail-collapse-btn");
+        const isPeeking = shell?.getAttribute("data-rail-peek") === "true";
         headerRailBtn?.setAttribute("aria-expanded", String(!isHidden));
         headerRailBtn?.setAttribute("aria-label", isHidden ? "Open conversations" : "Close conversations");
-        document.getElementById("rail-collapse-btn")?.setAttribute(
+        headerRailBtn?.setAttribute(
+          "title",
+          isMobileViewport
+            ? isHidden
+              ? "Open conversations"
+              : "Close conversations"
+            : "Open sidebar  Ctrl+B",
+        );
+        railCollapseBtn?.setAttribute(
           "aria-label",
-          isMobileViewport ? "Close conversations sidebar" : "Collapse conversations sidebar",
+          isMobileViewport
+            ? "Close conversations sidebar"
+            : isDesktopCollapsed && isPeeking
+              ? "Open conversations sidebar"
+              : "Collapse conversations sidebar",
+        );
+        railCollapseBtn?.setAttribute(
+          "title",
+          isMobileViewport
+            ? "Close conversations"
+            : isDesktopCollapsed && isPeeking
+              ? "Open sidebar  Ctrl+B"
+              : "Collapse sidebar  Ctrl+B",
         );
         if (moveFocus && isHidden) {
           focusAfterRailStateSync(headerRailBtn);
@@ -2891,17 +2917,12 @@ function renderPwaShellHtml(locale, nonce) {
           focusAfterRailStateSync(document.getElementById("new-chat-btn"));
         }
       };
-      const toggleSidebar = () => {
-        const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
-        shell?.removeAttribute("data-rail-peek");
-        if (isMobileViewport) {
-          const mob = shell?.getAttribute("data-mobile-rail");
-          shell?.setAttribute("data-mobile-rail", mob === "open" ? "closed" : "open");
-        } else {
-          const cur = shell?.getAttribute("data-sidebar");
-          shell?.setAttribute("data-sidebar", cur === "collapsed" ? "open" : "collapsed");
+      let railPeekTimer = null;
+      const clearRailPeekTimer = () => {
+        if (railPeekTimer) {
+          window.clearTimeout(railPeekTimer);
+          railPeekTimer = null;
         }
-        syncMobileRailA11y(true);
       };
       const setRailPeek = (peek) => {
         const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
@@ -2916,13 +2937,106 @@ function renderPwaShellHtml(locale, nonce) {
           shell?.removeAttribute("data-rail-peek");
           railAsideEl?.setAttribute("inert", "");
         }
+        syncMobileRailA11y(false);
       };
-      document.getElementById("rail-hotzone")?.addEventListener("mouseenter", () => setRailPeek(true));
+      const handlePeekEnter = () => {
+        const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
+        if (isMobileViewport || shell?.getAttribute("data-sidebar") !== "collapsed") return;
+        clearRailPeekTimer();
+        railPeekTimer = window.setTimeout(() => setRailPeek(true), 120);
+      };
+      const handlePeekLeave = () => {
+        clearRailPeekTimer();
+        railPeekTimer = window.setTimeout(() => setRailPeek(false), 220);
+      };
+      const toggleSidebar = () => {
+        const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
+        clearRailPeekTimer();
+        shell?.removeAttribute("data-rail-peek");
+        if (isMobileViewport) {
+          const mob = shell?.getAttribute("data-mobile-rail");
+          shell?.setAttribute("data-mobile-rail", mob === "open" ? "closed" : "open");
+        } else {
+          const cur = shell?.getAttribute("data-sidebar");
+          const next = cur === "collapsed" ? "open" : "collapsed";
+          shell?.setAttribute("data-sidebar", next);
+          try {
+            window.localStorage.setItem("ssra-rail-collapsed-v1", String(next === "collapsed"));
+          } catch {}
+        }
+        syncMobileRailA11y(true);
+      };
+      try {
+        if (window.localStorage.getItem("ssra-rail-collapsed-v1") === "true") {
+          shell?.setAttribute("data-sidebar", "collapsed");
+        }
+      } catch {}
+      const headerRailBtnEl = document.getElementById("header-rail-btn");
+      const railHotzoneEl = document.getElementById("rail-hotzone");
+      headerRailBtnEl?.addEventListener("mouseenter", handlePeekEnter);
+      headerRailBtnEl?.addEventListener("mouseleave", handlePeekLeave);
+      headerRailBtnEl?.addEventListener("focus", handlePeekEnter);
+      headerRailBtnEl?.addEventListener("blur", handlePeekLeave);
+      railHotzoneEl?.addEventListener("mouseenter", handlePeekEnter);
+      railHotzoneEl?.addEventListener("mouseleave", handlePeekLeave);
+      railAsideEl?.addEventListener("mouseenter", () => {
+        if (shell?.getAttribute("data-sidebar") === "collapsed") {
+          clearRailPeekTimer();
+          setRailPeek(true);
+        }
+      });
       railAsideEl?.addEventListener("mouseleave", () => {
-        if (shell?.getAttribute("data-rail-peek") === "true") setRailPeek(false);
+        if (shell?.getAttribute("data-rail-peek") === "true") handlePeekLeave();
       });
       document.getElementById("rail-collapse-btn")?.addEventListener("click", toggleSidebar);
-      document.getElementById("header-rail-btn")?.addEventListener("click", toggleSidebar);
+      headerRailBtnEl?.addEventListener("click", toggleSidebar);
+      // Mobile edge-swipe gesture (28px edge, 56px threshold — matching FinalYearProject page.tsx)
+      let touchSwipeStartX = 0;
+      let touchSwipeStartY = 0;
+      let touchSwipeTracking = false;
+      window.addEventListener(
+        "touchstart",
+        (e) => {
+          if (e.touches.length !== 1) return;
+          const target = e.target;
+          if (target instanceof Element && target.closest('textarea, input, [contenteditable="true"]')) return;
+          const isMobileOpen = shell?.getAttribute("data-mobile-rail") === "open";
+          const x = e.touches[0].clientX;
+          const y = e.touches[0].clientY;
+          if (isMobileOpen || x <= 28) {
+            touchSwipeTracking = true;
+            touchSwipeStartX = x;
+            touchSwipeStartY = y;
+          }
+        },
+        { passive: true },
+      );
+      window.addEventListener(
+        "touchmove",
+        (e) => {
+          if (!touchSwipeTracking || e.touches.length !== 1) return;
+          const dx = e.touches[0].clientX - touchSwipeStartX;
+          const dy = e.touches[0].clientY - touchSwipeStartY;
+          if (Math.abs(dy) > 48 && Math.abs(dy) > Math.abs(dx)) {
+            touchSwipeTracking = false;
+            return;
+          }
+          const isMobileOpen = shell?.getAttribute("data-mobile-rail") === "open";
+          if (!isMobileOpen && dx > 56) {
+            shell?.setAttribute("data-mobile-rail", "open");
+            syncMobileRailA11y(true);
+            touchSwipeTracking = false;
+          } else if (isMobileOpen && dx < -56) {
+            shell?.setAttribute("data-mobile-rail", "closed");
+            syncMobileRailA11y(true);
+            touchSwipeTracking = false;
+          }
+        },
+        { passive: true },
+      );
+      window.addEventListener("touchend", () => {
+        touchSwipeTracking = false;
+      });
       document.getElementById("rail-mobile-backdrop")?.addEventListener("click", () => {
         shell?.setAttribute("data-mobile-rail", "closed");
         syncMobileRailA11y(true);

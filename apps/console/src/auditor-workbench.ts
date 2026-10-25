@@ -5,7 +5,11 @@
  */
 
 import { type AuditVerificationReport, buildAuditorTrailIntegrityView } from "./roles-and-audit.js";
-import { buildOpsPageShell, type OpsPageShellDescriptor } from "./views.js";
+import {
+  buildOpsPageShell,
+  type OpsPageShellDescriptor,
+  resolveTelemetryProvenance,
+} from "./views.js";
 
 const HEX64_PATTERN = /^[0-9a-f]{64}$/i;
 
@@ -68,6 +72,8 @@ export interface ForensicReplayTimelineView {
 export function buildForensicReplayTimelineView(params: {
   readonly threadId: string;
   readonly turns: readonly ReconstructedTurnItem[];
+  readonly observedAtMs?: number | null | undefined;
+  readonly nowMs?: number | undefined;
 }): ForensicReplayTimelineView {
   const turnViews: ForensicReplayTurnView[] = params.turns.map((t) => {
     const shortAuditHash = HEX64_PATTERN.test(t.audit_event_hash)
@@ -108,13 +114,22 @@ export function buildForensicReplayTimelineView(params: {
         Boolean(t.knowledge_snapshot_version),
     );
   const flaggedTurnsCount = turnViews.filter((t) => t.requiresAuditorAttention).length;
+  const provenance =
+    params.turns.length === 0
+      ? "ILLUSTRATIVE_FALLBACK"
+      : params.observedAtMs !== undefined
+        ? resolveTelemetryProvenance({
+            observedAtMs: params.observedAtMs,
+            nowMs: params.nowMs,
+          })
+        : "LIVE_TELEMETRY";
 
   const shell = buildOpsPageShell({
     eyebrow: "Audit",
     title: "Forensic conversation replay",
     description:
       "Turn-by-turn reconstruction of redacted inputs, OPA policy decisions, tool artifacts, citations, and WORM hashes",
-    provenance: params.turns.length > 0 ? "LIVE_TELEMETRY" : "ILLUSTRATIVE_FALLBACK",
+    provenance,
     allMetricsPassed: allTurnsReconstructable && flaggedTurnsCount === 0,
   });
 
@@ -257,13 +272,33 @@ export function buildAuditorEvidencePackage(params: {
       bundle: null,
     };
   }
+  if (!params.snapshotVersion.trim() || params.sampledThreadIds.length === 0) {
+    return {
+      exportAllowed: false,
+      blockedReason:
+        "Audit evidence export requires a non-empty KnowledgeSnapshot version and at least one sampled conversation thread.",
+      bundle: null,
+    };
+  }
+  if (
+    !Number.isFinite(params.qaCompositeScore) ||
+    params.qaCompositeScore < 0 ||
+    params.qaCompositeScore > 1
+  ) {
+    return {
+      exportAllowed: false,
+      blockedReason:
+        "Audit evidence export requires a finite QA composite score between 0.0 and 1.0.",
+      bundle: null,
+    };
+  }
   return {
     exportAllowed: true,
     blockedReason: null,
     bundle: {
       standard: "ISO/IEC 42001:2023 + NIST AI 600-1 + EU AI Act Art. 12",
       headHash: params.auditReport.head_hash,
-      snapshotVersion: params.snapshotVersion,
+      snapshotVersion: params.snapshotVersion.trim(),
       sampledThreadIds: [...params.sampledThreadIds],
       qaCompositeScore: params.qaCompositeScore,
     },

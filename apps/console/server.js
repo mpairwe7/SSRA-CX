@@ -218,22 +218,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (pathname === "/api/scorecard") {
-    denyStaffApi(res, secHeaders);
-    return;
-  }
-
-  if (pathname === "/api/flags") {
-    denyStaffApi(res, secHeaders);
-    return;
-  }
-
-  if (pathname === "/api/kill-switches") {
-    denyStaffApi(res, secHeaders);
-    return;
-  }
-
-  if (pathname === "/v1/runtime/stack-status") {
+  if (
+    pathname !== "/api/auth/backchannel-logout" &&
+    (pathname.startsWith("/api/") || pathname.startsWith("/v1/"))
+  ) {
     denyStaffApi(res, secHeaders);
     return;
   }
