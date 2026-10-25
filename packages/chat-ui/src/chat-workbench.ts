@@ -418,3 +418,366 @@ export function groupConversationsByRecency(
 
   return { pinned, today, yesterday, previous7Days, older, dateUnavailable };
 }
+
+/**
+ * Reviewed Phase 1 UI Translation Dictionary (`en`, `pga`, `ar`) with safe English fallback
+ * for unreviewed Phase 2 languages (`din`, `nus`, `bfa`, `zne`, `shk`) per `OQ-008` / `FE-G5`
+ * and `FinalYearProject/App/frontend/src/lib/i18n/index.ts`.
+ */
+export const SSRA_UI_TRANSLATIONS = {
+  en: {
+    "landing.eyebrow": "Republic of South Sudan · SSRA / NRA Grounded AI Assistant",
+    "landing.headline": "How can I help with your South Sudan taxes today?",
+    "landing.subtitle":
+      "Ask about TIN registration, PAYE, TCC, customs, or e-Tax. Answers cite approved sources when available. If a source cannot be confirmed, SSRA Assist will say so and offer staff help.",
+    "composer.placeholder":
+      "Ask about SSRA taxes, TIN, PAYE, TCC, or customs in English, Arabic, or Juba Arabic…",
+    "composer.dropFiles":
+      "Drop files or screenshots to inspect (PDF, DOCX, XLSX, CSV, TXT, or image)",
+    "header.callReceptionist": "Call receptionist",
+    "header.languageAuto": "Response language: Auto-detect (currently {value})",
+    "header.languageSelected": "Response language: {value}",
+    "message.spoken": "Spoken",
+    "message.latest": "Latest",
+  },
+  pga: {
+    "landing.eyebrow": "Jumhuriya ta South Sudan · Musaa'id SSRA / NRA",
+    "landing.headline": "Kif ana agdar asaidu inta fi darayib ta South Sudan al-yom?",
+    "landing.subtitle":
+      "Is'al an TIN, PAYE, TCC, Jamarik, aw e-Tax. Ijaba bitzkur maraji SSRA lama yisanduha. Iza al-masdar mish mu'akkad, SSRA Assist bitwaddeh da wa bitqaddim musaa'ada min الموظفين.",
+    "composer.placeholder": "As'al ayi su'al ala TIN, PAYE, TCC, aw Jamarik bi Arabi Juba...",
+    "composer.dropFiles":
+      "Khalli malafat aw sura ta shasha hina (PDF, DOCX, XLSX, CSV, TXT, aw sura)",
+    "header.callReceptionist": "Ittasil bil istiqbal",
+    "header.languageAuto": "Lugha ta ijaba: Tilqa'i ({value})",
+    "header.languageSelected": "Lugha ta ijaba: {value}",
+    "message.spoken": "Bil sot",
+    "message.latest": "Al-akhir",
+  },
+  ar: {
+    "landing.eyebrow": "جمهورية جنوب السودان · المساعد الذكي لهيئة الإيرادات (SSRA / NRA)",
+    "landing.headline": "كيف يمكنني مساعدتك في ضرائب جنوب السودان اليوم؟",
+    "landing.subtitle":
+      "اسأل عن تسجيل الرقم الضريبي أو PAYE أو شهادة الامتثال أو الجمارك أو e-Tax. تذكر الإجابات المصادر المعتمدة عند توفرها. إذا تعذر تأكيد المصدر، سنوضح ذلك ونقترح التواصل مع موظف.",
+    "composer.placeholder":
+      "اسأل عن الرقم الضريبي TIN أو ضريبة الدخل PAYE أو شهادة الامتثال TCC أو الجمارك...",
+    "composer.dropFiles": "أفلت الملفات أو لقطات الشاشة هنا للفحص (PDF أو DOCX أو XLSX أو صورة)",
+    "header.callReceptionist": "موظف الاستقبال الصوتي",
+    "header.languageAuto": "لغة الإجابة: تلقائي ({value})",
+    "header.languageSelected": "لغة الإجابة: {value}",
+    "message.spoken": "منطوق صوتياً",
+    "message.latest": "الأحدث",
+  },
+} as const;
+
+export type UiTranslationKey = keyof typeof SSRA_UI_TRANSLATIONS.en;
+
+export function translateUiString(
+  locale: string,
+  key: UiTranslationKey,
+  vars?: Readonly<Record<string, string | number>>,
+): string {
+  const dict =
+    locale === "ar"
+      ? SSRA_UI_TRANSLATIONS.ar
+      : locale === "pga"
+        ? SSRA_UI_TRANSLATIONS.pga
+        : SSRA_UI_TRANSLATIONS.en;
+  const template: string = dict[key] ?? SSRA_UI_TRANSLATIONS.en[key];
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
+    Object.hasOwn(vars, name) ? String(vars[name]) : whole,
+  );
+}
+
+const SUPPORTED_LOCALE_SET: ReadonlySet<LocaleCode> = new Set([
+  "en",
+  "ar",
+  "pga",
+  "din",
+  "nus",
+  "bfa",
+  "zne",
+  "shk",
+]);
+
+const EXPLICIT_SWITCH_MAP: ReadonlyArray<readonly [RegExp, LocaleCode]> = [
+  [
+    /\b(?:answer|reply|respond|speak|explain|switch|talk)\b[^.!?]{0,25}\b(?:in|to)\s+juba\s+arabic\b|\bbi\s+arabi\s+juba\b|بالعربي\s+جوبا|بعربي\s+جوبا/i,
+    "pga",
+  ],
+  [
+    /\b(?:answer|reply|respond|speak|explain|switch|talk)\b[^.!?]{0,25}\b(?:in|to)\s+arabic\b|(?:تحدث|تكلم|اجب|أجب|رد|اشرح)\s+(?:بالعربي|بالعربية|عربي)/i,
+    "ar",
+  ],
+  [
+    /\b(?:answer|reply|respond|speak|explain|switch|talk)\b[^.!?]{0,25}\b(?:in|to)\s+english\b|(?:تحدث|تكلم|اجب|أجب|رد)\s+بالانجليزي/i,
+    "en",
+  ],
+  [
+    /\b(?:answer|reply|respond|speak|explain|switch|talk)\b[^.!?]{0,25}\b(?:in|to)\s+(?:dinka|thuɔŋjäŋ|thuongjang)\b/i,
+    "din",
+  ],
+  [
+    /\b(?:answer|reply|respond|speak|explain|switch|talk)\b[^.!?]{0,25}\b(?:in|to)\s+(?:nuer|thok\s+naath|thok\s+nath)\b/i,
+    "nus",
+  ],
+  [
+    /\b(?:answer|reply|respond|speak|explain|switch|talk)\b[^.!?]{0,25}\b(?:in|to)\s+(?:bari|kutuk\s+na\s+bari)\b/i,
+    "bfa",
+  ],
+  [
+    /\b(?:answer|reply|respond|speak|explain|switch|talk)\b[^.!?]{0,25}\b(?:in|to)\s+(?:pazande|zande)\b/i,
+    "zne",
+  ],
+  [
+    /\b(?:answer|reply|respond|speak|explain|switch|talk)\b[^.!?]{0,25}\b(?:in|to)\s+(?:shilluk|dhøg\s+cøllø|dhog\s+collo)\b/i,
+    "shk",
+  ],
+];
+
+const ARABIC_SCRIPT_RE = /[\u0600-\u06FF]/;
+const PGA_ARABIC_MARKERS_RE =
+  /(?:^|\s)(?:شنو|عشان|بتاع|بتاعي|بتاعت|هسي|قروش|بيشتغل|ندفع|نسجل)(?=\s|$|[؟،.])/g;
+const PGA_LATIN_MARKERS_RE =
+  /\b(?:kif|shunu|gaaid|agdar|asaidu|tasjil|dariba|darayib|jamarik|bitaa|al-yom)\b/;
+const DIN_MARKERS_RE = /\b(?:thuongjang|ajul|weu|bengic|akuma|tene|caar|nhialic|muk)\b/;
+const NUS_MARKERS_RE = /\b(?:thok|naath|nath|guaath|kuäär|miem|rwac)\b/;
+const BFA_MARKERS_RE = /\b(?:kutuk|nyepo|konyo|bari|molok|gwoso)\b/;
+const ZNE_MARKERS_RE = /\b(?:pazande|marimo|kumba|pai|gbia)\b/;
+const SHK_MARKERS_RE = /\b(?:collo|dhog|jwok|kwer|kyew)\b/;
+
+/**
+ * Instant client-side language & explicit-switch detector matching `ssra_voice`
+ * and `FinalYearProject` `adoptResponseLocale`. Bounded to 1,024 chars (`<0.05ms` CPU).
+ */
+export function detectClientTextLanguageHint(
+  text: string,
+  currentLocale: LocaleCode = "en",
+): { readonly detectedLocale: LocaleCode; readonly explicitSwitch: boolean } {
+  const clean = String(text || "")
+    .trim()
+    .slice(0, 1024);
+  if (!clean) return { detectedLocale: currentLocale, explicitSwitch: false };
+
+  for (const [pattern, target] of EXPLICIT_SWITCH_MAP) {
+    if (pattern.test(clean)) {
+      return { detectedLocale: target, explicitSwitch: true };
+    }
+  }
+
+  if (ARABIC_SCRIPT_RE.test(clean)) {
+    const pgaArabicHits = clean.match(PGA_ARABIC_MARKERS_RE) ?? [];
+    return {
+      detectedLocale: pgaArabicHits.length > 0 ? "pga" : "ar",
+      explicitSwitch: false,
+    };
+  }
+
+  const folded = clean
+    .toLowerCase()
+    .replace(/ë/g, "e")
+    .replace(/ɛ/g, "e")
+    .replace(/ɔ/g, "o")
+    .replace(/ŋ/g, "ng")
+    .replace(/[öä]/g, "a")
+    .replace(/ï/g, "i")
+    .replace(/ü/g, "u")
+    .replace(/ø/g, "o");
+
+  if (PGA_LATIN_MARKERS_RE.test(folded)) {
+    return { detectedLocale: "pga", explicitSwitch: false };
+  }
+  if (DIN_MARKERS_RE.test(folded)) {
+    return { detectedLocale: "din", explicitSwitch: false };
+  }
+  if (NUS_MARKERS_RE.test(folded)) {
+    return { detectedLocale: "nus", explicitSwitch: false };
+  }
+  if (BFA_MARKERS_RE.test(folded)) {
+    return { detectedLocale: "bfa", explicitSwitch: false };
+  }
+  if (ZNE_MARKERS_RE.test(folded)) {
+    return { detectedLocale: "zne", explicitSwitch: false };
+  }
+  if (SHK_MARKERS_RE.test(folded)) {
+    return { detectedLocale: "shk", explicitSwitch: false };
+  }
+
+  return { detectedLocale: currentLocale, explicitSwitch: false };
+}
+
+export interface AdoptedLocaleDecision {
+  readonly locale: LocaleCode;
+  readonly detectedLocale: LocaleCode;
+  readonly localeExplicit: boolean;
+  readonly shouldSwitchInterface: boolean;
+  readonly badgeLabel: string;
+}
+
+/**
+ * Adopt the backend's detected language (`data.locale` or `english_router_envelope.detected_input_language`)
+ * following `FinalYearProject/App/frontend/src/store/useChatStore.ts` `adoptResponseLocale`.
+ */
+export function adoptDetectedResponseLocale(params: {
+  readonly currentLocale: LocaleCode;
+  readonly localeExplicit: boolean;
+  readonly responseLocale?: string | null | undefined;
+  readonly localeSource?: string | null | undefined;
+  readonly explicitUserSwitch?: boolean | undefined;
+}): AdoptedLocaleDecision {
+  const candidate = (params.responseLocale ?? "").trim().toLowerCase() as LocaleCode;
+  const validDetected = SUPPORTED_LOCALE_SET.has(candidate) ? candidate : params.currentLocale;
+  const isExplicitRequest =
+    params.explicitUserSwitch === true || params.localeSource === "explicit_request";
+  const nextExplicit = isExplicitRequest ? true : params.localeExplicit;
+  const nextLocale =
+    isExplicitRequest || !params.localeExplicit ? validDetected : params.currentLocale;
+  return {
+    locale: nextLocale,
+    detectedLocale: validDetected,
+    localeExplicit: nextExplicit,
+    shouldSwitchInterface: isExplicitRequest,
+    badgeLabel: nextExplicit
+      ? validDetected.toUpperCase()
+      : `AUTO · ${validDetected.toUpperCase()}`,
+  };
+}
+
+export type ComposerSpeechState =
+  | "idle"
+  | "starting"
+  | "listening"
+  | "processing"
+  | "unavailable"
+  | "error";
+
+export interface ComposerSpeechControlsDescriptor {
+  readonly dictateButton: {
+    readonly iconName: "mic";
+    readonly testId: "composer-mic";
+    readonly ariaLabel: string;
+    readonly tooltip: string;
+    readonly className: string;
+    readonly disabled: boolean;
+  };
+  readonly autoVoiceButton: {
+    readonly iconName: "voiceWave";
+    readonly testId: "composer-voicemode";
+    readonly ariaLabel: string;
+    readonly ariaPressed: boolean;
+    readonly tooltip: string;
+    readonly className: string;
+    readonly isPrimarySlot: boolean;
+  };
+  readonly primarySlotMode: "voicemode" | "send" | "stop";
+}
+
+/**
+ * Models the two side-by-side speech controls in the Main Chat composer toolbar
+ * (`FinalYearProject/App/frontend/src/components/ChatInput.tsx` lines 780-851):
+ * 1. Dictate (`mic-circle-btn`, `ICONS.mic`) — fills the textarea via `joinDictated`
+ * 2. Auto Voice Mode (`voicemode-circle-btn`, `ICONS.voiceWave`) — hands-free turn-taking & `VoiceModeDock`
+ */
+export function buildComposerSpeechControls(params: {
+  readonly speechState: ComposerSpeechState;
+  readonly voiceMode: boolean;
+  readonly hasText: boolean;
+  readonly isLoading: boolean;
+  readonly isUploading?: boolean | undefined;
+}): ComposerSpeechControlsDescriptor {
+  const { speechState, voiceMode, hasText, isLoading } = params;
+  const isUploading = Boolean(params.isUploading);
+  const dictateAriaLabel =
+    speechState === "listening"
+      ? "Stop listening"
+      : speechState === "starting"
+        ? "Opening the microphone"
+        : speechState === "processing"
+          ? "Transcribing"
+          : "Start speaking";
+  const dictateTooltip =
+    speechState === "listening"
+      ? "Stop listening"
+      : speechState === "starting"
+        ? "Opening the microphone…"
+        : speechState === "processing"
+          ? "Transcribing…"
+          : "Dictate";
+  const dictateClasses = ["composer-circle-btn", "mic-circle-btn"];
+  if (speechState === "listening") dictateClasses.push("btn-recording");
+  if (speechState === "starting" || speechState === "processing") {
+    dictateClasses.push("is-processing");
+  }
+
+  const primarySlotMode: "voicemode" | "send" | "stop" = isLoading
+    ? "stop"
+    : hasText || isUploading
+      ? "send"
+      : "voicemode";
+
+  const autoVoiceClasses = ["composer-circle-btn", "voicemode-circle-btn"];
+  if (voiceMode) autoVoiceClasses.push("is-active");
+  if (primarySlotMode === "voicemode") autoVoiceClasses.push("is-primary-slot");
+
+  return {
+    dictateButton: {
+      iconName: "mic",
+      testId: "composer-mic",
+      ariaLabel: dictateAriaLabel,
+      tooltip: dictateTooltip,
+      className: dictateClasses.join(" "),
+      disabled:
+        speechState === "unavailable" ||
+        isLoading ||
+        speechState === "starting" ||
+        speechState === "processing",
+    },
+    autoVoiceButton: {
+      iconName: "voiceWave",
+      testId: "composer-voicemode",
+      ariaLabel: voiceMode ? "Exit voice conversation mode" : "Enter voice conversation mode",
+      ariaPressed: voiceMode,
+      tooltip: voiceMode ? "Exit voice mode" : "Enter voice mode",
+      className: autoVoiceClasses.join(" "),
+      isPrimarySlot: primarySlotMode === "voicemode",
+    },
+    primarySlotMode,
+  };
+}
+
+export interface MainChatLayoutAlignmentDescriptor {
+  readonly headerCallIconName: "phone";
+  readonly headerCallButtonClass: "icon-btn call-btn hdrv2-call";
+  readonly composerDictateIconName: "mic";
+  readonly composerAutoVoiceIconName: "voiceWave";
+  readonly messageListScrollFadeMaskCss: string;
+  readonly landingMaxWidthPx: 720;
+  readonly landingSubtitleCentered: true;
+  readonly assistantAvatarSizePx: 32;
+  readonly userSpokenTagEnabled: true;
+  readonly composerDragDropEnabled: true;
+  readonly composerClipboardPasteEnabled: true;
+  readonly iosTouchFontSizeMinPx: 16;
+}
+
+/**
+ * Codifies the `FinalYearProject` (`chatv2`) Main Chat layout alignment & interaction contract.
+ */
+export function buildMainChatLayoutAlignment(): MainChatLayoutAlignmentDescriptor {
+  return {
+    headerCallIconName: "phone",
+    headerCallButtonClass: "icon-btn call-btn hdrv2-call",
+    composerDictateIconName: "mic",
+    composerAutoVoiceIconName: "voiceWave",
+    messageListScrollFadeMaskCss:
+      "linear-gradient(to bottom, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%)",
+    landingMaxWidthPx: 720,
+    landingSubtitleCentered: true,
+    assistantAvatarSizePx: 32,
+    userSpokenTagEnabled: true,
+    composerDragDropEnabled: true,
+    composerClipboardPasteEnabled: true,
+    iosTouchFontSizeMinPx: 16,
+  };
+}

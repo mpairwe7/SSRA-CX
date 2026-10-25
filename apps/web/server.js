@@ -532,9 +532,11 @@ function renderPwaShellHtml(locale, nonce) {
 
     /* Main Column & Floating ChatHeader */
     .app-main-col { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; position: relative; }
-    .chat-header { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1.25rem; gap: 0.75rem; border-bottom: 1px solid var(--border-0); background: rgba(9, 19, 16, 0.52); backdrop-filter: blur(16px); z-index: 10; }
+    .chat-header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0.65rem 1.15rem; gap: 0.65rem; border-bottom: 1px solid var(--border-0); background: rgba(9, 19, 16, 0.52); backdrop-filter: blur(16px); z-index: 10; }
     :root[data-theme="light"] .chat-header { background: rgba(246, 247, 242, 0.82); }
-    .header-left, .header-right { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .header-left { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: nowrap; }
+    .header-right { display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0; flex-wrap: wrap; }
+    .langsel-auto { display: inline-flex; align-items: center; padding: 0.14rem 0.45rem; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--border-1); color: var(--ssra-gold); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
     .icon-btn { min-height: 44px; min-width: 44px; padding: 0.36rem 0.68rem; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-0); border: 1px solid var(--border-1); cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; text-decoration: none; }
     .icon-btn:hover { background: var(--surface-3); border-color: var(--border-2); }
     .call-btn { background: linear-gradient(135deg, rgba(7, 137, 48, 0.24), rgba(15, 71, 175, 0.28)); border-color: rgba(46, 204, 113, 0.45); color: var(--text-0); }
@@ -551,22 +553,25 @@ function renderPwaShellHtml(locale, nonce) {
     /* Main Content Area */
     .app-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
     .landing { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem 1.25rem 2.5rem; max-width: 820px; width: 100%; margin: 0 auto; gap: 1.35rem; }
-    .landing-brand { text-align: center; max-width: 640px; }
+    .landing-brand { text-align: center; width: min(720px, 100%); margin-inline: auto; }
     .eyebrow-pill { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.32rem 0.85rem; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border-1); font-size: 0.76rem; font-weight: 600; color: var(--ssra-gold); margin-bottom: 0.75rem; }
-    .ldv2-headline { font-size: clamp(1.65rem, 3.2vw, 2.35rem); font-weight: 800; color: var(--text-0); margin: 0 0 0.5rem; letter-spacing: -0.02em; line-height: 1.2; }
-    .landing-sub { font-size: 0.96rem; color: var(--text-2); margin: 0; line-height: 1.5; }
-    .landing-prompts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.65rem; width: 100%; }
+    .ldv2-headline { font-size: clamp(1.65rem, 3.2vw, 2.35rem); font-weight: 800; color: var(--text-0); margin: 0 0 0.5rem; letter-spacing: -0.02em; line-height: 1.2; text-align: center; }
+    .landing-sub { font-size: 0.96rem; color: var(--text-2); margin: 0 auto; max-width: 62ch; line-height: 1.5; text-align: center; }
+    .landing-prompts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.65rem; width: min(720px, 100%); margin-inline: auto; }
     .landing-chip { min-height: 64px; padding: 0.8rem 0.95rem; border-radius: var(--radius-md); background: var(--surface-1); border: 1px solid var(--border-1); color: var(--text-1); text-align: start; cursor: pointer; display: flex; flex-direction: column; gap: 0.28rem; transition: all 0.15s ease; text-decoration: none; }
     .landing-chip:hover { background: var(--surface-2); border-color: var(--ssra-teal-light); transform: translateY(-2px); box-shadow: var(--shadow-md); }
     .ldv2-cat { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ssra-gold); }
     .landing-chip-text { font-size: 0.85rem; font-weight: 500; color: var(--text-0); line-height: 1.35; }
 
     /* Chat Stream Area (chatv2/messages.css & loading.css pattern) */
-    .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    .message-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 1.25rem clamp(1rem, 4vw, 3rem); display: flex; flex-direction: column; gap: 1.15rem; max-width: 880px; width: 100%; margin: 0 auto; container-type: inline-size; }
+    .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+    .message-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 1.25rem clamp(1rem, 4vw, 3rem); display: flex; flex-direction: column; gap: 1.15rem; max-width: 880px; width: 100%; margin: 0 auto; container-type: inline-size; mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%); }
+    .scroll-to-latest { position: absolute; bottom: 0.55rem; inset-inline: 0; margin-inline: auto; width: fit-content; min-height: 36px; padding: 0.3rem 0.85rem; border-radius: 999px; background: var(--bg-1); border: 1px solid var(--border-2); color: var(--text-0); font: inherit; font-size: 0.78rem; font-weight: 600; box-shadow: var(--shadow-lg); cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; z-index: 8; }
+    .scroll-to-latest:hover { background: var(--surface-2); }
     .message-row { display: flex; flex-direction: column; gap: 0.35rem; animation: fadeIn 0.22s var(--cv2-spring) both; content-visibility: auto; contain-intrinsic-size: auto 160px; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
     .message-row-user { align-items: flex-end; }
+    .msg-spoken-tag { margin: 0 0 0.15rem; display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.72rem; font-weight: 600; color: var(--text-2); }
     .message-row-assistant { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: flex-start; }
     .avatar.assistant {
       width: 32px; height: 32px; border-radius: 8px; background: var(--grad-primary);
@@ -578,8 +583,8 @@ function renderPwaShellHtml(locale, nonce) {
       .avatar.assistant { display: none; }
     }
     .bubble { max-width: min(720px, 92%); padding: 0.95rem 1.15rem; border-radius: var(--radius-lg); line-height: 1.62; font-size: 0.94rem; }
-    .bubble.user { background: var(--cv2-user-bubble); border: 1px solid var(--cv2-user-bubble-border); color: var(--text-0); border-radius: 16px; border-bottom-right-radius: 6px; max-width: min(78%, 640px); }
-    .bubble.assistant { background: var(--surface-2); border: 1px solid var(--border-1); color: var(--text-0); border-bottom-left-radius: 6px; box-shadow: var(--shadow-md); width: 100%; }
+    .bubble.user { background: var(--cv2-user-bubble); border: 1px solid var(--cv2-user-bubble-border); color: var(--text-0); border-radius: 16px; border-end-end-radius: 6px; max-width: min(78%, 640px); }
+    .bubble.assistant { background: var(--surface-2); border: 1px solid var(--border-1); color: var(--text-0); border-end-start-radius: 6px; box-shadow: var(--shadow-md); width: 100%; }
     .lds { display: inline-flex; align-items: center; gap: 10px; }
     .lds-grid { display: grid; grid-template-columns: repeat(3, 4px); gap: 1.5px; flex-shrink: 0; }
     .lds-cell { width: 4px; height: 4px; border-radius: 1px; background: var(--text-0); animation: pixelOn 1.2s ease-in-out infinite; }
@@ -624,9 +629,10 @@ function renderPwaShellHtml(locale, nonce) {
     .narration-sentence { color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .narration-actions { display: inline-flex; align-items: center; gap: 0.35rem; flex-shrink: 0; }
     .narration-btn { min-width: 36px; min-height: 36px; padding: 0 0.5rem; border-radius: 8px; border: 1px solid var(--border-1); background: var(--surface-1); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-    .composer-box { background: var(--surface-2); backdrop-filter: blur(20px); border: 1px solid var(--border-2); border-radius: 16px; padding: 0.65rem 0.85rem; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 0.45rem; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
-    .composer-box:focus-within { border-color: var(--ssra-gold); }
+    .composer-box { position: relative; background: var(--surface-2); backdrop-filter: blur(20px); border: 1px solid var(--border-2); border-radius: 16px; padding: 0.65rem 0.85rem; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 0.45rem; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+    .composer-box:focus-within, .composer-box.composer-drag-active { border-color: var(--ssra-gold); }
     .composer-box.is-recording { border-color: var(--danger); }
+    .composer-drop-overlay { position: absolute; inset: 4px; z-index: 6; display: flex; align-items: center; justify-content: center; padding: 0.75rem; border: 1.5px dashed var(--ssra-gold); border-radius: 12px; background: var(--bg-1); color: var(--text-0); font-size: 0.84rem; font-weight: 600; text-align: center; pointer-events: none; }
     .composer-active-recording { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; min-height: 48px; padding: 0.25rem 0.35rem; border-radius: 12px; background: rgba(251, 113, 133, 0.08); border: 1px solid rgba(251, 113, 133, 0.35); }
     .composer-rec-label { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.84rem; font-weight: 600; color: var(--text-0); }
     .composer-rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); animation: callDotPulse 1.4s ease-in-out infinite; }
@@ -635,10 +641,15 @@ function renderPwaShellHtml(locale, nonce) {
     .composer-rec-cancel { background: var(--surface-1); color: var(--danger); }
     .composer-rec-confirm { background: var(--grad-primary); color: #fff; border-color: transparent; }
     .composer-textarea { width: 100%; min-height: 46px; max-height: 140px; resize: none; border: none; background: transparent; color: var(--text-0); font: inherit; font-size: 0.95rem; outline: none; line-height: 1.45; }
+    @media (max-width: 1024px), (pointer: coarse) { .composer-textarea { font-size: 1rem; } }
     .composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
     .composer-tools-left, .composer-tools-right { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
-    .add-circle-btn { width: 38px; height: 38px; border-radius: 50%; background: var(--surface-1); border: 1px solid var(--border-2); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-    .add-circle-btn:hover { background: var(--surface-3); }
+    .composer-circle-btn, .add-circle-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--surface-1); border: 1px solid var(--border-2); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform 0.14s var(--cv2-spring), background-color 0.14s ease, border-color 0.14s ease; }
+    .composer-circle-btn:hover:not(:disabled), .add-circle-btn:hover:not(:disabled) { background: var(--surface-3); border-color: var(--ssra-teal-light); }
+    .composer-circle-btn:active:not(:disabled), .send-btn:active:not(:disabled) { transform: scale(0.95); }
+    @media (pointer: coarse), (max-width: 640px) { .composer-circle-btn, .add-circle-btn { min-width: 44px; min-height: 44px; } }
+    .mic-circle-btn.btn-recording { background: rgba(251, 113, 133, 0.18); border-color: var(--danger); color: var(--danger); box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.25); }
+    .mic-circle-btn.is-processing { color: var(--ssra-gold); border-color: var(--ssra-gold); animation: callDotPulse 1.4s ease-in-out infinite; }
     .composer-attachments { display: flex; flex-wrap: wrap; gap: 0.45rem; padding-bottom: 0.25rem; }
     .attachment-chip { display: inline-flex; align-items: center; gap: 0.4rem; max-width: 100%; padding: 0.3rem 0.55rem; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border-1); font-size: 0.78rem; color: var(--text-0); }
     .attachment-chip-error { border-color: var(--danger); background: rgba(251, 113, 133, 0.1); }
@@ -664,7 +675,8 @@ function renderPwaShellHtml(locale, nonce) {
     .doc-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; padding-top: 0.4rem; border-top: 1px solid var(--border-1); }
     .camera-video { width: 100%; max-height: 280px; border-radius: 10px; background: #000; object-fit: cover; }
     .voicemode-circle-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--surface-1); border: 1px solid var(--border-2); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-    .voicemode-circle-btn.is-active { background: rgba(7, 137, 48, 0.22); border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.28); color: #2ECC71; }
+    .voicemode-circle-btn.is-primary-slot { border-color: rgba(46, 204, 113, 0.52); background: linear-gradient(135deg, rgba(7, 137, 48, 0.2), rgba(15, 71, 175, 0.22)); }
+    .voicemode-circle-btn.is-active { background: rgba(7, 137, 48, 0.24); border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.28); color: #2ECC71; }
     .voice-dock { --vd-floor: var(--border-1); display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; padding: 0.5rem 0.75rem; margin-bottom: 0.45rem; background: var(--bg-1); border: 1px solid var(--vd-floor); border-radius: 14px; box-shadow: var(--shadow-md); }
     .voice-dock[data-floor="listening"] { --vd-floor: #2ECC71; }
     .voice-dock[data-floor="thinking"] { --vd-floor: #FCDD09; }
@@ -760,7 +772,7 @@ function renderPwaShellHtml(locale, nonce) {
     .rail-brand-sub { font-size: 0.68rem; color: var(--text-2); font-weight: 500; }
     .acct-pop-hr { border: 0; border-top: 1px solid var(--border-0); margin: 3px 0; }
     .acct-chevron { color: var(--text-3); font-size: 0.75rem; }
-    .active-conv-title { font-weight: 700; font-size: 0.9rem; color: var(--text-0); }
+    .active-conv-title { font-weight: 700; font-size: 0.9rem; color: var(--text-0); max-width: 34ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .composer-hint { flex: 1; min-width: 0; font-size: 0.8rem; color: var(--text-1); }
     .composer-hint:empty { display: none; }
     .composer-keys { font-size: 0.75rem; color: var(--text-2); }
@@ -801,7 +813,7 @@ function renderPwaShellHtml(locale, nonce) {
       #theme-toggle-btn { grid-area: theme; }
       #net-status-badge { grid-area: status; justify-self: start; min-width: 0; }
       #locale-select { grid-area: locale; max-width: 9.5rem; }
-      .chat-header .btn-label { display: none; }
+      .chat-header .btn-label, .langsel-auto { display: none; }
       .landing { padding: 1rem 0.85rem 1.5rem; gap: 0.9rem; justify-content: flex-start; }
       .landing-prompts { grid-template-columns: minmax(0, 1fr); }
       .composer-keys { display: none; }
@@ -811,6 +823,7 @@ function renderPwaShellHtml(locale, nonce) {
     @media (max-height: 500px) {
       .app-main-col { overflow-y: auto; }
       .app-content, .chat-area, .message-list, .landing { flex: none; overflow: visible; }
+      .message-list { mask-image: none; -webkit-mask-image: none; }
       .landing { justify-content: flex-start; }
       .composer-keys { display: none; }
       .composer-dock { padding-block: 0.35rem max(0.45rem, env(safe-area-inset-bottom)); }
@@ -892,14 +905,14 @@ function renderPwaShellHtml(locale, nonce) {
 
     <!-- Main Column -->
     <div class="app-main-col">
-      <header class="chat-header">
+      <header class="chat-header hdrv2">
         <div class="header-left">
           <button type="button" id="header-rail-btn" class="icon-btn" aria-label="Open conversations" aria-expanded="false" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
           <span id="active-conv-title" class="active-conv-title">New Conversation</span>
           <span id="net-status-badge" class="status-badge" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="net-status-text">Official sources cited per answer</span></span>
         </div>
         <div class="header-right">
-          <button type="button" id="open-call-btn" class="icon-btn call-btn" aria-label="Open voice input options">${ICONS.mic}<span class="btn-label">Voice input</span></button>
+          <button type="button" id="open-call-btn" class="icon-btn call-btn hdrv2-call" aria-label="Call receptionist — Open voice input options" title="Call receptionist">${ICONS.phone}<span id="header-call-label" class="btn-label hdrv2-call-label">Call receptionist</span></button>
           <select id="locale-select" class="icon-btn" aria-label="Language">
             <optgroup label="Available">
               <option value="en" ${locale === "en" ? "selected" : ""}>English (en)</option>
@@ -914,6 +927,7 @@ function renderPwaShellHtml(locale, nonce) {
               <option value="shk" ${locale === "shk" ? "selected" : ""}>Dhøg Cøllø Shilluk (shk)</option>
             </optgroup>
           </select>
+          <span id="lang-auto-badge" class="langsel-auto" data-testid="lang-auto-badge" aria-hidden="true">AUTO · ${locale.toUpperCase()}</span>
           <button type="button" id="theme-toggle-btn" class="icon-btn">${ICONS.moon}<span class="btn-label">Dark</span></button>
         </div>
       </header>
@@ -923,38 +937,38 @@ function renderPwaShellHtml(locale, nonce) {
         <!-- Landing Hero State -->
         <div id="landing-view" class="landing">
           <div class="landing-brand">
-            <div class="eyebrow-pill">${ICONS.ssraCrest} Republic of South Sudan · SSRA / NRA Grounded AI Assistant</div>
+            <div class="eyebrow-pill">${ICONS.ssraCrest} <span id="landing-eyebrow-text">Republic of South Sudan · SSRA / NRA Grounded AI Assistant</span></div>
             <h1 id="landing-headline" class="ldv2-headline">How can I help with your South Sudan taxes today?</h1>
             <p id="landing-subtitle" class="landing-sub">Ask about TIN registration, PAYE, TCC, customs, or e-Tax. Answers cite approved sources when available. If a source cannot be confirmed, SSRA Assist will say so and offer staff help.</p>
           </div>
 
           <div class="landing-prompts" role="group" aria-label="Suggested tax questions">
             <button type="button" class="landing-chip" data-prompt="How do I register for a TIN step by step?">
-              <span class="ldv2-cat">TIN Registration</span>
+              <span class="ldv2-cat" data-cat-idx="0">TIN Registration</span>
               <span class="landing-chip-text">How do I register for a TIN step by step?</span>
             </button>
             <button type="button" class="landing-chip" data-prompt="How much is PAYE salary tax on 250,000 SSP per month?">
-              <span class="ldv2-cat">PAYE Calculator</span>
+              <span class="ldv2-cat" data-cat-idx="1">PAYE Calculator</span>
               <span class="landing-chip-text">How much is PAYE salary tax on 250,000 SSP per month?</span>
             </button>
             <button type="button" class="landing-chip" data-prompt="Please calculate withholding tax WHT on a contract invoice of 1,000,000 SSP">
-              <span class="ldv2-cat">Withholding Tax (WHT)</span>
+              <span class="ldv2-cat" data-cat-idx="2">Withholding Tax (WHT)</span>
               <span class="landing-chip-text">Calculate WHT on a contract invoice of 1,000,000 SSP</span>
             </button>
             <button type="button" class="landing-chip" data-prompt="How do I apply for a Tax Compliance Certificate (TCC) on the SSRA e-Tax portal?">
-              <span class="ldv2-cat">Compliance (TCC)</span>
+              <span class="ldv2-cat" data-cat-idx="3">Compliance (TCC)</span>
               <span class="landing-chip-text">How do I apply for a Tax Compliance Certificate (TCC)?</span>
             </button>
             <button type="button" class="landing-chip" data-prompt="Is this really SSRA? Please verify account https://etax.nra.gov.ss/ before I pay.">
-              <span class="ldv2-cat">Scam &amp; Channel Check</span>
+              <span class="ldv2-cat" data-cat-idx="4">Scam &amp; Channel Check</span>
               <span class="landing-chip-text">Is this really SSRA? Verify https://etax.nra.gov.ss/</span>
             </button>
             <button type="button" class="landing-chip" data-prompt="Kif ana aml tasjil ta TIN fi SSRA?">
-              <span class="ldv2-cat">Juba Arabic (pga)</span>
+              <span class="ldv2-cat" data-cat-idx="5">Juba Arabic (pga)</span>
               <span class="landing-chip-text">Kif ana aml tasjil ta TIN fi SSRA?</span>
             </button>
             <a class="landing-chip" href="https://etax.nra.gov.ss/" rel="noopener noreferrer">
-              <span class="ldv2-cat">Personal e-Tax services</span>
+              <span class="ldv2-cat" data-cat-idx="6">Personal e-Tax services</span>
               <span class="landing-chip-text">Sign in to check your own balance or filing status</span>
             </a>
           </div>
@@ -963,6 +977,7 @@ function renderPwaShellHtml(locale, nonce) {
         <!-- Active Conversation Message List -->
         <div id="chat-view" class="chat-area is-hidden" aria-label="Chat conversation">
           <div id="ssra-chat-messages" class="message-list" aria-label="Conversation messages"></div>
+          <button type="button" id="scroll-to-latest-btn" class="scroll-to-latest is-hidden" aria-label="Scroll to latest response">${ICONS.chevronDown} <span id="scroll-latest-label">Latest</span></button>
         </div>
         <div id="chat-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -1000,7 +1015,8 @@ function renderPwaShellHtml(locale, nonce) {
               <button type="button" id="voice-dock-primary" class="voice-dock-btn voice-dock-primary" data-testid="voice-dock-primary" data-action="send" aria-label="Send voice turn now">${ICONS.check}</button>
             </div>
           </section>
-          <form id="ssra-chat-form" class="composer-box">
+          <form id="ssra-chat-form" class="composer-box cmpv2">
+            <div id="composer-drop-overlay" class="composer-drop-overlay is-hidden" aria-hidden="true"><span id="composer-drop-text">Drop files or screenshots to inspect (PDF, DOCX, XLSX, CSV, TXT, or image)</span></div>
             <!-- Composer Attachment Chips & Privacy Note (ChatInput.tsx pattern) -->
             <div id="composer-attachments" class="composer-attachments is-hidden" aria-label="Attached documents"></div>
             <p id="composer-attachment-privacy" class="composer-attachment-privacy is-hidden" role="note">Files are checked locally for format safety. Server-side OCR and malware scanning remain disabled under OQ-017; do not attach confidential taxpayer records in public chat.</p>
@@ -1020,18 +1036,16 @@ function renderPwaShellHtml(locale, nonce) {
                 <button type="button" id="composer-rec-confirm" class="composer-rec-confirm" data-testid="composer-rec-confirm" aria-label="Confirm voice recording">${ICONS.check}</button>
               </div>
             </div>
-            <div class="composer-toolbar">
+            <div class="composer-toolbar cmpv2-bar">
               <div class="composer-tools-left">
-                <button type="button" id="composer-add-btn" class="add-circle-btn" data-testid="composer-add-btn" aria-haspopup="dialog" aria-expanded="false" aria-label="Add file or photo" title="Add file, screenshot, or photo">${ICONS.plus}</button>
-                <button type="button" id="voice-dictate-btn" class="icon-btn" title="Voice typing uses your browser's speech recognition" aria-label="Voice typing">
-                  ${ICONS.mic} <span class="composer-waveform" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
-                </button>
+                <button type="button" id="composer-add-btn" class="composer-circle-btn add-circle-btn" data-testid="composer-add-btn" data-tip="Add to conversation" aria-haspopup="dialog" aria-expanded="false" aria-label="Add file or photo" title="Add file, screenshot, or photo">${ICONS.plus}</button>
                 <span id="composer-hint" class="composer-hint" role="status" aria-live="polite"></span>
                 <span class="composer-keys">Enter to send · Shift+Enter for a new line · Ctrl+K to search</span>
               </div>
               <div class="composer-tools-right">
-                <button type="button" id="composer-voicemode-btn" class="voicemode-circle-btn" data-testid="composer-voicemode" aria-pressed="false" aria-label="Enter voice conversation mode" title="Toggle hands-free voice conversation">${ICONS.voiceWave}</button>
-                <button type="submit" id="ssra-chat-submit" class="send-btn">${ICONS.send} Send</button>
+                <button type="button" id="voice-dictate-btn" class="composer-circle-btn mic-circle-btn" data-testid="composer-mic" data-tip="Dictate" title="Dictate into message" aria-label="Start speaking">${ICONS.mic}</button>
+                <button type="button" id="composer-voicemode-btn" class="composer-circle-btn voicemode-circle-btn is-primary-slot" data-testid="composer-voicemode" data-tip="Enter voice mode" aria-pressed="false" aria-label="Enter voice conversation mode" title="Toggle hands-free voice conversation">${ICONS.voiceWave}</button>
+                <button type="submit" id="ssra-chat-submit" class="send-btn" data-testid="composer-send" data-tip="Send message">${ICONS.send} Send</button>
               </div>
             </div>
           </form>
@@ -1277,19 +1291,37 @@ function renderPwaShellHtml(locale, nonce) {
       // FE-G5: reviewed Phase 1 interface strings only (OQ-008). Other locales fall back to English.
       const LOCALE_UI_STRINGS = {
         en: {
+          eyebrow: "Republic of South Sudan · SSRA / NRA Grounded AI Assistant",
           headline: "How can I help with your South Sudan taxes today?",
           subtitle: "Ask about TIN registration, PAYE, TCC, customs, or e-Tax. Answers cite approved sources when available. If a source cannot be confirmed, SSRA Assist will say so and offer staff help.",
           placeholder: "Ask about SSRA taxes, TIN, PAYE, TCC, or customs in English, Arabic, or Juba Arabic…",
+          callLabel: "Call receptionist",
+          dropFiles: "Drop files or screenshots to inspect (PDF, DOCX, XLSX, CSV, TXT, or image)",
+          spokenTag: "Spoken",
+          latestLabel: "Latest",
+          chipCats: ["TIN Registration", "PAYE Calculator", "Withholding Tax (WHT)", "Compliance (TCC)", "Scam & Channel Check", "Juba Arabic (pga)", "Personal e-Tax services"],
         },
         pga: {
+          eyebrow: "Jumhuriya ta South Sudan · Musaa'id SSRA / NRA",
           headline: "Kif ana agdar asaidu inta fi darayib ta South Sudan al-yom?",
           subtitle: "Is'al an TIN, PAYE, TCC, Jamarik, aw e-Tax. Ijaba bitzkur maraji SSRA lama yisanduha. Iza al-masdar mish mu'akkad, SSRA Assist bitwaddeh da wa bitqaddim musaa'ada min الموظفين.",
           placeholder: "As'al ayi su'al ala TIN, PAYE, TCC, aw Jamarik bi Arabi Juba...",
+          callLabel: "Ittasil bil istiqbal",
+          dropFiles: "Khalli malafat aw sura ta shasha hina (PDF, DOCX, XLSX, CSV, TXT, aw sura)",
+          spokenTag: "Bil sot",
+          latestLabel: "Al-akhir",
+          chipCats: ["Tasjil ta TIN", "Hisab ta PAYE", "Dariba ta الخصم (WHT)", "Shahada ta TCC", "Fahas ta Qanawat", "Arabi Juba (pga)", "Khadamat e-Tax"],
         },
         ar: {
+          eyebrow: "جمهورية جنوب السودان · المساعد الذكي لهيئة الإيرادات (SSRA / NRA)",
           headline: "كيف يمكنني مساعدتك في ضرائب جنوب السودان اليوم؟",
           subtitle: "اسأل عن تسجيل الرقم الضريبي أو PAYE أو شهادة الامتثال أو الجمارك أو e-Tax. تذكر الإجابات المصادر المعتمدة عند توفرها. إذا تعذر تأكيد المصدر، سنوضح ذلك ونقترح التواصل مع موظف.",
           placeholder: "اسأل عن الرقم الضريبي TIN أو ضريبة الدخل PAYE أو شهادة الامتثال TCC أو الجمارك...",
+          callLabel: "موظف الاستقبال الصوتي",
+          dropFiles: "أفلت الملفات أو لقطات الشاشة هنا للفحص (PDF أو DOCX أو XLSX أو صورة)",
+          spokenTag: "منطوق صوتياً",
+          latestLabel: "الأحدث",
+          chipCats: ["تسجيل الرقم الضريبي TIN", "حاسبة ضريبة الدخل PAYE", "ضريبة الاستقطاع WHT", "شهادة الامتثال TCC", "التحقق من القنوات الرسمية", "عربي جوبا (pga)", "خدمات e-Tax الشخصية"],
         },
       };
 
@@ -1301,6 +1333,7 @@ function renderPwaShellHtml(locale, nonce) {
       const input = document.getElementById("ssra-chat-input");
       const submitBtn = document.getElementById("ssra-chat-submit");
       const localeSelect = document.getElementById("locale-select");
+      const langAutoBadgeEl = document.getElementById("lang-auto-badge");
       const convListEl = document.getElementById("rail-conv-list");
       const activeTitleEl = document.getElementById("active-conv-title");
       const hintEl = document.getElementById("composer-hint");
@@ -1321,6 +1354,8 @@ function renderPwaShellHtml(locale, nonce) {
       }
       let state = {
         locale: shell?.dataset.locale || "en",
+        detectedLocale: shell?.dataset.locale || "en",
+        localeExplicit: false,
         theme: systemTheme(),
         themeChosen: false,
         lowDataMode: autoLowData,
@@ -1338,6 +1373,8 @@ function renderPwaShellHtml(locale, nonce) {
             theme: saved.theme || state.theme,
             themeChosen: Boolean(saved.theme),
             locale: saved.locale || state.locale,
+            detectedLocale: saved.locale || state.locale,
+            localeExplicit: Boolean(saved.localeExplicit),
             lowDataMode: saved.lowDataMode ?? state.lowDataMode,
             autoNarrate: Boolean(saved.autoNarrate),
             saveHistory: saved.saveHistory !== false,
@@ -1372,6 +1409,7 @@ function renderPwaShellHtml(locale, nonce) {
                 .map((t) => ({
                   role: t.role,
                   content: scrubPiiForStorage(t.content),
+                  spoken: Boolean(t.spoken),
                   meta: t.meta,
                 })),
             }));
@@ -1379,6 +1417,7 @@ function renderPwaShellHtml(locale, nonce) {
             STORAGE_KEY,
             JSON.stringify({
               locale: state.locale,
+              localeExplicit: Boolean(state.localeExplicit),
               theme: state.themeChosen ? state.theme : null,
               lowDataMode: state.lowDataMode,
               autoNarrate: state.autoNarrate,
@@ -1395,8 +1434,53 @@ function renderPwaShellHtml(locale, nonce) {
         } catch {}
       }
 
+      function syncLangAutoBadge() {
+        if (!langAutoBadgeEl) return;
+        const code = String(state.localeExplicit ? state.locale : state.detectedLocale || state.locale).toUpperCase();
+        langAutoBadgeEl.textContent = state.localeExplicit ? code : "AUTO · " + code;
+      }
+
+      const EXPLICIT_LOCALE_SWITCH_RULES = [
+        [/\\b(?:answer|reply|respond|speak|explain|switch|talk)\\b[^.!?]{0,25}\\b(?:in|to)\\s+juba\\s+arabic\\b|\\bbi\\s+arabi\\s+juba\\b|بالعربي\\s+جوبا|بعربي\\s+جوبا/i, "pga"],
+        [/\\b(?:answer|reply|respond|speak|explain|switch|talk)\\b[^.!?]{0,25}\\b(?:in|to)\\s+arabic\\b|(?:تحدث|تكلم|اجب|أجب|رد|اشرح)\\s+(?:بالعربي|بالعربية|عربي)/i, "ar"],
+        [/\\b(?:answer|reply|respond|speak|explain|switch|talk)\\b[^.!?]{0,25}\\b(?:in|to)\\s+english\\b|(?:تحدث|تكلم|اجب|أجب|رد)\\s+بالانجليزي/i, "en"],
+        [/\\b(?:answer|reply|respond|speak|explain|switch|talk)\\b[^.!?]{0,25}\\b(?:in|to)\\s+(?:dinka|thuɔŋjäŋ|thuongjang)\\b/i, "din"],
+        [/\\b(?:answer|reply|respond|speak|explain|switch|talk)\\b[^.!?]{0,25}\\b(?:in|to)\\s+(?:nuer|thok\\s+naath|thok\\s+nath)\\b/i, "nus"],
+        [/\\b(?:answer|reply|respond|speak|explain|switch|talk)\\b[^.!?]{0,25}\\b(?:in|to)\\s+(?:bari|kutuk\\s+na\\s+bari)\\b/i, "bfa"],
+        [/\\b(?:answer|reply|respond|speak|explain|switch|talk)\\b[^.!?]{0,25}\\b(?:in|to)\\s+(?:pazande|zande)\\b/i, "zne"],
+        [/\\b(?:answer|reply|respond|speak|explain|switch|talk)\\b[^.!?]{0,25}\\b(?:in|to)\\s+(?:shilluk|dhøg\\s+cøllø|dhog\\s+collo)\\b/i, "shk"],
+      ];
+
+      function detectExplicitLocaleSwitch(text) {
+        const clean = String(text || "").trim().slice(0, 512);
+        if (!clean) return null;
+        for (const [rx, target] of EXPLICIT_LOCALE_SWITCH_RULES) {
+          if (rx.test(clean)) return target;
+        }
+        return null;
+      }
+
+      function detectClientLocaleHint(text) {
+        const clean = String(text || "").trim().slice(0, 512);
+        if (!clean) return state.locale;
+        const exp = detectExplicitLocaleSwitch(clean);
+        if (exp) return exp;
+        if (/[\\u0600-\\u06FF]/.test(clean)) {
+          return /(?:^|\\s)(?:شنو|عشان|بتاع|بتاعي|بتاعت|هسي|قروش|بيشتغل|ندفع|نسجل)(?=\\s|$|[؟،.])/.test(clean) ? "pga" : "ar";
+        }
+        const folded = clean.toLowerCase().replace(/ë/g, "e").replace(/ɛ/g, "e").replace(/ɔ/g, "o").replace(/ŋ/g, "ng").replace(/[öä]/g, "a").replace(/ï/g, "i").replace(/ü/g, "u").replace(/ø/g, "o");
+        if (/\\b(?:kif|shunu|gaaid|agdar|asaidu|tasjil|dariba|darayib|jamarik|bitaa|al-yom)\\b/.test(folded)) return "pga";
+        if (/\\b(?:thuongjang|ajul|weu|bengic|akuma|tene|caar|nhialic|muk)\\b/.test(folded)) return "din";
+        if (/\\b(?:thok|naath|nath|guaath|kuäär|miem|rwac)\\b/.test(folded)) return "nus";
+        if (/\\b(?:kutuk|nyepo|konyo|bari|molok|gwoso)\\b/.test(folded)) return "bfa";
+        if (/\\b(?:pazande|marimo|kumba|pai|gbia)\\b/.test(folded)) return "zne";
+        if (/\\b(?:collo|dhog|jwok|kwer|kyew)\\b/.test(folded)) return "shk";
+        return state.locale;
+      }
+
       function applyLocaleStrings(loc) {
         state.locale = SELECTABLE_LOCALES.has(loc) ? loc : "en";
+        state.detectedLocale = state.locale;
         const uiLocale = LOCALE_UI_STRINGS[state.locale] ? state.locale : "en";
         document.documentElement.lang = uiLocale;
         document.documentElement.dir = uiLocale === "ar" ? "rtl" : "ltr";
@@ -1410,13 +1494,45 @@ function renderPwaShellHtml(locale, nonce) {
           notice.classList.toggle("is-hidden", uiLocale === state.locale);
         }
         const dict = LOCALE_UI_STRINGS[uiLocale];
+        const eyeEl = document.getElementById("landing-eyebrow-text");
         const hEl = document.getElementById("landing-headline");
         const sEl = document.getElementById("landing-subtitle");
+        const callLblEl = document.getElementById("header-call-label");
+        const openCallBtn = document.getElementById("open-call-btn");
+        const dropEl = document.getElementById("composer-drop-text");
+        const latestLblEl = document.getElementById("scroll-latest-label");
+        if (eyeEl && dict.eyebrow) eyeEl.textContent = dict.eyebrow;
         if (hEl) hEl.textContent = dict.headline;
         if (sEl) sEl.textContent = dict.subtitle;
         if (input) input.placeholder = dict.placeholder;
+        if (callLblEl && dict.callLabel) callLblEl.textContent = dict.callLabel;
+        if (openCallBtn && dict.callLabel) {
+          openCallBtn.setAttribute("aria-label", dict.callLabel + " — Open voice input options");
+          openCallBtn.setAttribute("title", dict.callLabel);
+        }
+        if (dropEl && dict.dropFiles) dropEl.textContent = dict.dropFiles;
+        if (latestLblEl && dict.latestLabel) latestLblEl.textContent = dict.latestLabel;
+        if (Array.isArray(dict.chipCats)) {
+          document.querySelectorAll("[data-cat-idx]").forEach((el) => {
+            const idx = Number.parseInt(el.getAttribute("data-cat-idx") || "-1", 10);
+            if (dict.chipCats[idx]) el.textContent = dict.chipCats[idx];
+          });
+        }
+        syncLangAutoBadge();
       }
       applyLocaleStrings(state.locale);
+
+      function adoptResponseLocale(responseLocale, localeSource, explicitSwitchTarget) {
+        const target = explicitSwitchTarget || (SELECTABLE_LOCALES.has(responseLocale) ? responseLocale : null);
+        if (!target) return;
+        state.detectedLocale = target;
+        if (explicitSwitchTarget || localeSource === "explicit_request") {
+          state.localeExplicit = true;
+          applyLocaleStrings(target);
+        } else {
+          syncLangAutoBadge();
+        }
+      }
 
       const THEME_COLORS = { dark: "#091310", light: "#F6F7F2", "high-contrast": "#000000" };
       function applyTheme(t) {
@@ -1582,7 +1698,11 @@ function renderPwaShellHtml(locale, nonce) {
 
       function renderTurnHtml(turn, index) {
         if (turn.role === "user") {
-          return '<article class="message-row message-row-user"><div class="bubble user">' + escapeHtml(turn.content) + "</div></article>";
+          const spokenDict = LOCALE_UI_STRINGS[state.locale] || LOCALE_UI_STRINGS.en;
+          const spokenHtml = turn.spoken
+            ? '<p class="msg-spoken-tag" aria-hidden="true">' + ICONS.mic + " <span>" + escapeHtml(spokenDict.spokenTag || "Spoken") + "</span></p>"
+            : "";
+          return '<article class="message-row message-row-user">' + spokenHtml + '<div class="bubble user">' + escapeHtml(turn.content) + "</div></article>";
         }
         const meta = turn.meta || {};
         if (meta.kind === "pending") {
@@ -1755,12 +1875,14 @@ function renderPwaShellHtml(locale, nonce) {
         if (!activeConv || activeConv.turns.length === 0) {
           landingView?.classList.remove("is-hidden");
           chatView?.classList.add("is-hidden");
+          document.getElementById("scroll-to-latest-btn")?.classList.add("is-hidden");
           if (activeTitleEl) activeTitleEl.textContent = "New Conversation";
           window.clearTimeout(prependTimer);
           renderedTranscript = { convId: null, turnHtml: [], offset: 0 };
         } else {
           landingView?.classList.add("is-hidden");
           chatView?.classList.remove("is-hidden");
+          document.getElementById("scroll-to-latest-btn")?.classList.add("is-hidden");
           if (activeTitleEl) activeTitleEl.textContent = activeConv.title;
           if (msgList) {
             renderTranscript(activeConv);
@@ -1992,11 +2114,25 @@ function renderPwaShellHtml(locale, nonce) {
         return true;
       }
 
+      function joinDictatedText(base, spoken) {
+        const b = String(base || "").trimEnd();
+        const s = String(spoken || "").trimStart();
+        if (!b) return s;
+        if (!s) return b;
+        return b + " " + s;
+      }
+
       async function sendTurn(text, opts) {
         if (activeTurnAbortController) return;
         const trimmed = String(text || "").trim();
         if (!trimmed) return;
         const fromVoiceLoop = Boolean(opts && opts.fromVoiceLoop);
+        const isSpoken = Boolean(fromVoiceLoop || (opts && opts.spoken));
+        const explicitSwitchTarget = detectExplicitLocaleSwitch(trimmed);
+        if (!voiceContinuousActive && activeSpeechRec) {
+          stopActiveSpeechRecognition();
+          syncComposerRecordingUi();
+        }
 
         let conv = state.conversations.find((c) => c.id === state.activeId);
         if (!conv) {
@@ -2012,7 +2148,7 @@ function renderPwaShellHtml(locale, nonce) {
           state.activeId = conv.id;
         }
         conv.updatedAtMs = Date.now();
-        conv.turns.push({ role: "user", content: trimmed });
+        conv.turns.push({ role: "user", content: trimmed, spoken: isSpoken });
         if (fromVoiceLoop || voiceContinuousActive || callBackdrop?.classList.contains("open")) {
           appendCallCaption("caller", trimmed);
         }
@@ -2083,6 +2219,11 @@ function renderPwaShellHtml(locale, nonce) {
           } else if (!replyText) {
             reply = failureTurn("SSRA Assist sent a reply it couldn’t display, so your question wasn’t answered. You can try again.", trimmed);
           } else {
+            adoptResponseLocale(
+              data.locale || data.english_router_envelope?.detected_input_language,
+              data.locale_source,
+              explicitSwitchTarget,
+            );
             const answerCitations = Array.isArray(data.answer.citations) ? data.answer.citations : [];
             reply = {
               role: "assistant",
@@ -2118,6 +2259,7 @@ function renderPwaShellHtml(locale, nonce) {
             submitBtn.type = "submit";
             setSafeHtml(submitBtn, ICONS.send + " Send");
           }
+          syncComposerRecordingUi();
         }
         conv.turns[conv.turns.length - 1] = reply;
         if (fromVoiceLoop || voiceContinuousActive || callBackdrop?.classList.contains("open")) {
@@ -2156,12 +2298,18 @@ function renderPwaShellHtml(locale, nonce) {
         const val = input.value;
         input.value = "";
         input.rows = 1;
+        syncComposerRecordingUi();
         sendTurn(val);
       });
 
       input?.addEventListener("input", () => {
         const lines = String(input.value || "").split("\\n").length;
         input.rows = Math.min(5, Math.max(1, lines));
+        if (!state.localeExplicit) {
+          state.detectedLocale = detectClientLocaleHint(input.value);
+          syncLangAutoBadge();
+        }
+        syncComposerRecordingUi();
       });
 
       input?.addEventListener("keydown", (e) => {
@@ -2408,6 +2556,7 @@ function renderPwaShellHtml(locale, nonce) {
       });
 
       localeSelect?.addEventListener("change", () => {
+        state.localeExplicit = true;
         applyLocaleStrings(localeSelect.value);
         saveState();
       });
@@ -3028,6 +3177,12 @@ function renderPwaShellHtml(locale, nonce) {
         const isListening = Boolean(activeSpeechRec) && !callMuted;
         composerRecBarEl?.classList.toggle("is-hidden", !isListening);
         form?.classList.toggle("is-recording", isListening);
+        const dictateBtn = document.getElementById("voice-dictate-btn");
+        if (dictateBtn) {
+          dictateBtn.classList.toggle("btn-recording", isListening);
+          dictateBtn.setAttribute("aria-label", isListening ? "Stop listening" : "Start speaking");
+          dictateBtn.setAttribute("data-tip", isListening ? "Stop listening" : "Dictate");
+        }
         if (composerRecConfirmBtn) {
           composerRecConfirmBtn.setAttribute(
             "aria-label",
@@ -3036,8 +3191,11 @@ function renderPwaShellHtml(locale, nonce) {
         }
         if (composerVoiceModeBtn) {
           const vmOn = Boolean(voiceContinuousActive);
+          const hasTypedText = Boolean(input && input.value.trim().length > 0);
           composerVoiceModeBtn.classList.toggle("is-active", vmOn);
+          composerVoiceModeBtn.classList.toggle("is-primary-slot", !activeTurnAbortController && !hasTypedText);
           composerVoiceModeBtn.setAttribute("aria-pressed", String(vmOn));
+          composerVoiceModeBtn.setAttribute("data-tip", vmOn ? "Exit voice mode" : "Enter voice mode");
           composerVoiceModeBtn.setAttribute(
             "aria-label",
             vmOn ? "Exit voice conversation mode" : "Enter voice conversation mode",
@@ -3276,6 +3434,18 @@ function renderPwaShellHtml(locale, nonce) {
         if (activeSpeechRec) {
           stopActiveSpeechRecognition();
         }
+        if (!voiceContinuousActive) {
+          if (input && lastHeardVoiceTranscript.trim() && !input.value.includes(lastHeardVoiceTranscript.trim())) {
+            input.value = joinDictatedText(input.value, lastHeardVoiceTranscript);
+            const lines = String(input.value || "").split("\\n").length;
+            input.rows = Math.min(5, Math.max(1, lines));
+          }
+          lastHeardVoiceTranscript = "";
+          syncComposerRecordingUi();
+          input?.focus();
+          setVoiceStatus("Voice text added. Check it before you send.");
+          return;
+        }
         syncComposerRecordingUi();
         const candidate = (input && input.value.trim()) || lastHeardVoiceTranscript.trim();
         if (candidate) {
@@ -3284,7 +3454,7 @@ function renderPwaShellHtml(locale, nonce) {
             input.rows = 1;
           }
           lastHeardVoiceTranscript = "";
-          sendTurn(candidate, { fromVoiceLoop: voiceContinuousActive });
+          sendTurn(candidate, { fromVoiceLoop: true, spoken: true });
         }
       });
       composerVoiceModeBtn?.addEventListener("click", () => {
@@ -3594,17 +3764,23 @@ function renderPwaShellHtml(locale, nonce) {
             }
             if (voiceSilenceTimeoutMs === 0) {
               if (input) {
-                input.value = (input.value ? input.value + " " : "") + transcript;
+                input.value = joinDictatedText(input.value, transcript);
+                const lines = String(input.value || "").split("\\n").length;
+                input.rows = Math.min(5, Math.max(1, lines));
               }
               setVoiceStatus("Voice text ready. Tap Send to submit.");
               return;
             }
             setVoiceStatus('Heard: "' + transcript + '" — preparing answer…');
-            sendTurn(transcript, { fromVoiceLoop: true });
+            sendTurn(transcript, { fromVoiceLoop: true, spoken: true });
           } else {
             if (input) {
-              input.value = (input.value ? input.value + " " : "") + transcript;
+              input.value = joinDictatedText(input.value, transcript);
+              const lines = String(input.value || "").split("\\n").length;
+              input.rows = Math.min(5, Math.max(1, lines));
+              input.focus();
             }
+            lastHeardVoiceTranscript = "";
             setVoiceStatus("Voice text added. Check it before you send.");
           }
         };
@@ -3645,6 +3821,8 @@ function renderPwaShellHtml(locale, nonce) {
           }
         };
         try {
+          lastHeardVoiceTranscript = "";
+          lastMicStartAtMs = Date.now();
           rec.start();
         } catch {
           activeSpeechRec = null;
@@ -3655,7 +3833,13 @@ function renderPwaShellHtml(locale, nonce) {
       }
 
       // Voice Dictation (Web Speech API)
+      let lastMicStartAtMs = 0;
       document.getElementById("voice-dictate-btn")?.addEventListener("click", () => {
+        if (activeSpeechRec && !voiceContinuousActive) {
+          if (Date.now() - lastMicStartAtMs < 250 && !lastHeardVoiceTranscript) return;
+          composerRecConfirmBtn?.click();
+          return;
+        }
         if (assistantCurrentlySpeaking || activeTurnAbortController) {
           stopAssistantSpeechPlayback();
           if (activeTurnAbortController) activeTurnAbortController.abort();
@@ -3739,7 +3923,11 @@ function renderPwaShellHtml(locale, nonce) {
       let inspectingAttachmentId = null;
 
       function sanitizeAttachmentName(rawName) {
-        const stripped = Array.from(String(rawName || "document"))
+        const normalizedRaw =
+          !rawName || rawName === "image.png" || rawName === "blob"
+            ? "pasted_image_" + Date.now().toString().slice(-4) + ".png"
+            : String(rawName);
+        const stripped = Array.from(normalizedRaw)
           .filter((ch) => {
             const code = ch.charCodeAt(0);
             return (
@@ -4249,6 +4437,61 @@ function renderPwaShellHtml(locale, nonce) {
       composerCameraInput?.addEventListener("change", (e) => {
         if (e.target.files?.length) handleAttachFiles(e.target.files);
         e.target.value = "";
+      });
+      const composerDropOverlayEl = document.getElementById("composer-drop-overlay");
+      let composerDragCounter = 0;
+      const dragHasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
+      form?.addEventListener("dragenter", (e) => {
+        if (!dragHasFiles(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        composerDragCounter += 1;
+        form.classList.add("composer-drag-active");
+        composerDropOverlayEl?.classList.remove("is-hidden");
+      });
+      form?.addEventListener("dragover", (e) => {
+        if (!dragHasFiles(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      form?.addEventListener("dragleave", (e) => {
+        if (!dragHasFiles(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        composerDragCounter = Math.max(0, composerDragCounter - 1);
+        if (composerDragCounter === 0) {
+          form.classList.remove("composer-drag-active");
+          composerDropOverlayEl?.classList.add("is-hidden");
+        }
+      });
+      form?.addEventListener("drop", (e) => {
+        if (!dragHasFiles(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        composerDragCounter = 0;
+        form.classList.remove("composer-drag-active");
+        composerDropOverlayEl?.classList.add("is-hidden");
+        if (e.dataTransfer?.files?.length) {
+          handleAttachFiles(e.dataTransfer.files);
+        }
+      });
+      input?.addEventListener("paste", (e) => {
+        const files = e.clipboardData?.files;
+        if (!files || !files.length) return;
+        if (e.clipboardData?.getData?.("text/plain")) return;
+        e.preventDefault();
+        handleAttachFiles(files);
+      });
+      const scrollLatestBtn = document.getElementById("scroll-to-latest-btn");
+      msgList?.addEventListener("scroll", () => {
+        if (!msgList || !scrollLatestBtn) return;
+        const dist = msgList.scrollHeight - msgList.scrollTop - msgList.clientHeight;
+        scrollLatestBtn.classList.toggle("is-hidden", dist < 72);
+      });
+      scrollLatestBtn?.addEventListener("click", () => {
+        if (!msgList) return;
+        msgList.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "end" });
+        scrollLatestBtn.classList.add("is-hidden");
       });
       composerAttachmentsEl?.addEventListener("click", (e) => {
         const inspectBtn = e.target.closest("[data-inspect-att]");
