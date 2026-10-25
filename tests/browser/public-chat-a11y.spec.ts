@@ -138,6 +138,55 @@ test("the page advertises only shortcuts that work", async ({ page }) => {
   await expect(page.locator("#chat-view")).toBeVisible();
 });
 
+test("the landing centres the composer between the headline and three suggestions", async ({ page }) => {
+  await page.goto("/en");
+  const main = page.locator("#main-content");
+  await expect(main).toHaveAttribute("data-view", "landing");
+  const chips = page.getByRole("group", { name: "Suggested tax questions" }).getByRole("button");
+  await expect(chips).toHaveCount(3);
+  await expect(chips.first()).toHaveText("How do I register for a TIN step by step?");
+  const [headline, composer, prompts] = await Promise.all(
+    ["#landing-headline", "#ssra-chat-form", "#landing-prompts"].map((selector) => page.locator(selector).boundingBox()),
+  );
+  expect((headline?.y ?? 0) + (headline?.height ?? 0)).toBeLessThanOrEqual(composer?.y ?? 0);
+  expect((composer?.y ?? 0) + (composer?.height ?? 0)).toBeLessThanOrEqual(prompts?.y ?? 0);
+  // Keyboard order follows the visual order: add, input, dictate, voice mode, then the suggestions.
+  await page.locator("#composer-add-btn").focus();
+  for (const next of ["#ssra-chat-input", "#voice-dictate-btn", "#composer-voicemode-btn"]) {
+    await page.keyboard.press("Tab");
+    await expect(page.locator(next)).toBeFocused();
+  }
+  await page.keyboard.press("Tab");
+  await expect(chips.first()).toBeFocused();
+  await ask(page, "Synthetic public guidance question");
+  await expect(main).toHaveAttribute("data-view", "chat");
+  await expect(page.locator("#landing-prompts")).toBeHidden();
+});
+
+test("the composer placeholder rotates only while idle", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/en");
+  const input = page.getByRole("textbox", { name: "Ask SSRA Assist" });
+  const phrase = page.locator("#composer-placeholder-text");
+  await expect(input).toHaveAttribute("placeholder", "Ask anything you need about taxes");
+  await expect(phrase).toHaveText("Ask anything you need about taxes");
+  await page.clock.runFor(5_500);
+  await expect(phrase).toHaveText("Drag and drop a screenshot for guidance");
+  await input.focus();
+  await page.clock.runFor(11_000);
+  await expect(phrase).toHaveText("Drag and drop a screenshot for guidance");
+  await input.fill("Synthetic draft");
+  await expect(phrase).toBeHidden();
+});
+
+test("reduced motion keeps a static composer placeholder", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/en");
+  await expect(page.locator("#ssra-chat-form")).not.toHaveClass(/has-rotating-placeholder/);
+  await expect(page.locator("#composer-placeholder")).toBeHidden();
+  await expect(page.getByRole("textbox", { name: "Ask SSRA Assist" })).toHaveAttribute("placeholder", "Ask anything you need about taxes");
+});
+
 test("the offline status meets 4.5:1 contrast in the light theme", async ({ browser }) => {
   const context = await browser.newContext({ colorScheme: "light" });
   const page = await context.newPage();
@@ -371,19 +420,21 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(page.locator("#header-options-menu")).toBeHidden();
   await expect(kebabBtn).toBeFocused();
 
-  // Header & Sidebar background rgba(0, 93, 180, var(--tw-bg-opacity)), sharp white text, white main chat canvas & LanguageMenu.tsx dialog.
+  // The header is part of the main canvas (no separate bar); the sidebar keeps its institutional blue with white text.
   const headerStyles = await page.locator(".chat-header").evaluate((el) => {
     const s = getComputedStyle(el);
     return { bg: s.backgroundColor, color: s.color };
   });
-  expect(headerStyles).toEqual({ bg: "rgb(0, 93, 180)", color: "rgb(255, 255, 255)" });
+  expect(headerStyles).toEqual({ bg: "rgba(0, 0, 0, 0)", color: "rgb(11, 25, 44)" });
   const railStyles = await page.locator(".rail-wrap").evaluate((el) => {
     const s = getComputedStyle(el);
     return { bg: s.backgroundColor, color: s.color };
   });
   expect(railStyles).toEqual({ bg: "rgb(0, 93, 180)", color: "rgb(255, 255, 255)" });
   const mainBg = await page.locator(".app-content").evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(mainBg).toBe("rgb(255, 255, 255)");
+  expect(mainBg).toBe("rgba(0, 0, 0, 0)");
+  const canvas = await page.locator(".ssra-main-gradient").evaluate((el) => getComputedStyle(el).backgroundImage);
+  expect(canvas).toContain("radial-gradient");
 
   const langselBtn = page.locator("#langsel-btn");
   await expect(langselBtn).toHaveAttribute("aria-expanded", "false");
