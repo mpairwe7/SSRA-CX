@@ -48,4 +48,13 @@ We adopt the **Next.js 16 BFF Session Pattern** using `openid-client@6.8.8` (wit
 
 ## 6. Reversal Cost & Migration Path
 
-- **Reversal Cost:** Medium. Session handling is isolated inside `apps/web/src/lib/auth/` and `apps/console/src/lib/auth/`.
+- **Reversal Cost:** Medium. Session handling is isolated inside `apps/web/src/lib/auth/`, `apps/console/src/oidc-keycloak.ts`, and `libs/ssra_security/src/ssra_security/keycloak.py`.
+
+## 7. Update (2026-10-25): FAPI 2.0 / RFC 9207 OAuth Mix-Up Defense, `CWE-208` Constant-Time Callback Checks & Realm Export Validation
+
+1. **Keycloak Realm Export Hardening (`infra/keycloak/ssra-realm.json` & `libs/ssra_security/src/ssra_security/keycloak.py`):**
+   - `ssra-staff-console` and `ssra-web-bff` explicitly configure `redirectUris` (`/signin/callback` without wildcards or open redirects), `webOrigins`, `attributes["post.logout.redirect.uris"]`, `fullScopeAllowed: false` with explicit `scopeMappings` (`ssra_staff`, `ssra_admin`, `ssra_auditor`), and OIDC protocol mappers (`ssra-console-audience-mapper`, `ssra-realm-roles-mapper`, `ssra-office-code-mapper`, `ssra-web-audience-mapper`).
+   - `validate_keycloak_realm_export` uses `_is_valid_bff_uri` (`urllib.parse.urlsplit`) to reject wildcards (`*`), RFC 3986 `@` userinfo credentials, fragments (`#`), query parameters (`?`), path traversal (`..`), and cleartext HTTP on non-loopback hosts, while enforcing `"exclude.session.state.from.auth.response": "true"` (RFC 9700 / FAPI 2.0) and validating every `##`-delimited URI in `post.logout.redirect.uris`.
+2. **Sign-In (`/signin`), Sign-Up (`/signup`, OIDC `prompt=create`) & Callback (`/signin/callback`) Hardening (`apps/console/src/oidc-keycloak.ts` & `packages/ui/ops-console.js`):**
+   - Enforces RFC 7636 PKCE `S256` character-set grammar (`code_challenge` `^[A-Za-z0-9_-]{43,128}$` and `code_verifier` `^[A-Za-z0-9._~-]{43,128}$`), printable ASCII `state`/`nonce` bounds (`32..256` chars), and open-redirect sanitization (`sanitizeReturnTo` blocking `//`, `http:`, `javascript:`, `\\`, and auth-loop routes).
+   - Implements `timingSafeEqualStrings` (`GHSA-xpv3-w29h-x7cv` / `CWE-208` mitigation) for constant-time comparison of OAuth `state` and RFC 9207 `iss` (`Authorization Server Issuer Identification`) on `/signin/callback`, and scrubs single-use authorization codes from the browser URL bar via `window.history.replaceState({}, "", "/signin/callback")` immediately upon consumption.

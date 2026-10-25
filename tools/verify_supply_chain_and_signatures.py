@@ -645,6 +645,12 @@ def main() -> None:
     assert "memory_limiter" in otel_cfg.get("processors", {}), (
         "otel-collector-config.yaml must configure memory_limiter processor"
     )
+    _basic_auth_uri_re = re.compile(r"https?://[^/\s:@\"'`]+:[^/\s@\"'`]+@")
+    for md_path in sorted((ROOT / "docs").rglob("*.md")):
+        md_text = md_path.read_text(encoding="utf-8")
+        assert not _basic_auth_uri_re.search(md_text), (
+            f"Documentation file {md_path.relative_to(ROOT)} contains a literal Basic-Auth URI pattern that triggers TruffleHog v3 URI detector"
+        )
 
     print(
         "Supply-chain, infra & living-docs traceability verification passed: 40-char SHA CI actions, "

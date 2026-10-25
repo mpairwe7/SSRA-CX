@@ -106,6 +106,15 @@ function hasAsciiControlChar(value: string): boolean {
   return false;
 }
 
+function stripAsciiControlChars(value: string): string {
+  let out = "";
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code > 0x1f && code !== 0x7f) out += value[i];
+  }
+  return out;
+}
+
 /**
  * Validate that a `returnTo` redirect target is a safe, same-origin relative path
  * starting with a single `/` (mitigates CWE-601 Open Redirect, including WHATWG URL
@@ -142,6 +151,19 @@ export function sanitizeReturnTo(raw: string | null | undefined): string | undef
       parsed.origin !== base ||
       !parsed.pathname.startsWith("/") ||
       parsed.pathname.startsWith("//")
+    ) {
+      return undefined;
+    }
+    const cleanPath = parsed.pathname.replace(/\/+$/, "") || "/";
+    if (
+      cleanPath === "/signin" ||
+      cleanPath.startsWith("/signin/") ||
+      cleanPath === "/signup" ||
+      cleanPath.startsWith("/signup/") ||
+      cleanPath === "/api" ||
+      cleanPath.startsWith("/api/") ||
+      cleanPath === "/v1" ||
+      cleanPath.startsWith("/v1/")
     ) {
       return undefined;
     }
@@ -334,22 +356,37 @@ export function validateOidcCallbackParams(
   input: OidcCallbackValidationInput,
 ): OidcCallbackValidationResult {
   if (input.error) {
-    const desc = input.errorDescription?.trim() || "the identity provider refused the request";
+    const cleanErr = stripAsciiControlChars(input.error).trim().slice(0, 64) || "oauth_error";
+    const cleanDesc =
+      (input.errorDescription
+        ? stripAsciiControlChars(input.errorDescription).trim().slice(0, 256)
+        : "") || "the identity provider refused the request";
     return {
       valid: false,
       phase: "error",
       errorReason: "PROVIDER_ERROR",
-      detailMessage: `${input.error}: ${desc}`,
+      detailMessage: `${cleanErr}: ${cleanDesc}`,
       targetPath: "/signin",
       allowedDestinations: [],
     };
   }
-  if (!input.code?.trim()) {
+  const cleanCode = input.code?.trim() ?? "";
+  if (!cleanCode) {
     return {
       valid: false,
       phase: "error",
       errorReason: "MISSING_AUTH_CODE",
       detailMessage: "The identity provider returned no authorization code.",
+      targetPath: "/signin",
+      allowedDestinations: [],
+    };
+  }
+  if (!/^[\x21-\x7E]{1,512}$/.test(cleanCode)) {
+    return {
+      valid: false,
+      phase: "error",
+      errorReason: "INVALID_AUTH_CODE",
+      detailMessage: "The authorization code format is invalid or corrupted.",
       targetPath: "/signin",
       allowedDestinations: [],
     };

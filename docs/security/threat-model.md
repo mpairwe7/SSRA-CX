@@ -1,8 +1,8 @@
 # SSRA Assist — Threat Model v1 & Controls Matrix (`docs/security/threat-model.md`)
 
-**Status:** Draft v1 (Phase 0)  
-**Date:** 2026-10-16  
-**Frameworks:** STRIDE, OWASP Top 10 for Agentic Applications 2026 (`ASI01`–`ASI10`), OWASP Top 10 for LLM Applications 2025, OWASP MCP Top 10, NSA AI Security Center MCP Guidance (May 2026), OWASP ASVS 5.0 (L2/L3), SLSA v1 Build Level 3  
+**Status:** v1.2 (Phase 0–4 Reference Baseline + October 2026 FAPI 2.0 / RFC 9207 / ASVS 5.0 L3 Hardening)  
+**Date:** 2026-10-25  
+**Frameworks:** STRIDE, OWASP Top 10 for Agentic Applications 2026 (`ASI01`–`ASI10`), OWASP Top 10 for LLM Applications 2025, OWASP MCP Top 10, NSA AI Security Center MCP Guidance (May 2026), OWASP ASVS 5.0 (L2/L3), OpenID FAPI 2.0, RFC 9207, SLSA v1 Build Level 3  
 **References:** [`docs/00-master-prompt.md`](../00-master-prompt.md) Sections 4, 8.2, 12.1–12.4
 
 ---

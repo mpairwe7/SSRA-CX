@@ -85,10 +85,27 @@ test("the preview state is rendered without JavaScript and claims no live capabi
     await expect(page.getByRole("heading", { level: 1, name: "Analytics & CX Scorecard" })).toBeVisible();
     await expect(page.locator("#staff-main")).toContainText("not connected to an authenticated staff session");
     await expect(page.locator("#spec-standard")).toContainText("OpenSLO v1");
+    await expect(page.locator("#rail-group-observe")).toHaveText("Observe");
+    await expect(page.locator('#staff-rail a[href="/analytics"]')).toHaveAttribute("aria-current", "page");
     await expect(page).toHaveTitle("SSRA Operations Console Preview — Analytics & CX Scorecard");
     const html = await page.content();
     expect(html).not.toMatch(/AI phone receptionist|served right now|Merkle seal proof|blurb/);
   } finally {
     await context.close();
   }
+});
+
+test("mobile drawer at 320px displays full labels and account metadata even when desktop railMode is hover", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("ssra-ops-rail-mode", "hover");
+  });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto(`${consoleBaseUrl}/admin`);
+  await page.locator("#mobile-ops-nav-btn").click();
+  await expect(page.locator("#staff-rail")).toHaveClass(/is-drawer-open/);
+  await expect(page.locator("#rail-group-work")).toBeVisible();
+  await expect(page.locator('#staff-rail a[href="/admin"] .staff-rail-label')).toBeVisible();
+  await expect(page.locator("#acct-display-name")).toBeVisible();
 });

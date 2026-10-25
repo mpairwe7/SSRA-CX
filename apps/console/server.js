@@ -36,6 +36,19 @@ const PORT = Number.parseInt(process.env.PORT ?? "3001", 10);
 const HOSTNAME = process.env.HOSTNAME ?? "0.0.0.0";
 const VALID_HOST_RE = /^[A-Za-z0-9.[\]:-]+$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "OPTIONS"]);
+const CONSUMED_LOGOUT_JTIS = new Map();
+const MAX_LOGOUT_JTIS = 4096;
+
+function consumeLogoutJti(jti, nowSec, expSec) {
+  for (const [key, expiry] of CONSUMED_LOGOUT_JTIS) {
+    if (expiry <= nowSec) CONSUMED_LOGOUT_JTIS.delete(key);
+  }
+  if (CONSUMED_LOGOUT_JTIS.has(jti) || CONSUMED_LOGOUT_JTIS.size >= MAX_LOGOUT_JTIS) {
+    return false;
+  }
+  CONSUMED_LOGOUT_JTIS.set(jti, Math.max(expSec, nowSec + 120));
+  return true;
+}
 function denyStaffApi(res, secHeaders) {
   res.writeHead(403, {
     "Content-Type": "application/json",
@@ -266,7 +279,8 @@ const server = http.createServer(async (req, res) => {
         nowSec > pld.exp ||
         Math.abs(nowSec - pld.iat) > 120 ||
         !pld?.events?.["http://schemas.openid.net/event/backchannel-logout"] ||
-        (!pld?.sid && !pld?.sub)
+        (!pld?.sid && !pld?.sub) ||
+        !consumeLogoutJti(pld.jti, nowSec, pld.exp)
       ) {
         res.writeHead(400, {
           "Content-Type": "application/json",

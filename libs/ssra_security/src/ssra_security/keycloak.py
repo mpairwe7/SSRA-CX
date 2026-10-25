@@ -122,6 +122,13 @@ def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
         is_interactive_bff = dpop_cid in ("ssra-web-bff", "ssra-staff-console")
         redirect_uris = dpop_client.get("redirectUris", [])
         web_origins = dpop_client.get("webOrigins", [])
+        post_logout_raw = str(dpop_attrs.get("post.logout.redirect.uris") or "").strip()
+        post_logout_uris = [u.strip() for u in post_logout_raw.split("##") if u.strip()]
+        console_fapi_ok = dpop_cid != "ssra-staff-console" or (
+            dpop_attrs.get("require.pushed.authorization.requests") == "true"
+            and dpop_attrs.get("default.acr.values") == "urn:ssra:acr:passkey"
+            and dpop_attrs.get("minimum.acr.value") == "urn:ssra:acr:passkey"
+        )
         redirect_ok = not is_interactive_bff or (
             isinstance(redirect_uris, list)
             and bool(redirect_uris)
@@ -131,7 +138,12 @@ def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
             and isinstance(web_origins, list)
             and bool(web_origins)
             and all(_is_valid_bff_uri(o, expected_paths=("", "/")) for o in web_origins)
-            and bool(str(dpop_attrs.get("post.logout.redirect.uris") or "").strip())
+            and bool(post_logout_uris)
+            and all(
+                _is_valid_bff_uri(u, expected_paths=("/en", "/signin")) for u in post_logout_uris
+            )
+            and dpop_attrs.get("exclude.session.state.from.auth.response") == "true"
+            and console_fapi_ok
         )
         bcl_url_ok = not is_interactive_bff or (
             dpop_client.get("frontchannelLogout") is False

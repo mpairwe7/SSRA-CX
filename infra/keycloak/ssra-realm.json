@@ -26,7 +26,8 @@
   "adminEventsDetailsEnabled": true,
   "attributes": {
     "acr.loa.map": "{\"urn:ssra:acr:otp-t1\":1,\"urn:ssra:acr:t3-step-up\":3,\"urn:ssra:acr:passkey\":3}",
-    "parRequestUriLifespan": "60"
+    "parRequestUriLifespan": "60",
+    "authorization_response_iss_parameter_supported": "true"
   },
   "webAuthnPolicyRpEntityName": "South Sudan Revenue Authority (SSRA)",
   "webAuthnPolicySignatureAlgorithms": ["ES256", "EdDSA"],
@@ -120,7 +121,8 @@
         "backchannel.logout.session.required": "true",
         "backchannel.logout.revoke.offline.tokens": "true",
         "backchannel.logout.url": "https://assist.ssra.gov.ss/api/auth/backchannel-logout",
-        "post.logout.redirect.uris": "https://assist.ssra.gov.ss/en##http://127.0.0.1:3032/en##http://localhost:3000/en",
+        "post.logout.redirect.uris": "https://assist.ssra.gov.ss/en##http://127.0.0.1:3032/en##http://127.0.0.1:3033/en##http://localhost:3000/en",
+        "exclude.session.state.from.auth.response": "true",
         "use.refresh.tokens": "true",
         "client.offline.session.idle.timeout": "0"
       },
@@ -169,7 +171,8 @@
         "backchannel.logout.session.required": "true",
         "backchannel.logout.revoke.offline.tokens": "true",
         "backchannel.logout.url": "https://console.ssra.gov.ss/api/auth/backchannel-logout",
-        "post.logout.redirect.uris": "https://console.ssra.gov.ss/signin##http://127.0.0.1:3034/signin##http://localhost:3034/signin"
+        "post.logout.redirect.uris": "https://console.ssra.gov.ss/signin##http://127.0.0.1:3034/signin##http://localhost:3034/signin",
+        "exclude.session.state.from.auth.response": "true"
       },
       "protocolMappers": [
         {

@@ -25,7 +25,7 @@ After a merge that changes only the web or staff servers, rebuild only those ser
 docker compose -f infra/compose/docker-compose.gpu.yml up -d --build --no-deps --wait ssra-frontend ssra-console
 ```
 
-Confirm that the running files match the checkout, for example `docker exec ssra-frontend sha256sum /app/apps/web/server.js` against `sha256sum apps/web/server.js`.
+Confirm that the running files match the checkout, for example `docker exec ssra-frontend sha256sum /app/apps/web/server.js` against `sha256sum apps/web/server.js`. Note that `infra/compose/docker-compose.gpu.yml` mounts `apps/web`, `apps/console`, `packages`, `libs`, `services/*`, `mcp-servers`, `ai`, and `knowledge` read-only with source-scoped live-watch (`uvicorn --reload-dir /app/libs/*/src --reload-dir /app/services/*/src` and `node --watch apps/*/server.js`) so source edits hot-reload cleanly while Turborepo `.turbo/*.log` and test runs never trigger spurious container restarts.
 
 ## Layer 1: public BFF and staff preview
 

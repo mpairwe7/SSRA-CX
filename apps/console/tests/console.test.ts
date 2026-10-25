@@ -977,6 +977,11 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(sanitizeReturnTo("/\t/evil.example.com")).toBeUndefined();
     expect(sanitizeReturnTo("/\\evil.example.com")).toBeUndefined();
     expect(sanitizeReturnTo("javascript:alert(1)")).toBeUndefined();
+    expect(sanitizeReturnTo("/signin")).toBeUndefined();
+    expect(sanitizeReturnTo("/signin/callback")).toBeUndefined();
+    expect(sanitizeReturnTo("/signup")).toBeUndefined();
+    expect(sanitizeReturnTo("/api/flags")).toBeUndefined();
+    expect(sanitizeReturnTo("/v1/admin/kill-switches")).toBeUndefined();
 
     const kcEndpoints = buildKeycloakOidcEndpoints("https://sso.ssra.gov.ss/realms/ssra/");
     expect(kcEndpoints.authorizationEndpoint).toBe(
@@ -1065,5 +1070,13 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
         iss: "https://sso.ssra.gov.ss/realms/ssra/",
       }).valid,
     ).toBe(true);
+    expect(
+      validateOidcCallbackParams({
+        code: "bad code with spaces",
+        state: "s".repeat(32),
+        expectedState: "s".repeat(32),
+        pkceVerifier: "v".repeat(64),
+      }).errorReason,
+    ).toBe("INVALID_AUTH_CODE");
   });
 });
