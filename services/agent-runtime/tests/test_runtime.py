@@ -1836,6 +1836,12 @@ def test_south_sudan_orthography_folding_juba_arabic_script_and_forward_switch()
         == 1
     )
     assert detect_language("Please switch to Dinka") == LocaleCode.DIN
+    assert (
+        detect_language(
+            "What is the filing deadline for salary tax?", default_locale=LocaleCode.DIN
+        )
+        == LocaleCode.EN
+    )
 
     # 2. Juba Arabic ('pga') written in Arabic script vs Modern Standard Arabic ('ar')
     assert detect_language("شنو المطلوب عشان اسجل الرقم الضريبي بتاع شركتي؟") == LocaleCode.PGA
@@ -1852,10 +1858,19 @@ def test_south_sudan_orthography_folding_juba_arabic_script_and_forward_switch()
     assert detect_explicit_locale_switch("") is None
     assert detect_explicit_locale_switch("Do you have the form in English?") is None
     assert (
+        detect_explicit_locale_switch("Do you have brochures in Dinka or guides in Arabic?") is None
+    )
+    assert detect_explicit_locale_switch("What does Thuongjang mean?") is None
+    assert detect_explicit_locale_switch("Do you have a Thok Naath brochure?") is None
+    assert detect_explicit_locale_switch("لا تتكلم عربي") is None
+    assert detect_explicit_locale_switch("لا تتكلم إنجليزي") is None
+    assert (
         detect_explicit_locale_switch("Please do not speak in Arabic, speak in Dinka")
         == LocaleCode.DIN
     )
     assert detect_explicit_locale_switch("Jam në Thuɔŋjäŋ") == LocaleCode.DIN
+    assert detect_explicit_locale_switch("Jam ne Thuongjang") == LocaleCode.DIN
+    assert detect_explicit_locale_switch("Thuɔŋjäŋ.") == LocaleCode.DIN
     assert detect_explicit_locale_switch("Ruacni Thok Naath") == LocaleCode.NUS
     eff_loc, state_str, cand = evaluate_language_state_transition(
         previous_locale=LocaleCode.EN,
@@ -1863,3 +1878,19 @@ def test_south_sudan_orthography_folding_juba_arabic_script_and_forward_switch()
         raw_text="Not in English — switch to Juba Arabic please",
     )
     assert eff_loc == LocaleCode.PGA and state_str == "LOCKED" and cand is None
+    # Short tax-loanword query in a non-English session stays in previous_locale as CODE_SWITCHING
+    det_loan = detect_language("TIN balance?", default_locale=LocaleCode.DIN)
+    loan_loc, loan_state, loan_cand = evaluate_language_state_transition(
+        previous_locale=LocaleCode.DIN,
+        detected_locale=det_loan,
+        raw_text="TIN balance?",
+    )
+    assert loan_loc == LocaleCode.DIN and loan_state == "CODE_SWITCHING" and loan_cand is None
+    # Short English question ("What is tax?") initiates CANDIDATE_SHIFT to EN
+    det_en_q = detect_language("What is tax?", default_locale=LocaleCode.DIN)
+    _, q_state, q_cand = evaluate_language_state_transition(
+        previous_locale=LocaleCode.DIN,
+        detected_locale=det_en_q,
+        raw_text="What is tax?",
+    )
+    assert q_state == "CANDIDATE_SHIFT" and q_cand == LocaleCode.EN

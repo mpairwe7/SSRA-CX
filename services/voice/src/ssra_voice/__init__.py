@@ -4196,30 +4196,40 @@ def lexical_language_hits(text: str) -> dict[str, int]:
     return counts
 
 
-def fuse_language_vote(vote: LanguageVote, text_confidence: float = 0.80) -> LanguageVote:
+def fuse_language_vote(
+    vote: LanguageVote,
+    text_confidence: float = 0.80,
+    *,
+    allowed_languages: tuple[str, ...] | None = None,
+) -> LanguageVote:
     """Fuse acoustic language-ID probabilities with transcript lexical evidence (`language.py` `fuse`).
 
     When acoustic confidence is `< 0.80` on noisy 2G/3G audio and the transcript contains at least
     2 words of a candidate language (strictly beating the runner-up), promote that language to
-    `text_confidence`.
+    `text_confidence` even if the acoustic front-end emitted a sparse probability map or already
+    picked `best_lang` with weak (`< 0.80`) acoustic probability.
     """
     if not vote.text or vote.confidence >= 0.80:
         return vote
     hits = lexical_language_hits(vote.text)
+    allowed_set = (
+        set(allowed_languages) if allowed_languages else set(_NATIVE_LEXICAL_WORDS_BY_LOCALE)
+    )
     ranked = sorted(
-        ((n, lang) for lang, n in hits.items() if lang in vote.probs),
+        ((n, lang) for lang, n in hits.items() if n > 0 and lang in allowed_set),
         reverse=True,
     )
     if not ranked:
         return vote
     best_n, best_lang = ranked[0]
     runner_up = ranked[1][0] if len(ranked) > 1 else 0
-    if best_n < 2 or best_n <= runner_up or best_lang == vote.top:
+    if best_n < 2 or best_n <= runner_up:
         return vote
-    rest = max(0.0, 1.0 - text_confidence)
+    boosted_conf = max(vote.confidence if best_lang == vote.top else 0.0, text_confidence)
+    rest = max(0.0, 1.0 - boosted_conf)
     others = [lang for lang in vote.probs if lang != best_lang]
     new_probs: dict[str, float] = {lang: round(rest / max(len(others), 1), 4) for lang in others}
-    new_probs[best_lang] = text_confidence
+    new_probs[best_lang] = boosted_conf
     return LanguageVote(probs=new_probs, top=best_lang, speech_s=vote.speech_s, text=vote.text)
 
 
@@ -4227,56 +4237,56 @@ _EXPLICIT_LANG_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "pga",
         re.compile(
-            r"\b(?:(?:speak|talk)\s+(?:in\s+)?(?:juba\s+arabic|arabi\s+juba)|switch\s+to\s+juba\s+arabic|عربي\s+جوبا)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:juba\s+arabic|arabi\s+juba)|atkalam\s+arabi\s+juba)\b|^\s*(?:please\s+)?عربي\s+جوبا\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "ar",
         re.compile(
-            r"\b(?:(?:speak|talk)\s+(?:in\s+)?arabic|switch\s+to\s+arabic|تكلم\s+عربي|تحدث\s+بالعربية)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+arabic|تكلم\s+عربي|تحدث\s+بالعربية|باللغة\s+العربية)\b",
             re.IGNORECASE,
         ),
     ),
     (
         "din",
         re.compile(
-            r"\b(?:(?:speak|talk)\s+(?:in\s+)?(?:dinka|thuongjang)|switch\s+to\s+dinka|thuɔŋjäŋ|jam\s+në\s+thuɔŋjäŋ)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:dinka|thuongjang)|jam\s+ne\s+thuongjang)\b|^\s*(?:please\s+)?thuongjang\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "nus",
         re.compile(
-            r"\b(?:(?:speak|talk)\s+(?:in\s+)?(?:nuer|thok\s+na+th)|switch\s+to\s+nuer|thok\s+naath|ruacni\s+thok\s+na+th)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:nuer|thok\s+na+th)|ruacni\s+thok\s+na+th)\b|^\s*(?:please\s+)?thok\s+na+th\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "bfa",
         re.compile(
-            r"\b(?:(?:speak|talk)\s+(?:in\s+)?bari|switch\s+to\s+bari|kutuk\s+na\s+bari)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+bari|kulya\s+ko\s+bari)\b|^\s*(?:please\s+)?kutuk\s+na\s+bari\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "zne",
         re.compile(
-            r"\b(?:(?:speak|talk)\s+(?:in\s+)?(?:zande|pazande)|switch\s+to\s+zande|pa\s+pazande)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:zande|pazande)|fura\s+pa\s+pazande)\b|^\s*(?:please\s+)?pa\s+pazande\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "shk",
         re.compile(
-            r"\b(?:(?:speak|talk)\s+(?:in\s+)?(?:shilluk|dhog\s+collo)|switch\s+to\s+shilluk|dhøg\s+cøllø)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:shilluk|dhog\s+collo)|kwop\s+dhog\s+collo)\b|^\s*(?:please\s+)?dhog\s+collo\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "en",
         re.compile(
-            r"\b(?:(?:speak|talk)\s+(?:in\s+)?english|switch\s+to\s+english|تكلم\s+إنجليزي)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+english|تكلم\s+إنجليزي)\b",
             re.IGNORECASE,
         ),
     ),
@@ -4289,7 +4299,7 @@ _LANG_NEGATION_PREFIX_RE = re.compile(
 
 def detect_explicit_language_request(text: str) -> str | None:
     """Return the locale code explicitly requested in *text*, or None (`language.py` `detect_explicit_request`)."""
-    clean = unicodedata.normalize("NFC", text or "").strip()
+    clean = _fold_voice_orthography(text or "").strip()
     if not clean:
         return None
     best_end = -1
@@ -4381,7 +4391,7 @@ class CallLanguagePolicy:
             return LanguageSwitchDecision("none", self.active, "override_locked", source="override")
         if vote.speech_s < self.min_speech_s or not vote.top:
             return LanguageSwitchDecision("none", self.active, "too_short")
-        vote = fuse_language_vote(vote)
+        vote = fuse_language_vote(vote, allowed_languages=self.supported_languages)
         if vote.top not in self.supported_languages:
             return LanguageSwitchDecision("none", self.active, "unsupported_language")
 

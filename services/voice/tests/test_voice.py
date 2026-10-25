@@ -1805,9 +1805,9 @@ def test_multilingual_contact_url_pronunciation_and_receptionist_structuring() -
     )
     assert clarify_native.action == "none"
 
-    # fuse_language_vote overrides uncertain acoustic vote (< 0.80) when >= 2 lexical hits agree
+    # fuse_language_vote overrides uncertain acoustic vote (< 0.80) when >= 2 lexical hits agree, even on sparse probs
     raw_vote = LanguageVote(
-        probs={"en": 0.55, "din": 0.30, "ar": 0.15},
+        probs={"en": 0.55, "ar": 0.45},
         top="en",
         speech_s=2.4,
         text="Namba de ajul weu tene bengic",
@@ -1815,6 +1815,14 @@ def test_multilingual_contact_url_pronunciation_and_receptionist_structuring() -
     fused = fuse_language_vote(raw_vote, text_confidence=0.80)
     assert fused.top == "din"
     assert fused.confidence == 0.80
+    # Same-top weak vote (< 0.70) is also boosted to 0.80 when lexical evidence agrees
+    same_top_weak = LanguageVote(
+        probs={"din": 0.58, "en": 0.42},
+        top="din",
+        speech_s=2.2,
+        text="Namba de ajul weu tene bengic",
+    )
+    assert fuse_language_vote(same_top_weak).confidence == 0.80
     # Already confident vote (>= 0.80) is untouched
     conf_vote = LanguageVote(
         probs={"en": 0.90, "din": 0.10}, top="en", speech_s=2.0, text="ajul weu"
@@ -1823,6 +1831,11 @@ def test_multilingual_contact_url_pronunciation_and_receptionist_structuring() -
 
     # 8-language explicit switch & text_confirmed fast switch in CallLanguagePolicy
     assert detect_explicit_language_request("Jam në Thuɔŋjäŋ") == "din"
+    assert detect_explicit_language_request("What does Thuongjang mean?") is None
+    assert detect_explicit_language_request("لا تتكلم عربي") is None
+    assert detect_explicit_language_request("لا تتكلم إنجليزي") is None
+    assert detect_explicit_language_request("Kwop dhøg cøllø") == "shk"
+    assert detect_explicit_language_request("Kwop dhog collo") == "shk"
     assert detect_explicit_language_request("Ruacni Thok Naath") == "nus"
     pol8 = CallLanguagePolicy(active="en")
     pol8.observe(LanguageVote(probs={"en": 0.85}, top="en", speech_s=2.0, text="Hello how are you"))
