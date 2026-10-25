@@ -42,6 +42,10 @@ processors:
         type: status_code
         status_code:
           status_codes: [ERROR]
+      - name: keep-slow-turns
+        type: latency
+        latency:
+          threshold_ms: 3000
       - name: baseline-sample
         type: probabilistic
         probabilistic:
@@ -52,10 +56,35 @@ exporters:
     endpoint: tempo:4317
     tls:
       insecure: false
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+  prometheus:
+    endpoint: 0.0.0.0:8889
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
 
 service:
+  extensions: [health_check]
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
   pipelines:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, attributes/redact_pii, tail_sampling, batch]
       exporters: [otlp/tempo]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact_pii, batch]
+      exporters: [otlphttp/loki]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]

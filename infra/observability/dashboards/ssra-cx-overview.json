@@ -6,28 +6,71 @@
   "panels": [
     {
       "id": 1,
-      "title": "Quality-Adjusted Containment Rate by Language (en, pga, ar, din, nus, bfa, zne, shk)",
-      "type": "timeseries"
+      "title": "Quality-Adjusted Containment Rate & Language Decisions (en, pga, ar, din, nus, bfa, zne, shk)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "ssra:chat_turns:containment_ratio_1h"
+        },
+        {
+          "expr": "sum by (locale, source) (rate(ssra_language_decisions_total[5m]))"
+        }
+      ]
     },
     {
       "id": 2,
-      "title": "Numeric Provenance Gate (Target: 100%) & Cross-Subject Leakage (Target: 0)",
-      "type": "stat"
+      "title": "API Availability & Security Events (Target: 99.9%)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "1 - ssra:http_errors_5xx:ratio_rate5m"
+        },
+        {
+          "expr": "sum by (event) (rate(ssra_security_events_total[5m]))"
+        }
+      ]
     },
     {
       "id": 3,
-      "title": "Latency SLOs: Web TTFT p95 (<= 1.5s), Grounded QA p95 (<= 6s), USSD (<= 2s)",
-      "type": "timeseries"
+      "title": "Latency SLOs: Chat Turn p95 by Channel & Mode (<= 3000ms) and Core Web Vitals",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "ssra:chat_response_time_ms:p95_by_channel_5m"
+        },
+        {
+          "expr": "ssra:chat_response_time_ms:p95_by_mode_5m"
+        },
+        {
+          "expr": "histogram_quantile(0.75, sum by (le, metric) (rate(ssra_web_vitals_ms_bucket[5m])))"
+        }
+      ]
     },
     {
       "id": 4,
-      "title": "AI Gateway Daily Spend vs Cap (150 USD) & Per-Channel Token Attribution",
-      "type": "gauge"
+      "title": "Faithfulness Mean (30m) & Retrieval Fallback Ratio",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "ssra:faithfulness_score:mean_30m"
+        },
+        {
+          "expr": "ssra:retrieval_keyword_fallback:ratio_rate10m"
+        }
+      ]
     },
     {
       "id": 5,
-      "title": "Upstream Health & Circuit Breaker State (e-Tax, e-Customs, BoSS)",
-      "type": "state-timeline"
+      "title": "Qdrant Index Freshness & Drift Status",
+      "type": "state-timeline",
+      "targets": [
+        {
+          "expr": "ssra_qdrant_index_fresh"
+        },
+        {
+          "expr": "ssra_qdrant_index_drift"
+        }
+      ]
     }
   ]
 }

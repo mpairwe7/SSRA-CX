@@ -2,11 +2,24 @@
 
 from __future__ import annotations
 
+import hmac
+import os
 from collections.abc import Awaitable, Callable
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Header, Request, Response
 from fastapi.responses import JSONResponse
-from ssra_core import McpErrorCode, SSRAError, ensure_w3c_traceparent
+from ssra_core import (
+    METRICS_CONTENT_TYPE,
+    ClientError,
+    McpErrorCode,
+    SSRAError,
+    WebVitalsBatch,
+    ensure_w3c_traceparent,
+    metrics,
+    record_client_error,
+    record_http_security_event,
+    record_web_vitals,
+)
 from ssra_core.deployment import is_reference_mode
 
 from ssra_api.admin.api import router as admin_router
@@ -74,6 +87,81 @@ def create_api_app() -> FastAPI:
     async def healthz() -> dict[str, str]:
         """Return Core API service health status."""
         return {"status": "ok", "service": "ssra-api"}
+
+    @app.get("/metrics", include_in_schema=False)
+    async def prometheus_metrics(
+        request: Request,
+        authorization: str | None = Header(default=None, alias="Authorization"),
+    ) -> Response:
+        """Return Prometheus text exposition gated by a dedicated read-only `METRICS_TOKEN`."""
+        expected_token = (
+            os.getenv("SSRA_METRICS_TOKEN", "").strip() or os.getenv("METRICS_TOKEN", "").strip()
+        )
+        raw_auth = (authorization or "").strip()
+        provided_token = raw_auth[7:].strip() if raw_auth.lower().startswith("bearer ") else ""
+        if (
+            not expected_token
+            or not provided_token
+            or not hmac.compare_digest(
+                provided_token.encode("utf-8"), expected_token.encode("utf-8")
+            )
+        ):
+            record_http_security_event(
+                method="GET",
+                status_code=401,
+                route="/metrics",
+                reason="INVALID_METRICS_TOKEN",
+            )
+            traceparent = ensure_w3c_traceparent(request.headers.get("traceparent"))
+            err = SSRAError(
+                code=McpErrorCode.NOT_AUTHORIZED,
+                message="Valid Bearer METRICS_TOKEN required to scrape /metrics.",
+                status_code=401,
+            )
+            return JSONResponse(
+                status_code=401,
+                content=err.to_problem_details(
+                    instance="/metrics", trace_id=traceparent
+                ).model_dump(mode="json"),
+                media_type="application/problem+json",
+                headers={"traceparent": traceparent, **SECURITY_HEADERS},
+            )
+        return Response(
+            content=metrics.to_prometheus(),
+            status_code=200,
+            media_type=METRICS_CONTENT_TYPE,
+            headers=SECURITY_HEADERS,
+        )
+
+    @app.post("/v1/telemetry/vitals", status_code=204, include_in_schema=False)
+    async def ingest_web_vitals(request: Request) -> Response:
+        """Ingest anonymous Core Web Vitals (`LCP`, `INP`, `CLS`, `FCP`, `TTFB`) beacons."""
+        raw_bytes = await request.body()
+        try:
+            batch = WebVitalsBatch.model_validate_json(raw_bytes)
+        except Exception as exc:
+            raise SSRAError(
+                code=McpErrorCode.VALIDATION_FAILED,
+                message="Invalid WebVitalsBatch telemetry payload.",
+                status_code=422,
+            ) from exc
+        record_web_vitals(batch)
+        return Response(status_code=204, headers=SECURITY_HEADERS)
+
+    @app.post("/v1/telemetry/errors", status_code=204, include_in_schema=False)
+    async def ingest_client_error(request: Request) -> Response:
+        """Ingest anonymous client error reports (message-free to prevent PII leakage)."""
+        raw_bytes = await request.body()
+        try:
+            report = ClientError.model_validate_json(raw_bytes)
+        except Exception as exc:
+            raise SSRAError(
+                code=McpErrorCode.VALIDATION_FAILED,
+                message="Invalid ClientError telemetry payload.",
+                status_code=422,
+            ) from exc
+        record_client_error(report)
+        return Response(status_code=204, headers=SECURITY_HEADERS)
 
     app.include_router(conversations_router)
     app.include_router(identity_link_router)
