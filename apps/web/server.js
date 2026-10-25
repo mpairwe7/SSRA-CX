@@ -398,6 +398,8 @@ function renderPwaShellHtml(locale, nonce) {
     .app-shell { display: grid; grid-template-columns: var(--cv2-rail, 300px) minmax(0, 1fr); height: 100dvh; width: 100%; }
     .rail-hotzone { display: none; }
     @media (min-width: 961px) {
+      .app-shell > .rail-wrap { grid-column: 1; width: 100%; height: 100dvh; overflow: hidden; }
+      .app-shell > .app-main-col { grid-column: 2; min-width: 0; }
       .app-shell[data-sidebar="open"] #header-rail-btn { display: none; }
       .app-shell[data-sidebar="collapsed"] { --cv2-rail: 0px; grid-template-columns: 0px minmax(0, 1fr); }
       .app-shell[data-sidebar="collapsed"]:not([data-rail-peek="true"]) .rail-wrap { visibility: hidden; pointer-events: none; border-inline-end-width: 0; }
@@ -2897,14 +2899,15 @@ function renderPwaShellHtml(locale, nonce) {
         if (!isMobileViewport) shell?.setAttribute("data-mobile-rail", "closed");
         const isMobOpen = shell?.getAttribute("data-mobile-rail") === "open";
         const isDesktopCollapsed = shell?.getAttribute("data-sidebar") === "collapsed";
+        const isPeeking = shell?.getAttribute("data-rail-peek") === "true";
         const isHidden = isMobileViewport ? !isMobOpen : isDesktopCollapsed;
+        const isRailInert = isMobileViewport ? !isMobOpen : isDesktopCollapsed && !isPeeking;
         if (railAsideEl) {
-          railAsideEl.toggleAttribute("inert", Boolean(isHidden));
+          railAsideEl.toggleAttribute("inert", Boolean(isRailInert));
         }
         document.querySelector(".app-main-col")?.toggleAttribute("inert", Boolean(isMobileViewport && isMobOpen));
         const headerRailBtn = document.getElementById("header-rail-btn");
         const railCollapseBtn = document.getElementById("rail-collapse-btn");
-        const isPeeking = shell?.getAttribute("data-rail-peek") === "true";
         headerRailBtn?.setAttribute("aria-expanded", String(!isHidden));
         headerRailBtn?.setAttribute("aria-label", isHidden ? "Open conversations" : "Close conversations");
         headerRailBtn?.setAttribute(
@@ -2938,6 +2941,7 @@ function renderPwaShellHtml(locale, nonce) {
         }
       };
       let railPeekTimer = null;
+      let suppressPeekUntil = 0;
       const clearRailPeekTimer = () => {
         if (railPeekTimer) {
           window.clearTimeout(railPeekTimer);
@@ -2960,6 +2964,7 @@ function renderPwaShellHtml(locale, nonce) {
         syncMobileRailA11y(false);
       };
       const handlePeekEnter = () => {
+        if (Date.now() < suppressPeekUntil) return;
         const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
         if (isMobileViewport || shell?.getAttribute("data-sidebar") !== "collapsed") return;
         clearRailPeekTimer();
@@ -2967,7 +2972,16 @@ function renderPwaShellHtml(locale, nonce) {
       };
       const handlePeekLeave = () => {
         clearRailPeekTimer();
-        railPeekTimer = window.setTimeout(() => setRailPeek(false), 220);
+        railPeekTimer = window.setTimeout(() => {
+          if (
+            railAsideEl?.matches(":hover") ||
+            headerRailBtnEl?.matches(":hover") ||
+            railHotzoneEl?.matches(":hover")
+          ) {
+            return;
+          }
+          setRailPeek(false);
+        }, 220);
       };
       const toggleSidebar = () => {
         const isMobileViewport = window.matchMedia?.("(max-width: 960px)")?.matches ?? false;
@@ -2979,6 +2993,9 @@ function renderPwaShellHtml(locale, nonce) {
         } else {
           const cur = shell?.getAttribute("data-sidebar");
           const next = cur === "collapsed" ? "open" : "collapsed";
+          if (next === "collapsed") {
+            suppressPeekUntil = Date.now() + 400;
+          }
           shell?.setAttribute("data-sidebar", next);
           try {
             window.localStorage.setItem("ssra-rail-collapsed-v1", String(next === "collapsed"));
@@ -2995,11 +3012,10 @@ function renderPwaShellHtml(locale, nonce) {
       const railHotzoneEl = document.getElementById("rail-hotzone");
       headerRailBtnEl?.addEventListener("mouseenter", handlePeekEnter);
       headerRailBtnEl?.addEventListener("mouseleave", handlePeekLeave);
-      headerRailBtnEl?.addEventListener("focus", handlePeekEnter);
-      headerRailBtnEl?.addEventListener("blur", handlePeekLeave);
       railHotzoneEl?.addEventListener("mouseenter", handlePeekEnter);
       railHotzoneEl?.addEventListener("mouseleave", handlePeekLeave);
       railAsideEl?.addEventListener("mouseenter", () => {
+        if (Date.now() < suppressPeekUntil) return;
         if (shell?.getAttribute("data-sidebar") === "collapsed") {
           clearRailPeekTimer();
           setRailPeek(true);
