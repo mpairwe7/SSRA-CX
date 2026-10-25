@@ -13,17 +13,21 @@ test("unreviewed locales show English interface text with an honest notice", asy
   await page.goto("/din");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
-  await expect(page.locator("#locale-select")).toHaveValue("din");
+  await expect(page.locator("#langsel-code")).toHaveText("DIN");
   const notice = page.locator("#locale-notice");
   await expect(notice).toBeVisible();
   await expect(notice).toContainText("Thuɔŋjäŋ Dinka (din) hasn’t been reviewed yet, so it is shown in English");
-  await expect(page.locator('optgroup[label^="Not yet reviewed"] option[value="din"]')).toHaveCount(1);
   await expect(page.locator(".landing-chip")).not.toContainText(["Waraga"]);
   await expect(page.getByRole("textbox", { name: "Ask SSRA Assist" })).not.toHaveAttribute("placeholder", /Dinka/);
 
-  await page.selectOption("#locale-select", "ar");
+  await page.locator("#langsel-btn").click();
+  await expect(page.getByRole("dialog", { name: "Response language" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: /Thuɔŋjäŋ Dinka.*Not yet reviewed/i })).toHaveCount(1);
+  await page.getByRole("radio", { name: /Arabic.*العربية/i }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "ar");
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  await expect(page.locator("#langsel-code")).toHaveText("AR");
+  await expect(page.locator("#lang-auto-badge")).toBeHidden();
   await expect(notice).toBeHidden();
 });
 

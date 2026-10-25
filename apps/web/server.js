@@ -250,54 +250,56 @@ function renderPwaShellHtml(locale, nonce) {
       font-style: normal;
       font-display: swap;
     }
-    :root {
-      color-scheme: dark;
+    :root, :root[data-theme="light"] {
+      color-scheme: light;
+      --tw-bg-opacity: 1;
+      --ssra-header-sidebar-bg: rgba(0, 93, 180, var(--tw-bg-opacity));
       --font-geist-sans: "Aptos", "Avenir Next", "Trebuchet MS", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, system-ui, sans-serif;
       --font-geist-mono: "IBM Plex Mono", "Cascadia Code", "SFMono-Regular", "Fira Code", monospace;
       --font-sans: var(--font-geist-sans);
       --font-mono: var(--font-geist-mono);
-      --bg-0: #091310;
-      --bg-1: #0E1C17;
-      --bg-2: #142720;
-      --surface-1: rgba(236, 245, 238, 0.04);
-      --surface-2: rgba(236, 245, 238, 0.07);
-      --surface-3: rgba(236, 245, 238, 0.11);
-      --surface-4: rgba(236, 245, 238, 0.15);
-      --surface-ink: rgba(9, 19, 16, 0.88);
-      --border-0: rgba(220, 235, 224, 0.075);
-      --border-1: rgba(220, 235, 224, 0.13);
-      --border-2: rgba(220, 235, 224, 0.22);
-      --text-0: #F6F8F5;
-      --text-1: #DCE4DD;
-      --text-2: #9BB0A3;
-      --text-3: #7E9688;
-      --ssra-green: #078930;
-      --ssra-blue: #0F47AF;
-      --ssra-blue-bright: #3B82F6;
-      --ssra-gold: #F4C430;
-      --ssra-red: #DA121A;
-      --ssra-teal: #078930;
-      --ssra-teal-light: #2ECC71;
-      --grad-primary: linear-gradient(135deg, #07792B 0%, #0D6E38 52%, #0F47AF 100%);
+      --bg-0: #FFFFFF;
+      --bg-1: #F8FAFC;
+      --bg-2: #F1F5F9;
+      --surface-1: #F8FBFF;
+      --surface-2: #F0F6FC;
+      --surface-3: #E2EDF8;
+      --surface-4: #D4E4F4;
+      --surface-ink: rgba(0, 93, 180, var(--tw-bg-opacity));
+      --border-0: rgba(0, 72, 145, 0.10);
+      --border-1: rgba(0, 72, 145, 0.18);
+      --border-2: rgba(0, 72, 145, 0.28);
+      --text-0: #0B192C;
+      --text-1: #1E293B;
+      --text-2: #334155;
+      --text-3: #475569;
+      --ssra-green: #056824;
+      --ssra-blue: #005DB4;
+      --ssra-blue-bright: #004891;
+      --ssra-gold: #7A4F00;
+      --ssra-red: #B91C1C;
+      --ssra-teal: #056824;
+      --ssra-teal-light: #056824;
+      --grad-primary: linear-gradient(135deg, #005DB4 0%, #056824 100%);
       --grad-gold: linear-gradient(135deg, #F4C430 0%, #D49B0B 100%);
-      --grad-user: linear-gradient(135deg, rgba(7, 137, 48, 0.24), rgba(244, 196, 48, 0.12));
+      --grad-user: linear-gradient(135deg, rgba(0, 93, 180, 0.10), rgba(5, 104, 36, 0.08));
       --cv2-rail: 300px;
       --cv2-top-h: calc(60px + env(safe-area-inset-top, 0px));
       --cv2-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
       --cv2-tap: 140ms;
-      --cv2-accent: #078930;
+      --cv2-accent: #005DB4;
       --cv2-accent-contrast: #FFFFFF;
-      --cv2-accent-hover: #056A24;
-      --cv2-accent-soft: rgba(7, 137, 48, 0.18);
-      --cv2-user-bubble: rgba(7, 137, 48, 0.20);
-      --cv2-user-bubble-border: rgba(244, 196, 48, 0.35);
-      --cv2-focus: #F4C430;
-      --success: #34d399;
-      --warning: #fbbf24;
-      --danger: #fb7185;
-      --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.35);
-      --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04);
-      --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+      --cv2-accent-hover: #004891;
+      --cv2-accent-soft: rgba(0, 93, 180, 0.10);
+      --cv2-user-bubble: #EBF4FF;
+      --cv2-user-bubble-border: rgba(0, 93, 180, 0.28);
+      --cv2-focus: #005DB4;
+      --success: #056824;
+      --warning: #853A06;
+      --danger: #B91C1C;
+      --shadow-sm: 0 1px 3px rgba(0, 45, 98, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+      --shadow-md: 0 6px 20px rgba(0, 45, 98, 0.08), 0 0 0 1px rgba(0, 72, 145, 0.06);
+      --shadow-lg: 0 16px 44px rgba(0, 45, 98, 0.14), 0 0 0 1px rgba(0, 72, 145, 0.08);
       --radius-xs: 6px;
       --radius-sm: 10px;
       --radius-md: 14px;
@@ -306,40 +308,11 @@ function renderPwaShellHtml(locale, nonce) {
       --radius-2xl: 32px;
       --radius-pill: 999px;
     }
-    :root[data-theme="light"] {
+    :root[data-theme="dark"] {
       color-scheme: light;
-      --bg-0: #F6F7F2;
-      --bg-1: #FFFFFF;
-      --bg-2: #EBF0E8;
-      --surface-1: rgba(12, 28, 20, 0.032);
-      --surface-2: rgba(12, 28, 20, 0.058);
-      --surface-3: rgba(12, 28, 20, 0.092);
-      --surface-4: rgba(12, 28, 20, 0.13);
-      --surface-ink: rgba(250, 251, 247, 0.94);
-      --border-0: rgba(12, 28, 20, 0.08);
-      --border-1: rgba(12, 28, 20, 0.14);
-      --border-2: rgba(12, 28, 20, 0.23);
-      --text-0: #0C1C14;
-      --text-1: #1F3329;
-      --text-2: #4A5E53;
-      --text-3: #4E6358;
-      --ssra-blue-bright: #0F47AF;
-      --ssra-teal-light: #066926;
-      --ssra-gold: #704B00;
-      --cv2-accent: #07792B;
-      --cv2-accent-contrast: #FFFFFF;
-      --cv2-accent-hover: #055E21;
-      --cv2-accent-soft: rgba(7, 137, 48, 0.10);
-      --cv2-user-bubble: #EAF4EC;
-      --cv2-user-bubble-border: rgba(7, 137, 48, 0.28);
-      --cv2-focus: #704B00;
-      --success: #066926;
-      --warning: #853A06;
-      --danger: #B91C1C;
-      --grad-user: linear-gradient(135deg, rgba(7, 137, 48, 0.14), rgba(212, 155, 11, 0.12));
-      --shadow-sm: 0 1px 2px rgba(12, 28, 20, 0.08), 0 2px 6px rgba(12, 28, 20, 0.05);
-      --shadow-md: 0 6px 20px rgba(12, 28, 20, 0.08), 0 0 0 1px rgba(12, 28, 20, 0.05);
-      --shadow-lg: 0 16px 44px rgba(12, 28, 20, 0.12), 0 0 0 1px rgba(12, 28, 20, 0.06);
+      --bg-2: #EEF4FA;
+      --surface-3: #DCE8F6;
+      --surface-4: #CCE0F4;
     }
     :root[data-theme="high-contrast"] {
       color-scheme: dark;
@@ -350,12 +323,19 @@ function renderPwaShellHtml(locale, nonce) {
       --surface-2: #161616;
       --surface-3: #222222;
       --surface-4: #2E2E2E;
-      --surface-ink: #000000;
+      --surface-ink: rgba(0, 93, 180, var(--tw-bg-opacity));
       --border-1: #FFFFFF;
       --border-2: #FFD60A;
       --text-0: #FFFFFF;
       --text-1: #FFFFFF;
       --text-2: #E5E7EB;
+      --text-3: #E5E7EB;
+      --ssra-blue: #60A5FA;
+      --ssra-blue-bright: #93C5FD;
+      --ssra-gold: #FFD60A;
+      --success: #4ADE80;
+      --warning: #FFD60A;
+      --danger: #FCA5A5;
       --cv2-user-bubble: #111111;
       --cv2-user-bubble-border: #FFD60A;
     }
@@ -369,16 +349,9 @@ function renderPwaShellHtml(locale, nonce) {
     body::before {
       content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
       background:
-        radial-gradient(ellipse 60% 50% at 18% 12%, rgba(7, 137, 48, 0.22), transparent 62%),
-        radial-gradient(ellipse 50% 45% at 82% 28%, rgba(15, 71, 175, 0.18), transparent 56%),
-        radial-gradient(ellipse 55% 40% at 50% 92%, rgba(244, 196, 48, 0.08), transparent 60%),
-        linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 50%, var(--bg-0) 100%);
-    }
-    :root[data-theme="light"] body::before {
-      background:
-        radial-gradient(ellipse 60% 50% at 18% 12%, rgba(7, 137, 48, 0.07), transparent 62%),
-        radial-gradient(ellipse 50% 45% at 82% 28%, rgba(15, 71, 175, 0.06), transparent 56%),
-        linear-gradient(180deg, var(--bg-0) 0%, #ECEFE6 50%, var(--bg-0) 100%);
+        radial-gradient(ellipse 60% 50% at 18% 12%, rgba(0, 93, 180, 0.045), transparent 62%),
+        radial-gradient(ellipse 50% 45% at 82% 28%, rgba(5, 104, 36, 0.035), transparent 56%),
+        linear-gradient(180deg, #FFFFFF 0%, #F8FBFF 52%, #FFFFFF 100%);
     }
     .ssra-flag-ribbon {
       position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 80; pointer-events: none;
@@ -423,41 +396,44 @@ function renderPwaShellHtml(locale, nonce) {
 
     /* ── chatv2 Sidebar (ConversationRail + AccountRail from FinalYearProject) ── */
     .rail-wrap {
-      background: var(--surface-ink); backdrop-filter: blur(22px) saturate(145%);
-      border-inline-end: 1px solid var(--border-1); display: flex; flex-direction: column;
+      background-color: rgba(0, 93, 180, var(--tw-bg-opacity));
+      background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(0, 62, 128, 0.22) 100%);
+      color: #FFFFFF;
+      border-inline-end: 1px solid rgba(255, 255, 255, 0.18); display: flex; flex-direction: column;
       overflow: hidden; height: 100dvh; contain: paint;
     }
     .rail-top {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0.75rem 0.85rem 0.6rem 1rem; border-bottom: 1px solid var(--border-0);
+      padding: 0.75rem 0.85rem 0.6rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.16);
     }
-    .rail-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 0.92rem; color: var(--text-0); }
+    .rail-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 0.92rem; color: #FFFFFF; }
     .rail-mark {
-      width: 30px; height: 30px; border-radius: 8px; background: var(--grad-primary);
-      color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 0.72rem;
-      letter-spacing: 0.04em; box-shadow: 0 4px 12px rgba(7, 137, 48, 0.35);
+      width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #056824 0%, #004488 100%);
+      color: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.28); display: grid; place-items: center; font-weight: 800; font-size: 0.72rem;
+      letter-spacing: 0.04em; box-shadow: 0 4px 12px rgba(0, 28, 64, 0.32);
     }
     .rail-top-actions { display: flex; align-items: center; gap: 4px; }
     .rail-icon-btn {
-      width: 44px; height: 44px; border-radius: 8px; background: transparent;
-      border: 1px solid transparent; color: var(--text-2); cursor: pointer;
+      width: 44px; height: 44px; border-radius: 8px; background: rgba(0, 56, 115, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.18); color: #FFFFFF; cursor: pointer;
       display: inline-flex; align-items: center; justify-content: center; font-size: 0.86rem;
     }
-    .rail-icon-btn:hover { background: var(--surface-2); color: var(--text-0); border-color: var(--border-1); }
+    .rail-icon-btn:hover { background: rgba(0, 42, 92, 0.78); color: #FFFFFF; border-color: rgba(255, 255, 255, 0.38); }
 
     .rail-new-btn {
       margin: 0.75rem 0.85rem 0.45rem; padding: 0.62rem 0.9rem; border-radius: var(--radius-md);
       min-height: 44px;
-      background: var(--grad-primary); color: #fff; border: 1px solid rgba(255,255,255,0.14);
-      font-weight: 600; font-size: 0.86rem; cursor: pointer;
+      background-color: #056824; background-image: linear-gradient(135deg, #067529 0%, #04561D 100%);
+      color: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.28);
+      font-weight: 700; font-size: 0.86rem; cursor: pointer;
       display: flex; align-items: center; justify-content: space-between;
-      box-shadow: var(--shadow-md); transition: transform 0.12s ease;
+      box-shadow: 0 6px 16px rgba(0, 28, 64, 0.26); transition: transform 0.12s ease;
     }
-    .rail-new-btn:hover { transform: translateY(-1px); }
+    .rail-new-btn:hover { transform: translateY(-1px); background-color: #04561D; }
 
     .rail-section-label {
       padding: 0.55rem 1rem 0.22rem; font-size: 0.75rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3);
+      text-transform: uppercase; letter-spacing: 0.07em; color: #FFFFFF;
     }
     .rail-list { flex: 1; overflow-y: auto; padding: 0.2rem 0.55rem; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; }
 
@@ -468,19 +444,19 @@ function renderPwaShellHtml(locale, nonce) {
       border-radius: var(--radius-sm); border: 1px solid transparent;
       transition: background 0.12s ease;
     }
-    .rail-row:hover { background: var(--surface-2); }
-    .rail-row.active { background: var(--surface-3); border-color: var(--border-1); }
+    .rail-row:hover { background: rgba(255, 255, 255, 0.12); }
+    .rail-row.active { background: rgba(0, 52, 107, 0.68); border-color: rgba(255, 255, 255, 0.28); }
     .rail-item {
-      flex: 1; min-width: 0; padding: 0.5rem 0.65rem; color: var(--text-1);
+      flex: 1; min-width: 0; padding: 0.5rem 0.65rem; color: #FFFFFF;
       font-size: 0.84rem; cursor: pointer; white-space: nowrap; overflow: hidden;
       text-overflow: ellipsis; border: none; background: transparent; text-align: start;
       font-family: inherit; display: inline-flex; align-items: center; gap: 8px;
     }
-    .rail-row.active .rail-item { color: var(--text-0); font-weight: 600; }
+    .rail-row.active .rail-item { color: #FFFFFF; font-weight: 700; }
     .rail-item-dot {
-      width: 5px; height: 5px; border-radius: 50%; border: 1px solid var(--text-3); flex-shrink: 0;
+      width: 5px; height: 5px; border-radius: 50%; border: 1px solid #FFFFFF; flex-shrink: 0;
     }
-    .rail-row.active .rail-item-dot { background: var(--cv2-accent); border-color: var(--cv2-accent); }
+    .rail-row.active .rail-item-dot { background: #FFD60A; border-color: #FFD60A; }
     .rail-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rail-row-actions {
       display: none; align-items: center; gap: 2px; padding-inline-end: 6px;
@@ -489,87 +465,121 @@ function renderPwaShellHtml(locale, nonce) {
     @media (hover: none) { .rail-row-actions { display: inline-flex; } }
     .rail-act-mini {
       width: 44px; height: 44px; border-radius: 6px; border: none; background: transparent;
-      color: var(--text-2); cursor: pointer; font-size: 0.74rem; display: inline-flex;
+      color: #FFFFFF; cursor: pointer; font-size: 0.74rem; display: inline-flex;
       align-items: center; justify-content: center;
     }
-    .rail-act-mini:hover { background: var(--surface-3); color: var(--text-0); }
+    .rail-act-mini:hover { background: rgba(255, 255, 255, 0.18); color: #FFFFFF; }
 
     /* AccountRail Footer & Upward Popover Menu (AccountRail.tsx pattern) */
     .rail-footer {
-      padding: 0.65rem 0.75rem; border-top: 1px solid var(--border-1);
-      background: var(--surface-1); position: relative; display: flex; flex-direction: column; gap: 0.45rem;
+      padding: 0.65rem 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(0, 68, 138, 0.45); position: relative; display: flex; flex-direction: column; gap: 0.45rem;
     }
     .acct-rail-trigger {
       width: 100%; min-height: 44px; padding: 0.5rem 0.6rem; border-radius: var(--radius-sm);
-      background: var(--surface-2); border: 1px solid var(--border-1); color: var(--text-0);
+      background: rgba(0, 52, 107, 0.68); border: 1px solid rgba(255, 255, 255, 0.24); color: #FFFFFF;
       cursor: pointer; display: flex; align-items: center; gap: 0.6rem; text-align: start; font-family: inherit;
     }
-    .acct-rail-trigger:hover { background: var(--surface-3); border-color: var(--border-2); }
+    .acct-rail-trigger:hover { background: rgba(0, 42, 92, 0.88); border-color: rgba(255, 255, 255, 0.42); }
     .acct-avatar {
       position: relative; width: 30px; height: 30px; border-radius: 8px;
-      background: var(--grad-primary); color: #fff; font-weight: 800; font-size: 0.74rem;
+      background: #056824; border: 1px solid rgba(255, 255, 255, 0.28); color: #FFFFFF; font-weight: 800; font-size: 0.74rem;
       display: grid; place-items: center; flex: none;
     }
     .acct-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    .acct-name { font-size: 0.8rem; font-weight: 700; color: var(--text-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .acct-sub { font-size: 0.75rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .acct-name { font-size: 0.8rem; font-weight: 700; color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .acct-sub { font-size: 0.75rem; color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     .acct-popover {
       position: absolute; bottom: calc(100% + 8px); left: 0.65rem; right: 0.65rem;
-      background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-md);
+      background: #00478F; border: 1px solid rgba(255, 255, 255, 0.28); border-radius: var(--radius-md);
       box-shadow: var(--shadow-lg); padding: 0.55rem; display: none; flex-direction: column;
-      gap: 3px; z-index: 60;
+      gap: 3px; z-index: 60; color: #FFFFFF;
     }
     .acct-popover.open { display: flex; }
-    .acct-pop-section { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); padding: 4px 8px 2px; }
+    .acct-pop-section { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #FFFFFF; padding: 4px 8px 2px; }
     .acct-pop-item {
       min-height: 44px; padding: 8px; border-radius: 7px; border: none; background: transparent;
-      color: var(--text-1); font-size: 0.78rem; font-family: inherit; cursor: pointer;
+      color: #FFFFFF; font-size: 0.78rem; font-family: inherit; cursor: pointer;
       display: flex; align-items: center; justify-content: space-between; text-decoration: none; text-align: start; width: 100%;
     }
-    .acct-pop-item:hover { background: var(--surface-2); color: var(--text-0); }
-    .acct-pop-item.active { color: var(--ssra-gold); font-weight: 600; }
+    .acct-pop-item:hover { background: rgba(255, 255, 255, 0.14); color: #FFFFFF; }
+    .acct-pop-item.active { color: #FFD60A; font-weight: 700; }
 
     /* Main Column & Floating ChatHeader */
-    .app-main-col { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; position: relative; }
-    .chat-header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0.65rem 1.15rem; gap: 0.65rem; border-bottom: 1px solid var(--border-0); background: rgba(9, 19, 16, 0.52); backdrop-filter: blur(16px); z-index: 10; }
-    :root[data-theme="light"] .chat-header { background: rgba(246, 247, 242, 0.82); }
+    .app-main-col { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; position: relative; background: var(--bg-0); }
+    .chat-header {
+      display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0.65rem 1.15rem; gap: 0.65rem;
+      background-color: rgba(0, 93, 180, var(--tw-bg-opacity));
+      background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(0, 68, 138, 0.18) 100%);
+      color: #FFFFFF;
+      border-bottom: 1px solid rgba(0, 56, 115, 0.42);
+      box-shadow: 0 4px 16px rgba(0, 45, 98, 0.12);
+      z-index: 10;
+    }
+    :root[data-theme="light"] .chat-header {
+      background-color: rgba(0, 93, 180, var(--tw-bg-opacity));
+      color: #FFFFFF;
+    }
     .header-left { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: nowrap; }
     .header-right { display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0; flex-wrap: wrap; }
-    .langsel-auto { display: inline-flex; align-items: center; padding: 0.14rem 0.45rem; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--border-1); color: var(--ssra-gold); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+    .langsel { position: relative; display: inline-flex; align-items: center; margin-inline-end: 2px; }
+    .langsel-btn { display: inline-flex; align-items: center; gap: 6px; height: 40px; min-height: 40px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 10px; background: rgba(0, 56, 115, 0.68); color: #FFFFFF; font-family: inherit; font-size: 12.5px; font-weight: 700; letter-spacing: 0.03em; cursor: pointer; white-space: nowrap; }
+    @media (pointer: coarse), (max-width: 640px) { .langsel-btn { min-height: 44px; height: 44px; padding: 0 10px; } }
+    .langsel-btn:hover { background: rgba(0, 42, 92, 0.88); border-color: rgba(255, 255, 255, 0.48); color: #FFFFFF; }
+    .langsel-btn svg:last-child { margin-inline-start: -2px; opacity: 0.88; }
+    .langsel-auto { display: inline-flex; align-items: center; padding: 0.1rem 0.36rem; border-radius: 999px; background: rgba(0, 38, 82, 0.88); border: 1px solid rgba(255, 255, 255, 0.34); color: #FFFFFF; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+    .lmv2 { display: flex; flex-direction: column; width: min(360px, 100%); max-height: min(74vh, 520px); background: var(--bg-1); border: 1px solid var(--border-2); border-radius: 16px; box-shadow: var(--shadow-lg); overflow: hidden; }
+    .lmv2-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 12px 10px 18px; border-bottom: 1px solid var(--border-1); flex-shrink: 0; }
+    .lmv2-head h2 { margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text-0); }
+    .lmv2-x { width: 38px; height: 38px; min-width: 38px; min-height: 38px; padding: 0; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--text-1); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .lmv2-x:hover { background: var(--surface-2); color: var(--text-0); }
+    .lmv2-list { padding: 8px; overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 2px; }
+    .lmv2-group-label { padding: 8px 12px 4px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); }
+    .lmv2-opt { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; border: none; border-radius: 8px; background: transparent; cursor: pointer; color: var(--text-0); font-family: inherit; text-align: start; }
+    .lmv2-opt:hover { background: var(--surface-2); }
+    .lmv2-opt[aria-checked="true"] { font-weight: 600; background: var(--surface-1); }
+    .lmv2-opt .lmv2-check { color: #056824; display: none; flex-shrink: 0; }
+    .lmv2-opt[aria-checked="true"] .lmv2-check { display: inline-flex; }
+    .lmv2-names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .lmv2-name { font-size: 0.88rem; color: var(--text-0); }
+    .lmv2-native { font-size: 0.76rem; color: var(--text-2); font-weight: 400; }
+    .lmv2-foot { padding: 9px 18px; border-top: 1px solid var(--border-1); background: var(--bg-0); font-size: 0.74rem; color: var(--text-2); flex-shrink: 0; }
     .icon-btn { min-height: 44px; min-width: 44px; padding: 0.36rem 0.68rem; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-0); border: 1px solid var(--border-1); cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; text-decoration: none; }
     .icon-btn:hover { background: var(--surface-3); border-color: var(--border-2); }
+    .chat-header .icon-btn { background: rgba(0, 56, 115, 0.68); color: #FFFFFF; border-color: rgba(255, 255, 255, 0.28); }
+    .chat-header .icon-btn:hover { background: rgba(0, 42, 92, 0.88); color: #FFFFFF; border-color: rgba(255, 255, 255, 0.48); }
     .top-bar-icon-btn { width: 40px; height: 40px; min-width: 40px; min-height: 40px; padding: 0; border-radius: 10px; justify-content: center; flex-shrink: 0; }
     @media (pointer: coarse), (max-width: 640px) { .top-bar-icon-btn { width: 44px; height: 44px; min-width: 44px; min-height: 44px; } }
     .hdrv2-kebab { position: relative; display: inline-flex; }
-    .hdrv2-menu { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 120; min-width: 215px; padding: 6px; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: 12px; box-shadow: var(--shadow-lg); display: none; flex-direction: column; gap: 2px; }
+    .hdrv2-menu { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 120; min-width: 215px; padding: 6px; background: #00478F; border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 12px; box-shadow: var(--shadow-lg); display: none; flex-direction: column; gap: 2px; color: #FFFFFF; }
     .hdrv2-menu.open { display: flex; }
-    .hdrv2-menu-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 10px; border: none; border-radius: 8px; background: transparent; color: var(--text-0); font: inherit; font-size: 0.84rem; text-align: start; cursor: pointer; text-decoration: none; width: 100%; }
-    .hdrv2-menu-item:hover:not(:disabled) { background: var(--surface-2); }
-    .hdrv2-menu-item:disabled { opacity: 0.42; cursor: not-allowed; }
-    .call-btn { background: linear-gradient(135deg, rgba(7, 137, 48, 0.24), rgba(15, 71, 175, 0.28)); border-color: rgba(46, 204, 113, 0.45); color: var(--text-0); }
-    .ops-link-btn { border-color: rgba(244, 196, 48, 0.45); color: var(--ssra-gold); }
-    .status-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.28rem 0.65rem; border-radius: var(--radius-pill); background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.32); color: var(--success); font-size: 0.73rem; font-weight: 600; }
-    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }
-    .status-badge[data-connection="offline"] { background: rgba(218, 18, 26, 0.12); border-color: rgba(218, 18, 26, 0.45); color: #ffb2b5; }
-    .status-badge[data-connection="offline"] .status-dot { background: #ff6269; box-shadow: 0 0 8px #ff6269; }
-    :root[data-theme="light"] .status-badge[data-connection="offline"] { color: #991B1B; }
-    :root[data-theme="light"] .status-badge[data-connection="offline"] .status-dot { background: #991B1B; box-shadow: none; }
-    .status-badge[data-connection="low-data"] { background: rgba(244, 196, 48, 0.12); border-color: rgba(244, 196, 48, 0.45); color: var(--ssra-gold); }
-    .status-badge[data-connection="low-data"] .status-dot { background: var(--ssra-gold); box-shadow: 0 0 8px var(--ssra-gold); }
+    .hdrv2-menu-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 10px; border: none; border-radius: 8px; background: transparent; color: #FFFFFF; font: inherit; font-size: 0.84rem; text-align: start; cursor: pointer; text-decoration: none; width: 100%; }
+    .hdrv2-menu-item:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); color: #FFFFFF; }
+    .hdrv2-menu-item:disabled { opacity: 0.48; cursor: not-allowed; }
+    .chat-header .call-btn { background: linear-gradient(135deg, #067529 0%, #004891 100%); border-color: rgba(255, 255, 255, 0.38); color: #FFFFFF; }
+    .ops-link-btn { border-color: rgba(244, 196, 48, 0.45); color: #FFFFFF; }
+    .status-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.28rem 0.65rem; border-radius: var(--radius-pill); background: #044E29; border: 1px solid rgba(255, 255, 255, 0.32); color: #FFFFFF; font-size: 0.73rem; font-weight: 600; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ADE80; box-shadow: 0 0 8px #4ADE80; }
+    .status-badge[data-connection="offline"] { background: #7F1D1D; border-color: rgba(255, 255, 255, 0.42); color: #FFFFFF; }
+    .status-badge[data-connection="offline"] .status-dot { background: #FCA5A5; box-shadow: 0 0 8px #FCA5A5; }
+    :root[data-theme="light"] .status-badge[data-connection="offline"] { background: #7F1D1D; color: #FFFFFF; }
+    :root[data-theme="light"] .status-badge[data-connection="offline"] .status-dot { background: #FCA5A5; box-shadow: none; }
+    .status-badge[data-connection="low-data"] { background: #78350F; border-color: rgba(255, 255, 255, 0.38); color: #FFFFFF; }
+    .status-badge[data-connection="low-data"] .status-dot { background: #FDE047; box-shadow: 0 0 8px #FDE047; }
 
-    /* Main Content Area */
-    .app-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+    /* Main Content Area (White UI Canvas with Branded SSRA Cards) */
+    .app-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; background: var(--bg-0); }
     .landing { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem 1.25rem 2.5rem; max-width: 820px; width: 100%; margin: 0 auto; gap: 1.35rem; }
     .landing-brand { text-align: center; width: min(720px, 100%); margin-inline: auto; }
-    .eyebrow-pill { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.32rem 0.85rem; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border-1); font-size: 0.76rem; font-weight: 600; color: var(--ssra-gold); margin-bottom: 0.75rem; }
+    .eyebrow-pill { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.34rem 0.9rem; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border-2); font-size: 0.76rem; font-weight: 700; color: var(--ssra-blue-bright); margin-bottom: 0.75rem; box-shadow: 0 1px 3px rgba(0, 52, 107, 0.06); }
     .ldv2-headline { font-size: clamp(1.65rem, 3.2vw, 2.35rem); font-weight: 800; color: var(--text-0); margin: 0 0 0.5rem; letter-spacing: -0.02em; line-height: 1.2; text-align: center; }
     .landing-sub { font-size: 0.96rem; color: var(--text-2); margin: 0 auto; max-width: 62ch; line-height: 1.5; text-align: center; }
     .landing-prompts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.65rem; width: min(720px, 100%); margin-inline: auto; }
-    .landing-chip { min-height: 64px; padding: 0.8rem 0.95rem; border-radius: var(--radius-md); background: var(--surface-1); border: 1px solid var(--border-1); color: var(--text-1); text-align: start; cursor: pointer; display: flex; flex-direction: column; gap: 0.28rem; transition: all 0.15s ease; text-decoration: none; }
-    .landing-chip:hover { background: var(--surface-2); border-color: var(--ssra-teal-light); transform: translateY(-2px); box-shadow: var(--shadow-md); }
-    .ldv2-cat { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ssra-gold); }
-    .landing-chip-text { font-size: 0.85rem; font-weight: 500; color: var(--text-0); line-height: 1.35; }
+    .landing-chip { min-height: 64px; padding: 0.82rem 0.95rem; border-radius: var(--radius-md); background: linear-gradient(180deg, var(--bg-0) 0%, var(--surface-1) 100%); border: 1px solid var(--border-1); border-inline-start: 3.5px solid var(--ssra-blue); color: var(--text-1); text-align: start; cursor: pointer; display: flex; flex-direction: column; gap: 0.28rem; transition: all 0.15s ease; text-decoration: none; box-shadow: 0 2px 8px rgba(0, 45, 98, 0.06); }
+    .landing-chip:hover { background: var(--surface-2); border-color: var(--ssra-blue); transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0, 93, 180, 0.12); }
+    .ldv2-cat { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ssra-blue); }
+    .landing-chip-text { font-size: 0.85rem; font-weight: 600; color: var(--text-0); line-height: 1.35; }
 
     /* Chat Stream Area (chatv2/messages.css & loading.css pattern) */
     .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
@@ -591,8 +601,8 @@ function renderPwaShellHtml(locale, nonce) {
       .avatar.assistant { display: none; }
     }
     .bubble { max-width: min(720px, 92%); padding: 0.95rem 1.15rem; border-radius: var(--radius-lg); line-height: 1.62; font-size: 0.94rem; }
-    .bubble.user { background: var(--cv2-user-bubble); border: 1px solid var(--cv2-user-bubble-border); color: var(--text-0); border-radius: 16px; border-end-end-radius: 6px; max-width: min(78%, 640px); }
-    .bubble.assistant { background: var(--surface-2); border: 1px solid var(--border-1); color: var(--text-0); border-end-start-radius: 6px; box-shadow: var(--shadow-md); width: 100%; }
+    .bubble.user { background: var(--cv2-user-bubble); border: 1px solid var(--cv2-user-bubble-border); color: var(--text-0); border-radius: 16px; border-end-end-radius: 6px; max-width: min(78%, 640px); box-shadow: 0 2px 6px rgba(0, 93, 180, 0.06); }
+    .bubble.assistant { background: var(--bg-0); border: 1px solid var(--border-1); border-inline-start: 3.5px solid var(--ssra-blue); color: var(--text-0); border-end-start-radius: 6px; box-shadow: 0 4px 16px rgba(0, 45, 98, 0.07); width: 100%; }
     .lds { display: inline-flex; align-items: center; gap: 10px; }
     .lds-grid { display: grid; grid-template-columns: repeat(3, 4px); gap: 1.5px; flex-shrink: 0; }
     .lds-cell { width: 4px; height: 4px; border-radius: 1px; background: var(--text-0); animation: pixelOn 1.2s ease-in-out infinite; }
@@ -602,16 +612,16 @@ function renderPwaShellHtml(locale, nonce) {
     .lds-cell:nth-child(5), .lds-cell:nth-child(9) { animation-delay: 0.6s; }
     @keyframes pixelOn { 0%, 100% { opacity: 0.18; } 50% { opacity: 1; } }
     .turn-meta-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin-bottom: 0.55rem; font-size: 0.74rem; color: var(--text-2); }
-    .meta-pill { padding: 0.18rem 0.55rem; border-radius: var(--radius-pill); background: var(--surface-3); border: 1px solid var(--border-1); font-weight: 600; font-size: 0.75rem; }
-    .meta-pill.verified { color: var(--success); border-color: rgba(52, 211, 153, 0.35); }
-    .meta-pill.caution { color: var(--warning); border-color: rgba(251, 191, 36, 0.45); }
+    .meta-pill { padding: 0.18rem 0.55rem; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border-1); color: var(--ssra-blue-bright); font-weight: 600; font-size: 0.75rem; }
+    .meta-pill.verified { background: var(--surface-1); color: var(--success); border-color: rgba(5, 104, 36, 0.32); }
+    .meta-pill.caution { background: var(--surface-1); color: var(--warning); border-color: rgba(133, 58, 6, 0.38); }
 
     /* Generative UI Cards */
-    .gen-ui-card { margin-top: 0.85rem; padding: 0.95rem 1.1rem; border-radius: var(--radius-md); background: var(--surface-1); border: 1px solid var(--border-2); }
-    .gen-ui-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ssra-gold); margin-bottom: 0.55rem; display: flex; align-items: center; justify-content: space-between; }
+    .gen-ui-card { margin-top: 0.85rem; padding: 0.95rem 1.1rem; border-radius: var(--radius-md); background: var(--surface-1); border: 1px solid var(--border-2); border-top: 3px solid var(--ssra-blue); box-shadow: 0 2px 8px rgba(0, 45, 98, 0.05); }
+    .gen-ui-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ssra-blue-bright); margin-bottom: 0.55rem; display: flex; align-items: center; justify-content: space-between; }
     .ssra-guided-steps { margin: 0.4rem 0; padding-inline-start: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.88rem; }
     .ssra-citation-badges { list-style: none; padding: 0; margin: 0.65rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
-    .citation-pill { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); background: rgba(7, 137, 48, 0.14); border: 1px solid rgba(46, 204, 113, 0.35); color: var(--ssra-teal-light); font-size: 0.78rem; font-weight: 600; }
+    .citation-pill { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); background: var(--surface-1); border: 1px solid rgba(5, 104, 36, 0.32); color: var(--success); font-size: 0.78rem; font-weight: 600; }
     .citation-link { color: inherit; text-underline-offset: 2px; }
     .gen-ui-card.is-warning { border-color: rgba(251, 191, 36, 0.55); }
     .gen-ui-card p { margin: 0.35rem 0 0; font-size: 0.88rem; line-height: 1.5; }
@@ -637,8 +647,8 @@ function renderPwaShellHtml(locale, nonce) {
     .narration-sentence { color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .narration-actions { display: inline-flex; align-items: center; gap: 0.35rem; flex-shrink: 0; }
     .narration-btn { min-width: 36px; min-height: 36px; padding: 0 0.5rem; border-radius: 8px; border: 1px solid var(--border-1); background: var(--surface-1); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-    .composer-box { position: relative; background: var(--surface-2); backdrop-filter: blur(20px); border: 1px solid var(--border-2); border-radius: 16px; padding: 0.65rem 0.85rem; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 0.45rem; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
-    .composer-box:focus-within, .composer-box.composer-drag-active { border-color: var(--ssra-gold); }
+    .composer-box { position: relative; background: var(--bg-0); backdrop-filter: blur(20px); border: 1.5px solid var(--border-2); border-radius: 16px; padding: 0.65rem 0.85rem; box-shadow: 0 10px 30px rgba(0, 45, 98, 0.10), 0 2px 6px rgba(15, 23, 42, 0.04); display: flex; flex-direction: column; gap: 0.45rem; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+    .composer-box:focus-within, .composer-box.composer-drag-active { border-color: var(--ssra-blue); box-shadow: 0 10px 32px rgba(0, 93, 180, 0.15), 0 0 0 3px rgba(0, 93, 180, 0.12); }
     .composer-box.is-recording { border-color: var(--danger); }
     .composer-drop-overlay { position: absolute; inset: 4px; z-index: 6; display: flex; align-items: center; justify-content: center; padding: 0.75rem; border: 1.5px dashed var(--ssra-gold); border-radius: 12px; background: var(--bg-1); color: var(--text-0); font-size: 0.84rem; font-weight: 600; text-align: center; pointer-events: none; }
     .composer-active-recording { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; min-height: 48px; padding: 0.25rem 0.35rem; border-radius: 12px; background: rgba(251, 113, 133, 0.08); border: 1px solid rgba(251, 113, 133, 0.35); }
@@ -766,6 +776,10 @@ function renderPwaShellHtml(locale, nonce) {
     .search-modal { max-width: 540px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
     .search-input { width: 100%; padding: 14px 16px; border: none; border-bottom: 1px solid var(--border-1); background: transparent; color: var(--text-0); font: inherit; font-size: 0.95rem; outline: none; }
     .search-results { max-height: 320px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .search-modal .acct-pop-item { color: var(--text-0); }
+    .search-modal .acct-pop-item:hover { background: var(--surface-2); color: var(--text-0); }
+    .search-modal .acct-pop-item.active { color: var(--ssra-blue); font-weight: 700; }
+    .search-modal .rail-empty-hint { color: var(--text-2); }
 
     .settings-modal { max-width: 680px; width: 100%; min-height: 380px; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: grid; grid-template-columns: 185px 1fr; overflow: hidden; }
     @media (max-width: 640px) { .settings-modal { grid-template-columns: 1fr; } }
@@ -777,18 +791,18 @@ function renderPwaShellHtml(locale, nonce) {
 
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
     .is-hidden { display: none !important; }
-    .rail-brand-sub { font-size: 0.68rem; color: var(--text-2); font-weight: 500; }
-    .acct-pop-hr { border: 0; border-top: 1px solid var(--border-0); margin: 3px 0; }
-    .acct-chevron { color: var(--text-3); font-size: 0.75rem; }
-    .active-conv-title { font-weight: 700; font-size: 0.9rem; color: var(--text-0); max-width: 34ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rail-brand-sub { font-size: 0.68rem; color: #FFFFFF; font-weight: 500; }
+    .acct-pop-hr { border: 0; border-top: 1px solid rgba(255, 255, 255, 0.20); margin: 3px 0; }
+    .acct-chevron { color: #FFFFFF; font-size: 0.75rem; }
+    .active-conv-title { font-weight: 700; font-size: 0.9rem; color: #FFFFFF; max-width: 34ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .composer-hint { flex: 1; min-width: 0; font-size: 0.8rem; color: var(--text-1); }
     .composer-hint:empty { display: none; }
     .composer-keys { font-size: 0.75rem; color: var(--text-2); }
     .composer-disclosure { margin: 0.45rem 0.4rem 0; font-size: 0.75rem; line-height: 1.45; color: var(--text-2); text-align: center; }
-    .rail-device-note { margin: 0 0.85rem 0.35rem; font-size: 0.75rem; line-height: 1.4; color: var(--text-2); }
-    .locale-notice { margin: 0.75rem auto 0; max-width: 820px; width: calc(100% - 2rem); padding: 0.6rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid rgba(251, 191, 36, 0.45); background: var(--surface-2); color: var(--text-0); font-size: 0.84rem; line-height: 1.45; }
-    .noscript-note { position: fixed; inset: auto 1rem 1rem 1rem; z-index: 200; margin: 0; padding: 1rem; border: 2px solid var(--ssra-gold); border-radius: var(--radius-md); background: var(--bg-1); color: var(--text-0); }
-    .acct-pop-note { margin: 0; padding: 4px 8px; font-size: 0.78rem; color: var(--text-2); line-height: 1.45; }
+    .rail-device-note { margin: 0 0.85rem 0.35rem; font-size: 0.75rem; line-height: 1.4; color: #FFFFFF; }
+    .locale-notice { margin: 0.75rem auto 0; max-width: 820px; width: calc(100% - 2rem); padding: 0.6rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text-0); font-size: 0.84rem; line-height: 1.45; }
+    .noscript-note { position: fixed; inset: auto 1rem 1rem 1rem; z-index: 200; margin: 0; padding: 1rem; border: 2px solid #005DB4; border-radius: var(--radius-md); background: var(--bg-1); color: var(--text-0); }
+    .acct-pop-note { margin: 0; padding: 4px 8px; font-size: 0.78rem; color: #FFFFFF; line-height: 1.45; }
     .confirm-modal { max-width: 440px; width: 100%; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 1.25rem 1.4rem; display: flex; flex-direction: column; gap: 0.75rem; }
     .confirm-modal-field { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.86rem; color: var(--text-1); }
     .confirm-modal-input { min-height: 44px; padding: 0.5rem 0.7rem; border-radius: var(--radius-sm); border: 1px solid var(--border-2); background: var(--surface-1); color: var(--text-0); font: inherit; }
@@ -805,9 +819,10 @@ function renderPwaShellHtml(locale, nonce) {
     .settings-actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
     .turn-content-text { white-space: pre-wrap; }
     .bubble, .landing-chip-text, .citation-pill, .gen-ui-card p, .gen-kv dd, .locale-notice, .composer-disclosure { overflow-wrap: anywhere; }
-    .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: var(--text-3); }
-    :focus-visible { outline: 3px solid var(--ssra-gold); outline-offset: 2px; }
-    .composer-textarea:focus-visible, .search-input:focus-visible { outline: 3px solid var(--ssra-gold) !important; outline-offset: 2px; box-shadow: 0 0 0 3px var(--ssra-gold); }
+    .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: #FFFFFF; }
+    :focus-visible { outline: 3px solid #005DB4; outline-offset: 2px; }
+    .chat-header :focus-visible, .rail-wrap :focus-visible { outline: 3px solid #FFD60A; outline-offset: 2px; }
+    .composer-textarea:focus-visible, .search-input:focus-visible { outline: 3px solid #005DB4 !important; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(0, 93, 180, 0.22); }
     /* Responsive overrides come after the base rules so they take effect. */
     @media (max-width: 640px) {
       .chat-header {
@@ -821,8 +836,8 @@ function renderPwaShellHtml(locale, nonce) {
       #theme-toggle-btn { grid-area: theme; }
       #header-kebab-wrap { grid-area: kebab; }
       #net-status-badge { grid-area: status; justify-self: start; min-width: 0; }
-      #locale-select { grid-area: locale; max-width: 9.5rem; justify-self: end; }
-      .chat-header .btn-label, .langsel-auto { display: none; }
+      #header-langsel { grid-area: locale; justify-self: end; }
+      .chat-header .btn-label { display: none; }
       .landing { padding: 1rem 0.85rem 1.5rem; gap: 0.9rem; justify-content: flex-start; }
       .landing-prompts { grid-template-columns: minmax(0, 1fr); }
       .composer-keys { display: none; }
@@ -922,21 +937,15 @@ function renderPwaShellHtml(locale, nonce) {
         </div>
         <div class="header-right">
           <button type="button" id="open-call-btn" class="top-bar-icon-btn icon-btn call-btn hdrv2-call" aria-label="Open voice input options" title="Call receptionist">${ICONS.phone}</button>
-          <select id="locale-select" class="icon-btn" aria-label="Language">
-            <optgroup label="Available">
-              <option value="en" ${locale === "en" ? "selected" : ""}>English (en)</option>
-              <option value="pga" ${locale === "pga" ? "selected" : ""}>Juba Arabic (pga)</option>
-              <option value="ar" ${locale === "ar" ? "selected" : ""}>العربية (ar)</option>
-            </optgroup>
-            <optgroup label="Not yet reviewed (interface in English)">
-              <option value="din" ${locale === "din" ? "selected" : ""}>Thuɔŋjäŋ Dinka (din)</option>
-              <option value="nus" ${locale === "nus" ? "selected" : ""}>Thok Naath Nuer (nus)</option>
-              <option value="bfa" ${locale === "bfa" ? "selected" : ""}>Bari (bfa)</option>
-              <option value="zne" ${locale === "zne" ? "selected" : ""}>Pazande (zne)</option>
-              <option value="shk" ${locale === "shk" ? "selected" : ""}>Dhøg Cøllø Shilluk (shk)</option>
-            </optgroup>
-          </select>
-          <span id="lang-auto-badge" class="langsel-auto" data-testid="lang-auto-badge" aria-hidden="true">AUTO · ${locale.toUpperCase()}</span>
+          <div id="header-langsel" class="langsel">
+            <button type="button" id="langsel-btn" class="langsel-btn" data-testid="langsel-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="lang-menu-dialog" title="Response language: auto-detected">
+              <span id="langsel-sr-label" class="sr-only">Response language: Auto-detect (currently English)</span>
+              ${ICONS.globe}
+              <span id="langsel-code" aria-hidden="true">${locale.toUpperCase()}</span>
+              <span id="lang-auto-badge" class="langsel-auto" data-testid="lang-auto-badge" aria-hidden="true">auto</span>
+              ${ICONS.chevronDown}
+            </button>
+          </div>
           <button type="button" id="theme-toggle-btn" class="top-bar-icon-btn icon-btn" aria-label="Colour theme: Dark. Change theme" title="Change theme">${ICONS.moon}</button>
           <div id="header-kebab-wrap" class="hdrv2-kebab">
             <button type="button" id="header-kebab-btn" class="top-bar-icon-btn icon-btn" data-testid="header-kebab-btn" aria-label="More options" aria-expanded="false" aria-controls="header-options-menu" title="More options">${ICONS.kebab}</button>
@@ -1267,6 +1276,86 @@ function renderPwaShellHtml(locale, nonce) {
     </div>
   </div>
 
+  <!-- LanguageMenu Dialog Overlay (LanguageMenu.tsx & overlays.css pattern) -->
+  <div id="lang-menu-overlay" class="lmv2-overlay modal-backdrop" data-testid="lang-menu-overlay">
+    <div id="lang-menu-dialog" class="lmv2" role="dialog" aria-modal="true" aria-label="Response language">
+      <div class="lmv2-head">
+        <h2 id="lang-menu-title">Response language</h2>
+        <button type="button" id="close-lang-menu-btn" class="dlgv2-x lmv2-x" aria-label="Close language picker">${ICONS.close}</button>
+      </div>
+      <div id="lang-menu-list" class="lmv2-list" role="radiogroup" aria-label="Language selection">
+        <button type="button" role="radio" class="lmv2-opt" data-lang-opt="auto" aria-checked="true" tabindex="0">
+          <span class="lmv2-names">
+            <span class="lmv2-name">Auto-detect</span>
+            <span class="lmv2-native" id="lang-opt-auto-native">Answers follow the language you type</span>
+          </span>
+          <span class="lmv2-check" aria-hidden="true">${ICONS.check}</span>
+        </button>
+        <div id="lang-group-available" class="lmv2-group-label" role="none" aria-hidden="true">Available</div>
+        <button type="button" role="radio" class="lmv2-opt" data-lang-opt="en" aria-checked="false" tabindex="-1">
+          <span class="lmv2-names">
+            <span class="lmv2-name">English</span>
+            <span class="lmv2-native">English (en)</span>
+          </span>
+          <span class="lmv2-check" aria-hidden="true">${ICONS.check}</span>
+        </button>
+        <button type="button" role="radio" class="lmv2-opt" data-lang-opt="pga" aria-checked="false" tabindex="-1">
+          <span class="lmv2-names">
+            <span class="lmv2-name">Juba Arabic</span>
+            <span class="lmv2-native">Arabi Juba · عربي جوبا (pga)</span>
+          </span>
+          <span class="lmv2-check" aria-hidden="true">${ICONS.check}</span>
+        </button>
+        <button type="button" role="radio" class="lmv2-opt" data-lang-opt="ar" aria-checked="false" tabindex="-1">
+          <span class="lmv2-names">
+            <span class="lmv2-name">Arabic</span>
+            <span class="lmv2-native">العربية (ar)</span>
+          </span>
+          <span class="lmv2-check" aria-hidden="true">${ICONS.check}</span>
+        </button>
+        <div id="lang-group-unreviewed" class="lmv2-group-label" role="none" aria-hidden="true">Not yet reviewed (interface in English)</div>
+        <button type="button" role="radio" class="lmv2-opt" data-lang-opt="din" aria-checked="false" tabindex="-1">
+          <span class="lmv2-names">
+            <span class="lmv2-name">Thuɔŋjäŋ Dinka</span>
+            <span class="lmv2-native">Thuɔŋjäŋ (din) · Not yet reviewed</span>
+          </span>
+          <span class="lmv2-check" aria-hidden="true">${ICONS.check}</span>
+        </button>
+        <button type="button" role="radio" class="lmv2-opt" data-lang-opt="nus" aria-checked="false" tabindex="-1">
+          <span class="lmv2-names">
+            <span class="lmv2-name">Thok Naath Nuer</span>
+            <span class="lmv2-native">Thok Naath (nus) · Not yet reviewed</span>
+          </span>
+          <span class="lmv2-check" aria-hidden="true">${ICONS.check}</span>
+        </button>
+        <button type="button" role="radio" class="lmv2-opt" data-lang-opt="bfa" aria-checked="false" tabindex="-1">
+          <span class="lmv2-names">
+            <span class="lmv2-name">Bari</span>
+            <span class="lmv2-native">Kutuk na Bari (bfa) · Not yet reviewed</span>
+          </span>
+          <span class="lmv2-check" aria-hidden="true">${ICONS.check}</span>
+        </button>
+        <button type="button" role="radio" class="lmv2-opt" data-lang-opt="zne" aria-checked="false" tabindex="-1">
+          <span class="lmv2-names">
+            <span class="lmv2-name">Pazande</span>
+            <span class="lmv2-native">Pazande (zne) · Not yet reviewed</span>
+          </span>
+          <span class="lmv2-check" aria-hidden="true">${ICONS.check}</span>
+        </button>
+        <button type="button" role="radio" class="lmv2-opt" data-lang-opt="shk" aria-checked="false" tabindex="-1">
+          <span class="lmv2-names">
+            <span class="lmv2-name">Dhøg Cøllø Shilluk</span>
+            <span class="lmv2-native">Dhøg Cøllø (shk) · Not yet reviewed</span>
+          </span>
+          <span class="lmv2-check" aria-hidden="true">${ICONS.check}</span>
+        </button>
+      </div>
+      <div id="lang-menu-foot" class="lmv2-foot">
+        Pick a language to always answer in it, or let answers follow the language you type.
+      </div>
+    </div>
+  </div>
+
   <script nonce="${nonce}">
     (() => {
       const ICONS = ${JSON.stringify(ICONS)};
@@ -1433,6 +1522,28 @@ function renderPwaShellHtml(locale, nonce) {
         },
       };
 
+      const LOCALE_DISPLAY_NAMES = {
+        en: "English (en)",
+        pga: "Juba Arabic (pga)",
+        ar: "العربية (ar)",
+        din: "Thuɔŋjäŋ Dinka (din)",
+        nus: "Thok Naath Nuer (nus)",
+        bfa: "Bari (bfa)",
+        zne: "Pazande (zne)",
+        shk: "Dhøg Cøllø Shilluk (shk)",
+      };
+      const LOCALE_SHORT_NAMES = {
+        en: "English",
+        pga: "Juba Arabic",
+        ar: "Arabic",
+        din: "Thuɔŋjäŋ Dinka",
+        nus: "Thok Naath Nuer",
+        bfa: "Bari",
+        zne: "Pazande",
+        shk: "Dhøg Cøllø Shilluk",
+      };
+      const SELECTABLE_LOCALES = new Set(Object.keys(LOCALE_DISPLAY_NAMES));
+
       const shell = document.getElementById("ssra-app-shell");
       const landingView = document.getElementById("landing-view");
       const chatView = document.getElementById("chat-view");
@@ -1440,14 +1551,17 @@ function renderPwaShellHtml(locale, nonce) {
       const form = document.getElementById("ssra-chat-form");
       const input = document.getElementById("ssra-chat-input");
       const submitBtn = document.getElementById("ssra-chat-submit");
-      const localeSelect = document.getElementById("locale-select");
+      const langselBtn = document.getElementById("langsel-btn");
+      const langselCodeEl = document.getElementById("langsel-code");
+      const langselSrLabelEl = document.getElementById("langsel-sr-label");
       const langAutoBadgeEl = document.getElementById("lang-auto-badge");
+      const langMenuOverlay = document.getElementById("lang-menu-overlay");
+      const langMenuList = document.getElementById("lang-menu-list");
       const convListEl = document.getElementById("rail-conv-list");
       const activeTitleEl = document.getElementById("active-conv-title");
       const hintEl = document.getElementById("composer-hint");
       const acctTrigger = document.getElementById("acct-rail-trigger");
       const acctPopover = document.getElementById("acct-popover");
-      const SELECTABLE_LOCALES = new Set(Array.from(localeSelect?.options || [], (option) => option.value));
 
       // Detect 2G / Save-Data network condition (FE-G4)
       const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -1545,9 +1659,38 @@ function renderPwaShellHtml(locale, nonce) {
       }
 
       function syncLangAutoBadge() {
-        if (!langAutoBadgeEl) return;
-        const code = String(state.localeExplicit ? state.locale : state.detectedLocale || state.locale).toUpperCase();
-        langAutoBadgeEl.textContent = state.localeExplicit ? code : "AUTO · " + code;
+        const effectiveLocale = state.localeExplicit ? state.locale : (state.detectedLocale || state.locale);
+        const code = String(effectiveLocale || "en").toUpperCase();
+        const shortName = LOCALE_SHORT_NAMES[effectiveLocale] || "English";
+        if (langselCodeEl) langselCodeEl.textContent = code;
+        if (langAutoBadgeEl) {
+          langAutoBadgeEl.textContent = "auto";
+          langAutoBadgeEl.classList.toggle("is-hidden", Boolean(state.localeExplicit));
+        }
+        if (langselSrLabelEl) {
+          langselSrLabelEl.textContent = state.localeExplicit
+            ? "Response language: " + shortName
+            : "Response language: Auto-detect (currently " + shortName + ")";
+        }
+        if (langselBtn) {
+          langselBtn.setAttribute(
+            "title",
+            state.localeExplicit ? "Response language" : "Response language: auto-detected",
+          );
+        }
+        const checkedVal = state.localeExplicit ? state.locale : "auto";
+        if (langMenuList) {
+          const opts = Array.from(langMenuList.querySelectorAll(".lmv2-opt[data-lang-opt]"));
+          const activeIdx = Math.max(
+            0,
+            opts.findIndex((btn) => btn.getAttribute("data-lang-opt") === checkedVal),
+          );
+          opts.forEach((btn, idx) => {
+            const isChecked = btn.getAttribute("data-lang-opt") === checkedVal;
+            btn.setAttribute("aria-checked", String(isChecked));
+            btn.tabIndex = idx === activeIdx ? 0 : -1;
+          });
+        }
       }
 
       const EXPLICIT_LOCALE_SWITCH_RULES = [
@@ -1594,10 +1737,9 @@ function renderPwaShellHtml(locale, nonce) {
         const uiLocale = LOCALE_UI_STRINGS[state.locale] ? state.locale : "en";
         document.documentElement.lang = uiLocale;
         document.documentElement.dir = uiLocale === "ar" ? "rtl" : "ltr";
-        if (localeSelect) localeSelect.value = state.locale;
         const notice = document.getElementById("locale-notice");
         if (notice) {
-          const name = localeSelect?.selectedOptions?.[0]?.textContent || state.locale;
+          const name = LOCALE_DISPLAY_NAMES[state.locale] || state.locale;
           notice.textContent = uiLocale === state.locale
             ? ""
             : "Interface text in " + name + " hasn’t been reviewed yet, so it is shown in English. SSRA Assist hasn’t been tested in this language; for checked answers, ask in English, Arabic, or Juba Arabic.";
@@ -2349,7 +2491,7 @@ function renderPwaShellHtml(locale, nonce) {
         const payload = {
           message: trimmed,
           thread_id: conv.id,
-          locale: state.locale,
+          locale: state.localeExplicit ? state.locale : (state.detectedLocale || state.locale),
           channel: "web",
           low_data_mode: Boolean(state.lowDataMode),
           auth_level: "ANONYMOUS",
@@ -2719,13 +2861,98 @@ function renderPwaShellHtml(locale, nonce) {
         applyTheme(next);
       });
 
-      localeSelect?.addEventListener("change", () => {
-        state.localeExplicit = true;
-        applyLocaleStrings(localeSelect.value);
-        try {
-          window.history?.replaceState?.(null, "", "/" + state.locale);
-        } catch {}
-        saveState();
+      function openLangMenu() {
+        if (!langMenuOverlay) return;
+        syncLangAutoBadge();
+        const checkedBtn =
+          langMenuList?.querySelector('.lmv2-opt[aria-checked="true"]') ||
+          langMenuList?.querySelector(".lmv2-opt");
+        langselBtn?.setAttribute("aria-expanded", "true");
+        openModal(langMenuOverlay, checkedBtn, langselBtn);
+        const topEntry = modalStack[modalStack.length - 1];
+        if (topEntry?.backdrop === langMenuOverlay) {
+          topEntry.onClose = () => {
+            langselBtn?.setAttribute("aria-expanded", "false");
+          };
+        }
+      }
+      function selectLangMenuOption(code) {
+        if (code === "auto") {
+          state.localeExplicit = false;
+          syncLangAutoBadge();
+          saveState();
+        } else if (SELECTABLE_LOCALES.has(code)) {
+          state.localeExplicit = true;
+          applyLocaleStrings(code);
+          try {
+            window.history?.replaceState?.(null, "", "/" + state.locale);
+          } catch {}
+          saveState();
+        }
+        if (modalStack[modalStack.length - 1]?.backdrop === langMenuOverlay) {
+          closeTopModal();
+        }
+      }
+      langselBtn?.addEventListener("click", () => {
+        if (langMenuOverlay?.classList.contains("open")) {
+          closeTopModal();
+        } else {
+          openLangMenu();
+        }
+      });
+      langselBtn?.addEventListener("keydown", (e) => {
+        if (!langMenuOverlay?.classList.contains("open") && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+          e.preventDefault();
+          openLangMenu();
+        }
+      });
+      document.getElementById("close-lang-menu-btn")?.addEventListener("click", () => {
+        if (modalStack[modalStack.length - 1]?.backdrop === langMenuOverlay) closeTopModal();
+      });
+      langMenuOverlay?.addEventListener("click", (e) => {
+        if (e.target === langMenuOverlay && modalStack[modalStack.length - 1]?.backdrop === langMenuOverlay) {
+          closeTopModal();
+        }
+      });
+      langMenuList?.addEventListener("click", (e) => {
+        const optBtn = e.target.closest(".lmv2-opt[data-lang-opt]");
+        if (!optBtn) return;
+        selectLangMenuOption(optBtn.getAttribute("data-lang-opt"));
+      });
+      langMenuList?.addEventListener("keydown", (e) => {
+        const opts = Array.from(langMenuList.querySelectorAll(".lmv2-opt[data-lang-opt]"));
+        if (opts.length === 0) return;
+        const currentBtn = e.target.closest(".lmv2-opt[data-lang-opt]");
+        const idx = Math.max(0, opts.indexOf(currentBtn));
+        const moveFocus = (nextIdx) => {
+          const clamped = ((nextIdx % opts.length) + opts.length) % opts.length;
+          opts.forEach((b, i) => {
+            b.tabIndex = i === clamped ? 0 : -1;
+          });
+          opts[clamped]?.focus();
+        };
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+          e.preventDefault();
+          moveFocus(idx + 1);
+        } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+          e.preventDefault();
+          moveFocus(idx - 1);
+        } else if (e.key === "Home") {
+          e.preventDefault();
+          moveFocus(0);
+        } else if (e.key === "End") {
+          e.preventDefault();
+          moveFocus(opts.length - 1);
+        } else if (/^[a-z]$/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const lower = e.key.toLowerCase();
+          const matchIdx = opts.findIndex((b) =>
+            (b.querySelector(".lmv2-name")?.textContent || "").trim().toLowerCase().startsWith(lower),
+          );
+          if (matchIdx >= 0) {
+            e.preventDefault();
+            moveFocus(matchIdx);
+          }
+        }
       });
 
       const headerKebabBtn = document.getElementById("header-kebab-btn");
@@ -3747,7 +3974,7 @@ function renderPwaShellHtml(locale, nonce) {
         opt.addEventListener("click", () => {
           const chosenLang = opt.getAttribute("data-call-lang") || "en";
           callLangSource = "chosen";
-          if (localeSelect) localeSelect.value = chosenLang;
+          state.localeExplicit = true;
           applyLocaleStrings(chosenLang);
           saveState();
           callLangMenuEl?.classList.add("is-hidden");

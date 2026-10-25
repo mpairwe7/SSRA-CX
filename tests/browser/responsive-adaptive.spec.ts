@@ -64,7 +64,7 @@ for (const [width, height] of [[320, 568], [360, 740], [568, 320]] as const) {
     await page.setViewportSize({ height, width });
     await page.goto("/en");
     expect(await offscreenControls(page)).toEqual([]);
-    await expect(page.locator("#locale-select")).toBeInViewport();
+    await expect(page.locator("#langsel-btn")).toBeInViewport();
   });
 }
 

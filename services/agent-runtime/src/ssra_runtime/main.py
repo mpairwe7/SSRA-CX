@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import socket
+import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from urllib.parse import urlparse
@@ -21,6 +22,7 @@ from ssra_core import (
     SSRAError,
     ensure_w3c_traceparent,
     get_default_feature_flag_engine,
+    record_chat_turn,
 )
 from ssra_core.deployment import is_reference_mode
 from ssra_security import (
@@ -368,6 +370,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
     ) -> RuntimeTurnResponse:
         """Execute a synchronous 11-node LangGraph conversation turn on the worker threadpool."""
         _verify_turn_subject_consistency(body, x_ssra_subject_ref)
+        started = time.perf_counter()
         event = make_conversation_event(
             body.message,
             locale=body.locale,
@@ -376,13 +379,36 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
             rich_ui=not body.low_data_mode,
             metadata=body.metadata,
         )
-        return active_runtime.run_turn(
+        turn_resp = active_runtime.run_turn(
             event,
             auth_level=body.auth_level,
             subject_ref=body.subject_ref,
             confirmation_token=body.confirmation_token,
             idempotency_key=body.idempotency_key,
         )
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
+        retrieval_mode = (
+            "abstained"
+            if turn_resp.answer.abstained
+            else (
+                "escalated"
+                if turn_resp.handoff_ticket
+                else ("calculator" if turn_resp.artifacts else "grounded_qa")
+            )
+        )
+        record_chat_turn(
+            {
+                "retrieval_mode": retrieval_mode,
+                "escalation_required": turn_resp.handoff_ticket is not None,
+                "handoff": turn_resp.handoff_ticket,
+                "faithfulness_score": None,
+                "locale": turn_resp.locale.value,
+                "locale_source": "",
+            },
+            elapsed_ms=elapsed_ms,
+            channel=body.channel.value.lower(),
+        )
+        return turn_resp
 
     @app.post("/v1/turns/batch", response_model=list[RuntimeTurnResponse])
     def execute_turn_batch(

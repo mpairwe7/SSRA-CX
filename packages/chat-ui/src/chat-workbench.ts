@@ -802,3 +802,160 @@ export function buildMainChatLayoutAlignment(): MainChatLayoutAlignmentDescripto
     iosTouchFontSizeMinPx: 16,
   };
 }
+
+export interface LanguageMenuOptionDescriptor {
+  readonly value: "auto" | "en" | "pga" | "ar" | "din" | "nus" | "bfa" | "zne" | "shk";
+  readonly label: string;
+  readonly native: string;
+  readonly reviewed: boolean;
+}
+
+export const SSRA_LANGUAGE_MENU_OPTIONS: readonly LanguageMenuOptionDescriptor[] = [
+  {
+    value: "auto",
+    label: "Auto-detect",
+    native: "Answers follow the language you type",
+    reviewed: true,
+  },
+  { value: "en", label: "English", native: "English (en)", reviewed: true },
+  {
+    value: "pga",
+    label: "Juba Arabic",
+    native: "Arabi Juba · عربي جوبا (pga)",
+    reviewed: true,
+  },
+  { value: "ar", label: "Arabic", native: "العربية (ar)", reviewed: true },
+  {
+    value: "din",
+    label: "Thuɔŋjäŋ Dinka",
+    native: "Thuɔŋjäŋ (din) · Not yet reviewed (interface in English)",
+    reviewed: false,
+  },
+  {
+    value: "nus",
+    label: "Thok Naath Nuer",
+    native: "Thok Naath (nus) · Not yet reviewed (interface in English)",
+    reviewed: false,
+  },
+  {
+    value: "bfa",
+    label: "Bari",
+    native: "Kutuk na Bari (bfa) · Not yet reviewed (interface in English)",
+    reviewed: false,
+  },
+  {
+    value: "zne",
+    label: "Pazande",
+    native: "Pazande (zne) · Not yet reviewed (interface in English)",
+    reviewed: false,
+  },
+  {
+    value: "shk",
+    label: "Dhøg Cøllø Shilluk",
+    native: "Dhøg Cøllø (shk) · Not yet reviewed (interface in English)",
+    reviewed: false,
+  },
+];
+
+export interface HeaderLanguageMenuModel {
+  readonly triggerCode: string;
+  readonly showAutoBadge: boolean;
+  readonly triggerSrLabel: string;
+  readonly triggerTitle: string;
+  readonly checkedValue: LanguageMenuOptionDescriptor["value"];
+  readonly activeIndex: number;
+  readonly rovingIndex: number;
+  readonly options: readonly (LanguageMenuOptionDescriptor & {
+    readonly checked: boolean;
+    readonly tabIndex: 0 | -1;
+  })[];
+}
+
+/**
+ * Build the `FinalYearProject` (`LanguageMenu.tsx`) header trigger and focus-trapped
+ * `role="radiogroup"` dialog state for SSRA Assist's 8 South Sudan languages + Auto-detect.
+ */
+export function buildHeaderLanguageMenuModel(params: {
+  readonly locale: string;
+  readonly detectedLocale?: string;
+  readonly localeExplicit: boolean;
+  readonly focusIndex?: number | null;
+}): HeaderLanguageMenuModel {
+  const effectiveCode = (
+    params.localeExplicit ? params.locale : (params.detectedLocale ?? params.locale)
+  )
+    .trim()
+    .toLowerCase();
+  const currentOpt: LanguageMenuOptionDescriptor = SSRA_LANGUAGE_MENU_OPTIONS.find(
+    (o) => o.value !== "auto" && o.value === effectiveCode,
+  ) ?? {
+    value: "en",
+    label: "English",
+    native: "English (en)",
+    reviewed: true,
+  };
+  const showAutoBadge = !params.localeExplicit;
+  const checkedValue: LanguageMenuOptionDescriptor["value"] = showAutoBadge
+    ? "auto"
+    : currentOpt.value;
+  const activeIndex = Math.max(
+    0,
+    SSRA_LANGUAGE_MENU_OPTIONS.findIndex((o) => o.value === checkedValue),
+  );
+  const rovingIndex =
+    params.focusIndex !== undefined &&
+    params.focusIndex !== null &&
+    params.focusIndex >= 0 &&
+    params.focusIndex < SSRA_LANGUAGE_MENU_OPTIONS.length
+      ? params.focusIndex
+      : activeIndex;
+  return {
+    triggerCode: currentOpt.value.toUpperCase(),
+    showAutoBadge,
+    triggerSrLabel: showAutoBadge
+      ? `Response language: Auto-detect (currently ${currentOpt.label})`
+      : `Response language: ${currentOpt.label}`,
+    triggerTitle: showAutoBadge ? "Response language: auto-detected" : "Response language",
+    checkedValue,
+    activeIndex,
+    rovingIndex,
+    options: SSRA_LANGUAGE_MENU_OPTIONS.map((opt, idx) => ({
+      ...opt,
+      checked: opt.value === checkedValue,
+      tabIndex: idx === rovingIndex ? 0 : -1,
+    })),
+  };
+}
+
+/**
+ * WAI-ARIA `role="radiogroup"` roving keyboard navigation (`ArrowDown`/`ArrowRight`,
+ * `ArrowUp`/`ArrowLeft`, `Home`, `End`, and single-character type-ahead), matching
+ * `FinalYearProject/App/frontend/src/components/LanguageMenu.tsx`.
+ */
+export function resolveLanguageMenuKeyNavigation(params: {
+  readonly key: string;
+  readonly currentIndex: number;
+  readonly options?: readonly LanguageMenuOptionDescriptor[];
+}): number | null {
+  const opts = params.options ?? SSRA_LANGUAGE_MENU_OPTIONS;
+  if (opts.length === 0) return null;
+  const cur = ((params.currentIndex % opts.length) + opts.length) % opts.length;
+  if (params.key === "ArrowDown" || params.key === "ArrowRight") {
+    return (cur + 1) % opts.length;
+  }
+  if (params.key === "ArrowUp" || params.key === "ArrowLeft") {
+    return (cur - 1 + opts.length) % opts.length;
+  }
+  if (params.key === "Home") {
+    return 0;
+  }
+  if (params.key === "End") {
+    return opts.length - 1;
+  }
+  if (/^[a-z]$/i.test(params.key)) {
+    const lower = params.key.toLowerCase();
+    const match = opts.findIndex((o) => o.label.toLowerCase().startsWith(lower));
+    if (match >= 0) return match;
+  }
+  return null;
+}

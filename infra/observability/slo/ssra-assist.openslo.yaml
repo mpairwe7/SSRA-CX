@@ -1,0 +1,73 @@
+# Service level objectives for SSRA Assist, in OpenSLO v1 (`infra/observability/slo/ssra-assist.openslo.yaml`).
+# Adapted from `FinalYearProject/monitoring/slo/ura-chatbot.openslo.yaml`.
+apiVersion: openslo/v1
+kind: Service
+metadata:
+  name: ssra-assist
+  displayName: SSRA Assist Taxpayer & Customs Assistant
+spec:
+  description: Omnichannel taxpayer chat (Web, AG-UI SSE, Voice, USSD, WhatsApp, SMS) and Core API.
+---
+apiVersion: openslo/v1
+kind: SLO
+metadata:
+  name: api-availability
+  displayName: API availability
+spec:
+  description: Share of API requests not answered with a 5xx.
+  service: ssra-assist
+  indicator:
+    metadata:
+      name: api-non-5xx
+    spec:
+      ratioMetric:
+        counter: true
+        bad:
+          metricSource:
+            type: Prometheus
+            spec:
+              query: sum(ssra_http_requests_total{status=~"5.."})
+        total:
+          metricSource:
+            type: Prometheus
+            spec:
+              query: sum(ssra_http_requests_total)
+  timeWindow:
+    - duration: 30d
+      isRolling: true
+  budgetingMethod: Occurrences
+  objectives:
+    - displayName: 99.9% of requests succeed
+      target: 0.999
+---
+apiVersion: openslo/v1
+kind: SLO
+metadata:
+  name: chat-latency
+  displayName: Chat answer latency
+spec:
+  description: Share of chat turns across all channels finishing within 3 seconds (3000.0 ms histogram bucket).
+  service: ssra-assist
+  indicator:
+    metadata:
+      name: chat-turns-within-3s
+    spec:
+      ratioMetric:
+        counter: true
+        good:
+          metricSource:
+            type: Prometheus
+            spec:
+              query: sum(ssra_chat_response_time_ms_bucket{le="3000.0"})
+        total:
+          metricSource:
+            type: Prometheus
+            spec:
+              query: sum(ssra_chat_response_time_ms_count)
+  timeWindow:
+    - duration: 30d
+      isRolling: true
+  budgetingMethod: Occurrences
+  objectives:
+    - displayName: 95% of turns within 3 s
+      target: 0.95

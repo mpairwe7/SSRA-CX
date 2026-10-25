@@ -1,0 +1,58 @@
+# Recording rules — SSRA Assist SLIs (`infra/observability/recording-rules.yml`)
+# Source of truth: `infra/observability/slo/ssra-assist.openslo.yaml`
+#   * availability  99.9% of API requests are not 5xx           (30 days)
+#   * chat latency  95.0% of chat turns finish within 3 s       (30 days)
+groups:
+  - name: ssra-sli-availability
+    interval: 30s
+    rules:
+      - record: ssra:http_requests:rate5m
+        expr: sum(rate(ssra_http_requests_total[5m]))
+      - record: ssra:http_errors_5xx:ratio_rate5m
+        expr: sum(rate(ssra_http_requests_total{status=~"5.."}[5m])) / sum(rate(ssra_http_requests_total[5m]))
+      - record: ssra:http_errors_5xx:ratio_rate30m
+        expr: sum(rate(ssra_http_requests_total{status=~"5.."}[30m])) / sum(rate(ssra_http_requests_total[30m]))
+      - record: ssra:http_errors_5xx:ratio_rate1h
+        expr: sum(rate(ssra_http_requests_total{status=~"5.."}[1h])) / sum(rate(ssra_http_requests_total[1h]))
+      - record: ssra:http_errors_5xx:ratio_rate2h
+        expr: sum(rate(ssra_http_requests_total{status=~"5.."}[2h])) / sum(rate(ssra_http_requests_total[2h]))
+      - record: ssra:http_errors_5xx:ratio_rate6h
+        expr: sum(rate(ssra_http_requests_total{status=~"5.."}[6h])) / sum(rate(ssra_http_requests_total[6h]))
+      - record: ssra:http_errors_5xx:ratio_rate1d
+        expr: sum(rate(ssra_http_requests_total{status=~"5.."}[1d])) / sum(rate(ssra_http_requests_total[1d]))
+      - record: ssra:http_errors_5xx:ratio_rate3d
+        expr: sum(rate(ssra_http_requests_total{status=~"5.."}[3d])) / sum(rate(ssra_http_requests_total[3d]))
+
+  - name: ssra-sli-latency
+    interval: 30s
+    rules:
+      - record: ssra:chat_turns_slow:ratio_rate5m
+        expr: 1 - sum(rate(ssra_chat_response_time_ms_bucket{le="3000.0"}[5m])) / sum(rate(ssra_chat_response_time_ms_count[5m]))
+      - record: ssra:chat_turns_slow:ratio_rate30m
+        expr: 1 - sum(rate(ssra_chat_response_time_ms_bucket{le="3000.0"}[30m])) / sum(rate(ssra_chat_response_time_ms_count[30m]))
+      - record: ssra:chat_turns_slow:ratio_rate1h
+        expr: 1 - sum(rate(ssra_chat_response_time_ms_bucket{le="3000.0"}[1h])) / sum(rate(ssra_chat_response_time_ms_count[1h]))
+      - record: ssra:chat_turns_slow:ratio_rate6h
+        expr: 1 - sum(rate(ssra_chat_response_time_ms_bucket{le="3000.0"}[6h])) / sum(rate(ssra_chat_response_time_ms_count[6h]))
+      - record: ssra:chat_response_time_ms:p95_by_channel_5m
+        expr: histogram_quantile(0.95, sum by (le, channel) (rate(ssra_chat_response_time_ms_bucket[5m])))
+      - record: ssra:chat_response_time_ms:p95_by_mode_5m
+        expr: histogram_quantile(0.95, sum by (le, mode) (rate(ssra_chat_response_time_ms_bucket[5m])))
+      - record: ssra:chat_response_time_ms:p99_5m
+        expr: histogram_quantile(0.99, sum by (le) (rate(ssra_chat_response_time_ms_bucket[5m])))
+
+  - name: ssra-sli-quality
+    interval: 60s
+    rules:
+      - record: ssra:faithfulness_score:mean_30m
+        expr: sum(rate(ssra_faithfulness_score_sum[30m])) / sum(rate(ssra_faithfulness_score_count[30m]))
+      - record: ssra:chat_turns:containment_ratio_1h
+        expr: sum(rate(ssra_chat_turns_total{outcome="answered"}[1h])) / sum(rate(ssra_chat_turns_total{outcome!="error"}[1h]))
+      - record: ssra:chat_turns:abstention_ratio_1h
+        expr: sum(rate(ssra_chat_turns_total{outcome="abstained"}[1h])) / sum(rate(ssra_chat_turns_total{outcome!="error"}[1h]))
+      - record: ssra:chat_turns:escalation_ratio_1h
+        expr: sum(rate(ssra_chat_turns_total{outcome="escalated"}[1h])) / sum(rate(ssra_chat_turns_total{outcome!="error"}[1h]))
+      - record: ssra:chat_turns:error_ratio_1h
+        expr: sum(rate(ssra_chat_turns_total{outcome="error"}[1h])) / sum(rate(ssra_chat_turns_total[1h]))
+      - record: ssra:retrieval_keyword_fallback:ratio_rate10m
+        expr: sum(rate(ssra_retrieval_mode_total{mode="keyword"}[10m])) / sum(rate(ssra_retrieval_mode_total[10m]))

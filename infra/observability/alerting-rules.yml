@@ -1,0 +1,206 @@
+# Alerting rules — SSRA Assist (`infra/observability/alerting-rules.yml`)
+# Loaded by `infra/observability/prometheus.yml`; routed by `infra/observability/alertmanager.yml`.
+# Verified against the exported metric catalogue and runbook headings by `libs/ssra_core/tests/test_observability_and_monitoring.py`.
+groups:
+  - name: ssra-availability
+    rules:
+      - alert: SsraApiDown
+        expr: up{job="ssra-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "The SSRA Core API cannot be scraped"
+          description: "Prometheus has not read /metrics for 2 minutes: the API is down, or the scrape token is wrong (401)."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#1-developer-ci--production-docker-compose-operations-taskfileyml"
+
+      - alert: SsraAvailabilityBudgetBurnFast
+        expr: |
+          (ssra:http_errors_5xx:ratio_rate1h > (14.4 * 0.001) and ssra:http_errors_5xx:ratio_rate5m > (14.4 * 0.001))
+          or
+          (ssra:http_errors_5xx:ratio_rate6h > (6 * 0.001) and ssra:http_errors_5xx:ratio_rate30m > (6 * 0.001))
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "5xx responses are burning the 99.9% availability budget fast"
+          description: "At this rate the 30-day error budget is gone within days (1h/5m or 6h/30m window pair above threshold)."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#2-emergency-kill-switches-model-tool-channel"
+
+      - alert: SsraAvailabilityBudgetBurnSlow
+        expr: |
+          (ssra:http_errors_5xx:ratio_rate1d > (3 * 0.001) and ssra:http_errors_5xx:ratio_rate2h > (3 * 0.001))
+          or
+          (ssra:http_errors_5xx:ratio_rate3d > 0.001 and ssra:http_errors_5xx:ratio_rate6h > 0.001)
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "5xx responses are slowly eating the availability budget"
+          description: "The 1d/2h or 3d/6h error ratio is above the sustainable rate for a 99.9% objective."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#2-emergency-kill-switches-model-tool-channel"
+
+      - alert: SsraProbeFailing
+        expr: probe_success == 0
+        for: 3m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Synthetic probe failing: {{ $labels.instance }}"
+          description: "The blackbox exporter cannot get a 2xx from {{ $labels.instance }}."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#1-developer-ci--production-docker-compose-operations-taskfileyml"
+
+  - name: ssra-latency
+    rules:
+      - alert: SsraChatLatencyBudgetBurnFast
+        expr: |
+          (ssra:chat_turns_slow:ratio_rate1h > (14.4 * 0.05) and ssra:chat_turns_slow:ratio_rate5m > (14.4 * 0.05))
+          or
+          (ssra:chat_turns_slow:ratio_rate6h > (6 * 0.05) and ssra:chat_turns_slow:ratio_rate30m > (6 * 0.05))
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Too many chat turns are slower than 3 s"
+          description: "The share of turns over the 3 s objective is burning the 5% latency budget fast."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#2-emergency-kill-switches-model-tool-channel"
+
+      - alert: SsraChatLatencyP99High
+        expr: ssra:chat_response_time_ms:p99_5m > 15000
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Chat p99 above 15 s"
+          description: "p99 = {{ $value | humanize }} ms over 5m."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#2-emergency-kill-switches-model-tool-channel"
+
+  - name: ssra-quality
+    rules:
+      - alert: SsraFaithfulnessLow
+        expr: ssra:faithfulness_score:mean_30m < 0.5
+        for: 30m
+        labels:
+          severity: warning
+          team: ml
+        annotations:
+          summary: "Mean faithfulness below 0.5"
+          description: "30m mean = {{ $value | humanize }}. Check index freshness and retrieval mode."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#3-reference-knowledge-release-state-machine"
+
+      - alert: SsraEscalationRateHigh
+        expr: ssra:chat_turns:escalation_ratio_1h > 0.10
+        for: 30m
+        labels:
+          severity: warning
+          team: ml
+        annotations:
+          summary: "More than 10% of turns are handed to a person"
+          description: "Containment is falling; inspect escalating intents and languages."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#2-emergency-kill-switches-model-tool-channel"
+
+      - alert: SsraAbstentionRateHigh
+        expr: ssra:chat_turns:abstention_ratio_1h > 0.25
+        for: 1h
+        labels:
+          severity: warning
+          team: ml
+        annotations:
+          summary: "More than a quarter of turns abstain"
+          description: "Taxpayers are asking about topics not covered by the approved KnowledgeSnapshot."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#3-reference-knowledge-release-state-machine"
+
+      - alert: SsraRetrievalDegraded
+        expr: ssra:retrieval_keyword_fallback:ratio_rate10m > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Retrieval fell back to keyword mode"
+          description: "More than 20% of turns use keyword fallback — check Qdrant."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#4-disaster-recovery-rpo--5-min-rto--1-h--runtime-patching"
+
+  - name: ssra-security
+    rules:
+      - alert: AuthenticationFailureSpike
+        expr: sum(rate(ssra_security_events_total{event="authn_login_fail"}[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Sustained authentication failures (> 1/s)"
+          description: "Possible credential stuffing or invalid scrape/IdP token. Inspect authn_login_fail log events."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#2-emergency-kill-switches-model-tool-channel"
+
+      - alert: AuthorizationFailureSpike
+        expr: sum(rate(ssra_security_events_total{event="authz_fail"}[5m])) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Sustained authorisation denials"
+          description: "Callers are repeatedly invoking endpoints their role does not allow. Inspect authz_fail log events."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#2-emergency-kill-switches-model-tool-channel"
+
+  - name: ssra-dependencies-and-index
+    rules:
+      - alert: QdrantDown
+        expr: up{job="qdrant"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Qdrant unreachable"
+          description: "Vector retrieval is degraded until Qdrant returns."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#4-disaster-recovery-rpo--5-min-rto--1-h--runtime-patching"
+
+      - alert: ValkeyDown
+        expr: up{job="valkey"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Valkey cache unreachable"
+          description: "Rate limits and working-memory cache fall back to per-worker memory."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#4-disaster-recovery-rpo--5-min-rto--1-h--runtime-patching"
+
+      - alert: VllmDown
+        expr: up{job="vllm"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: ml
+        annotations:
+          summary: "vLLM server {{ $labels.server }} is not answering"
+          description: "Sovereign local LLM serving is unreachable."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#2-emergency-kill-switches-model-tool-channel"
+
+      - alert: QdrantIndexDrift
+        expr: ssra_qdrant_index_drift > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: ml
+        annotations:
+          summary: "Serving Qdrant index no longer matches the approved KnowledgeSnapshot"
+          description: "Freshness reported source/index drift or a missing index binding."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#3-reference-knowledge-release-state-machine"
+
+      - alert: QdrantRebuildFailed
+        expr: ssra_qdrant_rebuild_failed > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: ml
+        annotations:
+          summary: "Staged Qdrant rebuild failed before promotion"
+          description: "The serving alias is unchanged; inspect the candidate build and rerun safely."
+          runbook_url: "https://github.com/mpairwe7/SSRA-CX/blob/main/docs/runbooks/README.md#3-reference-knowledge-release-state-machine"

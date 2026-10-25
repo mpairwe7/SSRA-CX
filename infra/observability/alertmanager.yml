@@ -1,0 +1,25 @@
+# Alertmanager — SSRA Assist (`infra/observability/alertmanager.yml`)
+# Adapted from `FinalYearProject/monitoring/alertmanager.yml`.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: ops-webhook
+  group_by: [alertname, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: ['severity="critical"']
+      receiver: ops-webhook
+      repeat_interval: 1h
+
+inhibit_rules:
+  - source_matchers: ['alertname="SsraApiDown"']
+    target_matchers: ['team="backend"', 'alertname!="SsraApiDown"']
+
+receivers:
+  - name: ops-webhook
+    webhook_configs:
+      - url_file: /run/secrets/alertmanager_webhook_url
+        send_resolved: true

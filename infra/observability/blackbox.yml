@@ -1,0 +1,8 @@
+# Blackbox exporter modules — synthetic probes scraped by `blackbox-http` (`infra/observability/blackbox.yml`)
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      preferred_ip_protocol: ip4
+      follow_redirects: true

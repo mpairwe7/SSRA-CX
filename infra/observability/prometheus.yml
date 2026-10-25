@@ -1,0 +1,102 @@
+# Prometheus configuration — SSRA Assist (`infra/observability/prometheus.yml`)
+# Adapted from `FinalYearProject/monitoring/prometheus.yml` for October 2026 SSRA Assist.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    service: ssra-assist
+
+rule_files:
+  - "recording-rules.yml"
+  - "alerting-rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: "ssra-api"
+    metrics_path: "/metrics"
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/ssra_metrics_token
+    static_configs:
+      - targets: ["ssra-api:8000"]
+        labels:
+          component: "api"
+
+  - job_name: "ssra-agent-runtime"
+    metrics_path: "/metrics"
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/ssra_metrics_token
+    static_configs:
+      - targets: ["ssra-agent-runtime:8001"]
+        labels:
+          component: "runtime"
+
+  - job_name: "qdrant"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["ssra-qdrant:6333"]
+        labels:
+          component: "vector-store"
+
+  - job_name: "valkey"
+    static_configs:
+      - targets: ["valkey-exporter:9121"]
+        labels:
+          component: "cache"
+
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  - job_name: "vllm"
+    dns_sd_configs:
+      - names: ["ssra-vllm-sunflower", "ssra-vllm-reasoner"]
+        type: A
+        port: 8001
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: server
+
+  - job_name: "dcgm"
+    dns_sd_configs:
+      - names: ["dcgm-exporter"]
+        type: A
+        port: 9400
+
+  - job_name: "blackbox-http"
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://ssra-api:8000/healthz
+          - http://ssra-agent-runtime:8001/healthz
+          - http://ssra-frontend:3000/healthz
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: "otel-collector"
+    static_configs:
+      - targets: ["otel-collector:8888"]
+
+  - job_name: "otel-collector-genai"
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  - job_name: "alertmanager"
+    static_configs:
+      - targets: ["alertmanager:9093"]
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
