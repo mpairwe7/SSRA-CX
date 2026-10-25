@@ -731,22 +731,34 @@ function renderPwaShellHtml(locale, nonce) {
     .voicemode-circle-btn, .send-circle-btn { width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; border-radius: 50%; background: var(--grad-primary); border: 1px solid rgba(46, 204, 113, 0.48); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .voicemode-circle-btn.is-active { background: rgba(7, 137, 48, 0.28); border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.28); color: #2ECC71; }
     .stop-circle-btn { background: var(--text-0) !important; color: var(--bg-0) !important; border-color: var(--text-0) !important; }
-    .voice-dock { --vd-floor: var(--border-1); display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; padding: 0.5rem 0.75rem; margin-bottom: 0.45rem; background: var(--bg-1); border: 1px solid var(--vd-floor); border-radius: 14px; box-shadow: var(--shadow-md); }
-    .voice-dock[data-floor="listening"] { --vd-floor: #2ECC71; }
-    .voice-dock[data-floor="thinking"] { --vd-floor: #FCDD09; }
-    .voice-dock[data-floor="speaking"] { --vd-floor: #0F3A6D; }
-    .voice-dock-status { display: flex; align-items: center; gap: 0.55rem; min-width: 0; flex: 1 1 180px; }
-    .voice-dock-orb-wrap { width: 34px; height: 34px; flex: none; display: grid; place-items: center; }
-    .voice-dock-orb-wrap .call-orb { width: 30px; height: 30px; }
-    .voice-dock-text { min-width: 0; flex: 1; text-align: start; }
-    .voice-dock-label { margin: 0; font-size: 0.82rem; font-weight: 700; color: var(--text-0); line-height: 1.25; }
-    .voice-dock-detail { margin: 1px 0 0; font-size: 0.76rem; color: var(--text-2); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .voice-dock-controls { display: inline-flex; align-items: center; gap: 0.35rem; flex: none; }
-    .voice-dock-end { min-height: 36px; padding: 0 0.7rem; border-radius: 999px; border: 1px solid var(--border-1); background: transparent; color: var(--text-1); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
-    .voice-dock-btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-1); background: var(--surface-2); color: var(--text-0); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-    .voice-dock-primary { background: var(--grad-primary); color: #fff; border: none; }
-    .voice-dock-primary[data-action="send"] { background: #078930; }
-    .voice-dock-primary[data-action="stop"] { background: var(--danger); }
+    .voice-dock { --orb-size: 40px; --orb-wrap-w: 52px; --orb-wrap-h: 52px; --vd-floor: var(--border-1); display: flex; flex-direction: column; gap: 8px; padding: 12px 10px 10px 12px; background: var(--bg-0); border: 1px solid var(--vd-floor); border-radius: 16px; box-shadow: var(--shadow-sm), 0 0 0 3px color-mix(in srgb, var(--vd-floor) 16%, transparent); transition: border-color 200ms ease, box-shadow 200ms ease; }
+    .voice-dock[data-floor="listening"] { --vd-floor: var(--ssra-teal-light); }
+    .voice-dock[data-floor="thinking"] { --vd-floor: var(--ssra-gold); }
+    .voice-dock[data-floor="speaking"] { --vd-floor: var(--ssra-blue-bright); }
+    .voice-dock[data-floor="idle"] { --vd-floor: var(--border-1); box-shadow: var(--shadow-sm); }
+    .voice-dock-status { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 52px; }
+    .voice-dock-orb-wrap { width: var(--orb-wrap-w, 52px); height: var(--orb-wrap-h, 52px); flex: none; display: flex; align-items: center; justify-content: center; }
+    .voice-dock-orb-wrap .call-orb { width: var(--orb-size, 40px); height: var(--orb-size, 40px); }
+    .voice-dock-text { flex: 1 1 auto; min-width: 0; text-align: start; }
+    .voice-dock-label { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-0); line-height: 1.3; }
+    .voice-dock-detail { margin: 2px 0 0; font-size: 13px; color: var(--text-2); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    .voice-dock-detail.is-notice { color: var(--text-1); font-weight: 500; }
+    .voice-dock-controls { display: flex; align-items: center; gap: 8px; }
+    .voice-dock-spacer { flex: 1 1 auto; }
+    .voice-dock-end { min-width: 44px; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--border-1); background: transparent; color: var(--text-1); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; touch-action: manipulation; }
+    .voice-dock-end:hover { background: var(--surface-2); color: var(--text-0); }
+    .voice-dock-btn { position: relative; width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; background: var(--surface-2); color: var(--text-0); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; touch-action: manipulation; transition: background 150ms ease, transform 120ms ease; }
+    .voice-dock-btn:hover:not([aria-disabled="true"]) { background: var(--surface-3); }
+    .voice-dock-btn:active:not([aria-disabled="true"]) { transform: scale(0.94); }
+    .voice-dock-primary { width: 56px; height: 56px; background: var(--ssra-blue-bright); color: #fff; }
+    .voice-dock-primary:hover:not([aria-disabled="true"]) { background: var(--ssra-blue); }
+    .voice-dock-primary[data-action="send"] { background: #078930; color: #fff; }
+    .voice-dock-primary[data-action="stop"], .voice-dock-primary[data-action="stop"]:hover { background: var(--text-0); color: var(--bg-0); }
+    .voice-dock-primary svg { width: 22px; height: 22px; }
+    .voice-dock-ring { position: absolute; inset: -6px; opacity: 0; pointer-events: none; transition: opacity 150ms ease; }
+    .voice-dock[data-phase="pausing"] .voice-dock-ring, .voice-dock[data-phase="hearing"] .voice-dock-ring { opacity: 1; }
+    .voice-dock-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .voice-dock-ring circle { fill: none; stroke: var(--ssra-teal-light); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: calc(100 - var(--eot, 0) * 100); }
     .setv2-segmented { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border-1); flex-wrap: wrap; }
     .setv2-seg-btn { min-height: 34px; padding: 0 0.65rem; border-radius: 7px; border: none; background: transparent; color: var(--text-1); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
     .setv2-seg-btn[aria-checked="true"] { background: var(--surface-3); color: var(--text-0); }
@@ -869,8 +881,17 @@ function renderPwaShellHtml(locale, nonce) {
     .turn-content-text .md-callout strong { color: var(--ssra-green); font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
     .turn-content-text .md-callout-warning, .turn-content-text .md-callout-caution, .turn-content-text .md-callout-important { border-inline-start-color: var(--warning); }
     .turn-content-text .md-callout-warning strong, .turn-content-text .md-callout-caution strong, .turn-content-text .md-callout-important strong { color: var(--warning); }
+    .turn-content-text .md-hr { border: 0; border-top: 1px solid var(--border-1); margin: 0.45rem 0; }
+    .turn-content-text .md-hr + .md-p { font-size: 0.8rem; color: var(--text-3); font-style: italic; line-height: 1.5; }
+    .turn-content-text .md-code-block { margin: 0.35rem 0; padding: 0.75rem 0.9rem; background: var(--surface-2); border: 1px solid var(--border-1); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.83rem; overflow-x: auto; white-space: pre; unicode-bidi: isolate; }
+    .turn-content-text .md-table-wrap { margin: 0.35rem 0; overflow-x: auto; border: 1px solid var(--border-1); border-radius: var(--radius-sm); }
+    .turn-content-text .md-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+    .turn-content-text .md-table th, .turn-content-text .md-table td { padding: 0.48rem 0.7rem; text-align: start; border-bottom: 1px solid var(--border-1); }
+    .turn-content-text .md-table th { background: var(--surface-2); color: var(--text-0); font-weight: 700; }
+    .turn-content-text .md-table tbody tr:last-child td { border-bottom: 0; }
+    .turn-content-text .md-table tbody tr:nth-child(even) { background: var(--surface-1); }
     @media (forced-colors: active) {
-      .turn-content-text .md-callout, .turn-content-text .md-blockquote { border: 1px solid CanvasText; border-inline-start-width: 4px; }
+      .turn-content-text .md-callout, .turn-content-text .md-blockquote, .turn-content-text .md-table-wrap { border: 1px solid CanvasText; border-inline-start-width: 4px; }
     }
     .bubble, .landing-chip-text, .citation-pill, .gen-ui-card p, .gen-kv dd, .locale-notice, .composer-disclosure { overflow-wrap: anywhere; }
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: #FFFFFF; }
@@ -1076,24 +1097,26 @@ function renderPwaShellHtml(locale, nonce) {
             </div>
           </div>
           <!-- Main Chat VoiceModeDock (VoiceModeDock.tsx & voice-dock.css pattern) -->
-          <section id="voice-mode-dock" class="voice-dock is-hidden" data-phase="idle" data-floor="idle" aria-label="Voice conversation controls" data-testid="voice-dock">
+          <section id="voice-mode-dock" class="voice-dock is-hidden" data-phase="idle" data-floor="idle" aria-label="Voice mode" data-testid="voice-dock">
+            <p id="voice-dock-sr" class="sr-only" role="status" aria-atomic="true"></p>
             <div class="voice-dock-status">
               <div class="voice-dock-orb-wrap" aria-hidden="true">
-                <div id="voice-dock-orb" class="call-orb" data-mode="idle">
+                <div id="voice-dock-orb" class="call-orb" data-mode="idle" data-state="idle">
                   <span class="call-orb-core"></span>
                   <span class="call-orb-halo"></span>
                 </div>
               </div>
               <div class="voice-dock-text">
-                <p id="voice-dock-label" class="voice-dock-label" data-testid="voice-dock-label">Listening…</p>
-                <p id="voice-dock-detail" class="voice-dock-detail" data-testid="voice-dock-detail">Speak your question — pauses send automatically.</p>
+                <p id="voice-dock-label" class="voice-dock-label" data-testid="voice-dock-label">Listening</p>
+                <p id="voice-dock-detail" class="voice-dock-detail" data-testid="voice-dock-detail">Go ahead — I’ll send it when you pause.</p>
               </div>
             </div>
             <div class="voice-dock-controls">
-              <button type="button" id="voice-dock-end" class="voice-dock-end" data-testid="voice-dock-end" aria-label="Exit voice mode">End</button>
-              <button type="button" id="voice-dock-mic-off" class="voice-dock-btn" data-testid="voice-dock-mic-off" aria-label="Cancel microphone listening" aria-keyshortcuts="Escape">${ICONS.micOff}</button>
-              <button type="button" id="voice-dock-pause" class="voice-dock-btn is-hidden" data-testid="voice-dock-pause" aria-label="Pause reading">${ICONS.pause}</button>
-              <button type="button" id="voice-dock-primary" class="voice-dock-btn voice-dock-primary" data-testid="voice-dock-primary" data-action="send" aria-label="Send voice turn now">${ICONS.check}</button>
+              <button type="button" id="voice-dock-end" class="voice-dock-end" data-testid="voice-dock-end" aria-label="End voice mode">End</button>
+              <span class="voice-dock-spacer"></span>
+              <button type="button" id="voice-dock-mic-off" class="voice-dock-btn" data-testid="voice-dock-mic-off" aria-label="Turn the microphone off — nothing is sent" aria-keyshortcuts="Escape" data-tip="Turn the microphone off — nothing is sent">${ICONS.micOff}</button>
+              <button type="button" id="voice-dock-pause" class="voice-dock-btn is-hidden" data-testid="voice-dock-pause" aria-label="Pause reading" data-tip="Pause reading">${ICONS.pause}</button>
+              <button type="button" id="voice-dock-primary" class="voice-dock-btn voice-dock-primary" data-testid="voice-dock-primary" data-action="send" aria-label="Send now" data-tip="Send now"><span id="voice-dock-ring" class="voice-dock-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16.5" pathLength="100"></circle></svg></span><span id="voice-dock-primary-icon">${ICONS.check}</span></button>
             </div>
           </section>
           <form id="ssra-chat-form" class="composer-box cmpv2">
@@ -2097,25 +2120,57 @@ function renderPwaShellHtml(locale, nonce) {
         return '<div class="turn-meta-bar">' + pills.join("") + "</div>";
       }
 
+      function safeMarkdownHref(rawHref) {
+        const h = String(rawHref || "").trim();
+        if (!h) return null;
+        const probe = Array.from(h).filter((ch) => ch.charCodeAt(0) > 32).join("");
+        return /^(?:https?:\\/\\/|mailto:|tel:|\\/(?!\\/)|#)/i.test(probe) ? h : null;
+      }
+
+      function cleanAnswerTextForCopy(rawText) {
+        return String(rawText || "")
+          .slice(0, 16000)
+          .replace(/\\[\\d{1,3}(?:[ \\t]*[,;][ \\t]*\\d{1,3}){0,10}\\](?!\\()/g, "")
+          .replace(/(\\s)--(\\s)/g, "$1—$2")
+          .replace(/[ \\t]+/g, " ")
+          .replace(/ ([.,;:!?])/g, "$1")
+          .replace(/\\[([^\\]\\n]{1,120})\\]\\(([^)\\s<]+)\\)/g, (_, label, url) => {
+            const safe = safeMarkdownHref(url);
+            return safe && /^https?:\\/\\//i.test(safe) && safe !== label ? label + " (" + safe + ")" : label;
+          })
+          .replace(/\\*\\*([^*]+)\\*\\*/g, "$1")
+          .trim();
+      }
+
       function renderInlineAnswerHtml(rawText) {
         let html = escapeHtml(rawText);
         const mdLinks = [];
         html = html.replace(
-          /\\[([^\\]\\n]{1,120})\\]\\((https?:\\/\\/[^)\\s<]+)\\)/gi,
-          (_, label, href) => {
+          /\\[([^\\]\\n]{1,120})\\]\\(([^)\\n]{1,300})\\)/g,
+          (_, label, rawHref) => {
             const idx = mdLinks.length;
-            mdLinks.push(
-              '<a class="md-link" dir="ltr" href="' +
-                href +
-                '" target="_blank" rel="noopener noreferrer">' +
-                label +
-                "</a>",
-            );
+            const formattedLabel = label.replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
+            const safe = safeMarkdownHref(rawHref.replace(/&amp;/g, "&"));
+            if (safe) {
+              const ext = /^https?:\\/\\//i.test(safe);
+              mdLinks.push(
+                '<a class="md-link" dir="ltr" href="' +
+                  escapeHtml(safe) +
+                  '"' +
+                  (ext ? ' target="_blank" rel="noopener noreferrer"' : "") +
+                  ">" +
+                  formattedLabel +
+                  "</a>",
+              );
+            } else {
+              mdLinks.push('<span class="md-link">' + formattedLabel + "</span>");
+            }
             return "\\u0000MDLINK_" + idx + "\\u0000";
           },
         );
         html = html
           .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
+          .replace(/(?<![*\\w])\\*([^\\s*][^*]{0,120}?[^\\s*])\\*(?![*\\w])/g, "<em>$1</em>")
           .replace(/\\x60([^\\x60]+)\\x60/g, '<code class="md-inline-code">$1</code>')
           .replace(
             /^(ESTIMATE ONLY(?: \\([^)]+\\))?:|OFFICIAL_VERIFIED:|UNVERIFIED_OR_SCAM:)/,
@@ -2283,17 +2338,41 @@ function renderPwaShellHtml(locale, nonce) {
         return chunks.length >= 2 ? chunks : [cleaned];
       }
 
-      function renderStructuredAnswerHtml(rawContent) {
-        const cleaned = String(rawContent || "")
-          .slice(0, 16000)
+      function isMdTableSeparator(line) {
+        const trimmed = String(line || "").trim();
+        if (!trimmed.includes("|") || !trimmed.includes("-")) return false;
+        const cells = trimmed.replace(/^\\|/, "").replace(/\\|$/, "").split("|").map((c) => c.trim());
+        return cells.length >= 2 && cells.every((c) => /^:?-{3,}:?$/.test(c));
+      }
+
+      function isMdTableRow(line) {
+        const trimmed = String(line || "").trim();
+        return trimmed.includes("|") && !isMdTableSeparator(trimmed);
+      }
+
+      function parseMdTableRow(line) {
+        return String(line || "")
+          .trim()
+          .replace(/^\\|/, "")
+          .replace(/\\|$/, "")
+          .split("|")
+          .map((c) => c.trim());
+      }
+
+      function cleanInlineMdLine(rawLine) {
+        return String(rawLine || "")
           .replace(/\\[\\d{1,3}(?:[ \\t]*[,;][ \\t]*\\d{1,3}){0,10}\\](?!\\()/g, "")
           .replace(/(\\s)--(\\s)/g, "$1—$2")
           .replace(/[ \\t]+/g, " ")
           .replace(/ ([.,;:!?])/g, "$1")
           .trim();
-        if (!cleaned) return "";
+      }
+
+      function renderStructuredAnswerHtml(rawContent) {
+        const bounded = String(rawContent || "").slice(0, 16000);
+        if (!bounded.trim()) return "";
         const blocksHtml = [];
-        const lines = cleaned.split("\\n");
+        const lines = bounded.split("\\n");
         const proseLines = [];
         const lineHeadingRe = /^(#{1,4})[ \\t]+(.+)$/;
         const lineCalloutRe = /^(Note|Important|Warning|Caution|Tip|Summary):[ \\t]+(.+)$/i;
@@ -2302,7 +2381,7 @@ function renderPwaShellHtml(locale, nonce) {
 
         function flushProseLines() {
           if (proseLines.length === 0) return;
-          const para = proseLines.join(" ").trim();
+          const para = cleanInlineMdLine(proseLines.join(" "));
           proseLines.length = 0;
           if (!para) return;
           const proc = parseInlineNumberedProcedure(para);
@@ -2354,10 +2433,62 @@ function renderPwaShellHtml(locale, nonce) {
 
         let lIdx = 0;
         while (lIdx < lines.length) {
-          const line = (lines[lIdx] || "").trim();
+          const rawLine = lines[lIdx] || "";
+          const trimmedRaw = rawLine.trim();
+          if (!trimmedRaw) {
+            flushProseLines();
+            lIdx += 1;
+            continue;
+          }
+          if (trimmedRaw.startsWith("\\x60\\x60\\x60")) {
+            flushProseLines();
+            const codeLines = [];
+            lIdx += 1;
+            while (lIdx < lines.length && !(lines[lIdx] || "").trim().startsWith("\\x60\\x60\\x60")) {
+              codeLines.push(lines[lIdx] || "");
+              lIdx += 1;
+            }
+            if (lIdx < lines.length) lIdx += 1;
+            blocksHtml.push('<pre class="md-code-block"><code>' + escapeHtml(codeLines.join("\\n")) + "</code></pre>");
+            continue;
+          }
+          const line = cleanInlineMdLine(rawLine);
           if (!line) {
             flushProseLines();
             lIdx += 1;
+            continue;
+          }
+          if (/^-{3,}$/.test(line)) {
+            flushProseLines();
+            blocksHtml.push('<hr class="md-hr" />');
+            lIdx += 1;
+            continue;
+          }
+          if (isMdTableRow(line) && lIdx + 1 < lines.length && isMdTableSeparator(lines[lIdx + 1])) {
+            flushProseLines();
+            const headRow = parseMdTableRow(line);
+            const bodyRows = [];
+            lIdx += 2;
+            while (lIdx < lines.length && isMdTableRow(cleanInlineMdLine(lines[lIdx]))) {
+              bodyRows.push(parseMdTableRow(cleanInlineMdLine(lines[lIdx])));
+              lIdx += 1;
+            }
+            const theadHtml =
+              "<thead><tr>" +
+              headRow.map((cell) => '<th scope="col">' + renderInlineAnswerHtml(cell) + "</th>").join("") +
+              "</tr></thead>";
+            const tbodyHtml =
+              "<tbody>" +
+              bodyRows
+                .map(
+                  (row) =>
+                    "<tr>" +
+                    headRow.map((_, cIdx) => "<td>" + renderInlineAnswerHtml(row[cIdx] || "") + "</td>").join("") +
+                    "</tr>",
+                )
+                .join("") +
+              "</tbody>";
+            blocksHtml.push('<div class="md-table-wrap"><table class="md-table">' + theadHtml + tbodyHtml + "</table></div>");
             continue;
           }
           const hMatch = lineHeadingRe.exec(line);
@@ -2390,7 +2521,7 @@ function renderPwaShellHtml(locale, nonce) {
             flushProseLines();
             const qParts = [];
             while (lIdx < lines.length) {
-              const qLine = (lines[lIdx] || "").trim();
+              const qLine = cleanInlineMdLine(lines[lIdx] || "");
               if (!qLine.startsWith(">")) break;
               const qBody = qLine.replace(/^>[ \\t]*/, "").trim();
               if (qBody) qParts.push(qBody);
@@ -2406,10 +2537,22 @@ function renderPwaShellHtml(locale, nonce) {
             flushProseLines();
             const ulItems = [];
             while (lIdx < lines.length) {
-              const m = lineUlRe.exec((lines[lIdx] || "").trim());
-              if (!m) break;
-              ulItems.push(m[1].trim());
-              lIdx += 1;
+              const cur = cleanInlineMdLine(lines[lIdx] || "");
+              const m = lineUlRe.exec(cur);
+              if (m) {
+                ulItems.push(m[1].trim());
+                lIdx += 1;
+              } else if (!cur) {
+                let nxt = lIdx + 1;
+                while (nxt < lines.length && !cleanInlineMdLine(lines[nxt] || "")) nxt += 1;
+                if (nxt < lines.length && lineUlRe.test(cleanInlineMdLine(lines[nxt] || ""))) {
+                  lIdx = nxt;
+                } else {
+                  break;
+                }
+              } else {
+                break;
+              }
             }
             blocksHtml.push(
               '<ul class="md-list">' +
@@ -2421,17 +2564,40 @@ function renderPwaShellHtml(locale, nonce) {
           const olMatch = lineOlRe.exec(line);
           if (olMatch) {
             flushProseLines();
-            const olItems = [];
+            const rawOlItems = [];
             while (lIdx < lines.length) {
-              const m = lineOlRe.exec((lines[lIdx] || "").trim());
-              if (!m) break;
-              olItems.push(
-                m[3]
-                  .replace(/(?:[,;،؛][ \\t]+)?\\band$/i, "")
-                  .replace(/(?<![;؛])[;؛]+$/, ".")
-                  .trim(),
-              );
-              lIdx += 1;
+              const cur = cleanInlineMdLine(lines[lIdx] || "");
+              const m = lineOlRe.exec(cur);
+              if (m) {
+                rawOlItems.push(
+                  m[3]
+                    .replace(/(?:[,;،؛][ \\t]+)?\\band$/i, "")
+                    .replace(/(?<![;؛])[;؛]+$/, ".")
+                    .trim(),
+                );
+                lIdx += 1;
+              } else if (!cur) {
+                let nxt = lIdx + 1;
+                while (nxt < lines.length && !cleanInlineMdLine(lines[nxt] || "")) nxt += 1;
+                if (nxt < lines.length && lineOlRe.test(cleanInlineMdLine(lines[nxt] || ""))) {
+                  lIdx = nxt;
+                } else {
+                  break;
+                }
+              } else {
+                break;
+              }
+            }
+            const olItems = [];
+            for (let oIdx = 0; oIdx < rawOlItems.length; oIdx += 1) {
+              const subProc = parseInlineNumberedProcedure(rawOlItems[oIdx]);
+              if (subProc && subProc.items.length > 0) {
+                for (let sIdx = 0; sIdx < subProc.items.length; sIdx += 1) {
+                  olItems.push(subProc.items[sIdx]);
+                }
+              } else {
+                olItems.push(rawOlItems[oIdx]);
+              }
             }
             blocksHtml.push(
               '<ol class="md-list md-ol">' +
@@ -2461,10 +2627,11 @@ function renderPwaShellHtml(locale, nonce) {
           return '<article class="message-row message-row-assistant" aria-busy="true"><div class="avatar assistant" aria-hidden="true">' + ICONS.ssraCrest + '</div><div class="bubble assistant"><div class="lds">' + grid + '<div class="turn-content-text">' + escapeHtml(turn.content) + "</div></div></div></article>";
         }
         const citationCount = Array.isArray(meta.citations) ? meta.citations.length : 0;
+        const cleanCopy = cleanAnswerTextForCopy(turn.content);
         const actions = meta.kind === "failure"
           ? (isFilledText(meta.retry_text) ? '<button type="button" class="turn-act-btn" data-retry-turn="' + index + '">' + ICONS.refresh + " Try again</button>" : "")
-          : '<button type="button" class="turn-act-btn" data-speak="' + escapeHtml(turn.content) + '">' + ICONS.speaker + " Listen</button>" +
-            '<button type="button" class="turn-act-btn" data-copy="' + escapeHtml(turn.content) + '">' + ICONS.copy + " Copy</button>" +
+          : '<button type="button" class="turn-act-btn" data-speak="' + escapeHtml(cleanCopy) + '">' + ICONS.speaker + " Listen</button>" +
+            '<button type="button" class="turn-act-btn" data-copy="' + escapeHtml(cleanCopy) + '">' + ICONS.copy + " Copy</button>" +
             (isFilledText(meta.thread_id)
               ? '<button type="button" class="turn-act-btn" data-csat="5" data-thread-id="' + escapeHtml(meta.thread_id) + '">' + ICONS.thumbUp + " Helpful</button>" +
                 '<button type="button" class="turn-act-btn" data-csat="1" data-thread-id="' + escapeHtml(meta.thread_id) + '">' + ICONS.thumbDown + " Not helpful</button>"
@@ -2885,7 +3052,7 @@ function renderPwaShellHtml(locale, nonce) {
         }, 60);
       }
       function announceReply(reply) {
-        const text = String(reply.content || "");
+        const text = cleanAnswerTextForCopy(reply.content || "");
         const summary = text.length > 280 ? text.slice(0, 277) + "…" : text;
         announce((reply.meta?.kind === "failure" ? "Not answered. " : "Answer received. ") + summary);
       }
@@ -2931,7 +3098,7 @@ function renderPwaShellHtml(locale, nonce) {
         }
         conv.updatedAtMs = Date.now();
         conv.turns.push({ role: "user", content: trimmed, spoken: isSpoken });
-        if (fromVoiceLoop || voiceContinuousActive || callBackdrop?.classList.contains("open")) {
+        if (callBackdrop?.classList.contains("open")) {
           appendCallCaption("caller", trimmed);
         }
 
@@ -2939,7 +3106,7 @@ function renderPwaShellHtml(locale, nonce) {
           const offline = computeOfflineResilienceAnswer(trimmed);
           const offlineReply = { role: "assistant", content: offline.content, meta: offline.meta };
           conv.turns.push(offlineReply);
-          if (fromVoiceLoop || voiceContinuousActive || callBackdrop?.classList.contains("open")) {
+          if (callBackdrop?.classList.contains("open")) {
             appendCallCaption("assistant", offline.content);
           }
           restoreDraft(trimmed);
@@ -3039,6 +3206,8 @@ function renderPwaShellHtml(locale, nonce) {
         conv.turns[conv.turns.length - 1] = reply;
         if (fromVoiceLoop || voiceContinuousActive || callBackdrop?.classList.contains("open")) {
           lastSpokenAssistantText = cleanTextForSpeech(reply.content);
+        }
+        if (callBackdrop?.classList.contains("open")) {
           document.getElementById("call-repeat-btn")?.classList.remove("is-hidden");
           document.getElementById("call-more-detail-btn")?.classList.remove("is-hidden");
           appendCallCaption("assistant", reply.content);
@@ -4216,7 +4385,8 @@ function renderPwaShellHtml(locale, nonce) {
 
       function syncNarrationBar(active, sentenceText) {
         if (!narrationBarEl) return;
-        narrationBarEl.classList.toggle("is-hidden", !active);
+        const showVoiceDock = Boolean(voiceContinuousActive) && !callBackdrop?.classList.contains("open");
+        narrationBarEl.classList.toggle("is-hidden", !active || showVoiceDock);
         if (!active) {
           narrationPaused = false;
           return;
@@ -4231,8 +4401,14 @@ function renderPwaShellHtml(locale, nonce) {
 
       function syncComposerRecordingUi() {
         const isListening = Boolean(activeSpeechRec) && !callMuted;
-        composerRecBarEl?.classList.toggle("is-hidden", !isListening);
-        form?.classList.toggle("is-recording", isListening);
+        const isCallOpen = Boolean(callBackdrop?.classList.contains("open"));
+        const showDock = Boolean(voiceContinuousActive) && !isCallOpen;
+        composerRecBarEl?.classList.toggle("is-hidden", !isListening || showDock);
+        form?.classList.toggle("is-recording", isListening && !showDock);
+        form?.classList.toggle("is-hidden", showDock);
+        if (showDock && narrationBarEl) {
+          narrationBarEl.classList.add("is-hidden");
+        }
         const dictateBtn = document.getElementById("voice-dictate-btn");
         if (dictateBtn) {
           dictateBtn.classList.toggle("btn-recording", isListening);
@@ -4286,8 +4462,8 @@ function renderPwaShellHtml(locale, nonce) {
         const voiceDockPauseBtn = document.getElementById("voice-dock-pause");
         const voiceDockMicOffBtn = document.getElementById("voice-dock-mic-off");
         const voiceDockPrimaryBtn = document.getElementById("voice-dock-primary");
+        const voiceDockPrimaryIconEl = document.getElementById("voice-dock-primary-icon");
         if (voiceDockEl) {
-          const showDock = Boolean(voiceContinuousActive) && !callBackdrop?.classList.contains("open");
           voiceDockEl.classList.toggle("is-hidden", !showDock);
           const dockPhase = assistantCurrentlySpeaking
             ? narrationPaused
@@ -4300,18 +4476,23 @@ function renderPwaShellHtml(locale, nonce) {
                 : "idle";
           voiceDockEl.setAttribute("data-phase", dockPhase);
           voiceDockEl.setAttribute("data-floor", orbMode);
-          if (voiceDockOrbEl) voiceDockOrbEl.setAttribute("data-mode", orbMode);
+          if (voiceDockOrbEl) {
+            voiceDockOrbEl.setAttribute("data-mode", orbMode);
+            voiceDockOrbEl.setAttribute("data-state", orbMode);
+          }
           if (voiceDockLabelEl) {
             voiceDockLabelEl.textContent =
               dockPhase === "paused"
                 ? "Paused"
                 : dockPhase === "speaking"
-                  ? "Speaking…"
+                  ? "Speaking"
                   : dockPhase === "thinking"
                     ? "Working on your answer…"
                     : dockPhase === "listening"
-                      ? "Listening…"
-                      : "Voice mode ready";
+                      ? lastHeardVoiceTranscript
+                        ? "Hearing you…"
+                        : "Listening"
+                      : "Tap the mic to talk";
           }
           if (voiceDockDetailEl) {
             const isReadingPhase = dockPhase === "speaking" || dockPhase === "paused";
@@ -4322,12 +4503,14 @@ function renderPwaShellHtml(locale, nonce) {
             }
             voiceDockDetailEl.textContent =
               isReadingPhase
-                ? lastSpokenAssistantText || "Tap the microphone to interrupt and ask a follow-up."
-                : dockPhase === "thinking" && lastHeardVoiceTranscript
-                  ? 'You said: "' + lastHeardVoiceTranscript + '"'
-                  : voiceSilenceTimeoutMs > 0
-                    ? "Speak your question — pauses send automatically."
-                    : "Speak your question, then tap Send.";
+                ? lastSpokenAssistantText || "Tap the mic to interrupt."
+                : (dockPhase === "thinking" || dockPhase === "listening") && lastHeardVoiceTranscript
+                  ? 'You said: “' + lastHeardVoiceTranscript + "”"
+                  : dockPhase === "idle"
+                    ? "Voice mode is on. Replies are read aloud."
+                    : voiceSilenceTimeoutMs > 0
+                      ? "Go ahead — I’ll send it when you pause."
+                      : "Go ahead, then tap the tick to send.";
           }
           voiceDockMicOffBtn?.classList.toggle("is-hidden", dockPhase !== "listening");
           if (voiceDockPauseBtn) {
@@ -4345,24 +4528,24 @@ function renderPwaShellHtml(locale, nonce) {
                   : dockPhase === "speaking" || dockPhase === "paused"
                     ? "interrupt"
                     : "talk";
-            voiceDockPrimaryBtn.setAttribute("data-action", action);
-            voiceDockPrimaryBtn.setAttribute(
-              "aria-label",
+            const actionLabel =
               action === "send"
-                ? "Send voice turn now"
+                ? "Send now"
                 : action === "stop"
-                  ? "Stop answer generation"
+                  ? "Stop"
                   : action === "interrupt"
-                    ? "Interrupt and speak"
-                    : "Start speaking",
-            );
+                    ? "Interrupt and talk"
+                    : "Start talking";
+            voiceDockPrimaryBtn.setAttribute("data-action", action);
+            voiceDockPrimaryBtn.setAttribute("aria-label", actionLabel);
+            voiceDockPrimaryBtn.setAttribute("data-tip", actionLabel);
             setSafeHtml(
-              voiceDockPrimaryBtn,
+              voiceDockPrimaryIconEl || voiceDockPrimaryBtn,
               action === "send" ? ICONS.check : action === "stop" ? ICONS.stop : ICONS.mic,
             );
           }
         }
-        if (callStatusPillEl && callStatusLabelEl) {
+        if (isCallOpen && callStatusPillEl && callStatusLabelEl) {
           const curStatus = callStatusPillEl.getAttribute("data-status");
           if (voiceContinuousActive || assistantCurrentlySpeaking || isThinking || isListening) {
             if (curStatus !== "transferring") {
@@ -4391,19 +4574,20 @@ function renderPwaShellHtml(locale, nonce) {
       function syncVoiceModalButtons() {
         syncCallLanguageChipUi();
         syncComposerRecordingUi();
-        if (voiceContinuousActive && !callDurationTimer) {
+        const isCallOpen = Boolean(callBackdrop?.classList.contains("open"));
+        if (voiceContinuousActive && isCallOpen && !callDurationTimer) {
           callDurationSec = 0;
           if (callTimerEl) callTimerEl.textContent = "00:00";
           callDurationTimer = window.setInterval(() => {
             callDurationSec += 1;
             if (callTimerEl) callTimerEl.textContent = formatMmSs(callDurationSec);
           }, 1000);
-        } else if (!voiceContinuousActive && callDurationTimer) {
+        } else if ((!voiceContinuousActive || !isCallOpen) && callDurationTimer) {
           window.clearInterval(callDurationTimer);
           callDurationTimer = null;
         }
         if (!callListenBtn) return;
-        if (voiceContinuousActive) {
+        if (voiceContinuousActive && isCallOpen) {
           callListenBtn.setAttribute("aria-pressed", "true");
           setSafeHtml(callListenBtn, ICONS.stop + " Stop voice conversation");
         } else {
@@ -4562,6 +4746,7 @@ function renderPwaShellHtml(locale, nonce) {
       });
 
       document.getElementById("voice-dock-end")?.addEventListener("click", () => {
+        const dockHadFocus = Boolean(document.activeElement?.closest("#voice-mode-dock"));
         voiceContinuousActive = false;
         state.autoNarrate = false;
         saveState();
@@ -4571,9 +4756,14 @@ function renderPwaShellHtml(locale, nonce) {
         syncNarrationBar(false, "");
         syncVoiceModalButtons();
         setVoiceStatus("Voice conversation mode off.");
+        if (dockHadFocus) {
+          window.requestAnimationFrame(() => input?.focus());
+        }
       });
       document.getElementById("voice-dock-mic-off")?.addEventListener("click", () => {
-        composerRecCancelBtn?.click();
+        lastHeardVoiceTranscript = "";
+        stopActiveSpeechRecognition();
+        syncComposerRecordingUi();
       });
       document.getElementById("voice-dock-pause")?.addEventListener("click", () => {
         narrationPauseBtn?.click();
@@ -4808,10 +4998,7 @@ function renderPwaShellHtml(locale, nonce) {
         if (!SR) {
           voiceContinuousActive = false;
           syncVoiceModalButtons();
-          setVoiceStatus("Voice typing is unavailable in this browser. Type your question instead.");
-          if (!callBackdrop?.classList.contains("open")) {
-            openModal(callBackdrop, document.getElementById("close-call-btn"));
-          }
+          setVoiceStatus("Speech recognition is unavailable right now — you can type instead.");
           return;
         }
         stopActiveSpeechRecognition();
@@ -4860,6 +5047,7 @@ function renderPwaShellHtml(locale, nonce) {
             if (recTextEl) {
               recTextEl.textContent = 'Listening… "' + transcript.slice(0, 64) + '"';
             }
+            syncComposerRecordingUi();
             return;
           }
           receivedTranscript = true;
@@ -4982,16 +5170,22 @@ function renderPwaShellHtml(locale, nonce) {
 
       // Voice input options dialog
       document.getElementById("open-call-btn")?.addEventListener("click", (e) => {
-        syncVoiceModalButtons();
+        if (voiceContinuousActive) {
+          voiceContinuousActive = false;
+          state.autoNarrate = false;
+          stopActiveSpeechRecognition();
+          stopAssistantSpeechPlayback();
+        }
         openModal(callBackdrop, document.getElementById("close-call-btn"), e.currentTarget);
+        syncVoiceModalButtons();
       });
       document.getElementById("close-call-btn")?.addEventListener("click", () => {
         voiceContinuousActive = false;
         if (activeTurnAbortController) activeTurnAbortController.abort();
         stopActiveSpeechRecognition();
         stopAssistantSpeechPlayback();
-        syncVoiceModalButtons();
         closeAllModals();
+        syncVoiceModalButtons();
       });
       callBackdrop?.addEventListener("click", (e) => {
         if (e.target === callBackdrop) {
@@ -4999,8 +5193,8 @@ function renderPwaShellHtml(locale, nonce) {
           if (activeTurnAbortController) activeTurnAbortController.abort();
           stopActiveSpeechRecognition();
           stopAssistantSpeechPlayback();
-          syncVoiceModalButtons();
           closeAllModals();
+          syncVoiceModalButtons();
         }
       });
       document.querySelectorAll(".call-sample-btn").forEach((btn) => {
@@ -5184,11 +5378,11 @@ function renderPwaShellHtml(locale, nonce) {
         }
         const sample = new TextDecoder("latin1").decode(uint8.subarray(0, Math.min(uint8.byteLength, 256 * 1024)));
         const findings = [];
-        if (new RegExp("/Encrypt\\\\b").test(sample)) {
+        if (/\\/Encrypt\\b/.test(sample)) {
           findings.push("Encrypted or password-protected PDF documents are not accepted.");
         }
         const badTokens = sample.match(
-          new RegExp("/(?:JavaScript|JS|Launch|SubmitForm|ImportData|GoToR|RichMedia|EmbeddedFiles|XFA)\\\\b", "g"),
+          /\\/(?:JavaScript|JS|Launch|SubmitForm|ImportData|GoToR|RichMedia|EmbeddedFiles|XFA)\\b/g,
         );
         if (badTokens && badTokens.length) {
           findings.push("PDF contains active or embedded content (" + Array.from(new Set(badTokens)).join(", ") + ").");

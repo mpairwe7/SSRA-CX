@@ -118,7 +118,7 @@ const SCENARIOS = {
         is_estimate: false,
         segments: [
           {
-            text: "Official verification tools at https://www.nra.gov.ss/tools: (1) e-Invoice search, (2) TIN search, and (3) TCC verification. Official support is at support@nra.gov.ss and +211 918806493. Note: Keep your e-Tax receipt.",
+            text: "Official verification tools [1, 2] at https://www.nra.gov.ss/tools: (1) e-Invoice search, (2) TIN search, and (3) TCC verification. Official support is at support@nra.gov.ss and +211 918806493 with [Unsafe link](javascript:alert(1)). Note: Keep your e-Tax receipt.\n\n| Item | Requirement |\n| --- | --- |\n| TIN | Required |",
           },
         ],
         ui_component: null,

@@ -32,6 +32,7 @@ import {
   evaluateCaptionScrollPin,
   evaluateSemanticEndpointing,
   evaluateVoiceTurnContinuation,
+  formatCleanAnswerCopyText,
   formatDocType,
   formatVoiceSpeakerDisplayName,
   GENERATIVE_UI_STORYBOOK_FIXTURES,
@@ -68,6 +69,7 @@ import {
   SSRA_VOICE_SPEAKER_CATALOG,
   sanitizeAttachmentFilename,
   sanitizeCopilotReturnUrl,
+  sanitizeMarkdownHref,
   scrubDocumentTextForIndirectInjection,
   splitLongStatutoryParagraph,
   stripCitationMarkers,
@@ -1285,6 +1287,28 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
       "ol",
       "callout",
     ]);
+
+    expect(sanitizeMarkdownHref("https://etax.nra.gov.ss/")).toBe("https://etax.nra.gov.ss/");
+    expect(sanitizeMarkdownHref("mailto:support@nra.gov.ss")).toBe("mailto:support@nra.gov.ss");
+    expect(sanitizeMarkdownHref("tel:+211918806493")).toBe("tel:+211918806493");
+    expect(sanitizeMarkdownHref("/tools/tin-search")).toBe("/tools/tin-search");
+    expect(sanitizeMarkdownHref("javascript:alert(1)")).toBeNull();
+    expect(sanitizeMarkdownHref("ja\tvascript:alert(1)")).toBeNull();
+    expect(sanitizeMarkdownHref("data:text/html,<script>")).toBeNull();
+    expect(sanitizeMarkdownHref("//evil.example/path")).toBeNull();
+
+    expect(
+      formatCleanAnswerCopyText(
+        "File on **e-Tax** -- [1, 2] via [Portal](https://etax.nra.gov.ss/).",
+      ),
+    ).toBe("File on e-Tax — via Portal (https://etax.nra.gov.ss/).");
+
+    const tableAndHrBlocks = parseStructuredAnswerBlocks(
+      "| Item | Requirement |\n| --- | --- |\n| TIN | Required |\n| Jinsia | Citizens |\n\n---\n\nDisclaimer text.\n\n```text\n    ETAX-01\n```\n\n1. First step\n\n2. Second step",
+    );
+    expect(tableAndHrBlocks.map((b) => b.type)).toEqual(["table", "hr", "paragraph", "code", "ol"]);
+    const codeBlock = tableAndHrBlocks.find((b) => b.type === "code");
+    expect(codeBlock && "text" in codeBlock ? codeBlock.text : "").toBe("    ETAX-01");
 
     const parenCallBlocks = structureCallReceptionistBlocks(
       "Under Module 2: (1) Filing is free; (2) Log in with TIN and OTP.",

@@ -131,5 +131,11 @@ test("assistant replies render structured paragraphs, ordered lists, callouts, a
   await expect(content.locator('a.md-link[dir="ltr"][href="https://www.nra.gov.ss/tools"]')).toBeVisible();
   await expect(content.locator('a.md-link[dir="ltr"][href="mailto:support@nra.gov.ss"]')).toBeVisible();
   await expect(content.locator('a.md-link[dir="ltr"][href="tel:+211918806493"]')).toBeVisible();
+  await expect(content.locator("span.md-link", { hasText: "Unsafe link" })).toBeVisible();
+  await expect(content.locator('a[href^="javascript:"]')).toHaveCount(0);
+  await expect(content.locator("table.md-table th")).toHaveCount(2);
+  await expect(content.locator("table.md-table td")).toHaveCount(2);
+  const copyPayload = await reply.getByRole("button", { name: "Copy" }).getAttribute("data-copy");
+  expect(copyPayload).not.toContain("[1, 2]");
 });
 

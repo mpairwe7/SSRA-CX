@@ -1175,13 +1175,46 @@ export function splitLongStatutoryParagraph(text: string): readonly string[] {
   return chunks.length >= 2 ? chunks : [cleaned];
 }
 
+/**
+ * Allowlist URL schemes for LLM/RAG-authored `[text](url)` links (`FinalYearProject` `safeHref` parity).
+ * Permits `http(s)://`, `mailto:`, `tel:`, site-relative `/path` (rejecting protocol-relative `//`), and `#anchor`.
+ * Rejects `javascript:`, `data:`, `vbscript:`, `file:`, `blob:`, etc.
+ */
+export function sanitizeMarkdownHref(href: string): string | null {
+  const h = String(href ?? "").trim();
+  if (!h) return null;
+  const probe = Array.from(h)
+    .filter((ch) => ch.charCodeAt(0) > 32)
+    .join("");
+  return /^(?:https?:\/\/|mailto:|tel:|\/(?!\/)|#)/i.test(probe) ? h : null;
+}
+
+/**
+ * Clean assistant reply text for the Copy button and screen-reader announcer (`answerText.ts` 3-surface parity).
+ * Strips inline `[n]` citation markers, normalizes ` -- ` to ` — `, and unwraps raw `**bold**` / `[label](url)` markdown.
+ */
+export function formatCleanAnswerCopyText(rawText: string): string {
+  const cleaned = tidyStatutoryTypography(stripCitationMarkers(rawText)).trim();
+  if (!cleaned) return "";
+  return cleaned
+    .replace(/\[([^\]\n]{1,120})\]\(([^)\s<]+)\)/g, (_, label: string, url: string) => {
+      const safe = sanitizeMarkdownHref(url);
+      return safe && /^https?:\/\//i.test(safe) && safe !== label ? `${label} (${safe})` : label;
+    })
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .trim();
+}
+
 export type StructuredAnswerBlock =
   | { readonly type: "heading"; readonly level: number; readonly text: string }
   | { readonly type: "paragraph"; readonly text: string }
   | { readonly type: "ol"; readonly items: readonly string[] }
   | { readonly type: "ul"; readonly items: readonly string[] }
   | { readonly type: "blockquote"; readonly text: string }
-  | { readonly type: "callout"; readonly kind: string; readonly text: string };
+  | { readonly type: "callout"; readonly kind: string; readonly text: string }
+  | { readonly type: "code"; readonly lang: string; readonly text: string }
+  | { readonly type: "hr" }
+  | { readonly type: "table"; readonly rows: readonly (readonly string[])[] };
 
 const LINE_HEADING_RE = /^(#{1,4})[ \t]+(.+)$/;
 const LINE_CALLOUT_RE = /^(Note|Important|Warning|Caution|Tip|Summary):[ \t]+(.+)$/i;
@@ -1189,20 +1222,47 @@ const LINE_UL_ITEM_RE = /^(?:[-*+•])[ \t]+(.+)$/;
 const LINE_OL_ITEM_RE =
   /^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \t]+)?(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]+(.+)$/i;
 
+function isMarkdownTableSeparator(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.includes("|") || !trimmed.includes("-")) return false;
+  const cells = trimmed
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((c) => c.trim());
+  return cells.length >= 2 && cells.every((c) => /^:?-{3,}:?$/.test(c));
+}
+
+function isMarkdownTableRow(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.includes("|") && !isMarkdownTableSeparator(trimmed);
+}
+
+function parseMarkdownTableRow(line: string): readonly string[] {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
 /**
- * Parse an assistant answer into structured blocks (`heading`, `paragraph`, `ol`, `ul`, `blockquote`, `callout`)
+ * Parse an assistant answer into structured blocks (`heading`, `paragraph`, `ol`, `ul`, `blockquote`, `callout`, `code`, `hr`, `table`)
  * so both line-by-line Markdown and inline statutory rules/schedules/long prose are scannable.
  */
 export function parseStructuredAnswerBlocks(rawText: string): readonly StructuredAnswerBlock[] {
-  const cleaned = tidyStatutoryTypography(stripCitationMarkers(rawText)).trim();
-  if (!cleaned) return [];
+  const bounded = String(rawText ?? "").slice(0, MAX_STRUCTURED_TEXT_LEN);
+  if (!bounded.trim()) return [];
+  const cleanInlineLine = (s: string): string =>
+    tidyStatutoryTypography(stripCitationMarkers(s)).trim();
   const blocks: StructuredAnswerBlock[] = [];
-  const lines = cleaned.split("\n");
+  const lines = bounded.split("\n");
   const proseLines: string[] = [];
 
   const flushProse = () => {
     if (proseLines.length === 0) return;
-    const para = proseLines.join(" ").trim();
+    const para = cleanInlineLine(proseLines.join(" "));
     proseLines.length = 0;
     if (!para) return;
 
@@ -1240,14 +1300,59 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
 
   let i = 0;
   while (i < lines.length) {
-    const line = (lines[i] ?? "").trim();
+    const rawLine = lines[i] ?? "";
+    const line = rawLine.trim();
     if (!line) {
       flushProse();
       i += 1;
       continue;
     }
 
-    const headingMatch = LINE_HEADING_RE.exec(line);
+    if (line.startsWith("```")) {
+      flushProse();
+      const lang = line.slice(3).trim();
+      const codeLines: string[] = [];
+      i += 1;
+      while (i < lines.length && !(lines[i] ?? "").trim().startsWith("```")) {
+        codeLines.push(lines[i] ?? "");
+        i += 1;
+      }
+      if (i < lines.length) i += 1;
+      blocks.push({ type: "code", lang, text: codeLines.join("\n") });
+      continue;
+    }
+
+    const normLine = cleanInlineLine(rawLine);
+    if (!normLine) {
+      flushProse();
+      i += 1;
+      continue;
+    }
+
+    if (/^-{3,}$/.test(normLine)) {
+      flushProse();
+      blocks.push({ type: "hr" });
+      i += 1;
+      continue;
+    }
+
+    if (
+      isMarkdownTableRow(normLine) &&
+      i + 1 < lines.length &&
+      isMarkdownTableSeparator(lines[i + 1] ?? "")
+    ) {
+      flushProse();
+      const rows: (readonly string[])[] = [parseMarkdownTableRow(normLine)];
+      i += 2;
+      while (i < lines.length && isMarkdownTableRow(cleanInlineLine(lines[i] ?? ""))) {
+        rows.push(parseMarkdownTableRow(cleanInlineLine(lines[i] ?? "")));
+        i += 1;
+      }
+      blocks.push({ type: "table", rows });
+      continue;
+    }
+
+    const headingMatch = LINE_HEADING_RE.exec(normLine);
     if (headingMatch?.[1] && headingMatch[2]) {
       flushProse();
       blocks.push({
@@ -1259,7 +1364,7 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       continue;
     }
 
-    const calloutMatch = LINE_CALLOUT_RE.exec(line);
+    const calloutMatch = LINE_CALLOUT_RE.exec(normLine);
     if (calloutMatch?.[1] && calloutMatch[2]) {
       flushProse();
       blocks.push({
@@ -1271,11 +1376,11 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       continue;
     }
 
-    if (line.startsWith(">")) {
+    if (normLine.startsWith(">")) {
       flushProse();
       const quoteParts: string[] = [];
       while (i < lines.length) {
-        const qLine = (lines[i] ?? "").trim();
+        const qLine = cleanInlineLine(lines[i] ?? "");
         if (!qLine.startsWith(">")) break;
         const stripped = qLine.replace(/^>[ \t]*/, "").trim();
         if (stripped) quoteParts.push(stripped);
@@ -1287,40 +1392,65 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       continue;
     }
 
-    const ulMatch = LINE_UL_ITEM_RE.exec(line);
+    const ulMatch = LINE_UL_ITEM_RE.exec(normLine);
     if (ulMatch?.[1]) {
       flushProse();
       const items: string[] = [];
       while (i < lines.length) {
-        const m = LINE_UL_ITEM_RE.exec((lines[i] ?? "").trim());
-        if (!m?.[1]) break;
-        items.push(m[1].trim());
-        i += 1;
+        const curLine = cleanInlineLine(lines[i] ?? "");
+        const m = LINE_UL_ITEM_RE.exec(curLine);
+        if (m?.[1]) {
+          items.push(m[1].trim());
+          i += 1;
+        } else if (!curLine) {
+          let next = i + 1;
+          while (next < lines.length && !cleanInlineLine(lines[next] ?? "")) next += 1;
+          if (next < lines.length && LINE_UL_ITEM_RE.test(cleanInlineLine(lines[next] ?? ""))) {
+            i = next;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
       }
       blocks.push({ type: "ul", items });
       continue;
     }
 
-    const olMatch = LINE_OL_ITEM_RE.exec(line);
+    const olMatch = LINE_OL_ITEM_RE.exec(normLine);
     if (olMatch?.[3]) {
       flushProse();
-      const items: string[] = [];
+      const rawItems: string[] = [];
       while (i < lines.length) {
-        const m = LINE_OL_ITEM_RE.exec((lines[i] ?? "").trim());
-        if (!m?.[3]) break;
-        items.push(
-          m[3]
-            .replace(/(?:[,;،؛][ \t]+)?\band$/i, "")
-            .replace(/(?<![;؛])[;؛]+$/, ".")
-            .trim(),
-        );
-        i += 1;
+        const curLine = cleanInlineLine(lines[i] ?? "");
+        const m = LINE_OL_ITEM_RE.exec(curLine);
+        if (m?.[3]) {
+          rawItems.push(
+            m[3]
+              .replace(/(?:[,;،؛][ \t]+)?\band$/i, "")
+              .replace(/(?<![;؛])[;؛]+$/, ".")
+              .trim(),
+          );
+          i += 1;
+        } else if (!curLine) {
+          let next = i + 1;
+          while (next < lines.length && !cleanInlineLine(lines[next] ?? "")) next += 1;
+          if (next < lines.length && LINE_OL_ITEM_RE.test(cleanInlineLine(lines[next] ?? ""))) {
+            i = next;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
       }
+      const items = rawItems.flatMap((it) => asNumberedProcedure(it)?.items ?? [it]);
       blocks.push({ type: "ol", items });
       continue;
     }
 
-    proseLines.push(line);
+    proseLines.push(normLine);
     i += 1;
   }
   flushProse();
