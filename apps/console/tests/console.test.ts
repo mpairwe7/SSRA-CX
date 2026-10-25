@@ -17,12 +17,16 @@ import {
   buildCallConsoleBarView,
   buildEvaluationDashboardView,
   buildForensicReplayTimelineView,
+  buildKeycloakAuthorizationUrl,
+  buildKeycloakOidcEndpoints,
   buildKillSwitchControlPlaneView,
   buildKnowledgeReleaseGovernanceView,
   buildKnowledgeReleasePipelineView,
   buildMakerCheckerCardView,
   buildOpsPageShell,
   buildOpsStatTile,
+  buildSignInPageViewModel,
+  buildSignUpPageViewModel,
   buildStaffDocumentInspectionViewerState,
   buildStaffReplyComposerPreview,
   buildSystemConnectorsHealthView,
@@ -32,6 +36,7 @@ import {
   evaluateAuthorityStatusResponse,
   formatSafeTimestamp,
   isLiveOfficer,
+  looksLikeJwt,
   partitionCallDeskQueueSections,
   plainSeconds,
   pointsHint,
@@ -42,6 +47,8 @@ import {
   resolveCallWorkspaceState,
   resolveExtractedFieldReview,
   resolveTelemetryProvenance,
+  sanitizeAuthToken,
+  sanitizeReturnTo,
   signedInName,
   splitMeasureParts,
   staffDestinationsFor,
@@ -50,6 +57,7 @@ import {
   toDelta,
   validateAdminAnswerOverride,
   validateCopilotDraftApproval,
+  validateOidcCallbackParams,
   validateWrapUpFormSubmission,
   waitingFor,
   waitTone,
@@ -950,5 +958,81 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
       "\u202ESSRA Treasury\u202C",
     );
     expect(bidiField.value).toBe("SSRA Treasury");
+
+    // Keycloak 26.4.11 OIDC + PKCE S256 + WebAuthn Passkey Sign-In, Sign-Up & Callback
+    expect(executeConsoleProxy({ session: null, pathname: "/signin" }).status).toBe(200);
+    expect(executeConsoleProxy({ session: null, pathname: "/signup" }).status).toBe(200);
+    expect(executeConsoleProxy({ session: null, pathname: "/signin/callback" }).status).toBe(200);
+
+    expect(sanitizeAuthToken(" \u200Bheader_b64.payload_b64.sig_b64…\n")).toBe(
+      "header_b64.payload_b64.sig_b64",
+    );
+    expect(looksLikeJwt("hdr.pld.sig")).toBe(true);
+    expect(looksLikeJwt("hdr.pld")).toBe(false);
+
+    expect(sanitizeReturnTo("/admin/audit")).toBe("/admin/audit");
+    expect(sanitizeReturnTo("//evil.example.com")).toBeUndefined();
+    expect(sanitizeReturnTo("/\t/evil.example.com")).toBeUndefined();
+    expect(sanitizeReturnTo("/\\evil.example.com")).toBeUndefined();
+    expect(sanitizeReturnTo("javascript:alert(1)")).toBeUndefined();
+
+    const kcEndpoints = buildKeycloakOidcEndpoints("https://sso.ssra.gov.ss/realms/ssra/");
+    expect(kcEndpoints.authorizationEndpoint).toBe(
+      "https://sso.ssra.gov.ss/realms/ssra/protocol/openid-connect/auth",
+    );
+    expect(kcEndpoints.registrationEndpoint).toBe(
+      "https://sso.ssra.gov.ss/realms/ssra/protocol/openid-connect/registrations",
+    );
+    expect(() => buildKeycloakOidcEndpoints("http://sso.ssra.gov.ss/realms/ssra")).toThrow();
+
+    const signInAuth = buildKeycloakAuthorizationUrl({
+      redirectUri: "https://console.ssra.gov.ss/signin/callback",
+      codeChallenge: "c".repeat(43),
+      state: "s".repeat(32),
+      mode: "signin",
+      prompt: "login",
+      returnTo: "/analytics",
+    });
+    expect(signInAuth.url).toContain("client_id=ssra-staff-console");
+    expect(signInAuth.url).toContain("code_challenge_method=S256");
+    expect(signInAuth.url).toContain("acr_values=urn%3Assra%3Aacr%3Apasskey");
+    expect(signInAuth.url).toContain("prompt=login");
+    expect(signInAuth.sanitizedReturnTo).toBe("/analytics");
+
+    const signUpAuth = buildKeycloakAuthorizationUrl({
+      redirectUri: "https://console.ssra.gov.ss/signin/callback",
+      codeChallenge: "c".repeat(43),
+      state: "s".repeat(32),
+      mode: "signup",
+      returnTo: "//evil.com",
+    });
+    expect(signUpAuth.url).toContain("prompt=create");
+    expect(signUpAuth.url).toContain("screen_hint=signup");
+    expect(signUpAuth.sanitizedReturnTo).toBeUndefined();
+
+    expect(
+      validateOidcCallbackParams({
+        code: "auth_code_1",
+        state: "state_a",
+        expectedState: "state_b",
+        pkceVerifier: "v".repeat(64),
+      }).errorReason,
+    ).toBe("CSRF_STATE_MISMATCH");
+
+    const cbAuditor = validateOidcCallbackParams({
+      code: "auth_code_1",
+      state: "s".repeat(32),
+      expectedState: "s".repeat(32),
+      pkceVerifier: "v".repeat(64),
+      resolvedRole: "ssra_auditor",
+    });
+    expect(cbAuditor.valid).toBe(true);
+    expect(cbAuditor.targetPath).toBe("/analytics");
+    expect(cbAuditor.allowedDestinations.map((d) => d.href)).toContain("/admin/audit");
+
+    const signInVm = buildSignInPageViewModel({ selectedRole: "ssra_staff" });
+    expect(signInVm.targetLandingPath).toBe("/agent");
+    const signUpVm = buildSignUpPageViewModel();
+    expect(signUpVm.benefits).toHaveLength(3);
   });
 });

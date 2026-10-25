@@ -93,6 +93,13 @@ export function authorizeConsoleRoute(
   pathname: string,
   method = "GET",
 ): { readonly allowed: boolean; readonly reason?: string } {
+  const cleanPath = pathname.split("?", 1)[0] ?? pathname;
+  if (
+    ["GET", "HEAD", "OPTIONS"].includes(method.trim().toUpperCase()) &&
+    (cleanPath === "/signin" || cleanPath === "/signup" || cleanPath === "/signin/callback")
+  ) {
+    return { allowed: true };
+  }
   const base = authorizeConsoleAccess(session);
   if (!base.allowed || !session) {
     return base;

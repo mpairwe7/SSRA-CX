@@ -75,7 +75,7 @@
           },
           {
             "category": "SAST_FRONTEND_AND_BFF",
-            "message": "Scanned 41 TypeScript and 5 JavaScript modules (SAST-FE-01..05: DOM-XSS, Trusted Types, CSP Level 3, Service Worker, and BFF process sinks).",
+            "message": "Scanned 42 TypeScript and 5 JavaScript modules (SAST-FE-01..05: DOM-XSS, Trusted Types, CSP Level 3, Service Worker, and BFF process sinks).",
             "ruleId": "SAST-FE-01",
             "status": "PASS"
           },
@@ -151,7 +151,7 @@
               "id": "SAST-FE-01",
               "name": "SAST_FRONTEND_AND_BFF",
               "shortDescription": {
-                "text": "Scanned 41 TypeScript and 5 JavaScript modules (SAST-FE-01..05: DOM-XSS, Trusted Types, CSP Level 3, Service Worker, and BFF process sinks)."
+                "text": "Scanned 42 TypeScript and 5 JavaScript modules (SAST-FE-01..05: DOM-XSS, Trusted Types, CSP Level 3, Service Worker, and BFF process sinks)."
               }
             },
             {

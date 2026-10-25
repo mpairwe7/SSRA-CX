@@ -101,9 +101,31 @@ def validate_keycloak_realm_export(realm_data: dict[str, Any]) -> bool:
         dpop_client = client_map[dpop_cid]
         dpop_attrs = dpop_client.get("attributes", {})
         is_interactive_bff = dpop_cid in ("ssra-web-bff", "ssra-staff-console")
+        redirect_uris = dpop_client.get("redirectUris", [])
+        web_origins = dpop_client.get("webOrigins", [])
+        redirect_ok = not is_interactive_bff or (
+            isinstance(redirect_uris, list)
+            and bool(redirect_uris)
+            and all(
+                isinstance(u, str)
+                and "*" not in u
+                and u.endswith("/signin/callback")
+                and (
+                    u.startswith("https://")
+                    or u.startswith("http://127.0.0.1:")
+                    or u.startswith("http://localhost:")
+                )
+                for u in redirect_uris
+            )
+            and isinstance(web_origins, list)
+            and bool(web_origins)
+            and all(isinstance(o, str) and "*" not in o for o in web_origins)
+            and bool(str(dpop_attrs.get("post.logout.redirect.uris") or "").strip())
+        )
         bcl_url_ok = not is_interactive_bff or (
             dpop_client.get("frontchannelLogout") is False
             and bool(str(dpop_attrs.get("backchannel.logout.url") or "").strip())
+            and redirect_ok
         )
         dpop_ok = (
             dpop_attrs.get("oauth2.dpop.bound.access.tokens") == "true"
