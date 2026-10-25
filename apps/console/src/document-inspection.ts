@@ -59,24 +59,26 @@ export function buildStaffDocumentInspectionViewerState(params: {
   };
 }
 
+const BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C]/g;
+
 /**
- * Resolve an officer's HITL decision (`confirm_extracted` or `override_value`) on a flagged OCR field.
+ * Resolve an officer's HITL decision (`confirm_extracted` or `override_value`) on a flagged OCR field,
+ * stripping Unicode BiDi control characters and requiring a non-empty value when overriding.
  */
 export function resolveExtractedFieldReview(
   field: ExtractedDocumentField,
   decision: "confirm_extracted" | "override_value",
   correctedValue?: string,
 ): ExtractedDocumentField {
-  const nextVal =
-    decision === "override_value" && correctedValue && correctedValue.trim().length > 0
-      ? correctedValue.trim()
-      : field.value;
+  const cleanOverride = correctedValue ? correctedValue.replace(BIDI_CONTROL_RE, "").trim() : "";
+  const isValidOverride = decision === "override_value" && cleanOverride.length > 0;
+  const nextVal = isValidOverride ? cleanOverride : field.value.replace(BIDI_CONTROL_RE, "").trim();
   return {
     ...field,
     value: nextVal,
-    source: decision === "override_value" ? "manual" : field.source,
-    status: "auto_use",
-    confidence: 1.0,
+    source: isValidOverride ? "manual" : field.source,
+    status: decision === "override_value" && !isValidOverride ? "review_required" : "auto_use",
+    confidence: isValidOverride || decision === "confirm_extracted" ? 1.0 : field.confidence,
   };
 }
 

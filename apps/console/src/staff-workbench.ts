@@ -38,7 +38,8 @@ export function buildTakeoverHandbackBannerView(params: {
     (params.assignedStaffId === null || params.assignedStaffId === params.currentStaffId);
 
   const hours = params.hoursSinceLastTaxpayerMessage ?? 0;
-  const whatsappWindowOpen = params.channel !== "whatsapp" || hours <= 24;
+  const validHours = Number.isFinite(hours) && hours >= 0;
+  const whatsappWindowOpen = params.channel !== "whatsapp" || (validHours && hours <= 24);
   const requiresTemplateForOutbound = params.channel === "whatsapp" && !whatsappWindowOpen;
 
   const statusSummary = isTakenOver

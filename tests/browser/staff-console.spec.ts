@@ -49,6 +49,15 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
   await expect(deniedScorecard.json()).resolves.toEqual({
     error: "AUTHENTICATED_STAFF_SESSION_REQUIRED",
   });
+
+  const deniedAuditApi = await request.get(`${consoleBaseUrl}/v1/admin/audit-verify`);
+  expect(deniedAuditApi.status()).toBe(403);
+
+  // Switching preview persona to Tax agent while on /analytics redirects to /agent (My queue & Copilot)
+  await page.locator("#staff-acct-trigger").click();
+  await page.getByRole("menuitemradio", { name: "Tax agent view (preview)" }).click();
+  await expect(main.getByRole("heading", { name: "My queue & Copilot" })).toBeVisible();
+  await expect(page.locator("#acct-display-name")).toHaveText("Tax agent preview");
 });
 
 test("the staff dashboard mobile rail returns focus after Escape", async ({ page }) => {

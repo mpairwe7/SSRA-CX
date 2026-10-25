@@ -52,7 +52,33 @@ export type TelemetryScope = "WINDOW_SCOPED" | "REPLICA_LIFETIME";
 
 const PROHIBITED_STAFF_REPLY_PATTERN =
   /\b(?:waive\s+(?:your\s+)?penalty|penalty\s+is\s+waived|pay\s+cash\s+to|send\s+money\s+to\s+my\s+personal)\b/i;
-const UNMASKED_TIN_IN_REPLY_PATTERN = /\b\d{9,12}\b/;
+const UNMASKED_TIN_IN_REPLY_PATTERN = /\b(?:\d{9,12}|\d{3}[\s-]\d{3}[\s-]?\d{4})\b/;
+const ARABIC_INDIC_DIGIT_MAP: Readonly<Record<string, string>> = {
+  "٠": "0",
+  "١": "1",
+  "٢": "2",
+  "٣": "3",
+  "٤": "4",
+  "٥": "5",
+  "٦": "6",
+  "٧": "7",
+  "٨": "8",
+  "٩": "9",
+  "۰": "0",
+  "۱": "1",
+  "۲": "2",
+  "۳": "3",
+  "۴": "4",
+  "۵": "5",
+  "۶": "6",
+  "۷": "7",
+  "۸": "8",
+  "۹": "9",
+};
+
+function normalizeDigitsForTinCheck(text: string): string {
+  return text.replace(/[٠-٩۰-۹]/g, (ch) => ARABIC_INDIC_DIGIT_MAP[ch] ?? ch);
+}
 
 export interface CopilotDraftReviewAction {
   readonly conversationId: string;
@@ -64,7 +90,7 @@ export interface CopilotDraftReviewAction {
 
 /**
  * Validate a Staff Copilot reply approval or manual edit before sending to a taxpayer,
- * enforcing passkey auth, read-only auditor exclusion, Principle 1 citations, and T4/cash-free safety rules.
+ * enforcing passkey auth, subject binding (`staffId`), read-only auditor exclusion, Principle 1 citations, and T4/cash-free safety rules.
  */
 export function validateCopilotDraftApproval(
   session: ConsoleSession | null,
@@ -77,6 +103,9 @@ export function validateCopilotDraftApproval(
   if (isReadOnlyAuditorRole(session.role)) {
     return { valid: false, error: "AUDITOR_READ_ONLY_CANNOT_SEND_TAXPAYER_REPLY" };
   }
+  if (!action.staffId.trim() || action.staffId !== session.staffId) {
+    return { valid: false, error: "STAFF_SUBJECT_MISMATCH_IN_ACTION" };
+  }
   if (action.decision === "APPROVE_AND_SEND" && action.citationsIncluded.length === 0) {
     return {
       valid: false,
@@ -84,18 +113,19 @@ export function validateCopilotDraftApproval(
     };
   }
   if (action.decision === "EDIT_AND_SEND" || action.decision === "REJECT_AND_WRITE_MANUAL") {
-    if (action.replyText !== undefined && !action.replyText.trim()) {
+    if (!action.replyText?.trim()) {
       return { valid: false, error: "EMPTY_MANUAL_OR_EDITED_REPLY" };
     }
   }
   if (action.replyText) {
-    if (PROHIBITED_STAFF_REPLY_PATTERN.test(action.replyText)) {
+    const normalizedReply = normalizeDigitsForTinCheck(action.replyText);
+    if (PROHIBITED_STAFF_REPLY_PATTERN.test(normalizedReply)) {
       return {
         valid: false,
         error: "PROHIBITED_PROMISE_OR_CASH_SOLICITATION_BLOCKED",
       };
     }
-    if (UNMASKED_TIN_IN_REPLY_PATTERN.test(action.replyText)) {
+    if (UNMASKED_TIN_IN_REPLY_PATTERN.test(normalizedReply)) {
       return {
         valid: false,
         error: "UNMASKED_TIN_IN_OUTBOUND_REPLY_BLOCKED",

@@ -276,6 +276,8 @@ export interface AuditVerificationReport {
   readonly anchor_breaks: readonly AuditSealBreakItem[];
 }
 
+const AUDIT_SHA256_HEX_RE = /^[0-9a-f]{40,64}$/i;
+
 /**
  * Auditor WORM Audit Trail & Merkle Seal Inspector (`admin/audit/page.tsx`):
  * Places integrity verification first, computes the tamper blast-radius sequence boundary,
@@ -286,8 +288,10 @@ export function buildAuditorTrailIntegrityView(
   data: AuditVerificationReport,
   options?: { readonly role?: StaffRole },
 ) {
-  const shortHeadHash = data.head_hash ? `${data.head_hash.slice(0, 10)}…` : "—";
-  const hasBreak = !data.valid || data.breaks.length > 0 || data.anchor_breaks.length > 0;
+  const validHeadHash = AUDIT_SHA256_HEX_RE.test(data.head_hash ?? "");
+  const shortHeadHash = validHeadHash ? `${data.head_hash.slice(0, 10)}…` : "—";
+  const hasBreak =
+    !data.valid || !validHeadHash || data.breaks.length > 0 || data.anchor_breaks.length > 0;
   const breakSeqs = [
     ...data.breaks.map((b) => b.seq),
     ...data.anchor_breaks.map((ab) => ab.first_seq),
@@ -301,7 +305,9 @@ export function buildAuditorTrailIntegrityView(
       ? `Event #${first.seq} fails its check (${first.reason}). Everything from that event on cannot be relied on as evidence until the cause is found.`
       : sealBreak
         ? `Events #${sealBreak.first_seq} to #${sealBreak.last_seq} no longer match their recorded seal (${sealBreak.reason}).`
-        : "One or more events fail their check.";
+        : !validHeadHash
+          ? "The ledger head hash is missing or is not a valid 64-character SHA-256 digest."
+          : "One or more events fail their check.";
     return {
       bannerRole: "alert" as const,
       chipClass: "is-danger" as const,

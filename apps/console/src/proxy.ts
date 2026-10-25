@@ -49,6 +49,9 @@ export function authorizeConsoleAccess(session: ConsoleSession | null): {
   if (!session) {
     return { allowed: false, reason: "MISSING_SESSION" };
   }
+  if (!session.staffId?.trim() || !session.officeCode?.trim()) {
+    return { allowed: false, reason: "INVALID_STAFF_IDENTITY_CLAIMS" };
+  }
   if (!session.passkeyVerified) {
     return { allowed: false, reason: "WEBAUTHN_PASSKEY_REQUIRED" };
   }
@@ -61,15 +64,29 @@ export function authorizeConsoleAccess(session: ConsoleSession | null): {
   if (cleanOrigin.toLowerCase() === "null" || cleanOrigin !== session.allowedOrigin) {
     return { allowed: false, reason: "NULL_OR_UNTRUSTED_ORIGIN" };
   }
-  // Short session idle timeout (900 seconds = 15 minutes per ADR-012)
-  if (session.idleAgeSeconds > 900) {
+  // Short session idle timeout (900 seconds = 15 minutes per ADR-012); reject NaN or negative values
+  if (
+    !Number.isFinite(session.idleAgeSeconds) ||
+    session.idleAgeSeconds < 0 ||
+    session.idleAgeSeconds > 900
+  ) {
     return { allowed: false, reason: "SESSION_IDLE_EXPIRED" };
   }
   return { allowed: true };
 }
 
+const ADMIN_OR_AUDITOR_ROLES: ReadonlySet<ConsoleSession["role"]> = new Set([
+  "admin",
+  "secops",
+  "qa",
+  "supervisor",
+  "legal_approver",
+  "ssra_admin",
+  "ssra_auditor",
+]);
+
 /**
- * Authorize route-specific Staff Console access by role and HTTP method (enforcing Auditor read-only Separation of Duties).
+ * Authorize route-specific Staff Console access by role and HTTP method (enforcing Auditor read-only Separation of Duties & OWASP API5 BFLA).
  */
 export function authorizeConsoleRoute(
   session: ConsoleSession | null,
@@ -97,6 +114,20 @@ export function authorizeConsoleRoute(
   if (pathname.startsWith("/admin/kill-switches") || pathname.startsWith("/admin/jit")) {
     if (session.role !== "admin" && session.role !== "secops" && session.role !== "ssra_admin") {
       return { allowed: false, reason: "INSUFFICIENT_ROLE_ADMIN_REQUIRED" };
+    }
+  }
+  // OWASP API5:2023 BFLA: Audit, Replay, Quality, Flags, Overrides, Outbox, and Analytics routes require Admin/Supervisor/Auditor role
+  if (
+    pathname.startsWith("/admin/audit") ||
+    pathname.startsWith("/admin/replay") ||
+    pathname.startsWith("/admin/quality") ||
+    pathname.startsWith("/admin/flags") ||
+    pathname.startsWith("/admin/overrides") ||
+    pathname.startsWith("/admin/outbox") ||
+    pathname.startsWith("/analytics")
+  ) {
+    if (!ADMIN_OR_AUDITOR_ROLES.has(session.role)) {
+      return { allowed: false, reason: "INSUFFICIENT_ROLE_GOVERNANCE_OR_AUDIT_REQUIRED" };
     }
   }
   if (pathname.startsWith("/knowledge-release/approve")) {

@@ -124,6 +124,13 @@ test("the page advertises only shortcuts that work", async ({ page }) => {
   await ask(page, "Synthetic public guidance question");
   await page.getByRole("button", { name: /New Conversation/ }).click();
   await expect(page.locator("#landing-view")).toBeVisible();
+  await expect(page.locator("#header-rail-btn")).toBeHidden();
+  await page.keyboard.press("Control+b");
+  await expect(page.locator("#ssra-app-shell")).toHaveAttribute("data-sidebar", "collapsed");
+  await expect(page.locator("#header-rail-btn")).toBeVisible();
+  await page.keyboard.press("Control+b");
+  await expect(page.locator("#ssra-app-shell")).toHaveAttribute("data-sidebar", "open");
+  await expect(page.locator("#header-rail-btn")).toBeHidden();
   await page.keyboard.press("Control+k");
   const searchInput = page.getByRole("textbox", { name: "Search saved conversations" });
   await expect(searchInput).toBeFocused();

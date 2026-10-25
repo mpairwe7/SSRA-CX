@@ -860,5 +860,95 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
         reason: "Emergency snapshot rollback",
       }),
     ).toEqual({ granted: true });
+
+    // October 2026 QA/Security Audit Hardening: BFLA, NaN idle timeout, subject-binding, Arabic-Indic TINs, BiDi OCR & Evidence bounds
+    expect(
+      authorizeConsoleAccess({
+        ...session,
+        idleAgeSeconds: Number.NaN,
+      }),
+    ).toEqual({ allowed: false, reason: "SESSION_IDLE_EXPIRED" });
+    expect(
+      authorizeConsoleAccess({
+        ...session,
+        staffId: "   ",
+      }),
+    ).toEqual({ allowed: false, reason: "INVALID_STAFF_IDENTITY_CLAIMS" });
+    expect(
+      authorizeConsoleRoute({ ...session, role: "ssra_staff" }, "/admin/audit", "GET"),
+    ).toEqual({
+      allowed: false,
+      reason: "INSUFFICIENT_ROLE_GOVERNANCE_OR_AUDIT_REQUIRED",
+    });
+    expect(
+      validateCopilotDraftApproval(session, {
+        conversationId: "conv_1",
+        staffId: "stf_impersonated_other",
+        decision: "APPROVE_AND_SEND",
+        citationsIncluded: ["Sec-1"],
+      }),
+    ).toEqual({ valid: false, error: "STAFF_SUBJECT_MISMATCH_IN_ACTION" });
+    expect(
+      validateCopilotDraftApproval(session, {
+        conversationId: "conv_1",
+        staffId: "stf_01",
+        decision: "EDIT_AND_SEND",
+        citationsIncluded: ["Sec-1"],
+      }),
+    ).toEqual({ valid: false, error: "EMPTY_MANUAL_OR_EDITED_REPLY" });
+    expect(
+      validateCopilotDraftApproval(session, {
+        conversationId: "conv_1",
+        staffId: "stf_01",
+        decision: "EDIT_AND_SEND",
+        citationsIncluded: ["Sec-1"],
+        replyText: "TIN ١٠٠-٢٠٠-١٢٣٤ is active.",
+      }),
+    ).toEqual({ valid: false, error: "UNMASKED_TIN_IN_OUTBOUND_REPLY_BLOCKED" });
+    expect(
+      validateAdminAnswerOverride({
+        role: "ssra_admin",
+        questionPattern: "TIN lookup",
+        overrideAnswerText: "Use TIN 100-200-1234 as example.",
+        sectionAnchor: "Sec-1",
+      }),
+    ).toEqual({ valid: false, error: "UNMASKED_TIN_IN_ANSWER_OVERRIDE_BLOCKED" });
+    expect(
+      buildAuditorTrailIntegrityView({
+        valid: true,
+        head_hash: "invalid_short_hash",
+        unsealed_rows: 0,
+        breaks: [],
+        anchor_breaks: [],
+      }).chipText,
+    ).toBe("Record altered");
+    expect(
+      buildAuditorEvidencePackage({
+        auditReport: {
+          valid: true,
+          head_hash: "8f2b1290a5b1179c20f9e8123ab71e8902112a01",
+          unsealed_rows: 0,
+          breaks: [],
+          anchor_breaks: [],
+        },
+        snapshotVersion: "   ",
+        sampledThreadIds: ["thr_1"],
+        qaCompositeScore: 0.99,
+      }).exportAllowed,
+    ).toBe(false);
+    const bidiField = resolveExtractedFieldReview(
+      {
+        id: "f_bidi",
+        name: "Payee",
+        value: "SSRA",
+        confidence: 0.5,
+        source: "ocr_inset",
+        status: "review_required",
+        page: 1,
+      },
+      "override_value",
+      "\u202ESSRA Treasury\u202C",
+    );
+    expect(bidiField.value).toBe("SSRA Treasury");
   });
 });

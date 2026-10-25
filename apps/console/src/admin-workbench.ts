@@ -83,10 +83,16 @@ export function buildKnowledgeReleaseGovernanceView(params: {
   readonly evalRegressionPassed: boolean;
 }): KnowledgeReleaseGovernanceView {
   const isAdmin = params.role === "ssra_admin";
-  const isSelfAuthor = params.draftAuthorId === params.currentStaffId;
-  const canApproveLegal = isAdmin && params.status === "LEGAL_REVIEW" && !isSelfAuthor;
-  const canPublish = isAdmin && params.status === "APPROVED" && params.evalRegressionPassed;
+  const hasValidActors =
+    Boolean(params.draftAuthorId.trim()) && Boolean(params.currentStaffId.trim());
+  const isSelfAuthor =
+    !hasValidActors || params.draftAuthorId.trim() === params.currentStaffId.trim();
+  const canApproveLegal =
+    isAdmin && hasValidActors && params.status === "LEGAL_REVIEW" && !isSelfAuthor;
+  const canPublish =
+    isAdmin && hasValidActors && params.status === "APPROVED" && params.evalRegressionPassed;
   const autoRollbackTriggered = params.status === "APPROVED" && !params.evalRegressionPassed;
+  const canRollback = isAdmin && (params.status === "PUBLISHED" || params.status === "APPROVED");
 
   const governanceNote =
     isSelfAuthor && params.status === "LEGAL_REVIEW"
@@ -100,7 +106,7 @@ export function buildKnowledgeReleaseGovernanceView(params: {
     status: autoRollbackTriggered ? "ROLLED_BACK" : params.status,
     canApproveLegal,
     canPublish,
-    canRollback: isAdmin,
+    canRollback,
     autoRollbackTriggered,
     governanceNote,
   };
@@ -161,11 +167,12 @@ export function buildSystemConnectorsHealthView(params: {
 }
 
 const PROHIBITED_OVERRIDE_TEXT_PATTERN =
-  /\b(?:waive\s+(?:your\s+)?penalty|penalty\s+is\s+waived|pay\s+cash\s+to)\b/i;
+  /\b(?:waive\s+(?:your\s+)?penalty|penalty\s+is\s+waived|pay\s+cash\s+to|send\s+money\s+to\s+my\s+personal)\b/i;
+const OVERRIDE_TIN_PATTERN = /\b(?:\d{9,12}|\d{3}[\s-]\d{3}[\s-]?\d{4})\b/;
 
 /**
  * Validate an administrator's exact-match Answer Override (`/admin/overrides`)
- * to ensure it cites an approved `sectionAnchor` and contains no prohibited waiver or cash claims.
+ * to ensure it cites an approved `sectionAnchor` and contains no prohibited waiver, cash claims, or unmasked taxpayer TINs.
  */
 export function validateAdminAnswerOverride(input: {
   readonly role: StaffRole;
@@ -184,6 +191,9 @@ export function validateAdminAnswerOverride(input: {
   }
   if (PROHIBITED_OVERRIDE_TEXT_PATTERN.test(input.overrideAnswerText)) {
     return { valid: false, error: "PROHIBITED_WAIVER_OR_CASH_CLAIM_IN_OVERRIDE" };
+  }
+  if (OVERRIDE_TIN_PATTERN.test(input.overrideAnswerText)) {
+    return { valid: false, error: "UNMASKED_TIN_IN_ANSWER_OVERRIDE_BLOCKED" };
   }
   return { valid: true, error: null };
 }
