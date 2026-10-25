@@ -39,7 +39,8 @@ test("the composer discloses AI use, accuracy limits, and identifier risk", asyn
   await expect(disclosure).toContainText("automated AI assistant and can make mistakes");
   await expect(disclosure).toContainText("Don’t enter your TIN, phone number, or passwords");
   await expect(page.locator("#rail-device-note")).toContainText("saved on this device only");
-  await expect(page.locator("#net-status-text")).toHaveText("Online");
+  await expect(page.locator("#net-status-badge")).toBeHidden();
+  await expect(page.locator("#active-conv-title")).toBeHidden();
 });
 
 test("people on shared devices can stop saving conversations", async ({ page }) => {

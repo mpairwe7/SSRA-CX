@@ -12,7 +12,9 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+      .then((keys) =>
+        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
+      )
       .then(() => self.clients.claim()),
   );
 });
@@ -27,15 +29,19 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  const cacheControl = event.request.headers.get("Cache-Control") || "";
+  const cacheControl = (event.request.headers.get("Cache-Control") || "").toLowerCase();
   const hasAuthHeader = Boolean(event.request.headers.get("Authorization"));
-  // CVE-2026-50184: Never intercept or cache non-GET, API/BFF, account, no-store, or authenticated requests
+  // CVE-2026-50184: Never intercept or cache non-GET, API/BFF, health/metrics, SW script, account, no-store, or authenticated requests
   if (
     event.request.method !== "GET" ||
     event.request.cache === "no-store" ||
     cacheControl.includes("no-store") ||
     hasAuthHeader ||
     url.origin !== self.location.origin ||
+    url.pathname === "/sw.js" ||
+    url.pathname === "/healthz" ||
+    url.pathname === "/health" ||
+    url.pathname === "/metrics" ||
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/v1/") ||
     url.pathname.includes("/account")
@@ -56,16 +62,36 @@ self.addEventListener("fetch", (event) => {
     fetch(netReq)
       .then((res) => {
         const resCacheControl = (res.headers.get("cache-control") || "").toLowerCase();
+        const resVary = res.headers.get("vary") || "";
         if (
-          res.ok &&
+          res.status === 200 &&
+          res.type === "basic" &&
           !res.headers.get("ngrok-error-code") &&
-          !resCacheControl.includes("no-store")
+          !resCacheControl.includes("no-store") &&
+          !resCacheControl.includes("private") &&
+          !res.headers.has("set-cookie") &&
+          !resVary.includes("*")
         ) {
           const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          caches
+            .open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, clone))
+            .catch(() => {});
         }
         return res;
       })
-      .catch(() => caches.match(event.request)),
+      .catch(() =>
+        caches.match(event.request).then(
+          (cached) =>
+            cached ||
+            new Response(JSON.stringify({ status: "offline", service: "ssra-web" }), {
+              status: 503,
+              headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Cache-Control": "no-store",
+              },
+            }),
+        ),
+      ),
   );
 });

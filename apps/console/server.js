@@ -315,6 +315,19 @@ const server = http.createServer(async (req, res) => {
   );
 });
 
+server.headersTimeout = 15_000;
+server.requestTimeout = 35_000;
+server.keepAliveTimeout = 5_000;
+
+function shutdownConsoleGracefully() {
+  server.closeIdleConnections?.();
+  const forceTimer = setTimeout(() => process.exit(0), 2_000);
+  forceTimer.unref?.();
+  server.close(() => process.exit(0));
+}
+process.on("SIGTERM", shutdownConsoleGracefully);
+process.on("SIGINT", shutdownConsoleGracefully);
+
 server.listen(PORT, HOSTNAME, () => {
   process.stdout.write(`ssra-console listening on http://${HOSTNAME}:${PORT}\n`);
 });

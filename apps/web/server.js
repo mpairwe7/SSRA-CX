@@ -41,9 +41,19 @@ for (const fontName of ALLOWED_FONT_FILES) {
   }
 }
 const SW_PATH = path.join(__dirname, "public", "sw.js");
-const SW_CONTENT = fs.existsSync(SW_PATH)
-  ? fs.readFileSync(SW_PATH, "utf-8")
-  : "self.addEventListener('install', () => self.skipWaiting());";
+let cachedSwContent = "self.addEventListener('install', () => self.skipWaiting());";
+let cachedSwMtimeMs = -1;
+function getServiceWorkerContent() {
+  try {
+    const stat = fs.statSync(SW_PATH);
+    if (stat.mtimeMs !== cachedSwMtimeMs) {
+      cachedSwContent = fs.readFileSync(SW_PATH, "utf-8");
+      cachedSwMtimeMs = stat.mtimeMs;
+    }
+  } catch {}
+  return cachedSwContent;
+}
+getServiceWorkerContent();
 const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
 const HOSTNAME = process.env.HOSTNAME ?? "0.0.0.0";
 const INTERNAL_API_URL = (process.env.INTERNAL_API_URL ?? "http://ssra-api:8000").replace(
@@ -794,7 +804,7 @@ function renderPwaShellHtml(locale, nonce) {
     .rail-brand-sub { font-size: 0.68rem; color: #FFFFFF; font-weight: 500; }
     .acct-pop-hr { border: 0; border-top: 1px solid rgba(255, 255, 255, 0.20); margin: 3px 0; }
     .acct-chevron { color: #FFFFFF; font-size: 0.75rem; }
-    .active-conv-title { font-weight: 700; font-size: 0.9rem; color: #FFFFFF; max-width: 34ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .active-conv-title { font-weight: 700; font-size: 0.9rem; color: #FFFFFF; max-width: 34ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; unicode-bidi: plaintext; }
     .composer-hint { flex: 1; min-width: 0; font-size: 0.8rem; color: var(--text-1); }
     .composer-hint:empty { display: none; }
     .composer-keys { font-size: 0.75rem; color: var(--text-2); }
@@ -932,8 +942,8 @@ function renderPwaShellHtml(locale, nonce) {
       <header class="chat-header hdrv2">
         <div class="header-left">
           <button type="button" id="header-rail-btn" class="top-bar-icon-btn icon-btn" aria-label="Open conversations" aria-expanded="false" aria-controls="conversation-rail">${ICONS.panelLeft}</button>
-          <span id="active-conv-title" class="active-conv-title">New Conversation</span>
-          <span id="net-status-badge" class="status-badge" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="net-status-text">Official sources cited per answer</span></span>
+          <span id="active-conv-title" class="active-conv-title is-hidden" dir="auto"></span>
+          <span id="net-status-badge" class="status-badge is-hidden" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="net-status-text"></span></span>
         </div>
         <div class="header-right">
           <button type="button" id="open-call-btn" class="top-bar-icon-btn icon-btn call-btn hdrv2-call" aria-label="Open voice input options" title="Call receptionist">${ICONS.phone}</button>
@@ -1431,6 +1441,9 @@ function renderPwaShellHtml(locale, nonce) {
           langGroupAvailable: "Available",
           langGroupUnreviewed: "Not yet reviewed (interface in English)",
           langMenuFoot: "Pick a language to always answer in it, or let answers follow the language you type.",
+          netStatusOffline: "Offline · reconnect to get current guidance",
+          netStatusLowData: "Low-data mode · online",
+          netStatusOnline: "Online",
           chipCats: ["TIN Registration", "PAYE Calculator", "Withholding Tax (WHT)", "Compliance (TCC)", "Scam & Channel Check", "Juba Arabic (pga)", "Personal e-Tax services"],
           chipTexts: [
             "How do I register for a TIN step by step?",
@@ -1479,6 +1492,9 @@ function renderPwaShellHtml(locale, nonce) {
           langGroupAvailable: "Mutah",
           langGroupUnreviewed: "Lissa ma tammat muraja'a (al-wajiha bil-Inglizi)",
           langMenuFoot: "Ikhtar lugha aashan al-ijaba dayman takun biha, aw khalli al-ijaba tatba lughatak.",
+          netStatusOffline: "Offline · arja' ittasal aashan talga irshad al-hali",
+          netStatusLowData: "Wad' tawfir al-bayanat (Low-data mode) · online",
+          netStatusOnline: "Online",
           chipCats: ["Tasjil ta TIN", "Hisab ta PAYE", "Dariba ta الخصم (WHT)", "Shahada ta TCC", "Fahas ta Qanawat", "Arabi Juba (pga)", "Khadamat e-Tax"],
           chipTexts: [
             "Kif ana aml tasjil ta TIN khatwa bi khatwa?",
@@ -1527,6 +1543,9 @@ function renderPwaShellHtml(locale, nonce) {
           langGroupAvailable: "اللغات المعتمدة",
           langGroupUnreviewed: "قيد المراجعة (الواجهة بالإنجليزية)",
           langMenuFoot: "اختر لغة للرد بها دائماً، أو اترك الإجابات تتبع اللغة التي تكتب بها.",
+          netStatusOffline: "غير متصل · أعد الاتصال للحصول على الإرشادات المحدثة",
+          netStatusLowData: "وضع توفير البيانات (Low-data mode) · متصل",
+          netStatusOnline: "متصل الآن",
           chipCats: ["تسجيل الرقم الضريبي TIN", "حاسبة ضريبة الدخل PAYE", "ضريبة الاستقطاع WHT", "شهادة الامتثال TCC", "التحقق من القنوات الرسمية", "عربي جوبا (pga)", "خدمات e-Tax الشخصية"],
           chipTexts: [
             "كيف أسجل الرقم الضريبي TIN خطوة بخطوة؟",
@@ -1810,7 +1829,6 @@ function renderPwaShellHtml(locale, nonce) {
         if (latestLblEl && dict.latestLabel) latestLblEl.textContent = dict.latestLabel;
         if (railSubEl && dict.railBrandSub) railSubEl.textContent = dict.railBrandSub;
         if (newChatLblEl && dict.newChatLabel) newChatLblEl.textContent = dict.newChatLabel;
-        if (!state.activeId && activeTitleEl && dict.newChatLabel) activeTitleEl.textContent = dict.newChatLabel;
         if (acctNameEl && dict.publicChatName) acctNameEl.textContent = dict.publicChatName;
         if (acctSubEl && dict.publicChatSub) acctSubEl.textContent = dict.publicChatSub;
         if (acctPopSecEl && dict.acctPopSection) acctPopSecEl.textContent = dict.acctPopSection;
@@ -1849,7 +1867,10 @@ function renderPwaShellHtml(locale, nonce) {
           });
         }
         syncLangAutoBadge();
+        syncNetworkStatusBadge();
       }
+      let prevNetConnectionState = null;
+      const DEFAULT_NEW_CHAT_TITLES = new Set(["New Conversation", "Wanasa Jadida", "محادثة جديدة"]);
       applyLocaleStrings(state.locale);
 
       function adoptResponseLocale(responseLocale, localeSource, explicitSwitchTarget) {
@@ -2214,15 +2235,28 @@ function renderPwaShellHtml(locale, nonce) {
           landingView?.classList.remove("is-hidden");
           chatView?.classList.add("is-hidden");
           document.getElementById("scroll-to-latest-btn")?.classList.add("is-hidden");
-          const uiDict = LOCALE_UI_STRINGS[LOCALE_UI_STRINGS[state.locale] ? state.locale : "en"];
-          if (activeTitleEl) activeTitleEl.textContent = uiDict.newChatLabel || "New Conversation";
+          if (activeTitleEl) {
+            activeTitleEl.textContent = "";
+            activeTitleEl.removeAttribute("title");
+            activeTitleEl.classList.add("is-hidden");
+          }
           window.clearTimeout(prependTimer);
           renderedTranscript = { convId: null, turnHtml: [], offset: 0 };
         } else {
           landingView?.classList.add("is-hidden");
           chatView?.classList.remove("is-hidden");
           document.getElementById("scroll-to-latest-btn")?.classList.add("is-hidden");
-          if (activeTitleEl) activeTitleEl.textContent = activeConv.title;
+          if (activeTitleEl) {
+            const trimmedTitle = String(activeConv.title || "").trim();
+            const hasCustomTitle = Boolean(trimmedTitle && !DEFAULT_NEW_CHAT_TITLES.has(trimmedTitle));
+            activeTitleEl.textContent = hasCustomTitle ? trimmedTitle : "";
+            if (hasCustomTitle) {
+              activeTitleEl.setAttribute("title", trimmedTitle);
+            } else {
+              activeTitleEl.removeAttribute("title");
+            }
+            activeTitleEl.classList.toggle("is-hidden", !hasCustomTitle);
+          }
           if (msgList) {
             renderTranscript(activeConv);
             const lastTurn = msgList.lastElementChild;
@@ -3046,20 +3080,33 @@ function renderPwaShellHtml(locale, nonce) {
         }
       });
 
-      // Online / Offline Network Indicator (FE-G4)
+      // Offline / Low-Data Network Indicator (FE-G4 & WCAG 2.2 SC 4.1.3: hidden visually when online in standard mode, announced via #chat-announcer on transitions)
       function syncNetworkStatusBadge() {
         const txt = document.getElementById("net-status-text");
         const badge = document.getElementById("net-status-badge");
         if (!txt || !badge) return;
         const offline = navigator.onLine === false;
         const lowData = !offline && state.lowDataMode;
+        const nextState = offline ? "offline" : lowData ? "low-data" : "available";
+        const uiLoc = LOCALE_UI_STRINGS[state.locale] ? state.locale : "en";
+        const dict = LOCALE_UI_STRINGS[uiLoc];
         document.documentElement.setAttribute("data-low-data", String(Boolean(state.lowDataMode)));
-        badge.setAttribute("data-connection", offline ? "offline" : lowData ? "low-data" : "available");
-        txt.textContent = offline
-          ? "Offline · reconnect to get current guidance"
+        badge.setAttribute("data-connection", nextState);
+        badge.classList.toggle("is-hidden", !offline && !lowData);
+        const statusMsg = offline
+          ? dict.netStatusOffline || "Offline · reconnect to get current guidance"
           : lowData
-            ? "Low-data mode · online"
-            : "Online";
+            ? dict.netStatusLowData || "Low-data mode · online"
+            : "";
+        txt.textContent = statusMsg;
+        if (prevNetConnectionState !== null && prevNetConnectionState !== nextState) {
+          const announcer = document.getElementById("chat-announcer");
+          if (announcer) {
+            announcer.textContent =
+              statusMsg || dict.netStatusOnline || "Online";
+          }
+        }
+        prevNetConnectionState = nextState;
       }
       window.addEventListener("online", syncNetworkStatusBadge);
       window.addEventListener("offline", syncNetworkStatusBadge);
@@ -5266,10 +5313,9 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {
       "Content-Type": "application/javascript; charset=utf-8",
       "Cache-Control": "no-cache, no-store, must-revalidate",
-      "Clear-Site-Data": '"cache"',
       ...secHeaders,
     });
-    res.end(method === "HEAD" ? undefined : SW_CONTENT);
+    res.end(method === "HEAD" ? undefined : getServiceWorkerContent());
     return;
   }
 
@@ -5369,10 +5415,27 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  async function fetchUpstreamWithReloadRetry(url, init, maxAttempts = 3) {
+    let lastErr;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fetch(url, init);
+      } catch (err) {
+        lastErr = err;
+        const isTimeout = err instanceof Error && err.name === "TimeoutError";
+        if (isTimeout || attempt >= maxAttempts) {
+          throw err;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+      }
+    }
+    throw lastErr;
+  }
+
   if (method === "POST" && pathname === "/api/turns") {
     try {
       const safeBody = sanitizeBrowserTurnBody(await readRequestBody(req));
-      const upstream = await fetch(`${INTERNAL_RUNTIME_URL}/v1/turns`, {
+      const upstream = await fetchUpstreamWithReloadRetry(`${INTERNAL_RUNTIME_URL}/v1/turns`, {
         method: "POST",
         headers: { "Content-Type": "application/json", traceparent },
         body: safeBody,
@@ -5412,12 +5475,15 @@ const server = http.createServer(async (req, res) => {
     });
     try {
       const safeBody = sanitizeBrowserTurnBody(await readRequestBody(req));
-      const upstream = await fetch(`${INTERNAL_RUNTIME_URL}/v1/agui/stream`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "text/event-stream", traceparent },
-        body: safeBody,
-        signal: ac.signal,
-      });
+      const upstream = await fetchUpstreamWithReloadRetry(
+        `${INTERNAL_RUNTIME_URL}/v1/agui/stream`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "text/event-stream", traceparent },
+          body: safeBody,
+          signal: ac.signal,
+        },
+      );
       resetInactivityTimeout();
       res.writeHead(upstream.status, {
         "Content-Type": upstream.headers.get("content-type") ?? "text/event-stream",
@@ -5516,6 +5582,19 @@ const server = http.createServer(async (req, res) => {
     renderPwaShellHtml(locale, nonce),
   );
 });
+
+server.headersTimeout = 15_000;
+server.requestTimeout = 35_000;
+server.keepAliveTimeout = 5_000;
+
+function shutdownGracefully() {
+  server.closeIdleConnections?.();
+  const forceTimer = setTimeout(() => process.exit(0), 2_000);
+  forceTimer.unref?.();
+  server.close(() => process.exit(0));
+}
+process.on("SIGTERM", shutdownGracefully);
+process.on("SIGINT", shutdownGracefully);
 
 server.listen(PORT, HOSTNAME, () => {
   process.stdout.write(`ssra-web listening on http://${HOSTNAME}:${PORT}\n`);
