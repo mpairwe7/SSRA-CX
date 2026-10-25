@@ -109,6 +109,23 @@ const SCENARIOS = {
     { "Retry-After": "7" },
   ],
   "synthetic-scenario:html-error": () => [500, "<html><body>Synthetic error page</body></html>"],
+  "synthetic-scenario:structured-answer": () => [
+    200,
+    syntheticAnswer({
+      answer: {
+        abstained: false,
+        citations: [SYNTHETIC_CITATION],
+        is_estimate: false,
+        segments: [
+          {
+            text: "Official verification tools at https://www.nra.gov.ss/tools: (1) e-Invoice search, (2) TIN search, and (3) TCC verification. Official support is at support@nra.gov.ss and +211 918806493. Note: Keep your e-Tax receipt.",
+          },
+        ],
+        ui_component: null,
+      },
+      citations: [SYNTHETIC_CITATION],
+    }),
+  ],
 };
 
 async function readJson(req) {

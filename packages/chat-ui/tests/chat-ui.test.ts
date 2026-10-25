@@ -1263,6 +1263,29 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     );
     expect(blocks.map((b) => b.type)).toEqual(["paragraph", "ol", "callout"]);
 
+    const toolsProc = asNumberedProcedure(
+      "Official tools: (1) e-Invoice Verification, (2) TIN Verification, and (3) TCC Verification. Official SSRA Helpdesk support is available via email at support@nra.gov.ss.",
+    );
+    expect(toolsProc?.items).toEqual([
+      "e-Invoice Verification",
+      "TIN Verification",
+      "TCC Verification.",
+    ]);
+    expect(toolsProc?.trailingParagraph).toBe(
+      "Official SSRA Helpdesk support is available via email at support@nra.gov.ss.",
+    );
+
+    const multilineBlocks = parseStructuredAnswerBlocks(
+      "### Registration steps\n> Statutory requirement\n- Jinsia ID\n- Active phone\n1. Open portal\n2. Submit form\nSummary: Keep your receipt.",
+    );
+    expect(multilineBlocks.map((b) => b.type)).toEqual([
+      "heading",
+      "blockquote",
+      "ul",
+      "ol",
+      "callout",
+    ]);
+
     const parenCallBlocks = structureCallReceptionistBlocks(
       "Under Module 2: (1) Filing is free; (2) Log in with TIN and OTP.",
     );

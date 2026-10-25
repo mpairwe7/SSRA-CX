@@ -117,3 +117,19 @@ test("a reply still in progress is never saved to the device", async ({ page }) 
   expect(stored).not.toContain('"pending"');
 });
 
+test("assistant replies render structured paragraphs, ordered lists, callouts, and LTR-isolated links", async ({
+  page,
+}) => {
+  const reply = await askScenario(page, "synthetic-scenario:structured-answer");
+  const content = reply.locator(".turn-content-text");
+  await expect(content.locator("ol.md-list.md-ol > li")).toHaveCount(3);
+  await expect(content.locator("ol.md-list.md-ol > li").nth(1)).toHaveText("TIN search");
+  await expect(content.locator("ol.md-list.md-ol > li").nth(2)).toHaveText("TCC verification.");
+  await expect(content.locator("aside.md-callout.md-callout-note")).toContainText(
+    "Keep your e-Tax receipt.",
+  );
+  await expect(content.locator('a.md-link[dir="ltr"][href="https://www.nra.gov.ss/tools"]')).toBeVisible();
+  await expect(content.locator('a.md-link[dir="ltr"][href="mailto:support@nra.gov.ss"]')).toBeVisible();
+  await expect(content.locator('a.md-link[dir="ltr"][href="tel:+211918806493"]')).toBeVisible();
+});
+

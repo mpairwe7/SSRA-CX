@@ -853,19 +853,25 @@ function renderPwaShellHtml(locale, nonce) {
     .settings-pane-title { margin: 0; color: var(--text-0); font-size: 1.05rem; }
     .settings-pane-body { font-size: 0.86rem; color: var(--text-2); line-height: 1.55; }
     .settings-actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
-    .turn-content-text { display: flex; flex-direction: column; gap: 0.6rem; line-height: 1.64; color: var(--text-0); }
+    .turn-content-text { display: flex; flex-direction: column; gap: 0.6rem; line-height: 1.64; color: var(--text-0); font-variant-numeric: tabular-nums; }
     .turn-content-text .md-p { margin: 0; white-space: pre-wrap; line-height: 1.64; }
+    .turn-content-text .md-h2, .turn-content-text .md-h3 { margin: 0.35rem 0 0.05rem; font-size: 1rem; font-weight: 700; color: var(--text-0); line-height: 1.4; }
+    .turn-content-text .md-h4 { margin: 0.25rem 0 0; font-size: 0.92rem; font-weight: 600; color: var(--text-1); line-height: 1.4; }
     .turn-content-text .md-list { margin: 0.15rem 0; padding-inline-start: 1.45rem; display: flex; flex-direction: column; gap: 0.42rem; max-width: 70ch; }
     .turn-content-text .md-list li { margin: 0; padding-inline-start: 0.15rem; line-height: 1.58; color: var(--text-0); }
     .turn-content-text .md-list li::marker { color: var(--ssra-blue-bright); font-weight: 700; }
     .turn-content-text .md-ol { list-style-type: decimal; }
-    .turn-content-text .md-inline-code { padding: 0.12em 0.38em; background: var(--surface-2); border: 1px solid var(--border-1); border-radius: 5px; font-family: var(--font-mono); font-size: 0.86em; color: var(--ssra-blue-bright); }
-    .turn-content-text .md-link { color: var(--ssra-blue-bright); font-weight: 600; text-decoration: underline; text-decoration-color: rgba(0, 93, 180, 0.4); text-underline-offset: 2px; }
+    .turn-content-text .md-inline-code { padding: 0.12em 0.38em; background: var(--surface-2); border: 1px solid var(--border-1); border-radius: 5px; font-family: var(--font-mono); font-size: 0.86em; color: var(--ssra-blue-bright); unicode-bidi: isolate; }
+    .turn-content-text .md-link { color: var(--ssra-blue-bright); font-weight: 600; text-decoration: underline; text-decoration-color: rgba(0, 93, 180, 0.4); text-underline-offset: 2px; unicode-bidi: isolate; }
     .turn-content-text .md-link:hover { color: var(--ssra-green); text-decoration-color: currentColor; }
+    .turn-content-text .md-blockquote { margin: 0.2rem 0; padding: 0.5rem 0.85rem; border-inline-start: 3px solid var(--ssra-blue-bright); background: var(--surface-1); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; color: var(--text-1); font-style: italic; }
     .turn-content-text .md-callout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.45rem; align-items: baseline; margin: 0.2rem 0 0; padding: 0.65rem 0.85rem; background: var(--surface-1); border: 1px solid var(--border-1); border-inline-start: 3.5px solid var(--ssra-green); border-radius: var(--radius-sm); font-size: 0.88rem; line-height: 1.55; color: var(--text-1); }
     .turn-content-text .md-callout strong { color: var(--ssra-green); font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
     .turn-content-text .md-callout-warning, .turn-content-text .md-callout-caution, .turn-content-text .md-callout-important { border-inline-start-color: var(--warning); }
     .turn-content-text .md-callout-warning strong, .turn-content-text .md-callout-caution strong, .turn-content-text .md-callout-important strong { color: var(--warning); }
+    @media (forced-colors: active) {
+      .turn-content-text .md-callout, .turn-content-text .md-blockquote { border: 1px solid CanvasText; border-inline-start-width: 4px; }
+    }
     .bubble, .landing-chip-text, .citation-pill, .gen-ui-card p, .gen-kv dd, .locale-notice, .composer-disclosure { overflow-wrap: anywhere; }
     .rail-empty-hint { padding: 0.75rem; font-size: 0.78rem; color: #FFFFFF; }
     :focus-visible { outline: 3px solid #005DB4; outline-offset: 2px; }
@@ -2093,6 +2099,21 @@ function renderPwaShellHtml(locale, nonce) {
 
       function renderInlineAnswerHtml(rawText) {
         let html = escapeHtml(rawText);
+        const mdLinks = [];
+        html = html.replace(
+          /\\[([^\\]\\n]{1,120})\\]\\((https?:\\/\\/[^)\\s<]+)\\)/gi,
+          (_, label, href) => {
+            const idx = mdLinks.length;
+            mdLinks.push(
+              '<a class="md-link" dir="ltr" href="' +
+                href +
+                '" target="_blank" rel="noopener noreferrer">' +
+                label +
+                "</a>",
+            );
+            return "\\u0000MDLINK_" + idx + "\\u0000";
+          },
+        );
         html = html
           .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
           .replace(/\\x60([^\\x60]+)\\x60/g, '<code class="md-inline-code">$1</code>')
@@ -2108,15 +2129,15 @@ function renderPwaShellHtml(locale, nonce) {
             const trail = trailMatch ? trailMatch[0] : "";
             if (!clean) return match;
             if (clean.includes("@") && !/^https?:/i.test(clean)) {
-              return '<a class="md-link" href="mailto:' + clean + '">' + clean + "</a>" + trail;
+              return '<a class="md-link" dir="ltr" href="mailto:' + clean + '">' + clean + "</a>" + trail;
             }
             if (clean.startsWith("+211")) {
               const digits = clean.replace(/[\\s-]/g, "");
-              return '<a class="md-link" href="tel:' + digits + '">' + clean + "</a>" + trail;
+              return '<a class="md-link" dir="ltr" href="tel:' + digits + '">' + clean + "</a>" + trail;
             }
             const href = /^https?:\\/\\//i.test(clean) ? clean : "https://" + clean;
             return (
-              '<a class="md-link" href="' +
+              '<a class="md-link" dir="ltr" href="' +
               href +
               '" target="_blank" rel="noopener noreferrer">' +
               clean +
@@ -2125,6 +2146,9 @@ function renderPwaShellHtml(locale, nonce) {
             );
           },
         );
+        if (mdLinks.length > 0) {
+          html = html.replace(/\\u0000MDLINK_(\\d+)\\u0000/g, (_, idx) => mdLinks[Number(idx)] || "");
+        }
         return html;
       }
 
@@ -2167,14 +2191,19 @@ function renderPwaShellHtml(locale, nonce) {
         }
         const lead = text.slice(0, found[0].start).trim();
         const items = [];
+        let trailingPara = null;
         let trailingCallout = null;
         for (let i = 0; i < found.length; i += 1) {
           const stop = i + 1 < found.length ? found[i + 1].start : text.length;
           let item = text.slice(found[i].end, stop).trim();
           if (i + 1 < found.length) {
-            item = item.replace(/(?<![;؛])[;؛]+$/, ".").replace(/(?<![,،])[,،]+$/, "").trim();
+            item = item
+              .replace(/(?:[,;،؛][ \\t]+)?\\band$/i, "")
+              .replace(/(?<![;؛])[;؛]+$/, ".")
+              .replace(/(?<![,،])[,،]+$/, "")
+              .trim();
           } else {
-            const calloutMarker = /\\b(Note|Important|Warning|Caution|Tip):[ \\t]+/i.exec(item);
+            const calloutMarker = /\\b(Note|Important|Warning|Caution|Tip|Summary):[ \\t]+/i.exec(item);
             if (calloutMarker && calloutMarker.index > 0) {
               const prefix = item.slice(0, calloutMarker.index).trimEnd();
               const suffix = item.slice(calloutMarker.index + calloutMarker[0].length).trim();
@@ -2183,11 +2212,20 @@ function renderPwaShellHtml(locale, nonce) {
                 trailingCallout = { kind: calloutMarker[1].toLowerCase(), label: calloutMarker[1], text: suffix };
               }
             }
+            const dotIdx = item.indexOf(". ");
+            if (dotIdx > 3 && dotIdx <= 95 && items.every((prev) => prev.length <= 95)) {
+              const firstClause = item.slice(0, dotIdx + 1).trim();
+              const restSentence = item.slice(dotIdx + 2).trim();
+              if (/^[A-Z\\u0600-\\u06FF]/.test(restSentence) && restSentence.length >= 20) {
+                item = firstClause;
+                trailingPara = restSentence;
+              }
+            }
           }
           if (!item) return null;
           items.push(item);
         }
-        return { lead, items, trailingCallout };
+        return { lead, items, trailingPara, trailingCallout };
       }
 
       function parseSemicolonEnumeration(rawText) {
@@ -2255,24 +2293,18 @@ function renderPwaShellHtml(locale, nonce) {
           .trim();
         if (!cleaned) return "";
         const blocksHtml = [];
-        const rawParas = cleaned.split(/\\n(?:[ \\t]*\\n)+/);
-        for (let pIdx = 0; pIdx < rawParas.length; pIdx += 1) {
-          const para = rawParas[pIdx].trim();
-          if (!para) continue;
-          const calloutMatch = /^(Note|Important|Warning|Caution|Tip):\\s+(.+)$/is.exec(para);
-          if (calloutMatch) {
-            const cKind = calloutMatch[1].toLowerCase();
-            blocksHtml.push(
-              '<aside class="md-callout md-callout-' +
-                escapeHtml(cKind) +
-                '"><strong>' +
-                escapeHtml(calloutMatch[1]) +
-                ':</strong> <span>' +
-                renderInlineAnswerHtml(calloutMatch[2].trim()) +
-                "</span></aside>",
-            );
-            continue;
-          }
+        const lines = cleaned.split("\\n");
+        const proseLines = [];
+        const lineHeadingRe = /^(#{1,4})[ \\t]+(.+)$/;
+        const lineCalloutRe = /^(Note|Important|Warning|Caution|Tip|Summary):[ \\t]+(.+)$/i;
+        const lineUlRe = /^(?:[-*+•])[ \\t]+(.+)$/;
+        const lineOlRe = /^(?:(?:Step|الخطوة|Khatwa|Dhöl|Dia|Daket|Di|Yoo)[ \\t]+)?(?:\\((\\d{1,2}|[٠-٩]{1,2})\\)|(\\d{1,2}|[٠-٩]{1,2})[.)])[ \\t]+(.+)$/i;
+
+        function flushProseLines() {
+          if (proseLines.length === 0) return;
+          const para = proseLines.join(" ").trim();
+          proseLines.length = 0;
+          if (!para) return;
           const proc = parseInlineNumberedProcedure(para);
           if (proc) {
             if (proc.lead) {
@@ -2283,6 +2315,9 @@ function renderPwaShellHtml(locale, nonce) {
                 proc.items.map((it) => "<li>" + renderInlineAnswerHtml(it) + "</li>").join("") +
                 "</ol>",
             );
+            if (proc.trailingPara) {
+              blocksHtml.push('<p class="md-p">' + renderInlineAnswerHtml(proc.trailingPara) + "</p>");
+            }
             if (proc.trailingCallout) {
               blocksHtml.push(
                 '<aside class="md-callout md-callout-' +
@@ -2294,7 +2329,7 @@ function renderPwaShellHtml(locale, nonce) {
                   "</span></aside>",
               );
             }
-            continue;
+            return;
           }
           const enumBlock = parseSemicolonEnumeration(para);
           if (enumBlock) {
@@ -2309,13 +2344,106 @@ function renderPwaShellHtml(locale, nonce) {
             if (enumBlock.trailingPara) {
               blocksHtml.push('<p class="md-p">' + renderInlineAnswerHtml(enumBlock.trailingPara) + "</p>");
             }
-            continue;
+            return;
           }
           const subParas = splitLongParagraphSafe(para);
           for (let sIdx = 0; sIdx < subParas.length; sIdx += 1) {
             blocksHtml.push('<p class="md-p">' + renderInlineAnswerHtml(subParas[sIdx]) + "</p>");
           }
         }
+
+        let lIdx = 0;
+        while (lIdx < lines.length) {
+          const line = (lines[lIdx] || "").trim();
+          if (!line) {
+            flushProseLines();
+            lIdx += 1;
+            continue;
+          }
+          const hMatch = lineHeadingRe.exec(line);
+          if (hMatch) {
+            flushProseLines();
+            const hTag = hMatch[1].length >= 4 ? "h4" : "h3";
+            blocksHtml.push(
+              "<" + hTag + ' class="md-' + hTag + '">' + renderInlineAnswerHtml(hMatch[2].trim()) + "</" + hTag + ">",
+            );
+            lIdx += 1;
+            continue;
+          }
+          const cMatch = lineCalloutRe.exec(line);
+          if (cMatch) {
+            flushProseLines();
+            const cKind = cMatch[1].toLowerCase();
+            blocksHtml.push(
+              '<aside class="md-callout md-callout-' +
+                escapeHtml(cKind) +
+                '"><strong>' +
+                escapeHtml(cMatch[1]) +
+                ':</strong> <span>' +
+                renderInlineAnswerHtml(cMatch[2].trim()) +
+                "</span></aside>",
+            );
+            lIdx += 1;
+            continue;
+          }
+          if (line.startsWith(">")) {
+            flushProseLines();
+            const qParts = [];
+            while (lIdx < lines.length) {
+              const qLine = (lines[lIdx] || "").trim();
+              if (!qLine.startsWith(">")) break;
+              const qBody = qLine.replace(/^>[ \\t]*/, "").trim();
+              if (qBody) qParts.push(qBody);
+              lIdx += 1;
+            }
+            if (qParts.length > 0) {
+              blocksHtml.push('<blockquote class="md-blockquote">' + renderInlineAnswerHtml(qParts.join(" ")) + "</blockquote>");
+            }
+            continue;
+          }
+          const ulMatch = lineUlRe.exec(line);
+          if (ulMatch) {
+            flushProseLines();
+            const ulItems = [];
+            while (lIdx < lines.length) {
+              const m = lineUlRe.exec((lines[lIdx] || "").trim());
+              if (!m) break;
+              ulItems.push(m[1].trim());
+              lIdx += 1;
+            }
+            blocksHtml.push(
+              '<ul class="md-list">' +
+                ulItems.map((it) => "<li>" + renderInlineAnswerHtml(it) + "</li>").join("") +
+                "</ul>",
+            );
+            continue;
+          }
+          const olMatch = lineOlRe.exec(line);
+          if (olMatch) {
+            flushProseLines();
+            const olItems = [];
+            while (lIdx < lines.length) {
+              const m = lineOlRe.exec((lines[lIdx] || "").trim());
+              if (!m) break;
+              olItems.push(
+                m[3]
+                  .replace(/(?:[,;،؛][ \\t]+)?\\band$/i, "")
+                  .replace(/(?<![;؛])[;؛]+$/, ".")
+                  .trim(),
+              );
+              lIdx += 1;
+            }
+            blocksHtml.push(
+              '<ol class="md-list md-ol">' +
+                olItems.map((it) => "<li>" + renderInlineAnswerHtml(it) + "</li>").join("") +
+                "</ol>",
+            );
+            continue;
+          }
+          proseLines.push(line);
+          lIdx += 1;
+        }
+        flushProseLines();
         return blocksHtml.join("");
       }
 
