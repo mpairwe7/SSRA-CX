@@ -3,6 +3,11 @@
 // Usage: LIVE_WEB_URL=https://<public-host> LIVE_CONSOLE_URL=http://127.0.0.1:3034 node tools/live_frontend_regression.mjs
 import { createRequire } from "node:module";
 
+// Guard against NFS-backed TMPDIR (/mnt/*) hanging Chromium UNIX domain sockets
+if (!process.env.TMPDIR || process.env.TMPDIR.startsWith("/mnt/")) {
+  process.env.TMPDIR = "/tmp";
+}
+
 const require = createRequire(new URL("../package.json", import.meta.url));
 const { chromium, request: pwRequest } = require("@playwright/test");
 

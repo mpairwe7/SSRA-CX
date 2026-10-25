@@ -233,6 +233,7 @@ services:
       context: ../..
       dockerfile: services/api/Dockerfile
     container_name: ssra-api
+    init: true
     command:
       - uvicorn
       - ssra_api.main:app
@@ -241,6 +242,8 @@ services:
       - --port
       - "8000"
       - --no-access-log
+      - --timeout-graceful-shutdown
+      - "10"
       - --reload
       - --reload-dir
       - /app/libs
@@ -283,6 +286,7 @@ services:
       context: ../..
       dockerfile: services/agent-runtime/Dockerfile
     container_name: ssra-agent-runtime
+    init: true
     command:
       - uvicorn
       - ssra_runtime.main:app
@@ -291,6 +295,8 @@ services:
       - --port
       - "8001"
       - --no-access-log
+      - --timeout-graceful-shutdown
+      - "10"
       - --reload
       - --reload-dir
       - /app/libs
@@ -361,7 +367,12 @@ services:
         INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
         INTERNAL_RUNTIME_URL: ${INTERNAL_RUNTIME_URL:-http://ssra-agent-runtime:8001}
     container_name: ssra-frontend
-    command: ["node", "--watch", "apps/web/server.js"]
+    command:
+      - node
+      - --watch
+      - --watch-path=/app/apps/web
+      - --watch-path=/app/packages
+      - apps/web/server.js
     init: true
     read_only: true
     tmpfs:
@@ -392,7 +403,12 @@ services:
       args:
         INTERNAL_API_URL: ${INTERNAL_API_URL:-http://ssra-api:8000}
     container_name: ssra-console
-    command: ["node", "--watch", "apps/console/server.js"]
+    command:
+      - node
+      - --watch
+      - --watch-path=/app/apps/console
+      - --watch-path=/app/packages
+      - apps/console/server.js
     init: true
     read_only: true
     tmpfs:

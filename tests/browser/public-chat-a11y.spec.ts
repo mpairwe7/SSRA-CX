@@ -150,6 +150,10 @@ test("the offline status meets 4.5:1 contrast in the light theme", async ({ brow
     const effectiveBg = [0, 1, 2].map((i) => (colors.bg[i] ?? 0) * alpha + (colors.page[i] ?? 255) * (1 - alpha));
     const [light, dark] = [relativeLuminance(colors.fg), relativeLuminance(effectiveBg)].sort((a, b) => b - a);
     expect(((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05)).toBeGreaterThanOrEqual(4.5);
+    await expect(page.locator("#chat-announcer")).toContainText("Offline");
+    await context.setOffline(false);
+    await expect(badge).toBeHidden();
+    await expect(page.locator("#chat-announcer")).toHaveText("Online");
   } finally {
     await context.setOffline(false);
     await context.close();
