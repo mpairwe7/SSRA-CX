@@ -1881,7 +1881,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
                 window.history.replaceState({}, "", "/signin/callback");
               } catch {}
             }
-            const cleanIss = iss ? iss.trim().replace(/\\/+$/, "") : null;
+            const cleanIss = iss;
             const expectedIss = "https://sso.ssra.gov.ss/realms/ssra";
             if (err) {
               lastCallbackOutcome = {
@@ -1898,7 +1898,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
                 ok: false,
                 text: "State mismatch — this sign-in did not start in this browser tab. Start again from /signin.",
               };
-            } else if (cleanIss !== null && !timingSafeEqualStr(cleanIss, expectedIss)) {
+            } else if (!cleanIss || !timingSafeEqualStr(cleanIss, expectedIss)) {
               lastCallbackOutcome = {
                 ok: false,
                 text: "Issuer mismatch (RFC 9207) — callback issuer does not match the configured SSRA Keycloak realm.",
@@ -1925,6 +1925,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       }
 
       function renderCurrentRoute() {
+        if (state.route !== "/signin/callback") {
+          lastCallbackOutcome = null;
+        }
         const isAuthRoute = state.route === "/signin" || state.route === "/signup" || state.route === "/signin/callback";
         if (!isAuthRoute) {
           const matchedDest = DESTINATIONS.find((destination) => destination.href === state.route);

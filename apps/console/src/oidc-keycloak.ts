@@ -81,7 +81,7 @@ export function looksLikeJwt(token: string): boolean {
   );
 }
 
-const PKCE_CHALLENGE_B64URL_RE = /^[A-Za-z0-9_-]{43,128}$/;
+const PKCE_CHALLENGE_B64URL_RE = /^[A-Za-z0-9_-]{43}$/;
 const PKCE_VERIFIER_RFC7636_RE = /^[A-Za-z0-9._~-]{43,128}$/;
 const OPAQUE_TOKEN_NO_SPACE_RE = /^[\x21-\x7E]{32,256}$/;
 
@@ -268,7 +268,7 @@ export function buildKeycloakAuthorizationUrl(params: BuildKeycloakAuthUrlParams
   const cleanChallenge = (params.codeChallenge || "").trim();
   if (!PKCE_CHALLENGE_B64URL_RE.test(cleanChallenge)) {
     throw new Error(
-      "PKCE S256 code_challenge must be 43..128 base64url characters without padding",
+      "PKCE S256 code_challenge must be exactly 43 base64url characters without padding",
     );
   }
   const cleanState = (params.state || "").trim();
@@ -408,22 +408,17 @@ export function validateOidcCallbackParams(
       allowedDestinations: [],
     };
   }
-  if (input.iss !== undefined && input.iss !== null) {
-    const cleanIss = input.iss.trim().replace(/\/+$/, "");
-    const expectedIss = (input.expectedIssuer ?? KEYCLOAK_CONSOLE_OIDC_CONFIG.issuer)
-      .trim()
-      .replace(/\/+$/, "");
-    if (!cleanIss || !timingSafeEqualStrings(cleanIss, expectedIss)) {
-      return {
-        valid: false,
-        phase: "error",
-        errorReason: "RFC9207_ISSUER_MISMATCH",
-        detailMessage:
-          "Issuer mismatch (RFC 9207) — callback issuer does not match the configured SSRA Keycloak realm.",
-        targetPath: "/signin",
-        allowedDestinations: [],
-      };
-    }
+  const expectedIss = input.expectedIssuer ?? KEYCLOAK_CONSOLE_OIDC_CONFIG.issuer;
+  if (!input.iss || !timingSafeEqualStrings(input.iss, expectedIss)) {
+    return {
+      valid: false,
+      phase: "error",
+      errorReason: "RFC9207_ISSUER_MISMATCH",
+      detailMessage:
+        "Issuer mismatch (RFC 9207) — callback issuer does not match the configured SSRA Keycloak realm.",
+      targetPath: "/signin",
+      allowedDestinations: [],
+    };
   }
   const verifier = input.pkceVerifier?.trim() ?? "";
   if (!PKCE_VERIFIER_RFC7636_RE.test(verifier)) {

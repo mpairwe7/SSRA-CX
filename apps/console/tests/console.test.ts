@@ -1031,6 +1031,7 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
       state: "s".repeat(32),
       expectedState: "s".repeat(32),
       pkceVerifier: "v".repeat(64),
+      iss: "https://sso.ssra.gov.ss/realms/ssra",
       resolvedRole: "ssra_auditor",
     });
     expect(cbAuditor.valid).toBe(true);
@@ -1050,7 +1051,7 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(timingSafeEqualStrings("abc123", "abc124")).toBe(false);
     expect(timingSafeEqualStrings("short", "longer_string")).toBe(false);
 
-    // RFC 9207 OAuth Mix-Up Attack detection on callback iss parameter
+    // RFC 9207 OAuth Mix-Up Attack detection on callback iss parameter (mandatory & exact match)
     expect(
       validateOidcCallbackParams({
         code: "auth_code_1",
@@ -1067,7 +1068,26 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
         state: "s".repeat(32),
         expectedState: "s".repeat(32),
         pkceVerifier: "v".repeat(64),
+      }).errorReason,
+    ).toBe("RFC9207_ISSUER_MISMATCH");
+
+    expect(
+      validateOidcCallbackParams({
+        code: "auth_code_1",
+        state: "s".repeat(32),
+        expectedState: "s".repeat(32),
+        pkceVerifier: "v".repeat(64),
         iss: "https://sso.ssra.gov.ss/realms/ssra/",
+      }).errorReason,
+    ).toBe("RFC9207_ISSUER_MISMATCH");
+
+    expect(
+      validateOidcCallbackParams({
+        code: "auth_code_1",
+        state: "s".repeat(32),
+        expectedState: "s".repeat(32),
+        pkceVerifier: "v".repeat(64),
+        iss: "https://sso.ssra.gov.ss/realms/ssra",
       }).valid,
     ).toBe(true);
     expect(

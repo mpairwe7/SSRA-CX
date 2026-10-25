@@ -23,13 +23,31 @@ const ALLOWED_FONT_FILES = new Set([
   "IBMPlexMono-Regular.woff2",
 ]);
 const FONT_CACHE = new Map();
-for (const fontName of ALLOWED_FONT_FILES) {
+function getFontAsset(fontName) {
+  if (!ALLOWED_FONT_FILES.has(fontName)) return null;
   const fontPath = path.join(FONTS_DIR, fontName);
-  if (fs.existsSync(fontPath)) {
+  try {
+    const stat = fs.statSync(fontPath);
+    const cached = FONT_CACHE.get(fontName);
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      return cached;
+    }
     const buffer = fs.readFileSync(fontPath);
     const etag = `"${crypto.createHash("sha256").update(buffer).digest("hex").slice(0, 32)}"`;
-    FONT_CACHE.set(fontName, { buffer, etag, byteLength: String(buffer.byteLength) });
+    const entry = {
+      buffer,
+      etag,
+      byteLength: String(buffer.byteLength),
+      mtimeMs: stat.mtimeMs,
+    };
+    FONT_CACHE.set(fontName, entry);
+    return entry;
+  } catch {
+    return FONT_CACHE.get(fontName) ?? null;
   }
+}
+for (const fontName of ALLOWED_FONT_FILES) {
+  getFontAsset(fontName);
 }
 
 const PORT = Number.parseInt(process.env.PORT ?? "3001", 10);
@@ -195,7 +213,7 @@ const server = http.createServer(async (req, res) => {
 
   if (isGetOrHead && pathname.startsWith("/fonts/")) {
     const fontName = pathname.slice("/fonts/".length);
-    const cached = FONT_CACHE.get(fontName);
+    const cached = getFontAsset(fontName);
     if (cached) {
       const fontHeaders = {
         ...secHeaders,
@@ -257,31 +275,54 @@ const server = http.createServer(async (req, res) => {
       }
       const hdr = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf-8"));
       const pld = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
-      const verifyKey = process.env.KEYCLOAK_LOGOUT_VERIFY_KEY ?? "";
-      const expectedSig = verifyKey
-        ? crypto.createHmac("sha256", verifyKey).update(`${parts[0]}.${parts[1]}`).digest()
-        : Buffer.alloc(0);
+      const signingInput = Buffer.from(`${parts[0]}.${parts[1]}`, "utf-8");
       const actualSig = Buffer.from(parts[2], "base64url");
-      const sigOk =
-        Boolean(verifyKey) &&
-        expectedSig.length === actualSig.length &&
-        crypto.timingSafeEqual(expectedSig, actualSig);
+      const publicKeyPem = process.env.KEYCLOAK_LOGOUT_PUBLIC_KEY ?? "";
+      const verifyKey = process.env.KEYCLOAK_LOGOUT_VERIFY_KEY ?? "";
+      let sigOk = false;
+      if (publicKeyPem && ["ES256", "RS256", "PS256", "EdDSA"].includes(hdr?.alg)) {
+        if (hdr.alg === "EdDSA") {
+          sigOk = crypto.verify(null, signingInput, publicKeyPem, actualSig);
+        } else if (hdr.alg === "ES256") {
+          sigOk = crypto.verify(
+            "sha256",
+            signingInput,
+            { key: publicKeyPem, dsaEncoding: "ieee-p1363" },
+            actualSig,
+          );
+        } else if (hdr.alg === "PS256") {
+          sigOk = crypto.verify(
+            "sha256",
+            signingInput,
+            {
+              key: publicKeyPem,
+              padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+              saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
+            },
+            actualSig,
+          );
+        } else {
+          sigOk = crypto.verify("sha256", signingInput, publicKeyPem, actualSig);
+        }
+      } else if (verifyKey && ["ES256", "RS256", "PS256", "EdDSA"].includes(hdr?.alg)) {
+        const expectedSig = crypto.createHmac("sha256", verifyKey).update(signingInput).digest();
+        sigOk =
+          expectedSig.length === actualSig.length && crypto.timingSafeEqual(expectedSig, actualSig);
+      }
       const nowSec = Math.floor(Date.now() / 1000);
-      if (
-        !sigOk ||
-        !["ES256", "RS256", "PS256", "EdDSA"].includes(hdr?.alg) ||
-        pld?.iss !== "https://sso.ssra.gov.ss/realms/ssra" ||
-        pld?.aud !== "ssra-staff-console" ||
-        pld?.nonce !== undefined ||
-        typeof pld?.jti !== "string" ||
-        typeof pld?.iat !== "number" ||
-        typeof pld?.exp !== "number" ||
-        nowSec > pld.exp ||
-        Math.abs(nowSec - pld.iat) > 120 ||
-        !pld?.events?.["http://schemas.openid.net/event/backchannel-logout"] ||
-        (!pld?.sid && !pld?.sub) ||
-        !consumeLogoutJti(pld.jti, nowSec, pld.exp)
-      ) {
+      const claimsOk =
+        sigOk &&
+        pld?.iss === "https://sso.ssra.gov.ss/realms/ssra" &&
+        pld?.aud === "ssra-staff-console" &&
+        pld?.nonce === undefined &&
+        typeof pld?.jti === "string" &&
+        typeof pld?.iat === "number" &&
+        typeof pld?.exp === "number" &&
+        nowSec <= pld.exp &&
+        Math.abs(nowSec - pld.iat) <= 120 &&
+        Boolean(pld?.events?.["http://schemas.openid.net/event/backchannel-logout"]) &&
+        Boolean(pld?.sid || pld?.sub);
+      if (!claimsOk || !consumeLogoutJti(pld.jti, nowSec, pld.exp)) {
         res.writeHead(400, {
           "Content-Type": "application/json",
           "Cache-Control": "no-store",

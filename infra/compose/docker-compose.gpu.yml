@@ -326,6 +326,28 @@ services:
       - /app/services/voice/src
       - --reload-dir
       - /app/services/workers/src
+      - --reload-dir
+      - /app/mcp-servers/knowledge/src
+      - --reload-dir
+      - /app/mcp-servers/tax-facts/src
+      - --reload-dir
+      - /app/mcp-servers/official-channels/src
+      - --reload-dir
+      - /app/mcp-servers/taxpayer/src
+      - --reload-dir
+      - /app/mcp-servers/ledger/src
+      - --reload-dir
+      - /app/mcp-servers/payments-info/src
+      - --reload-dir
+      - /app/mcp-servers/tcc/src
+      - --reload-dir
+      - /app/mcp-servers/customs/src
+      - --reload-dir
+      - /app/mcp-servers/cases/src
+      - --reload-dir
+      - /app/mcp-servers/appointments/src
+      - --reload-dir
+      - /app/mcp-servers/notifications/src
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m

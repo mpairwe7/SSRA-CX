@@ -32,13 +32,31 @@ const ALLOWED_FONT_FILES = new Set([
   "IBMPlexMono-Regular.woff2",
 ]);
 const FONT_CACHE = new Map();
-for (const fontName of ALLOWED_FONT_FILES) {
+function getFontAsset(fontName) {
+  if (!ALLOWED_FONT_FILES.has(fontName)) return null;
   const fontPath = path.join(FONTS_DIR, fontName);
-  if (fs.existsSync(fontPath)) {
+  try {
+    const stat = fs.statSync(fontPath);
+    const cached = FONT_CACHE.get(fontName);
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      return cached;
+    }
     const buffer = fs.readFileSync(fontPath);
     const etag = `"${crypto.createHash("sha256").update(buffer).digest("hex").slice(0, 32)}"`;
-    FONT_CACHE.set(fontName, { buffer, etag, byteLength: String(buffer.byteLength) });
+    const entry = {
+      buffer,
+      etag,
+      byteLength: String(buffer.byteLength),
+      mtimeMs: stat.mtimeMs,
+    };
+    FONT_CACHE.set(fontName, entry);
+    return entry;
+  } catch {
+    return FONT_CACHE.get(fontName) ?? null;
   }
+}
+for (const fontName of ALLOWED_FONT_FILES) {
+  getFontAsset(fontName);
 }
 const SW_PATH = path.join(__dirname, "public", "sw.js");
 let cachedSwContent = "self.addEventListener('install', () => self.skipWaiting());";
@@ -5357,7 +5375,7 @@ const server = http.createServer(async (req, res) => {
 
   if (isGetOrHead && pathname.startsWith("/fonts/")) {
     const fontName = pathname.slice("/fonts/".length);
-    const cached = FONT_CACHE.get(fontName);
+    const cached = getFontAsset(fontName);
     if (cached) {
       const fontHeaders = {
         ...secHeaders,
