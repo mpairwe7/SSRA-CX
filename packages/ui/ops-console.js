@@ -1654,6 +1654,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         : null;
       function setSafeHtml(el, htmlStr) {
         if (!el) return;
+        if (el === mainEl) el.removeAttribute("data-auth-wired");
         el.innerHTML = ttPolicy ? ttPolicy.createHTML(htmlStr) : htmlStr;
       }
 
@@ -1773,19 +1774,21 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         if (!mainEl) return;
         const roleRadios = Array.from(mainEl.querySelectorAll('input[name="signin-role-target"]'));
         roleRadios.forEach((radio) => {
-          if (radio.value === state.role) {
-            radio.checked = true;
-          }
+          radio.checked = radio.value === state.role;
           radio.closest(".role-opt")?.classList.toggle("active", radio.checked);
-          radio.addEventListener("change", () => {
-            roleRadios.forEach((r) => r.closest(".role-opt")?.classList.toggle("active", r.checked));
-            if (ROLE_META[radio.value]) {
-              state.role = radio.value;
-              writeUiPreference("ssra-ops-preview-persona", state.role);
-              applyChrome();
-            }
-          });
         });
+        if (!mainEl.hasAttribute("data-auth-wired")) {
+          mainEl.setAttribute("data-auth-wired", "true");
+          roleRadios.forEach((radio) => {
+            radio.addEventListener("change", () => {
+              roleRadios.forEach((r) => r.closest(".role-opt")?.classList.toggle("active", r.checked));
+              if (ROLE_META[radio.value]) {
+                state.role = radio.value;
+                writeUiPreference("ssra-ops-preview-persona", state.role);
+                applyChrome();
+              }
+            });
+          });
 
         const startKeycloakRedirect = async (mode, promptVal) => {
           const verifier = randomHex(32);
@@ -1848,15 +1851,16 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           });
         };
 
-        document.getElementById("keycloak-signin-btn")?.addEventListener("click", () => {
-          runKeycloakRedirect("signin", undefined);
-        });
-        document.getElementById("keycloak-switch-account-btn")?.addEventListener("click", () => {
-          runKeycloakRedirect("signin", "login");
-        });
-        document.getElementById("keycloak-signup-btn")?.addEventListener("click", () => {
-          runKeycloakRedirect("signup", undefined);
-        });
+          document.getElementById("keycloak-signin-btn")?.addEventListener("click", () => {
+            runKeycloakRedirect("signin", undefined);
+          });
+          document.getElementById("keycloak-switch-account-btn")?.addEventListener("click", () => {
+            runKeycloakRedirect("signin", "login");
+          });
+          document.getElementById("keycloak-signup-btn")?.addEventListener("click", () => {
+            runKeycloakRedirect("signup", undefined);
+          });
+        }
 
         if (state.route === "/signin/callback") {
           const cbBanner = document.getElementById("callback-status-banner");
@@ -1943,19 +1947,25 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         mainEl.setAttribute("data-route", state.route);
         if (state.route === "/signin") {
           document.title = "SSRA Operations Console Preview — Sign in";
-          setSafeHtml(mainEl, buildSignInHtml());
+          if (!document.getElementById("keycloak-signin-btn")) {
+            setSafeHtml(mainEl, buildSignInHtml());
+          }
           wireAuthViewInteractions();
           return;
         }
         if (state.route === "/signup") {
           document.title = "SSRA Operations Console Preview — Create an account";
-          setSafeHtml(mainEl, buildSignUpHtml());
+          if (!document.getElementById("keycloak-signup-btn")) {
+            setSafeHtml(mainEl, buildSignUpHtml());
+          }
           wireAuthViewInteractions();
           return;
         }
         if (state.route === "/signin/callback") {
           document.title = "SSRA Operations Console Preview — Signing you in";
-          setSafeHtml(mainEl, buildCallbackHtml());
+          if (!document.getElementById("callback-status-banner")) {
+            setSafeHtml(mainEl, buildCallbackHtml());
+          }
           wireAuthViewInteractions();
           return;
         }

@@ -64,6 +64,8 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
   // Sign-in (/signin), Sign-up (/signup), and Callback (/signin/callback) Keycloak 26 OIDC + Passkey flows
   await page.locator("#ops-header-signin-link").click();
   await expect(main.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
+  await expect(main.locator(".role-opt.active")).toHaveCount(1);
+  await expect(main.locator('[data-role-card="ssra_staff"]')).toHaveClass(/active/);
   await page.getByTestId("keycloak-signin-btn").click();
   await expect(page.locator("#signin-status-banner")).toContainText(
     "https://sso.ssra.gov.ss/realms/ssra/protocol/openid-connect/auth",
