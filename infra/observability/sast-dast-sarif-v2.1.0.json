@@ -57,7 +57,7 @@
           },
           {
             "category": "SAST_PYTHON_AST",
-            "message": "Scanned 214 Python modules with import-alias resolution (SAST-PY-01..03: zero dangerous sinks, dynamic SQL expressions, or unbounded httpx calls).",
+            "message": "Scanned 217 Python modules with import-alias resolution (SAST-PY-01..03: zero dangerous sinks, dynamic SQL expressions, or unbounded httpx calls).",
             "ruleId": "SAST-PY-01",
             "status": "PASS"
           },
@@ -121,7 +121,7 @@
               "id": "SAST-PY-01",
               "name": "SAST_PYTHON_AST",
               "shortDescription": {
-                "text": "Scanned 214 Python modules with import-alias resolution (SAST-PY-01..03: zero dangerous sinks, dynamic SQL expressions, or unbounded httpx calls)."
+                "text": "Scanned 217 Python modules with import-alias resolution (SAST-PY-01..03: zero dangerous sinks, dynamic SQL expressions, or unbounded httpx calls)."
               }
             },
             {
