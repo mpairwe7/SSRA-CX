@@ -46,7 +46,7 @@ _NOISY_LOGGERS = ("httpx", "httpcore", "urllib3", "hpack", "multipart")
 
 _ARABIC_INDIC_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 _MAX_LOG_SCRUB_DEPTH = 8
-_LOG_BEARER_TOKEN_RE = re.compile(r"\b(Bearer)\s+[A-Za-z0-9._~+/=-]{12,}\b", re.IGNORECASE)
+_LOG_BEARER_TOKEN_RE = re.compile(r"\b(Bearer)\s+[A-Za-z0-9._~+/=-]{1,}\b", re.IGNORECASE)
 _LOG_PHONE_RE = re.compile(
     r"(?<!\w)(?:\+?211[\s-]?(?:\(0\)[\s-]?)?0?[19]\d{2}[\s-]?\d{3}[\s-]?\d{3}|"
     r"0[179]\d{2}[\s-]?\d{3}[\s-]?\d{3}|07\d{8})(?!\w)"
@@ -55,10 +55,39 @@ _LOG_TIN_RE = re.compile(r"\b(?:\d{9,12}|\d{3}[\s-]\d{3}[\s-]?\d{4})\b")
 _LOG_EMAIL_RE = re.compile(r"\b([A-Za-z0-9._%+-]{1,64})@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b")
 _LOG_OTP_RE = re.compile(r"\b(otp|passcode|verification\s+code)\s*[:=]?\s*\d{4,8}\b", re.IGNORECASE)
 _SENSITIVE_KEY_RE = re.compile(
-    r"(otp|passcode|password|secret|token|authorization|api[_-]?key|cookie)",
+    r"(?:^|[_-])(?:otp|passcode|password|secret|authorization|cookie|api[_-]?key|"
+    r"access[_-]?token|refresh[_-]?token|id[_-]?token|auth[_-]?token|bearer[_-]?token|"
+    r"client[_-]?secret|token)(?:$|[_-])",
     re.IGNORECASE,
 )
+_NON_SENSITIVE_METRIC_KEYS = frozenset(
+    {
+        "token_count",
+        "tokens",
+        "input_tokens",
+        "output_tokens",
+        "max_tokens",
+        "cached_tokens",
+        "cached_input_tokens",
+        "tokens_used",
+    }
+)
 _ALLOWED_OFFICIAL_EMAIL_DOMAINS = frozenset({"nra.gov.ss", "ssra.gov.ss", "etax.nra.gov.ss"})
+
+
+def _is_sensitive_key_value(key: str, value: Any) -> bool:
+    norm_key = str(key).strip().lower()
+    if (
+        norm_key in _NON_SENSITIVE_METRIC_KEYS
+        or norm_key.endswith("_tokens")
+        or norm_key.endswith("_count")
+    ):
+        return False
+    if not _SENSITIVE_KEY_RE.search(norm_key):
+        return False
+    if isinstance(value, bool):
+        return False
+    return isinstance(value, (str, bytes)) or ("otp" in norm_key or "passcode" in norm_key)
 
 
 def redact_log_pii_text(text: str) -> str:
@@ -88,7 +117,7 @@ def _scrub_value(value: Any, *, _depth: int = 0) -> Any:
     if isinstance(value, dict):
         return {
             k: "[REDACTED]"
-            if _SENSITIVE_KEY_RE.search(str(k))
+            if _is_sensitive_key_value(str(k), v)
             else _scrub_value(v, _depth=_depth + 1)
             for k, v in value.items()
         }
@@ -162,7 +191,7 @@ class PIISanitizingFilter(logging.Filter):
                 setattr(
                     record,
                     key,
-                    "[REDACTED]" if _SENSITIVE_KEY_RE.search(key) else _scrub_value(value),
+                    "[REDACTED]" if _is_sensitive_key_value(key, value) else _scrub_value(value),
                 )
         if record.exc_info and not record.exc_text:
             record.exc_text = redact_log_pii_text(

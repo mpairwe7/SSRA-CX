@@ -544,7 +544,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         _record_runtime_turn_metrics(
             turn,
             elapsed_ms=(time.perf_counter() - started_sse) * 1000.0,
-            channel="sse",
+            channel=body.channel.value.lower(),
         )
         return StreamingResponse(
             stream_agui_events(turn, last_event_id=last_event_id),
