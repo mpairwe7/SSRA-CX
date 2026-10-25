@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 logger = logging.getLogger("ssra.observability")
 security_logger = logging.getLogger("ssra.security")
@@ -130,7 +130,10 @@ def _clean_label_value(value: Any) -> str:
 
 
 def _number(value: float) -> int | float:
-    return int(value) if float(value).is_integer() else round(value, 4)
+    fval = float(value)
+    if not math.isfinite(fval):
+        return 0.0
+    return int(fval) if fval.is_integer() else round(fval, 4)
 
 
 def bucket_quantile(q: float, buckets: list[tuple[float, float]], count: float) -> float:
@@ -215,6 +218,8 @@ class MetricsStore:
     ) -> None:
         """Observe a value in a cumulative histogram family."""
         try:
+            if isinstance(value, bool) or not math.isfinite(float(value)):
+                return
             label_keys = tuple(sorted((labels or {}).keys()))
             family = self._get_or_create_family("histogram", name, label_keys, buckets)
             if family is None:
@@ -239,6 +244,11 @@ class MetricsStore:
         additive: bool,
     ) -> None:
         try:
+            if isinstance(value, bool):
+                return
+            fval = float(value)
+            if not math.isfinite(fval) or (kind == "counter" and fval < 0.0):
+                return
             label_keys = tuple(sorted((labels or {}).keys()))
             family = self._get_or_create_family(kind, name, label_keys, None)
             if family is None:
@@ -246,9 +256,9 @@ class MetricsStore:
             values = self._resolve_label_values(name, family, labels or {})
             with self._lock:
                 if additive:
-                    family.scalars[values] = family.scalars.get(values, 0.0) + float(value)
+                    family.scalars[values] = family.scalars.get(values, 0.0) + fval
                 else:
-                    family.scalars[values] = float(value)
+                    family.scalars[values] = fval
         except Exception:
             self._warn_once(f"record:{name}", "Metric %s could not be recorded", name)
 
@@ -429,7 +439,15 @@ def _snapshot_key(full_name: str, label_names: tuple[str, ...], label_vals: tupl
     return f"{base}{{{inner}}}"
 
 
+_lifecycle_lock = Lock()
 _qdrant_lifecycle_observation: dict[str, int | float] | None = None
+
+
+def clear_qdrant_lifecycle_observation() -> None:
+    """Clear any recorded Qdrant lifecycle observation (used for deterministic test isolation)."""
+    global _qdrant_lifecycle_observation
+    with _lifecycle_lock:
+        _qdrant_lifecycle_observation = None
 
 
 def record_qdrant_lifecycle_observation(
@@ -447,28 +465,34 @@ def record_qdrant_lifecycle_observation(
 ) -> None:
     """Record a trusted Qdrant / KnowledgeSnapshot lifecycle observation with its observation timestamp."""
     global _qdrant_lifecycle_observation
-    _qdrant_lifecycle_observation = {
-        "ssra_qdrant_index_fresh": int(bool(index_fresh)),
-        "ssra_qdrant_index_drift": int(bool(index_drift)),
-        "ssra_qdrant_index_status_timestamp_seconds": round(float(observed_at_epoch_seconds), 1),
-        "ssra_qdrant_rebuild_failed": int(bool(rebuild_failed)),
-        "ssra_qdrant_rebuild_timestamp_seconds": round(float(rebuild_timestamp_seconds), 1),
-        "ssra_qdrant_backup_required": int(bool(backup_required)),
-        "ssra_qdrant_backup_failed": int(bool(backup_failed)),
-        "ssra_qdrant_backup_timestamp_seconds": round(float(backup_timestamp_seconds), 1),
-        "ssra_qdrant_restore_drill_failed": int(bool(restore_drill_failed)),
-        "ssra_qdrant_restore_drill_timestamp_seconds": round(
-            float(restore_drill_timestamp_seconds), 1
-        ),
-    }
+    obs_ts = float(observed_at_epoch_seconds)
+    if not math.isfinite(obs_ts) or obs_ts < 0.0:
+        raise ValueError("observed_at_epoch_seconds must be a finite non-negative timestamp")
+    with _lifecycle_lock:
+        _qdrant_lifecycle_observation = {
+            "ssra_qdrant_index_fresh": int(bool(index_fresh)),
+            "ssra_qdrant_index_drift": int(bool(index_drift)),
+            "ssra_qdrant_index_status_timestamp_seconds": round(obs_ts, 1),
+            "ssra_qdrant_rebuild_failed": int(bool(rebuild_failed)),
+            "ssra_qdrant_rebuild_timestamp_seconds": round(float(rebuild_timestamp_seconds), 1),
+            "ssra_qdrant_backup_required": int(bool(backup_required)),
+            "ssra_qdrant_backup_failed": int(bool(backup_failed)),
+            "ssra_qdrant_backup_timestamp_seconds": round(float(backup_timestamp_seconds), 1),
+            "ssra_qdrant_restore_drill_failed": int(bool(restore_drill_failed)),
+            "ssra_qdrant_restore_drill_timestamp_seconds": round(
+                float(restore_drill_timestamp_seconds), 1
+            ),
+        }
 
 
 def _index_lifecycle_prometheus_metrics() -> list[str]:
     """Render Qdrant / KnowledgeSnapshot lifecycle gauges only when a trusted observation has been recorded."""
-    if _qdrant_lifecycle_observation is None:
+    with _lifecycle_lock:
+        obs = dict(_qdrant_lifecycle_observation) if _qdrant_lifecycle_observation else None
+    if obs is None:
         return []
     lines: list[str] = []
-    for name, value in _qdrant_lifecycle_observation.items():
+    for name, value in obs.items():
         lines.append(f"# HELP {name} {_LIFECYCLE_HELP[name]}")
         lines.append(f"# TYPE {name} gauge")
         lines.append(f"{name} {value}")
@@ -676,6 +700,14 @@ class WebVital(BaseModel):
     route: str = Field("", max_length=200)
     navigation_type: str = Field("", max_length=32)
 
+    @model_validator(mode="after")
+    def _validate_vital_bounds(self) -> WebVital:
+        if not math.isfinite(self.value):
+            raise ValueError("WebVital value must be finite")
+        if self.name == "CLS" and self.value > 10.0:
+            raise ValueError("CLS value must be <= 10.0")
+        return self
+
 
 class WebVitalsBatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -695,9 +727,13 @@ class ClientError(BaseModel):
     route: str = Field("", max_length=200)
 
 
+_CTRL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
 def normalise_route(path: str) -> str:
     """Normalize a client pathname into a bounded metric label (`:id` folded, <= 3 segments, no query/hash)."""
-    clean = (path or "/").split("?", 1)[0].split("#", 1)[0] or "/"
+    sanitized = _CTRL_CHAR_RE.sub("", (path or "/").replace("\\", "/"))
+    clean = sanitized.split("?", 1)[0].split("#", 1)[0] or "/"
     if not clean.startswith("/"):
         clean = "/" + clean
     clean = _ID_SEGMENT_RE.sub("/:id", clean)

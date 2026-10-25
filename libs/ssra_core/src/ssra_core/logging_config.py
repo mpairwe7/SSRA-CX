@@ -44,6 +44,9 @@ _STANDARD_ATTRS = frozenset(
 }
 _NOISY_LOGGERS = ("httpx", "httpcore", "urllib3", "hpack", "multipart")
 
+_ARABIC_INDIC_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+_MAX_LOG_SCRUB_DEPTH = 8
+_LOG_BEARER_TOKEN_RE = re.compile(r"\b(Bearer)\s+[A-Za-z0-9._~+/=-]{12,}\b", re.IGNORECASE)
 _LOG_PHONE_RE = re.compile(
     r"(?<!\w)(?:\+?211[\s-]?(?:\(0\)[\s-]?)?0?[19]\d{2}[\s-]?\d{3}[\s-]?\d{3}|"
     r"0[179]\d{2}[\s-]?\d{3}[\s-]?\d{3}|07\d{8})(?!\w)"
@@ -59,7 +62,7 @@ _ALLOWED_OFFICIAL_EMAIL_DOMAINS = frozenset({"nra.gov.ss", "ssra.gov.ss", "etax.
 
 
 def redact_log_pii_text(text: str) -> str:
-    """Scrub taxpayer TINs, phone numbers, emails (preserving official SSRA/NRA domains), and OTPs from log text."""
+    """Scrub taxpayer TINs, phone numbers, emails (preserving official SSRA/NRA domains), OTPs, and Bearer tokens from log text."""
     if not text:
         return text
 
@@ -69,24 +72,32 @@ def redact_log_pii_text(text: str) -> str:
             return match.group(0)
         return "[REDACTED_EMAIL]"
 
-    scrubbed = _LOG_EMAIL_RE.sub(_email_repl, text)
+    normalized = text.translate(_ARABIC_INDIC_TRANS)
+    scrubbed = _LOG_BEARER_TOKEN_RE.sub(r"\1 [REDACTED_TOKEN]", normalized)
+    scrubbed = _LOG_EMAIL_RE.sub(_email_repl, scrubbed)
     scrubbed = _LOG_OTP_RE.sub(r"\1=[REDACTED_OTP]", scrubbed)
     scrubbed = _LOG_PHONE_RE.sub("[REDACTED_PHONE]", scrubbed)
     return _LOG_TIN_RE.sub("[REDACTED_TIN]", scrubbed)
 
 
-def _scrub_value(value: Any) -> Any:
+def _scrub_value(value: Any, *, _depth: int = 0) -> Any:
+    if _depth >= _MAX_LOG_SCRUB_DEPTH:
+        return "[TRUNCATED_DEPTH]"
     if isinstance(value, str):
         return redact_log_pii_text(value)
     if isinstance(value, dict):
         return {
-            k: "[REDACTED]" if _SENSITIVE_KEY_RE.search(str(k)) else _scrub_value(v)
+            k: "[REDACTED]"
+            if _SENSITIVE_KEY_RE.search(str(k))
+            else _scrub_value(v, _depth=_depth + 1)
             for k, v in value.items()
         }
     if isinstance(value, list):
-        return [_scrub_value(item) for item in value]
+        return [_scrub_value(item, _depth=_depth + 1) for item in value]
     if isinstance(value, tuple):
-        return tuple(_scrub_value(item) for item in value)
+        return tuple(_scrub_value(item, _depth=_depth + 1) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return [_scrub_value(item, _depth=_depth + 1) for item in sorted(value, key=str)]
     return value
 
 
@@ -143,7 +154,7 @@ class PIISanitizingFilter(logging.Filter):
             record.msg = redact_log_pii_text(record.msg)
         if record.args:
             if isinstance(record.args, dict):
-                record.args = {k: _scrub_value(v) for k, v in record.args.items()}
+                record.args = _scrub_value(record.args)
             elif isinstance(record.args, tuple):
                 record.args = tuple(_scrub_value(arg) for arg in record.args)
         for key, value in list(vars(record).items()):
