@@ -398,19 +398,19 @@ test("continuous voice conversation auto-advances across turns and filters speak
   await expect(langselBtn).toBeFocused();
   await expect(page.locator("#lang-auto-badge")).toBeVisible();
 
-  // Main chat composer voice mode button couples with auto-narrate, opens VoiceModeDock, and Escape cancels recording (useVoiceEscape).
+  // Main chat composer voice mode button couples with auto-narrate, replaces #ssra-chat-form with VoiceModeDock (page.tsx {voiceDock ?? <ChatInput />}), never opens Call Receptionist, and Escape exits.
   const voiceModeBtn = page.locator("#composer-voicemode-btn");
   await voiceModeBtn.click();
-  await expect(voiceModeBtn).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("#composer-recording-bar")).toBeVisible();
   await expect(page.locator("#voice-mode-dock")).toBeVisible();
+  await expect(page.locator("#ssra-chat-form")).toBeHidden();
+  await expect(page.locator("#call-modal-backdrop")).not.toHaveClass(/open/);
   await expect(page.locator("#voice-mode-dock")).toHaveAttribute("data-phase", "listening");
   await expect(page.locator("#voice-mode-dock")).toHaveAttribute("data-floor", "listening");
   await expect(page.locator("#voice-dock-primary")).toHaveAttribute("data-action", "send");
   await page.keyboard.press("Escape");
-  await expect(voiceModeBtn).toHaveAttribute("aria-pressed", "false");
-  await expect(page.locator("#composer-recording-bar")).toBeHidden();
   await expect(page.locator("#voice-mode-dock")).toBeHidden();
+  await expect(page.locator("#ssra-chat-form")).toBeVisible();
+  await expect(voiceModeBtn).toHaveAttribute("aria-pressed", "false");
 
   // Single primary circle slot transition: empty composer shows Auto Voice (#composer-voicemode-btn); typing transitions to Send (#ssra-chat-submit).
   const dictateBtn = page.locator('.composer-tools-right [data-testid="composer-mic"]');

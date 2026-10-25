@@ -1252,15 +1252,17 @@ function parseMarkdownTableRow(line: string): readonly string[] {
  * so both line-by-line Markdown and inline statutory rules/schedules/long prose are scannable.
  */
 export function parseStructuredAnswerBlocks(rawText: string): readonly StructuredAnswerBlock[] {
-  const cleaned = tidyStatutoryTypography(stripCitationMarkers(rawText)).trim();
-  if (!cleaned) return [];
+  const bounded = String(rawText ?? "").slice(0, MAX_STRUCTURED_TEXT_LEN);
+  if (!bounded.trim()) return [];
+  const cleanInlineLine = (s: string): string =>
+    tidyStatutoryTypography(stripCitationMarkers(s)).trim();
   const blocks: StructuredAnswerBlock[] = [];
-  const lines = cleaned.split("\n");
+  const lines = bounded.split("\n");
   const proseLines: string[] = [];
 
   const flushProse = () => {
     if (proseLines.length === 0) return;
-    const para = proseLines.join(" ").trim();
+    const para = cleanInlineLine(proseLines.join(" "));
     proseLines.length = 0;
     if (!para) return;
 
@@ -1320,7 +1322,14 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       continue;
     }
 
-    if (/^-{3,}$/.test(line)) {
+    const normLine = cleanInlineLine(rawLine);
+    if (!normLine) {
+      flushProse();
+      i += 1;
+      continue;
+    }
+
+    if (/^-{3,}$/.test(normLine)) {
       flushProse();
       blocks.push({ type: "hr" });
       i += 1;
@@ -1328,22 +1337,22 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
     }
 
     if (
-      isMarkdownTableRow(line) &&
+      isMarkdownTableRow(normLine) &&
       i + 1 < lines.length &&
       isMarkdownTableSeparator(lines[i + 1] ?? "")
     ) {
       flushProse();
-      const rows: (readonly string[])[] = [parseMarkdownTableRow(line)];
+      const rows: (readonly string[])[] = [parseMarkdownTableRow(normLine)];
       i += 2;
-      while (i < lines.length && isMarkdownTableRow(lines[i] ?? "")) {
-        rows.push(parseMarkdownTableRow(lines[i] ?? ""));
+      while (i < lines.length && isMarkdownTableRow(cleanInlineLine(lines[i] ?? ""))) {
+        rows.push(parseMarkdownTableRow(cleanInlineLine(lines[i] ?? "")));
         i += 1;
       }
       blocks.push({ type: "table", rows });
       continue;
     }
 
-    const headingMatch = LINE_HEADING_RE.exec(line);
+    const headingMatch = LINE_HEADING_RE.exec(normLine);
     if (headingMatch?.[1] && headingMatch[2]) {
       flushProse();
       blocks.push({
@@ -1355,7 +1364,7 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       continue;
     }
 
-    const calloutMatch = LINE_CALLOUT_RE.exec(line);
+    const calloutMatch = LINE_CALLOUT_RE.exec(normLine);
     if (calloutMatch?.[1] && calloutMatch[2]) {
       flushProse();
       blocks.push({
@@ -1367,11 +1376,11 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       continue;
     }
 
-    if (line.startsWith(">")) {
+    if (normLine.startsWith(">")) {
       flushProse();
       const quoteParts: string[] = [];
       while (i < lines.length) {
-        const qLine = (lines[i] ?? "").trim();
+        const qLine = cleanInlineLine(lines[i] ?? "");
         if (!qLine.startsWith(">")) break;
         const stripped = qLine.replace(/^>[ \t]*/, "").trim();
         if (stripped) quoteParts.push(stripped);
@@ -1383,20 +1392,20 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       continue;
     }
 
-    const ulMatch = LINE_UL_ITEM_RE.exec(line);
+    const ulMatch = LINE_UL_ITEM_RE.exec(normLine);
     if (ulMatch?.[1]) {
       flushProse();
       const items: string[] = [];
       while (i < lines.length) {
-        const curLine = (lines[i] ?? "").trim();
+        const curLine = cleanInlineLine(lines[i] ?? "");
         const m = LINE_UL_ITEM_RE.exec(curLine);
         if (m?.[1]) {
           items.push(m[1].trim());
           i += 1;
         } else if (!curLine) {
           let next = i + 1;
-          while (next < lines.length && !(lines[next] ?? "").trim()) next += 1;
-          if (next < lines.length && LINE_UL_ITEM_RE.test((lines[next] ?? "").trim())) {
+          while (next < lines.length && !cleanInlineLine(lines[next] ?? "")) next += 1;
+          if (next < lines.length && LINE_UL_ITEM_RE.test(cleanInlineLine(lines[next] ?? ""))) {
             i = next;
           } else {
             break;
@@ -1409,12 +1418,12 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       continue;
     }
 
-    const olMatch = LINE_OL_ITEM_RE.exec(line);
+    const olMatch = LINE_OL_ITEM_RE.exec(normLine);
     if (olMatch?.[3]) {
       flushProse();
       const rawItems: string[] = [];
       while (i < lines.length) {
-        const curLine = (lines[i] ?? "").trim();
+        const curLine = cleanInlineLine(lines[i] ?? "");
         const m = LINE_OL_ITEM_RE.exec(curLine);
         if (m?.[3]) {
           rawItems.push(
@@ -1426,8 +1435,8 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
           i += 1;
         } else if (!curLine) {
           let next = i + 1;
-          while (next < lines.length && !(lines[next] ?? "").trim()) next += 1;
-          if (next < lines.length && LINE_OL_ITEM_RE.test((lines[next] ?? "").trim())) {
+          while (next < lines.length && !cleanInlineLine(lines[next] ?? "")) next += 1;
+          if (next < lines.length && LINE_OL_ITEM_RE.test(cleanInlineLine(lines[next] ?? ""))) {
             i = next;
           } else {
             break;
@@ -1441,7 +1450,7 @@ export function parseStructuredAnswerBlocks(rawText: string): readonly Structure
       continue;
     }
 
-    proseLines.push(line);
+    proseLines.push(normLine);
     i += 1;
   }
   flushProse();

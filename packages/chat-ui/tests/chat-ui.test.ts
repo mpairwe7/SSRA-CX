@@ -1304,9 +1304,11 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     ).toBe("File on e-Tax — via Portal (https://etax.nra.gov.ss/).");
 
     const tableAndHrBlocks = parseStructuredAnswerBlocks(
-      "| Item | Requirement |\n| --- | --- |\n| TIN | Required |\n| Jinsia | Citizens |\n\n---\n\nDisclaimer text.\n\n```text\nETAX-01\n```\n\n1. First step\n\n2. Second step",
+      "| Item | Requirement |\n| --- | --- |\n| TIN | Required |\n| Jinsia | Citizens |\n\n---\n\nDisclaimer text.\n\n```text\n    ETAX-01\n```\n\n1. First step\n\n2. Second step",
     );
     expect(tableAndHrBlocks.map((b) => b.type)).toEqual(["table", "hr", "paragraph", "code", "ol"]);
+    const codeBlock = tableAndHrBlocks.find((b) => b.type === "code");
+    expect(codeBlock && "text" in codeBlock ? codeBlock.text : "").toBe("    ETAX-01");
 
     const parenCallBlocks = structureCallReceptionistBlocks(
       "Under Module 2: (1) Filing is free; (2) Log in with TIN and OTP.",
