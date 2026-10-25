@@ -4233,63 +4233,60 @@ def fuse_language_vote(
     return LanguageVote(probs=new_probs, top=best_lang, speech_s=vote.speech_s, text=vote.text)
 
 
-_VOICE_SWITCH_VERB_PREFIX = (
-    r"(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)"
-)
 _EXPLICIT_LANG_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "pga",
         re.compile(
-            rf"\b(?:{_VOICE_SWITCH_VERB_PREFIX}\s+(?:juba\s+arabic|arabi\s+juba)|atkalam\s+arabi\s+juba)\b|عربي\s+جوبا",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:juba\s+arabic|arabi\s+juba)|atkalam\s+arabi\s+juba)\b|^\s*(?:please\s+)?عربي\s+جوبا\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "ar",
         re.compile(
-            rf"\b{_VOICE_SWITCH_VERB_PREFIX}\s+arabic\b|تكلم\s+عربي|تحدث\s+بالعربية|باللغة\s+العربية",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+arabic|تكلم\s+عربي|تحدث\s+بالعربية|باللغة\s+العربية)\b",
             re.IGNORECASE,
         ),
     ),
     (
         "din",
         re.compile(
-            rf"\b(?:{_VOICE_SWITCH_VERB_PREFIX}\s+(?:dinka|thuongjang)|thuongjang|jam\s+ne\s+thuongjang)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:dinka|thuongjang)|jam\s+ne\s+thuongjang)\b|^\s*(?:please\s+)?thuongjang\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "nus",
         re.compile(
-            rf"\b(?:{_VOICE_SWITCH_VERB_PREFIX}\s+(?:nuer|thok\s+na+th)|thok\s+na+th|ruacni\s+thok\s+na+th)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:nuer|thok\s+na+th)|ruacni\s+thok\s+na+th)\b|^\s*(?:please\s+)?thok\s+na+th\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "bfa",
         re.compile(
-            rf"\b(?:{_VOICE_SWITCH_VERB_PREFIX}\s+bari|kutuk\s+na\s+bari|kulya\s+ko\s+bari)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+bari|kulya\s+ko\s+bari)\b|^\s*(?:please\s+)?kutuk\s+na\s+bari\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "zne",
         re.compile(
-            rf"\b(?:{_VOICE_SWITCH_VERB_PREFIX}\s+(?:zande|pazande)|pa\s+pazande|fura\s+pa\s+pazande)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:zande|pazande)|fura\s+pa\s+pazande)\b|^\s*(?:please\s+)?pa\s+pazande\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "shk",
         re.compile(
-            rf"\b(?:{_VOICE_SWITCH_VERB_PREFIX}\s+(?:shilluk|dhog\s+collo)|dhog\s+collo|kwop\s+dhog\s+collo)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:shilluk|dhog\s+collo)|kwop\s+dhog\s+collo)\b|^\s*(?:please\s+)?dhog\s+collo\s*[.!]*\s*$",
             re.IGNORECASE,
         ),
     ),
     (
         "en",
         re.compile(
-            rf"\b{_VOICE_SWITCH_VERB_PREFIX}\s+english\b|تكلم\s+إنجليزي",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+english|تكلم\s+إنجليزي)\b",
             re.IGNORECASE,
         ),
     ),

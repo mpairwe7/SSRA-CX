@@ -1831,6 +1831,9 @@ def test_multilingual_contact_url_pronunciation_and_receptionist_structuring() -
 
     # 8-language explicit switch & text_confirmed fast switch in CallLanguagePolicy
     assert detect_explicit_language_request("Jam në Thuɔŋjäŋ") == "din"
+    assert detect_explicit_language_request("What does Thuongjang mean?") is None
+    assert detect_explicit_language_request("لا تتكلم عربي") is None
+    assert detect_explicit_language_request("لا تتكلم إنجليزي") is None
     assert detect_explicit_language_request("Kwop dhøg cøllø") == "shk"
     assert detect_explicit_language_request("Kwop dhog collo") == "shk"
     assert detect_explicit_language_request("Ruacni Thok Naath") == "nus"

@@ -159,63 +159,79 @@ _SWITCH_NEGATION_PREFIX_RE = re.compile(
     r"(?:\b(?:not|no|don'?t|do\s+not|never)|(?:لا|مش))[\s,;:—-]*$",
     flags=re.IGNORECASE,
 )
-_SWITCH_VERB_PREFIX = (
-    r"(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)"
+_TAX_LOANWORD_VOCAB: frozenset[str] = frozenset(
+    {
+        "tin",
+        "tcc",
+        "paye",
+        "tax",
+        "balance",
+        "return",
+        "etax",
+        "e-tax",
+        "ssra",
+        "nra",
+        "bpt",
+        "wht",
+        "status",
+        "my",
+        "check",
+    }
 )
 _EXPLICIT_LOCALE_PATTERNS: tuple[tuple[LocaleCode, re.Pattern[str]], ...] = (
     (
         LocaleCode.PGA,
         re.compile(
-            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+(?:juba\s+arabic|arabi\s+juba)|atkalam\s+arabi\s+juba)\b|عربي\s+جوبا",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:juba\s+arabic|arabi\s+juba)|atkalam\s+arabi\s+juba)\b|^\s*(?:please\s+)?عربي\s+جوبا\s*[.!]*\s*$",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.AR,
         re.compile(
-            rf"\b{_SWITCH_VERB_PREFIX}\s+arabic\b|تكلم\s+عربي|تحدث\s+بالعربية|باللغة\s+العربية",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+arabic|تكلم\s+عربي|تحدث\s+بالعربية|باللغة\s+العربية)\b",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.DIN,
         re.compile(
-            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+(?:dinka|thuongjang)|thuongjang|jam\s+ne\s+thuongjang)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:dinka|thuongjang)|jam\s+ne\s+thuongjang)\b|^\s*(?:please\s+)?thuongjang\s*[.!]*\s*$",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.NUS,
         re.compile(
-            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+(?:nuer|thok\s+na+th)|thok\s+na+th|ruacni\s+thok\s+na+th)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:nuer|thok\s+na+th)|ruacni\s+thok\s+na+th)\b|^\s*(?:please\s+)?thok\s+na+th\s*[.!]*\s*$",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.BFA,
         re.compile(
-            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+bari|kutuk\s+na\s+bari|kulya\s+ko\s+bari)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+bari|kulya\s+ko\s+bari)\b|^\s*(?:please\s+)?kutuk\s+na\s+bari\s*[.!]*\s*$",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.ZNE,
         re.compile(
-            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+(?:zande|pazande)|pa\s+pazande|fura\s+pa\s+pazande)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:zande|pazande)|fura\s+pa\s+pazande)\b|^\s*(?:please\s+)?pa\s+pazande\s*[.!]*\s*$",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.SHK,
         re.compile(
-            rf"\b(?:{_SWITCH_VERB_PREFIX}\s+(?:shilluk|dhog\s+collo)|dhog\s+collo|kwop\s+dhog\s+collo)\b",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+(?:shilluk|dhog\s+collo)|kwop\s+dhog\s+collo)\b|^\s*(?:please\s+)?dhog\s+collo\s*[.!]*\s*$",
             flags=re.IGNORECASE,
         ),
     ),
     (
         LocaleCode.EN,
         re.compile(
-            rf"\b{_SWITCH_VERB_PREFIX}\s+english\b|تكلم\s+إنجليزي",
+            r"\b(?:(?:(?:speak|talk)(?:\s+in)?|switch\s+to|respond\s+in|reply\s+in|change\s+(?:language\s+)?to)\s+english|تكلم\s+إنجليزي)\b",
             flags=re.IGNORECASE,
         ),
     ),
@@ -261,25 +277,27 @@ def evaluate_language_state_transition(
     if explicit_target is not None:
         return explicit_target, "LOCKED", None
 
-    if detected_locale == previous_locale:
-        return previous_locale, "LOCKED", None
-
     # Check if the utterance mixes English and South Sudanese vernacular terms (code-switching)
     lower = raw_text.lower()
+    token_words = re.findall(r"[a-z-]+", lower)
     has_en_tax_word = any(
         w in lower
         for w in ("tin", "tcc", "paye", "tax", "balance", "return", "etax", "ssra", "nra")
     )
-    if has_en_tax_word and detected_locale != LocaleCode.EN and previous_locale == LocaleCode.EN:
-        return previous_locale, "CODE_SWITCHING", detected_locale
     is_short_loanword_in_vernacular = (
         has_en_tax_word
         and previous_locale != LocaleCode.EN
-        and detected_locale == LocaleCode.EN
-        and len(lower.split()) <= 3
+        and 1 <= len(token_words) <= 3
+        and set(token_words).issubset(_TAX_LOANWORD_VOCAB)
     )
     if is_short_loanword_in_vernacular:
         return previous_locale, "CODE_SWITCHING", None
+
+    if detected_locale == previous_locale:
+        return previous_locale, "LOCKED", None
+
+    if has_en_tax_word and detected_locale != LocaleCode.EN and previous_locale == LocaleCode.EN:
+        return previous_locale, "CODE_SWITCHING", detected_locale
 
     if previous_candidate == detected_locale:
         return detected_locale, "LOCKED", None
