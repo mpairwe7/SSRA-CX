@@ -4,7 +4,7 @@
  * Implements the October 2026 `chatv2` MainChat + Sidebar (`ConversationRail`, `ConversationSearch`, `AccountRail`, `SettingsDialog`),
  * and OWASP ASVS 5.0 / WCAG 2.2 AA / ADR-011 hardening:
  * - Republic of South Sudan & SSRA/NRA Natural Civic Palette (`#091310` Nile Dusk, `#F6F7F2` Savanna Cotton Paper, `#078930` Equatoria Green,
- *   `#0F47AF` White Nile Azure, `#F4C430` Guiding Star Gold, `#DA121A` Sovereign Crimson, and `.ssra-flag-ribbon`)
+ *   `#0F47AF` White Nile Azure, `#F4C430` Guiding Star Gold, and `#DA121A` Sovereign Crimson)
  * - Shared-device Zero-PII storage hygiene (`T0`-only persistence in `localStorage`, PII scrubbing, `SSRA_LOGOUT_PURGE` dispatch)
  * - W3C Trusted Types (`setSafeHtml`) + 6-char `escapeHtml` (`&`, `<`, `>`, `"`, `'`, `` ` ``)
  * - Deterministic Offline Statutory Resilience Pack (`Part-IV-Sec-18-PAYE`, WHT, `etax.nra.gov.ss` verifier, SSRA Office Directory)
@@ -337,11 +337,12 @@ function renderPwaShellHtml(locale, nonce) {
       --radius-xl: 24px;
       --radius-2xl: 32px;
       --radius-pill: 999px;
-      --ghost-hover: rgba(232, 234, 237, 0.92);
-      --ghost-active: rgba(218, 220, 224, 0.95);
+      --ghost-hover: rgba(15, 23, 42, 0.08);
+      --ghost-active: rgba(15, 23, 42, 0.12);
       --rail-bg: #1E40AF;
-      --rail-hover: rgba(255, 255, 255, 0.10);
-      --rail-active: rgba(255, 255, 255, 0.16);
+      --rail-current: rgba(0, 0, 0, 0.18);
+      --rail-hover: rgba(255, 255, 255, 0.12);
+      --rail-active: rgba(255, 255, 255, 0.18);
       --rail-muted: rgba(255, 255, 255, 0.72);
     }
     :root[data-theme="dark"] {
@@ -390,10 +391,6 @@ function renderPwaShellHtml(locale, nonce) {
         radial-gradient(ellipse 60% 50% at 18% 12%, rgba(0, 93, 180, 0.045), transparent 62%),
         radial-gradient(ellipse 50% 45% at 82% 28%, rgba(5, 104, 36, 0.035), transparent 56%),
         linear-gradient(180deg, #FFFFFF 0%, #F8FBFF 52%, #FFFFFF 100%);
-    }
-    .ssra-flag-ribbon {
-      position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 80; pointer-events: none;
-      background: linear-gradient(90deg, #0F47AF 0%, #0F47AF 18%, #F4C430 18%, #F4C430 24%, #111815 24%, #111815 48%, #DA121A 48%, #DA121A 74%, #078930 74%, #078930 100%);
     }
     .skip-link {
       position: absolute; left: 12px; top: -48px; z-index: 95; padding: 8px 14px;
@@ -479,11 +476,12 @@ function renderPwaShellHtml(locale, nonce) {
     .rail-new-btn {
       display: flex; align-items: center; gap: 0.7rem; min-height: 40px; margin: 0.35rem 0.5rem 0.25rem; padding: 0 0.85rem 0 0.75rem;
       border: 1px solid transparent; border-radius: 999px; background: transparent; color: #FFFFFF;
-      font: inherit; font-size: 0.8125rem; font-weight: 500; cursor: pointer; text-align: start; transition: background-color 160ms ease;
+      font: inherit; font-size: 0.8125rem; font-weight: 500; cursor: pointer; text-align: start; transition: background-color 200ms ease;
     }
     .rail-new-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
-    .rail-new-btn:hover { background: var(--rail-hover); }
-    .rail-new-btn.is-current { background: var(--rail-active); }
+    .rail-new-btn.is-current { background: var(--rail-current); }
+    .rail-new-btn:hover, .rail-new-btn.is-current:hover { background: var(--rail-hover); }
+    .rail-new-btn:active, .rail-new-btn.is-current:active { background: var(--rail-active); }
     .rail-new-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .rail-kbd { font: inherit; font-size: 0.72rem; font-weight: 400; color: var(--rail-muted); white-space: nowrap; opacity: 0; transition: opacity 160ms ease; }
     .rail-new-btn:hover .rail-kbd, .rail-new-btn:focus-visible .rail-kbd { opacity: 1; }
@@ -505,10 +503,10 @@ function renderPwaShellHtml(locale, nonce) {
     .rail-group { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
     .rail-row {
       position: relative; display: flex; align-items: center; justify-content: space-between; min-height: 36px;
-      border-radius: 999px; transition: background-color 160ms ease;
+      border-radius: 999px; transition: background-color 200ms ease;
     }
-    .rail-row:hover { background: var(--rail-hover); }
-    .rail-row.active { background: var(--rail-active); }
+    .rail-row.active { background: var(--rail-current); }
+    .rail-row:hover, .rail-row.active:hover { background: var(--rail-hover); }
     .rail-item {
       flex: 1; min-width: 0; min-height: 36px; padding: 0.4rem 0.75rem; color: #FFFFFF;
       font: inherit; font-size: 0.8125rem; font-weight: 400; cursor: pointer; white-space: nowrap; overflow: hidden;
@@ -942,17 +940,19 @@ function renderPwaShellHtml(locale, nonce) {
     /* Responsive overrides come after the base rules so they take effect. */
     @media (max-width: 640px) {
       .chat-header {
-        display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 0.3rem 0.35rem;
-        grid-template-areas: "rail title voice theme kebab" "status status status locale locale"; padding: 0.4rem 0.55rem;
+        display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 0 0.25rem;
+        grid-template-areas: "rail title voice locale kebab" "status status status status status"; padding: 0.4rem 0.55rem;
       }
       .header-left, .header-right { display: contents; }
       #header-rail-btn { grid-area: rail; }
       #active-conv-title { grid-area: title; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #open-call-btn { grid-area: voice; }
-      #theme-toggle-btn { grid-area: theme; }
       #header-kebab-wrap { grid-area: kebab; }
-      #net-status-badge { grid-area: status; justify-self: start; min-width: 0; }
-      #header-langsel { grid-area: locale; justify-self: end; }
+      #net-status-badge { grid-area: status; justify-self: start; min-width: 0; margin-top: 0.3rem; }
+      #header-langsel { grid-area: locale; }
+      /* Phones show the globe only; the accessible name still comes from #langsel-sr-label. */
+      #langsel-code, .langsel-btn .langsel-auto, .langsel-btn > svg:last-child { display: none; }
+      .langsel-btn { width: 44px; min-width: 44px; padding: 0; justify-content: center; }
       .chat-header .btn-label { display: none; }
       .landing { padding: 1rem 0.85rem 1.25rem; }
       .landing-prompts { padding-inline: 0; }
@@ -993,7 +993,6 @@ function renderPwaShellHtml(locale, nonce) {
   </style>
 </head>
 <body>
-  <div class="ssra-flag-ribbon" aria-hidden="true"></div>
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <noscript><p class="noscript-note">SSRA Assist needs JavaScript to answer questions. For SSRA tax services, use the official e-Tax portal: https://etax.nra.gov.ss/</p></noscript>
 
@@ -1051,7 +1050,6 @@ function renderPwaShellHtml(locale, nonce) {
               ${ICONS.chevronDown}
             </button>
           </div>
-          <button type="button" id="theme-toggle-btn" class="top-bar-icon-btn icon-btn" aria-label="Colour theme: Dark. Change theme" title="Change theme">${ICONS.moon}</button>
           <div id="header-kebab-wrap" class="hdrv2-kebab">
             <button type="button" id="header-kebab-btn" class="top-bar-icon-btn icon-btn" data-testid="header-kebab-btn" aria-label="More options" aria-expanded="false" aria-controls="header-options-menu" title="More options">${ICONS.kebab}</button>
             <div id="header-options-menu" class="hdrv2-menu" role="group" aria-label="More options">
@@ -1969,15 +1967,9 @@ function renderPwaShellHtml(locale, nonce) {
       function applyTheme(t) {
         state.theme = t;
         document.documentElement.setAttribute("data-theme", t);
-        const btn = document.getElementById("theme-toggle-btn");
         const iconHtml = t === "dark" ? ICONS.moon : t === "light" ? ICONS.sun : ICONS.contrast;
         const label = t === "dark" ? "Dark" : t === "light" ? "Light" : "High contrast";
-        if (btn) {
-          setSafeHtml(btn, iconHtml);
-          document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => meta.setAttribute("content", THEME_COLORS[t]));
-          btn.setAttribute("aria-label", "Colour theme: " + label + ". Change theme");
-          btn.setAttribute("title", "Theme: " + label);
-        }
+        document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => meta.setAttribute("content", THEME_COLORS[t]));
         const menuThemeIcon = document.getElementById("header-menu-theme-icon");
         const menuThemeLabel = document.getElementById("header-menu-theme-label");
         if (menuThemeIcon) setSafeHtml(menuThemeIcon, iconHtml);
@@ -3643,12 +3635,6 @@ function renderPwaShellHtml(locale, nonce) {
       });
       window.addEventListener("resize", () => syncMobileRailA11y(false));
       syncMobileRailA11y(false);
-
-      document.getElementById("theme-toggle-btn")?.addEventListener("click", () => {
-        const next = state.theme === "dark" ? "light" : state.theme === "light" ? "high-contrast" : "dark";
-        state.themeChosen = true;
-        applyTheme(next);
-      });
 
       function openLangMenu() {
         if (!langMenuOverlay) return;

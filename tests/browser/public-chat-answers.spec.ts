@@ -111,7 +111,8 @@ test("a reply still in progress is never saved to the device", async ({ page }) 
   await composer.fill("synthetic-scenario:slow");
   await composer.press("Enter");
   await expect(page.locator("article[aria-busy='true']")).toHaveCount(1);
-  await page.locator("#theme-toggle-btn").click();
+  await page.locator("#header-kebab-btn").click();
+  await page.locator("#header-menu-theme-btn").click();
   const stored = await page.evaluate(() => localStorage.getItem("ssra-chat-store-v2") ?? "");
   expect(stored).not.toContain("Preparing an answer");
   expect(stored).not.toContain('"pending"');

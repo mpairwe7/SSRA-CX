@@ -206,6 +206,23 @@ test("Ctrl+Shift+O starts a new conversation and the rail fades only where conte
   await expect(newChat).toHaveClass(/is-current/);
 });
 
+test("the header is lean and hovers stay neutral", async ({ page }) => {
+  await page.goto("/en");
+  await expect(page.locator("#theme-toggle-btn")).toHaveCount(0);
+  await expect(page.locator(".ssra-flag-ribbon")).toHaveCount(0);
+  const kebab = page.locator("#header-kebab-btn");
+  await kebab.hover();
+  await expect.poll(() => kebab.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(15, 23, 42, 0.08)");
+
+  // New Conversation is the current page on the landing; hovering it still lifts the pill (Gemini pattern).
+  const newChat = page.getByRole("button", { name: "New Conversation" });
+  await expect(newChat).toHaveClass(/is-current/);
+  const resting = await newChat.evaluate((el) => getComputedStyle(el).backgroundColor);
+  await newChat.hover();
+  await expect.poll(() => newChat.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(resting);
+  await expect.poll(() => newChat.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(255, 255, 255, 0.12)");
+});
+
 test("the composer placeholder rotates only while idle", async ({ page }) => {
   await page.clock.install();
   await page.goto("/en");
@@ -284,7 +301,8 @@ test("the theme follows the system until the user chooses one", async ({ page })
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(html).toHaveAttribute("data-theme", "dark");
 
-  await page.locator("#theme-toggle-btn").click();
+  await page.locator("#header-kebab-btn").click();
+  await page.locator("#header-menu-theme-btn").click();
   await expect(html).toHaveAttribute("data-theme", "light");
   await page.emulateMedia({ colorScheme: "dark" });
   await page.reload();

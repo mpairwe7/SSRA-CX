@@ -34,6 +34,14 @@
   - **Language review:** the new `ar`/`pga` footer labels need SSRA language review.
   - **Tests:** browser tests cover the dialogs, settings focus return, the menu export, the hidden or "not saved" device note, `Ctrl+Shift+O`, and the scroll fades.
   - **Threat-model delta:** none (presentation only; the portal opens with `noopener,noreferrer`).
+- **Phase 14 (Hover Consistency, Lean Header & No Flag Ribbon in `apps/web/server.js`):** Fixed and refined several details.
+  - **New Conversation hover:** it had no hover on the landing because `.rail-new-btn.is-current` overrode `:hover` at equal specificity. Rail states now follow the sampled Gemini values: the current page or selected conversation sits on a darker pill (`--rail-current: rgba(0, 0, 0, 0.18)`), and hover lifts to a lighter pill (`--rail-hover: rgba(255, 255, 255, 0.12)`) with a 200 ms fade. Hover wins over the current state.
+  - **Canvas hover tint:** it is now a translucent dark tint (`--ghost-hover: rgba(15, 23, 42, 0.08)`). Header buttons on the lavender gradient no longer show the warm gray that the opaque `#E8EAED` produced, and they match the suggestion and menu hovers.
+  - **Theme control:** the duplicate header theme button is removed; theme lives in the 3-dot menu. `applyTheme()` now updates `meta[name="theme-color"]` on its own, so the browser UI colour still follows the theme.
+  - **Phone header:** phones (640 px and under) use a one-row header with a globe-only language button (accessible name kept through `#langsel-sr-label`). Laptops keep "EN AUTO".
+  - **Flag ribbon:** the top `.ssra-flag-ribbon` is removed.
+  - **Tests:** browser tests drive theme changes through the 3-dot menu and cover the neutral hover, the New Conversation hover, and the globe-only phone header.
+  - **Threat-model delta:** none.
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 

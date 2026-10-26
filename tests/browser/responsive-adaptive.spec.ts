@@ -90,6 +90,21 @@ test("controls stay reachable with 200% text and WCAG text spacing", async ({ br
   }
 });
 
+test("phones show a globe-only language button in a one-row header; laptops keep the code", async ({ page }) => {
+  await page.setViewportSize({ height: 740, width: 360 });
+  await page.goto("/en");
+  const langsel = page.getByRole("button", { name: /Response language/ });
+  await expect(langsel).toBeInViewport();
+  await expect(page.locator("#langsel-code")).toBeHidden();
+  await expect(page.locator("#lang-auto-badge")).toBeHidden();
+  const header = await page.locator(".chat-header").boundingBox();
+  expect(header?.height ?? 999).toBeLessThanOrEqual(64);
+
+  await page.setViewportSize({ height: 800, width: 1280 });
+  await expect(page.locator("#langsel-code")).toBeVisible();
+  await expect(page.locator("#lang-auto-badge")).toBeVisible();
+});
+
 test("the phone header stays compact and leaves room for the conversation", async ({ page }) => {
   await page.setViewportSize({ height: 568, width: 320 });
   await page.goto("/en");
@@ -119,7 +134,8 @@ test("short landscape screens scroll the whole column instead of a tiny transcri
 test("the viewport adapts to the on-screen keyboard and the browser UI follows the theme", async ({ page }) => {
   await page.goto("/en");
   await expect(page.locator('meta[name="viewport"]')).toHaveAttribute("content", /interactive-widget=resizes-content/);
-  await page.locator("#theme-toggle-btn").click();
+  await page.locator("#header-kebab-btn").click();
+  await page.locator("#header-menu-theme-btn").click();
   const theme = await page.locator("html").getAttribute("data-theme");
   const colors = await page.locator('meta[name="theme-color"]').evaluateAll((metas) => metas.map((m) => m.getAttribute("content")));
   const expected = theme === "dark" ? "#091310" : theme === "light" ? "#F6F7F2" : "#000000";
