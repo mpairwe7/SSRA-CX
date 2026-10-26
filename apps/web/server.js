@@ -1163,7 +1163,7 @@ function renderPwaShellHtml(locale, nonce) {
             </button>
           </div>
         </div>
-        <p class="composer-disclosure" lang="en">SSRA Assist is an automated AI assistant and can make mistakes. Check answers against the cited sources. Don’t enter your TIN, phone number, or passwords in this public chat.</p>
+        <p class="composer-disclosure" lang="en">SSRA Assist is an automated AI assistant and can make mistakes.</p>
       </main>
     </div>
   </div>

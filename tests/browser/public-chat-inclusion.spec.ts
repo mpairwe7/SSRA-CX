@@ -31,13 +31,13 @@ test("unreviewed locales show English interface text with an honest notice", asy
   await expect(notice).toBeHidden();
 });
 
-test("the composer discloses AI use, accuracy limits, and identifier risk", async ({ page }) => {
+test("the composer discloses AI use and accuracy limits", async ({ page }) => {
   await page.goto("/en");
   const disclosure = page.locator(".composer-disclosure");
   await expect(disclosure).toBeVisible();
   await expect(disclosure).toHaveAttribute("lang", "en");
   await expect(disclosure).toContainText("automated AI assistant and can make mistakes");
-  await expect(disclosure).toContainText("Don’t enter your TIN, phone number, or passwords");
+  await expect(disclosure).toHaveText("SSRA Assist is an automated AI assistant and can make mistakes.");
   await expect(page.locator("#rail-device-note")).toBeHidden();
   await expect(page.locator("#net-status-badge")).toBeHidden();
   await expect(page.locator("#active-conv-title")).toBeHidden();

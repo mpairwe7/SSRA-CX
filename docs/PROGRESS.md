@@ -42,6 +42,7 @@
   - **Flag ribbon:** the top `.ssra-flag-ribbon` is removed.
   - **Tests:** browser tests drive theme changes through the 3-dot menu and cover the neutral hover, the New Conversation hover, and the globe-only phone header.
   - **Threat-model delta:** none.
+- **Phase 15 (Shorter AI Disclosure):** At the product owner's request, the bottom disclosure now reads only "SSRA Assist is an automated AI assistant and can make mistakes." The "check the cited sources" and "don't enter your TIN, phone number, or passwords" sentences are removed from the footer. Answers still show source pills or "No source cited", and Settings, Privacy & Erasure still explains that numbers that look like a TIN or phone number are hidden before saving. Browser test updated.
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 
