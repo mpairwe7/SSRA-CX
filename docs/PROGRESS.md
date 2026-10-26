@@ -43,6 +43,16 @@
   - **Tests:** browser tests drive theme changes through the 3-dot menu and cover the neutral hover, the New Conversation hover, and the globe-only phone header.
   - **Threat-model delta:** none.
 - **Phase 15 (Shorter AI Disclosure):** At the product owner's request, the bottom disclosure now reads only "SSRA Assist is an automated AI assistant and can make mistakes." The "check the cited sources" and "don't enter your TIN, phone number, or passwords" sentences are removed from the footer. Answers still show source pills or "No source cited", and Settings, Privacy & Erasure still explains that numbers that look like a TIN or phone number are hidden before saving. Browser test updated.
+- **Phase 16 (Settings Dialog Redesign with Animated Navigation in `apps/web/server.js`):** Rebuilt the Settings dialog in the Gemini-style design language.
+  - **Dialog:** a white 24 px-radius surface with a soft shadow. It has a fixed height (`min(560px, 86dvh)`), so switching tabs never resizes it, and opens over a lighter blurred backdrop with a fade and rise.
+  - **Tabs:** pill tabs with icons. A sliding selection pill (`syncSettingsIndicator()`, CSSOM custom properties, CSP-safe) glides between tabs vertically on desktop and horizontally in the phone tab row, including RTL.
+  - **Pane transitions:** tab changes slide the pane title and body in from the direction of travel (`data-enter="down"`/`"up"`). Re-renders after a toggle stay still.
+  - **Rows:** settings are rows with a title, description and control. On/off settings are WAI-ARIA switches (`role="switch"`, `aria-checked`), replacing the ": ON/OFF" label text; `#toggle-lowdata-btn`, `#toggle-history-btn`, `#toggle-narrate-btn` and `#settings-voice-pace-btn` keep their IDs. Choices use pill segmented radios or chips.
+  - **Content:** a Theme picker (System, Light, Dark, High contrast) replaces the palette jargon line. The portal link and the clear-history action use new outline and danger pill buttons. The close control is a ghost circle.
+  - **Accessibility:** English settings copy is bidi-isolated for RTL pages. Phones get a near full-screen sheet. Forced-colours, high-contrast, reduced-motion and low-data fallbacks are covered.
+  - **Tests:** the shared-device history test uses the switch role, and a new test covers the fixed size, indicator position, transition direction, theme picker, low-data switch and focus return.
+  - **Threat-model delta:** none.
+  - **Next:** the "Dark" option still renders today's near-light palette until the dedicated dark theme lands.
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 

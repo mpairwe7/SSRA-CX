@@ -82,6 +82,54 @@ test("settings tabs follow the APG keyboard model", async ({ page }) => {
   await expect(page.locator("#open-settings-btn")).toBeFocused();
 });
 
+test("settings uses switches and a theme picker, keeps its size, and animates between tabs", async ({ page }) => {
+  await page.goto("/en");
+  const gear = page.getByRole("button", { name: "Settings & Privacy" });
+  await gear.click();
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  const panel = page.getByRole("tabpanel");
+  const modal = page.locator(".settings-modal");
+  const indicator = page.locator("#settings-tab-indicator");
+  // offsetHeight ignores the open animation's transform, so this compares layout size only.
+  const modalHeight = () => modal.evaluate((el) => (el as HTMLElement).offsetHeight);
+  const generalHeight = await modalHeight();
+
+  // The selection pill sits on the selected tab and glides to the next one.
+  const boxesMatch = async (tabName: string) => {
+    const tab = await page.getByRole("tab", { name: tabName }).boundingBox();
+    const pill = await indicator.boundingBox();
+    return Math.abs((tab?.y ?? 0) - (pill?.y ?? -99)) < 1.5 && Math.abs((tab?.height ?? 0) - (pill?.height ?? -99)) < 1.5;
+  };
+  await expect.poll(() => boxesMatch("General & Theme")).toBe(true);
+  await page.keyboard.press("ArrowDown");
+  await expect(panel).toHaveAttribute("data-enter", "down");
+  await expect.poll(() => boxesMatch("Voice & Speech")).toBe(true);
+  await page.keyboard.press("ArrowUp");
+  await expect(panel).toHaveAttribute("data-enter", "up");
+  await page.keyboard.press("End");
+  await expect(page.getByRole("switch", { name: "Save conversations on this device" })).toBeVisible();
+  expect(await modalHeight()).toBe(generalHeight);
+  await page.keyboard.press("Home");
+
+  // Theme picker and low-data switch.
+  const highContrast = dialog.getByRole("radio", { name: "High contrast" });
+  await highContrast.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "high-contrast");
+  await expect(dialog.getByRole("radio", { name: "High contrast" })).toHaveAttribute("aria-checked", "true");
+  await expect(dialog.getByRole("radio", { name: "High contrast" })).toBeFocused();
+  await dialog.getByRole("radio", { name: "Light" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  const lowData = dialog.getByRole("switch", { name: "2G low-data mode" });
+  await expect(lowData).toHaveAttribute("aria-checked", "false");
+  await lowData.click();
+  await expect(lowData).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("html")).toHaveAttribute("data-low-data", "true");
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(gear).toBeFocused();
+});
+
 test("rename, delete, and clear use in-page dialogs with a safe default", async ({ page }) => {
   let nativeDialogs = 0;
   page.on("dialog", (dialog) => {

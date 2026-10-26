@@ -782,9 +782,16 @@ function renderPwaShellHtml(locale, nonce) {
     .voice-dock[data-phase="pausing"] .voice-dock-ring, .voice-dock[data-phase="hearing"] .voice-dock-ring { opacity: 1; }
     .voice-dock-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
     .voice-dock-ring circle { fill: none; stroke: var(--ssra-teal-light); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: calc(100 - var(--eot, 0) * 100); }
-    .setv2-segmented { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border-1); flex-wrap: wrap; }
-    .setv2-seg-btn { min-height: 34px; padding: 0 0.65rem; border-radius: 7px; border: none; background: transparent; color: var(--text-1); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
-    .setv2-seg-btn[aria-checked="true"] { background: var(--surface-3); color: var(--text-0); }
+    .setv2-segmented { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(15, 23, 42, 0.05); flex-wrap: wrap; max-width: 100%; }
+    .setv2-seg-btn { min-height: 34px; padding: 0 0.85rem; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--text-1); font: inherit; font-size: 0.78rem; font-weight: 500; cursor: pointer; transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, border-color 160ms ease; }
+    .setv2-seg-btn:hover:not([aria-checked="true"]) { background: var(--ghost-hover); }
+    .setv2-seg-btn[aria-checked="true"] { background: var(--bg-0); color: #1E40AF; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16); }
+    .setv2-segmented.is-chips { background: transparent; padding: 0; gap: 0.4rem; border-radius: 0; }
+    .setv2-segmented.is-chips .setv2-seg-btn { border-color: var(--border-1); }
+    .setv2-segmented.is-chips .setv2-seg-btn[aria-checked="true"] { background: #EEF2FF; border-color: #1E40AF; box-shadow: none; }
+    :root[data-theme="high-contrast"] .setv2-segmented { background: var(--surface-2); }
+    :root[data-theme="high-contrast"] .setv2-seg-btn[aria-checked="true"], :root[data-theme="high-contrast"] .setv2-segmented.is-chips .setv2-seg-btn[aria-checked="true"] { background: var(--bg-0); color: #FFFFFF; border-color: #FFD60A; box-shadow: inset 0 0 0 1px #FFD60A; }
+    @media (pointer: coarse) { .setv2-seg-btn { min-height: 44px; } }
     .send-btn { min-height: 44px; padding: 0 1rem; border-radius: var(--radius-pill); background: var(--grad-primary); color: #fff; border: none; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; }
     .send-btn:disabled { opacity: 0.48; cursor: not-allowed; }
     .composer-waveform { display: inline-flex; align-items: center; gap: 3px; height: 16px; }
@@ -868,13 +875,100 @@ function renderPwaShellHtml(locale, nonce) {
     .search-modal .acct-pop-item.active { color: var(--ssra-blue); font-weight: 700; }
     .search-modal .rail-empty-hint { color: var(--text-2); }
 
-    .settings-modal { max-width: 680px; width: 100%; min-height: 380px; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: grid; grid-template-columns: 185px 1fr; overflow: hidden; }
-    @media (max-width: 640px) { .settings-modal { grid-template-columns: 1fr; } }
-    .settings-tabs { background: var(--surface-1); border-inline-end: 1px solid var(--border-1); padding: 1rem 0.6rem; display: flex; flex-direction: column; gap: 4px; }
-    .settings-tablist { display: flex; flex-direction: column; gap: 4px; }
-    .settings-tab-btn { min-height: 44px; padding: 8px 12px; border-radius: 8px; border: none; background: transparent; color: var(--text-2); font: inherit; font-size: 0.83rem; font-weight: 600; text-align: start; cursor: pointer; }
-    .settings-tab-btn.active { background: var(--surface-3); color: var(--text-0); }
-    .settings-pane { padding: 1.25rem 1.4rem; display: flex; flex-direction: column; gap: 0.85rem; }
+    /* SettingsDialog: Gemini-style surface, a sliding selection pill between tabs, and direction-aware pane transitions. */
+    #settings-modal-backdrop { background: rgba(15, 23, 42, 0.32); backdrop-filter: blur(6px); }
+    #settings-modal-backdrop.open { animation: settingsFade 180ms ease both; }
+    #settings-modal-backdrop.open .settings-modal { animation: settingsRise 240ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+    @keyframes settingsFade { from { opacity: 0; } }
+    @keyframes settingsRise { from { opacity: 0; transform: translateY(8px) scale(0.985); } }
+    .settings-modal {
+      width: min(760px, 100%); height: min(560px, 86dvh); background: var(--bg-0); border: 1px solid var(--border-0); border-radius: 24px;
+      box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18); display: grid; grid-template-columns: 220px minmax(0, 1fr); overflow: hidden;
+    }
+    .settings-tabs { min-width: 0; background: var(--surface-1); padding: 1.1rem 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
+    .settings-tablist { position: relative; display: flex; flex-direction: column; gap: 2px; }
+    .settings-tab-indicator {
+      position: absolute; top: 0; left: 0; z-index: 0; width: var(--tab-w, 0px); height: var(--tab-h, 0px); border-radius: 999px; background: #E0E7FF; pointer-events: none;
+      transform: translate(var(--tab-x, 0px), var(--tab-y, 0px));
+      transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), width 260ms cubic-bezier(0.22, 1, 0.36, 1), height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .settings-tab-indicator.is-instant { transition: none; }
+    .settings-tab-btn {
+      position: relative; z-index: 1; display: flex; align-items: center; gap: 0.7rem; min-height: 44px; padding: 0 0.9rem; border-radius: 999px; border: none;
+      background: transparent; color: var(--text-1); font: inherit; font-size: 0.8125rem; font-weight: 500; text-align: start; white-space: nowrap; cursor: pointer;
+      transition: background-color 160ms ease, color 200ms ease;
+    }
+    .settings-tab-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .settings-tab-btn:hover:not([aria-selected="true"]) { background: var(--ghost-hover); }
+    .settings-tab-btn[aria-selected="true"] { color: #1E40AF; }
+    :root[data-theme="high-contrast"] .settings-tab-indicator { background: transparent; box-shadow: inset 0 0 0 2px #FFD60A; }
+    :root[data-theme="high-contrast"] .settings-tab-btn[aria-selected="true"] { color: #FFFFFF; }
+    .settings-pane { position: relative; min-width: 0; min-height: 0; padding: 1.1rem 1.4rem 1.25rem; display: flex; flex-direction: column; gap: 0.6rem; overflow-y: auto; overscroll-behavior: contain; }
+    .settings-modal .settings-pane-head { gap: 0.75rem; }
+    .settings-modal .settings-pane-title { font-size: 1.15rem; font-weight: 500; letter-spacing: -0.01em; }
+    .settings-close-btn {
+      width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; border: none; background: transparent; color: var(--text-1); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; transition: background-color 160ms ease;
+    }
+    .settings-close-btn:hover { background: var(--ghost-hover); }
+    .settings-close-btn:active { background: var(--ghost-active); }
+    @media (pointer: coarse) { .settings-close-btn { width: 44px; height: 44px; } }
+    .settings-pane.is-entering .settings-pane-title, .settings-pane.is-entering .settings-pane-body { animation: settingsPaneDown 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .settings-pane.is-entering[data-enter="up"] .settings-pane-title, .settings-pane.is-entering[data-enter="up"] .settings-pane-body { animation-name: settingsPaneUp; }
+    @keyframes settingsPaneDown { from { opacity: 0; transform: translateY(10px); } }
+    @keyframes settingsPaneUp { from { opacity: 0; transform: translateY(-10px); } }
+
+    /* Settings rows: title + description + control, hairline dividers, WAI-ARIA switches. */
+    .set-intro { margin: 0 0 0.15rem; font-size: 0.82rem; line-height: 1.55; color: var(--text-2); }
+    .set-list { display: flex; flex-direction: column; }
+    .set-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem 0; border-top: 1px solid var(--border-0); }
+    .set-row:first-child { border-top: 0; }
+    .set-row.is-stacked { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+    .set-row-text { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+    .set-row:not(.is-stacked) > .set-row-text { flex: 1 1 12rem; }
+    /* Settings copy is English-only for now: isolate it so punctuation and units read correctly on RTL pages. */
+    .set-intro, .set-row-title, .set-row-desc, .setv2-seg-btn { unicode-bidi: plaintext; text-align: start; }
+    .set-row-title { font-size: 0.875rem; font-weight: 500; color: var(--text-0); }
+    .set-row-desc { font-size: 0.78rem; line-height: 1.45; color: var(--text-2); }
+    .set-switch {
+      position: relative; flex-shrink: 0; width: 44px; height: 44px; margin-inline-end: -4px; padding: 0; border: none; border-radius: 999px;
+      background: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .set-switch::before { content: ""; width: 36px; height: 20px; border-radius: 999px; background: rgba(15, 23, 42, 0.5); transition: background-color 180ms ease; }
+    .set-switch::after {
+      content: ""; position: absolute; top: 50%; left: 6px; width: 16px; height: 16px; margin-top: -8px; border-radius: 50%;
+      background: #FFFFFF; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3); transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .set-switch[aria-checked="true"]::before { background: #1E40AF; }
+    .set-switch[aria-checked="true"]::after { transform: translateX(16px); }
+    :root[dir="rtl"] .set-switch::after { left: auto; right: 6px; }
+    :root[dir="rtl"] .set-switch[aria-checked="true"]::after { transform: translateX(-16px); }
+    :root[data-theme="high-contrast"] .set-switch::before { background: #444444; box-shadow: inset 0 0 0 1px #FFFFFF; }
+    :root[data-theme="high-contrast"] .set-switch[aria-checked="true"]::before { background: #FFD60A; }
+    :root[data-theme="high-contrast"] .set-switch[aria-checked="true"]::after { background: #000000; }
+    .set-btn {
+      display: inline-flex; align-items: center; gap: 0.5rem; flex-shrink: 0; min-height: 40px; padding: 0 1rem; border-radius: 999px; border: 1px solid var(--border-1);
+      background: transparent; color: var(--text-0); font: inherit; font-size: 0.8125rem; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer;
+      transition: background-color 160ms ease, border-color 160ms ease;
+    }
+    .set-btn:hover { background: var(--ghost-hover); }
+    .set-btn:active { background: var(--ghost-active); }
+    .set-btn-danger { color: var(--danger); border-color: rgba(185, 28, 28, 0.35); }
+    .set-btn-danger:hover { background: rgba(185, 28, 28, 0.07); }
+    @media (pointer: coarse) { .set-btn { min-height: 44px; } }
+    /* Phones: a near full-screen sheet with a horizontal, scrollable tab row; the same pill slides sideways. */
+    @media (max-width: 640px) {
+      .settings-modal { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: min(92dvh, 720px); border-radius: 20px; }
+      .settings-tabs { padding: 0.9rem 0.75rem 0.4rem; gap: 0.35rem; }
+      .settings-tablist { flex-direction: row; overflow-x: auto; scrollbar-width: none; }
+      .settings-tablist::-webkit-scrollbar { display: none; }
+      .settings-tab-btn { padding: 0 0.85rem; }
+      .settings-pane { padding: 0.85rem 1rem 1rem; }
+      .set-row { flex-wrap: wrap; }
+      .set-row.is-stacked .set-btn { white-space: normal; text-align: start; }
+      .setv2-segmented { border-radius: 18px; }
+      .setv2-segmented:not(.is-chips) .setv2-seg-btn { flex: 1 1 auto; text-align: center; }
+    }
 
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
     .is-hidden { display: none !important; }
@@ -895,7 +989,7 @@ function renderPwaShellHtml(locale, nonce) {
     .call-actions-row { display: flex; gap: 0.65rem; margin-top: 0.5rem; }
     .danger-outline-btn { background: rgba(251, 113, 133, 0.2); border-color: var(--danger); color: var(--danger); }
     .danger-text-btn { color: var(--danger); }
-    .settings-heading { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--text-3); padding: 4px 12px; }
+    .settings-heading { margin: 0; padding: 0.15rem 0.75rem 0.35rem; font-size: 1.1rem; font-weight: 500; letter-spacing: -0.01em; color: var(--text-0); }
     .settings-pane-head { display: flex; justify-content: space-between; align-items: center; }
     .settings-pane-title { margin: 0; color: var(--text-0); font-size: 1.05rem; }
     .settings-pane-body { font-size: 0.86rem; color: var(--text-2); line-height: 1.55; }
@@ -982,6 +1076,10 @@ function renderPwaShellHtml(locale, nonce) {
       .send-btn, .rail-new-btn, .icon-btn, .turn-act-btn, .landing-chip, .bubble, .gen-ui-card, .meta-pill, .citation-pill, .status-badge, .composer-box { border: 1px solid CanvasText; }
       .status-dot { forced-color-adjust: none; background: CanvasText; box-shadow: none; }
       .ssra-main-gradient, .composer-placeholder { display: none !important; }
+      .settings-tab-indicator { background: transparent; border: 2px solid Highlight; }
+      .set-switch::before { border: 1px solid CanvasText; background: Canvas; }
+      .set-switch[aria-checked="true"]::before { background: Highlight; }
+      .set-switch::after { forced-color-adjust: none; background: CanvasText; }
       .composer-box.has-rotating-placeholder .composer-textarea::placeholder { color: GrayText; }
       :focus-visible { outline-color: Highlight; }
     }
@@ -1253,16 +1351,17 @@ function renderPwaShellHtml(locale, nonce) {
       <div class="settings-tabs">
         <div class="settings-heading">Settings</div>
         <div class="settings-tablist" role="tablist" aria-label="Settings categories" aria-orientation="vertical">
-          <button type="button" id="settings-tab-general" class="settings-tab-btn active" role="tab" aria-selected="true" aria-controls="settings-pane" tabindex="0" data-settings-tab="general">General &amp; Theme</button>
-          <button type="button" id="settings-tab-voice" class="settings-tab-btn" role="tab" aria-selected="false" aria-controls="settings-pane" tabindex="-1" data-settings-tab="voice">Voice &amp; Speech</button>
-          <button type="button" id="settings-tab-profile" class="settings-tab-btn" role="tab" aria-selected="false" aria-controls="settings-pane" tabindex="-1" data-settings-tab="profile">Taxpayer Profile</button>
-          <button type="button" id="settings-tab-privacy" class="settings-tab-btn" role="tab" aria-selected="false" aria-controls="settings-pane" tabindex="-1" data-settings-tab="privacy">Privacy &amp; Erasure</button>
+          <span id="settings-tab-indicator" class="settings-tab-indicator is-instant" aria-hidden="true"></span>
+          <button type="button" id="settings-tab-general" class="settings-tab-btn active" role="tab" aria-selected="true" aria-controls="settings-pane" tabindex="0" data-settings-tab="general">${ICONS.sliders}<span>General &amp; Theme</span></button>
+          <button type="button" id="settings-tab-voice" class="settings-tab-btn" role="tab" aria-selected="false" aria-controls="settings-pane" tabindex="-1" data-settings-tab="voice">${ICONS.speaker}<span>Voice &amp; Speech</span></button>
+          <button type="button" id="settings-tab-profile" class="settings-tab-btn" role="tab" aria-selected="false" aria-controls="settings-pane" tabindex="-1" data-settings-tab="profile">${ICONS.user}<span>Taxpayer Profile</span></button>
+          <button type="button" id="settings-tab-privacy" class="settings-tab-btn" role="tab" aria-selected="false" aria-controls="settings-pane" tabindex="-1" data-settings-tab="privacy">${ICONS.lock}<span>Privacy &amp; Erasure</span></button>
         </div>
       </div>
       <div id="settings-pane" class="settings-pane" role="tabpanel" aria-labelledby="settings-tab-general">
         <div class="settings-pane-head">
-          <h2 id="settings-pane-title" class="settings-pane-title">General &amp; Appearance</h2>
-          <button type="button" id="close-settings-btn" class="icon-btn">${ICONS.close} Close</button>
+          <h2 id="settings-pane-title" class="settings-pane-title">General &amp; theme</h2>
+          <button type="button" id="close-settings-btn" class="settings-close-btn" aria-label="Close settings">${ICONS.close}</button>
         </div>
         <div id="settings-pane-body" class="settings-pane-body"></div>
       </div>
@@ -3748,8 +3847,7 @@ function renderPwaShellHtml(locale, nonce) {
       });
       document.getElementById("header-menu-settings-btn")?.addEventListener("click", () => {
         setHeaderKebabMenu(false, false);
-        renderSettingsTabContent("general");
-        openModal(settingsBackdrop, settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]'), headerKebabBtn);
+        openSettings(headerKebabBtn);
       });
       document.getElementById("header-menu-clear-btn")?.addEventListener("click", () => {
         setHeaderKebabMenu(false, false);
@@ -3966,7 +4064,55 @@ function renderPwaShellHtml(locale, nonce) {
       const settingsBodyEl = document.getElementById("settings-pane-body");
       const settingsPaneEl = document.getElementById("settings-pane");
 
+      const settingsTablistEl = settingsBackdrop?.querySelector(".settings-tablist");
+      const settingsIndicatorEl = document.getElementById("settings-tab-indicator");
+      const SETTINGS_TAB_ORDER = ["general", "voice", "profile", "privacy"];
+
+      // The selection pill glides to the selected tab (vertical list on desktop, horizontal row on phones).
+      function syncSettingsIndicator(animate) {
+        const activeTab = settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]');
+        if (!settingsIndicatorEl || !activeTab || activeTab.offsetHeight === 0) return;
+        if (settingsTablistEl) {
+          settingsTablistEl.setAttribute("aria-orientation", getComputedStyle(settingsTablistEl).flexDirection === "row" ? "horizontal" : "vertical");
+        }
+        settingsIndicatorEl.classList.toggle("is-instant", !animate);
+        settingsIndicatorEl.style.setProperty("--tab-x", activeTab.offsetLeft + "px");
+        settingsIndicatorEl.style.setProperty("--tab-y", activeTab.offsetTop + "px");
+        settingsIndicatorEl.style.setProperty("--tab-w", activeTab.offsetWidth + "px");
+        settingsIndicatorEl.style.setProperty("--tab-h", activeTab.offsetHeight + "px");
+        if (!animate) {
+          void settingsIndicatorEl.offsetWidth;
+          settingsIndicatorEl.classList.remove("is-instant");
+        }
+      }
+      window.addEventListener("resize", () => {
+        if (settingsBackdrop?.classList.contains("open")) syncSettingsIndicator(false);
+      }, { passive: true });
+
+      function settingsSwitchRow(id, title, description, checked) {
+        return '<div class="set-row">' +
+          '<div class="set-row-text">' +
+            '<span class="set-row-title" id="' + id + '-label">' + escapeHtml(title) + "</span>" +
+            '<span class="set-row-desc" id="' + id + '-desc">' + escapeHtml(description) + "</span>" +
+          "</div>" +
+          '<button type="button" role="switch" class="set-switch" id="' + id + '" aria-checked="' + String(Boolean(checked)) + '" aria-labelledby="' + id + '-label" aria-describedby="' + id + '-desc"></button>' +
+        "</div>";
+      }
+      function settingsChoiceRow(labelId, title, description, choicesHtml, chips) {
+        return '<div class="set-row is-stacked">' +
+          '<div class="set-row-text">' +
+            '<span class="set-row-title" id="' + labelId + '">' + escapeHtml(title) + "</span>" +
+            (description ? '<span class="set-row-desc">' + escapeHtml(description) + "</span>" : "") +
+          "</div>" +
+          '<div class="setv2-segmented' + (chips ? " is-chips" : "") + '" role="radiogroup" aria-labelledby="' + labelId + '">' + choicesHtml + "</div>" +
+        "</div>";
+      }
+      function settingsRadio(attr, value, label, checked) {
+        return '<button type="button" role="radio" class="setv2-seg-btn" ' + attr + '="' + escapeHtml(String(value)) + '" aria-checked="' + String(Boolean(checked)) + '">' + escapeHtml(label) + "</button>";
+      }
+
       function renderSettingsTabContent(tabId) {
+        const prevTab = state.settingsTab;
         state.settingsTab = tabId || "general";
         document.querySelectorAll("[data-settings-tab]").forEach((btn) => {
           const isAct = btn.getAttribute("data-settings-tab") === state.settingsTab;
@@ -3975,101 +4121,103 @@ function renderPwaShellHtml(locale, nonce) {
           btn.tabIndex = isAct ? 0 : -1;
           if (isAct) settingsPaneEl?.setAttribute("aria-labelledby", btn.id);
         });
+        // Changing tabs slides the new content in from the direction of travel; re-renders after a toggle stay still.
+        if (settingsPaneEl && prevTab && prevTab !== state.settingsTab) {
+          settingsPaneEl.dataset.enter = SETTINGS_TAB_ORDER.indexOf(state.settingsTab) > SETTINGS_TAB_ORDER.indexOf(prevTab) ? "down" : "up";
+          settingsPaneEl.classList.remove("is-entering");
+          void settingsPaneEl.offsetWidth;
+          settingsPaneEl.classList.add("is-entering");
+          settingsPaneEl.scrollTop = 0;
+          settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+        syncSettingsIndicator(true);
         if (state.settingsTab === "voice") {
-          if (settingsTitleEl) settingsTitleEl.textContent = "Voice typing & reading";
+          if (settingsTitleEl) settingsTitleEl.textContent = "Voice & speech";
           const pauseOpts = [
             { value: 0, label: "Off" },
             { value: 800, label: "0.8 s" },
             { value: 1200, label: "1.2 s" },
             { value: 2000, label: "2 s" },
           ];
-          const pauseButtonsHtml = pauseOpts
-            .map(
-              (opt) =>
-                '<button type="button" role="radio" class="setv2-seg-btn" data-voice-pause="' +
-                opt.value +
-                '" aria-checked="' +
-                String(voiceSilenceTimeoutMs === opt.value) +
-                '">' +
-                opt.label +
-                "</button>",
-            )
-            .join("");
           const spkList = VOICE_SPEAKERS_BY_LOCALE[state.locale] || VOICE_SPEAKERS_BY_LOCALE.en;
           const activeSpk = getActiveVoiceSpeaker(state.locale);
-          const speakerButtonsHtml = spkList
-            .map(
-              (spk) =>
-                '<button type="button" role="radio" class="setv2-seg-btn" data-voice-speaker="' +
-                spk.id +
-                '" aria-checked="' +
-                String(activeSpk.id === spk.id) +
-                '">' +
-                spk.name +
-                " · " +
-                spk.dialect +
-                " (" +
-                spk.tone +
-                ")</button>",
-            )
-            .join("");
           setSafeHtml(
             settingsBodyEl,
-            "<p>Voice typing uses your browser's speech recognition when available and currently supports English and Arabic only. Your browser may process audio outside SSRA. Auto-narration uses browser speech synthesis; available voices vary by device.</p>" +
-              '<div class="settings-actions-row">' +
-                '<button type="button" class="icon-btn" id="toggle-narrate-btn">' +
-                  (state.autoNarrate ? ICONS.speaker + " Auto-Narrate Replies: ON" : ICONS.speakerOff + " Auto-Narrate Replies: OFF") +
-                "</button>" +
-                '<button type="button" class="icon-btn" id="settings-voice-pace-btn" aria-pressed="' +
-                  String(callSpeechRateSlow) +
-                '">' +
-                  (callSpeechRateSlow ? "Speech pace: Slower (0.82x)" : "Speech pace: Normal (1.0x)") +
-                "</button>" +
-                '<button type="button" class="icon-btn" id="settings-voice-preview-btn">' +
-                  ICONS.play +
-                  " Preview voice sample" +
-                "</button>" +
+            '<p class="set-intro">' +
+              "Voice typing uses your browser's speech recognition when available and currently supports English and Arabic only. Your browser may process audio outside SSRA. Auto-narration uses browser speech synthesis; available voices vary by device." +
+            "</p>" +
+            '<div class="set-list">' +
+              settingsSwitchRow("toggle-narrate-btn", "Auto-narrate replies", "Read each answer aloud when it arrives.", state.autoNarrate) +
+              settingsSwitchRow("settings-voice-pace-btn", "Slower speech pace", "Read answers at 0.82x speed.", callSpeechRateSlow) +
+              settingsChoiceRow(
+                "set-pause-label",
+                "Send after a pause",
+                "Voice typing sends your message after this much silence.",
+                pauseOpts.map((opt) => settingsRadio("data-voice-pause", opt.value, opt.label, voiceSilenceTimeoutMs === opt.value)).join(""),
+                false,
+              ) +
+              settingsChoiceRow(
+                "set-speaker-label",
+                "Voice (" + state.locale.toUpperCase() + ")",
+                "",
+                spkList.map((spk) => settingsRadio("data-voice-speaker", spk.id, spk.name + " · " + spk.dialect + " (" + spk.tone + ")", activeSpk.id === spk.id)).join(""),
+                true,
+              ) +
+              '<div class="set-row">' +
+                '<div class="set-row-text"><span class="set-row-title">Preview voice</span><span class="set-row-desc">Hear the selected voice read a short sample.</span></div>' +
+                '<button type="button" class="set-btn" id="settings-voice-preview-btn">' + ICONS.play + " Play sample</button>" +
               "</div>" +
-              '<div class="settings-actions-row" role="radiogroup" aria-label="Send after a pause">' +
-                "<span>Send after a pause:</span>" +
-                '<div class="setv2-segmented">' +
-                  pauseButtonsHtml +
-                "</div>" +
-              "</div>" +
-              '<div class="settings-actions-row" role="radiogroup" aria-label="Voice speaker and dialect">' +
-                "<span>Voice speaker & dialect (" + state.locale.toUpperCase() + "):</span>" +
-                '<div class="setv2-segmented">' +
-                  speakerButtonsHtml +
-                "</div>" +
-              "</div>",
+            "</div>",
           );
         } else if (state.settingsTab === "profile") {
-          if (settingsTitleEl) settingsTitleEl.textContent = "Personal e-Tax services";
+          if (settingsTitleEl) settingsTitleEl.textContent = "Your e-Tax account";
           setSafeHtml(
             settingsBodyEl,
-            "<p>This public chat does not show personal balances, filing records, or taxpayer identity details.</p>" +
-            '<p><a href="https://etax.nra.gov.ss/" rel="noopener noreferrer">Sign in through the official e-Tax portal</a> for personal services.</p>'
+            '<p class="set-intro">This public chat does not show personal balances, filing records, or taxpayer identity details.</p>' +
+            '<div class="set-list">' +
+              '<div class="set-row">' +
+                '<div class="set-row-text"><span class="set-row-title">Official e-Tax portal</span><span class="set-row-desc">Sign in there for your balances, filings, payments and TIN registration.</span></div>' +
+                '<a class="set-btn" href="' + OFFICIAL_PORTAL + '" rel="noopener noreferrer">Open portal ' + ICONS.arrowUpRight + "</a>" +
+              "</div>" +
+            "</div>",
           );
         } else if (state.settingsTab === "privacy") {
           if (settingsTitleEl) settingsTitleEl.textContent = "Privacy on this device";
           setSafeHtml(
             settingsBodyEl,
-            "<p>Only public questions and answers are saved, and only on this device. Numbers that look like a TIN or phone number are hidden before saving.</p>" +
-            '<div class="settings-actions-row">' +
-              '<button type="button" id="toggle-history-btn" class="icon-btn">' + ICONS.history + (state.saveHistory ? " Save conversations on this device: ON" : " Save conversations on this device: OFF") + "</button>" +
-              '<button type="button" id="purge-local-btn" class="icon-btn danger-text-btn">' + ICONS.trash + " Clear saved conversations on this device</button>" +
-            "</div>"
+            '<p class="set-intro">Only public questions and answers are saved, and only on this device. Numbers that look like a TIN or phone number are hidden before saving.</p>' +
+            '<div class="set-list">' +
+              settingsSwitchRow("toggle-history-btn", "Save conversations on this device", "Turn this off on shared devices; conversations then disappear when you close or reload the page.", state.saveHistory) +
+              '<div class="set-row is-stacked">' +
+                '<div class="set-row-text"><span class="set-row-title">Clear history</span><span class="set-row-desc">Removes every conversation saved on this device. This cannot be undone.</span></div>' +
+                '<button type="button" id="purge-local-btn" class="set-btn set-btn-danger">' + ICONS.trash + " Clear saved conversations on this device</button>" +
+              "</div>" +
+            "</div>",
           );
         } else {
-          if (settingsTitleEl) settingsTitleEl.textContent = "General, Theme & 2G Low-Data Mode";
+          if (settingsTitleEl) settingsTitleEl.textContent = "General & theme";
+          const activeThemeChoice = state.themeChosen ? state.theme : "system";
+          const themeChoices = [["system", "System"], ["light", "Light"], ["dark", "Dark"], ["high-contrast", "High contrast"]];
           setSafeHtml(
             settingsBodyEl,
-            "<p><strong>Republic of South Sudan Civic Palette:</strong> Nile Dusk (Dark), Savanna Cotton Paper (Light), and WCAG AAA High Contrast.</p>" +
-            '<div class="settings-actions-row">' +
-              '<button type="button" class="icon-btn" id="toggle-lowdata-btn">' + ICONS.wifi + (state.lowDataMode ? " 2G Low-Data Mode: ON" : " 2G Low-Data Mode: OFF") + "</button>" +
-            "</div>"
+            '<div class="set-list">' +
+              settingsChoiceRow(
+                "set-theme-label",
+                "Theme",
+                "System follows your device setting.",
+                themeChoices.map(([value, label]) => settingsRadio("data-theme-choice", value, label, activeThemeChoice === value)).join(""),
+                false,
+              ) +
+              settingsSwitchRow("toggle-lowdata-btn", "2G low-data mode", "Turns off blur, decorative backgrounds and motion so pages load faster on slow networks.", state.lowDataMode) +
+            "</div>",
           );
         }
+      }
+
+      function openSettings(returnFocusEl) {
+        renderSettingsTabContent("general");
+        openModal(settingsBackdrop, settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]'), returnFocusEl);
+        syncSettingsIndicator(false);
       }
 
       // Signed-out footer: SSRA Assist has no taxpayer sign-in yet (OQ-001/OQ-005), so both buttons say so in-page and offer the official portal.
@@ -4093,10 +4241,7 @@ function renderPwaShellHtml(locale, nonce) {
       document.getElementById("rail-register-btn")?.addEventListener("click", () => explainPortalAuth("register"));
 
       const openSettingsBtn = document.getElementById("open-settings-btn");
-      openSettingsBtn?.addEventListener("click", () => {
-        renderSettingsTabContent("general");
-        openModal(settingsBackdrop, settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]'), openSettingsBtn);
-      });
+      openSettingsBtn?.addEventListener("click", () => openSettings(openSettingsBtn));
       document.getElementById("close-settings-btn")?.addEventListener("click", closeAllModals);
       // APG tabs: arrow keys, Home and End move and select; only the selected tab is in the Tab order.
       document.querySelector(".settings-tablist")?.addEventListener("keydown", (e) => {
@@ -4127,6 +4272,15 @@ function renderPwaShellHtml(locale, nonce) {
         const tabBtn = e.target.closest("[data-settings-tab]");
         if (tabBtn) {
           renderSettingsTabContent(tabBtn.getAttribute("data-settings-tab"));
+          return;
+        }
+        const themeChoiceBtn = e.target.closest("[data-theme-choice]");
+        if (themeChoiceBtn) {
+          const choice = themeChoiceBtn.getAttribute("data-theme-choice") || "system";
+          state.themeChosen = choice !== "system";
+          applyTheme(choice === "system" ? systemTheme() : choice);
+          renderSettingsTabContent("general");
+          settingsBackdrop?.querySelector('[data-theme-choice="' + choice + '"]')?.focus();
           return;
         }
         if (e.target.closest("#toggle-lowdata-btn")) {

@@ -47,9 +47,11 @@ test("people on shared devices can stop saving conversations", async ({ page }) 
   await page.goto("/en");
   await page.getByRole("button", { name: "Settings & Privacy" }).click();
   await page.getByRole("tab", { name: "Privacy & Erasure" }).click();
-  const toggle = page.getByRole("button", { name: /Save conversations on this device: ON/ });
+  const toggle = page.getByRole("switch", { name: "Save conversations on this device" });
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
   await toggle.click();
-  await expect(page.getByRole("button", { name: /Save conversations on this device: OFF/ })).toBeFocused();
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await expect(toggle).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(page.locator("#rail-device-note")).toBeVisible();
   await expect(page.locator("#rail-device-note")).toContainText("not saved");
