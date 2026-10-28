@@ -87,7 +87,7 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
   // Credential sign-in for Admin (/admin), Staff (/agent), and Auditor (/analytics) accounts
   await main.getByRole("link", { name: "Sign in" }).click();
   await page.getByTestId("signin-email-input").fill("admin@nra.gov.ss");
-  await page.getByTestId("signin-password-input").fill(["SSRA", "Admin", "2026!#9"].join("-"));
+  await page.getByTestId("signin-password-input").fill(["Admin", "123"].join(""));
   await page.getByTestId("console-signin-submit-btn").click();
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByTestId("authenticated-session-pill")).toContainText("Grace A.");
@@ -96,7 +96,7 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
   await expect(page).toHaveURL(/\/signin$/);
 
   await page.getByTestId("signin-email-input").fill("staff@nra.gov.ss");
-  await page.getByTestId("signin-password-input").fill(["SSRA", "Staff", "2026!#7"].join("-"));
+  await page.getByTestId("signin-password-input").fill(["Staff", "123"].join(""));
   await page.getByTestId("console-signin-submit-btn").click();
   await expect(page).toHaveURL(/\/agent$/);
   await expect(page.getByTestId("authenticated-session-pill")).toContainText("Deng M.");
@@ -104,7 +104,7 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
   await page.getByTestId("ops-signout-btn").click();
 
   await page.getByTestId("signin-email-input").fill("auditor@nra.gov.ss");
-  await page.getByTestId("signin-password-input").fill(["SSRA", "Auditor", "2026!#5"].join("-"));
+  await page.getByTestId("signin-password-input").fill(["Auditor", "123"].join(""));
   await page.getByTestId("console-signin-submit-btn").click();
   await expect(page).toHaveURL(/\/analytics$/);
   await expect(page.getByTestId("authenticated-session-pill")).toContainText("Nyabol K.");
