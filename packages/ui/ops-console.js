@@ -13,6 +13,15 @@
  */
 
 import { ICONS } from "./icons.js";
+import {
+  renderThemeBootstrapScript,
+  SSRA_PALETTE,
+  SSRA_THEME_COLORS,
+  SSRA_THEME_STORAGE_KEY,
+} from "./theme.js";
+
+const DARK = SSRA_PALETTE.dark;
+const HC = SSRA_PALETTE["high-contrast"];
 
 const OPS_ROUTE_PREFIXES = [
   "/admin",
@@ -652,7 +661,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-  <meta name="theme-color" id="ops-theme-color" content="#FFFFFF" />
+  <meta name="theme-color" id="ops-theme-color" content="${SSRA_THEME_COLORS.light}" />
+  <script nonce="${nonce}">${renderThemeBootstrapScript()}</script>
   <meta name="description" content="Non-operational preview of SSRA Assist staff navigation. No live taxpayer data, service telemetry, or staff actions." />
   <link rel="preload" href="/fonts/IBMPlexSans-Regular.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/IBMPlexSans-Medium.woff2" as="font" type="font/woff2" crossorigin />
@@ -753,6 +763,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       --rail-muted: rgba(255, 255, 255, 0.72);
       --rail-field: rgba(255, 255, 255, 0.12);
       --rail-field-hover: rgba(255, 255, 255, 0.2);
+      --avatar-bg: #FFFFFF;
+      --avatar-ink: #1E40AF;
+      --on-grad: #FFFFFF;
+      --scrim: rgba(15, 23, 42, 0.32);
 
       --ops-good-ink: #056824;
       --ops-warn-ink: #853A06;
@@ -762,79 +776,106 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       --ops-focus-rail: #FFD60A;
     }
 
+    /* Dark: Gemini-style near-black canvas with a navy top glow and a #1F1F1F rail (packages/ui/theme.js). */
     :root[data-theme="dark"] {
       color-scheme: dark;
-      --bg-0: #0B1220;
-      --border-0: rgba(148, 163, 184, 0.14);
-      --border-1: rgba(148, 163, 184, 0.26);
-      --border-2: rgba(148, 163, 184, 0.38);
-      --text-0: #F1F5F9;
-      --text-1: #E2E8F0;
-      --text-2: #CBD5E1;
-      --text-3: #A3B1C6;
-      --accent: #A5B4FC;
-      --accent-soft: rgba(129, 140, 248, 0.16);
-      --ssra-blue: #93C5FD;
-      --canvas-glow: rgba(79, 70, 229, 0.30);
-      --topbar-bg: rgba(11, 18, 32, 0.78);
-      --ghost-hover: rgba(148, 163, 184, 0.12);
-      --ghost-active: rgba(148, 163, 184, 0.2);
-      --seg-track: rgba(148, 163, 184, 0.12);
-      --seg-active-bg: #1E293B;
-      --btn-primary-bg: #C7D2FE;
-      --btn-primary-hover: #E0E7FF;
-      --btn-primary-ink: #0B1220;
-      --ops-panel: #111A2E;
-      --ops-inset: #0F1729;
-      --ops-row-hover: rgba(148, 163, 184, 0.07);
-      --ops-hairline: rgba(148, 163, 184, 0.12);
+      --bg-0: ${DARK.canvas};
+      --border-0: ${DARK.border0};
+      --border-1: ${DARK.border1};
+      --border-2: ${DARK.border2};
+      --text-0: ${DARK.text0};
+      --text-1: ${DARK.text1};
+      --text-2: ${DARK.text2};
+      --text-3: ${DARK.text3};
+      --accent: ${DARK.accent};
+      --accent-soft: ${DARK.accentSoft};
+      --ssra-blue: ${DARK.accent};
+      --canvas-glow: ${DARK.glow};
+      --topbar-bg: rgba(15, 16, 17, 0.78);
+      --ghost-hover: ${DARK.ghostHover};
+      --ghost-active: ${DARK.ghostActive};
+      --seg-track: rgba(255, 255, 255, 0.06);
+      --seg-active-bg: ${DARK.surface4};
+      --btn-primary-bg: ${DARK.primary};
+      --btn-primary-hover: ${DARK.primaryHover};
+      --btn-primary-ink: ${DARK.primaryInk};
+      --ops-panel: ${DARK.card};
+      --ops-inset: ${DARK.inset};
+      --ops-row-hover: ${DARK.rowHover};
+      --ops-hairline: rgba(255, 255, 255, 0.06);
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.32);
       --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.42);
-      --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.5);
+      --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px ${DARK.border0};
       --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6);
-      --rail-bg: #172554;
-      --ops-good-ink: #4ADE80;
-      --ops-warn-ink: #FBBF24;
-      --ops-bad-ink: #FCA5A5;
-      --ops-info-ink: #A5B4FC;
-      --ops-focus: #93C5FD;
+      --scrim: ${DARK.scrim};
+      --rail-bg: ${DARK.railBg};
+      --rail-text: ${DARK.railText};
+      --rail-current: ${DARK.railCurrent};
+      --rail-hover: ${DARK.railHover};
+      --rail-active: ${DARK.railActive};
+      --rail-muted: ${DARK.railMuted};
+      --rail-field: ${DARK.railField};
+      --rail-field-hover: ${DARK.railFieldHover};
+      --avatar-bg: ${DARK.avatarBg};
+      --avatar-ink: ${DARK.avatarInk};
+      --ops-good-ink: ${DARK.good};
+      --ops-warn-ink: ${DARK.warn};
+      --ops-bad-ink: ${DARK.bad};
+      --ops-info-ink: ${DARK.accent};
+      --ops-focus: ${DARK.focus};
+      --ops-focus-rail: ${DARK.focus};
     }
 
+    /* High contrast: GitHub "Dark high contrast"-style palette; borders >= 3:1, yellow reserved for focus. */
     :root[data-theme="high-contrast"] {
       color-scheme: dark;
-      --bg-0: #000000;
-      --border-0: #737373;
-      --border-1: #FFFFFF;
-      --border-2: #FFD60A;
-      --text-0: #FFFFFF;
-      --text-1: #FFFFFF;
-      --text-2: #E5E7EB;
-      --text-3: #E5E7EB;
-      --accent: #FFD60A;
-      --accent-soft: #111111;
-      --ssra-blue: #60A5FA;
+      --bg-0: ${HC.canvas};
+      --border-0: ${HC.border0};
+      --border-1: ${HC.border1};
+      --border-2: ${HC.border2};
+      --text-0: ${HC.text0};
+      --text-1: ${HC.text1};
+      --text-2: ${HC.text2};
+      --text-3: ${HC.text3};
+      --accent: ${HC.accent};
+      --accent-soft: ${HC.accentSoft};
+      --ssra-blue: ${HC.accent};
+      --grad-primary: linear-gradient(135deg, ${HC.primary} 0%, ${HC.primary} 100%);
+      --on-grad: ${HC.primaryInk};
       --canvas-glow: transparent;
-      --topbar-bg: #000000;
-      --ghost-hover: #222222;
-      --ghost-active: #2E2E2E;
+      --topbar-bg: ${HC.canvas};
+      --ghost-hover: ${HC.ghostHover};
+      --ghost-active: ${HC.ghostActive};
       --seg-track: transparent;
-      --seg-active-bg: #000000;
-      --btn-primary-bg: #FFD60A;
-      --btn-primary-hover: #FFE45C;
-      --btn-primary-ink: #000000;
-      --ops-panel: #000000;
-      --ops-inset: #0D0D0D;
-      --ops-row-hover: #161616;
-      --ops-hairline: #4B4B4B;
+      --seg-active-bg: ${HC.accentPill};
+      --btn-primary-bg: ${HC.primary};
+      --btn-primary-hover: ${HC.primaryHover};
+      --btn-primary-ink: ${HC.primaryInk};
+      --ops-panel: ${HC.card};
+      --ops-inset: ${HC.inset};
+      --ops-row-hover: ${HC.rowHover};
+      --ops-hairline: #4B525C;
       --shadow-sm: none;
       --shadow-md: none;
       --shadow-lg: none;
       --shadow-modal: none;
-      --ops-good-ink: #4ADE80;
-      --ops-warn-ink: #FFD60A;
-      --ops-bad-ink: #FCA5A5;
-      --ops-info-ink: #93C5FD;
-      --ops-focus: #FFD60A;
+      --scrim: ${HC.scrim};
+      --rail-bg: ${HC.railBg};
+      --rail-text: ${HC.railText};
+      --rail-current: ${HC.railCurrent};
+      --rail-hover: ${HC.railHover};
+      --rail-active: ${HC.railActive};
+      --rail-muted: ${HC.railMuted};
+      --rail-field: ${HC.railField};
+      --rail-field-hover: ${HC.railFieldHover};
+      --avatar-bg: ${HC.avatarBg};
+      --avatar-ink: ${HC.avatarInk};
+      --ops-good-ink: ${HC.good};
+      --ops-warn-ink: ${HC.warn};
+      --ops-bad-ink: ${HC.bad};
+      --ops-info-ink: ${HC.accent};
+      --ops-focus: ${HC.focus};
+      --ops-focus-rail: ${HC.focus};
     }
 
     *, *::before, *::after { box-sizing: border-box; }
@@ -910,7 +951,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       width: var(--rail-w-expanded);
     }
     :root[data-rail-mode="hover"] .staff-rail.is-expanded { box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32); }
-    :root[data-theme="high-contrast"] .staff-rail { border-inline-end: 1px solid #FFFFFF; }
+    :root[data-theme="high-contrast"] .staff-rail { border-inline-end: 1px solid var(--border-0); }
 
     .staff-rail-head {
       display: flex; align-items: center; justify-content: space-between; gap: 4px;
@@ -991,6 +1032,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .staff-rail a.nav-item:active { background: var(--rail-active); }
     .staff-rail a.nav-item.active { background: var(--rail-current); font-weight: 500; }
     .staff-rail a.nav-item.active:hover { background: var(--rail-hover); }
+    :root[data-theme="high-contrast"] .staff-rail a.nav-item.active { box-shadow: inset 0 0 0 1px var(--accent); }
+    :root[data-theme="high-contrast"] .ops-cmdk-trigger { box-shadow: inset 0 0 0 1px var(--border-0); }
     .staff-rail-icon { display: inline-flex; flex: none; width: 20px; justify-content: center; }
     .staff-rail-icon svg, .ops-cmdk-trigger svg { width: 18px; height: 18px; }
     .staff-rail-label {
@@ -1011,7 +1054,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .staff-acct-trigger[aria-expanded="true"] { background: var(--rail-hover); }
     .staff-acct-avatar {
       position: relative; width: 36px; height: 36px; border-radius: 50%;
-      background: #FFFFFF; color: #1E40AF; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;
+      background: var(--avatar-bg); color: var(--avatar-ink); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;
       display: inline-flex; align-items: center; justify-content: center; flex: none;
     }
     .staff-acct-meta {
@@ -1097,7 +1140,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     }
     .ops-seg-btn:hover:not(.active) { background: var(--ghost-hover); }
     .ops-seg-btn.active { background: var(--seg-active-bg); color: var(--accent); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16); }
-    :root[data-theme="high-contrast"] .ops-seg-btn.active { border-color: #FFD60A; color: #FFFFFF; box-shadow: none; }
+    :root[data-theme="high-contrast"] .ops-seg-btn.active { border-color: var(--accent); box-shadow: none; }
+    :root[data-theme="high-contrast"] .ops-segmented { box-shadow: inset 0 0 0 1px var(--border-0); }
 
     /* Buttons: pill shaped, ghost hover, spring press */
     .ops-btn {
@@ -1309,7 +1353,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     /* Command palette (public assistant Settings modal motion) */
     .ops-cmdk-backdrop {
       position: fixed; inset: 0; z-index: 90; display: none; place-items: start center; padding: 12vh 16px 16px;
-      background: rgba(15, 23, 42, 0.32); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+      background: var(--scrim); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     }
     .ops-cmdk-backdrop.open { display: grid; animation: opsFade 180ms var(--ops-ease) both; }
     .ops-cmdk-dialog {
@@ -1347,7 +1391,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .signin-head { text-align: center; margin-bottom: 24px; }
     .signin-mark {
       display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 16px;
-      border-radius: 50%; background: var(--grad-primary); color: #FFFFFF; box-shadow: 0 6px 20px rgba(0, 93, 180, 0.25);
+      border-radius: 50%; background: var(--grad-primary); color: var(--on-grad); box-shadow: 0 6px 20px rgba(0, 93, 180, 0.25);
     }
     .signin-mark svg { width: 24px; height: 24px; }
     .signin-head .ops-eyebrow { margin-bottom: 8px; font-size: 0.75rem; }
@@ -1432,7 +1476,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 
     /* Phone drawer */
     .mobile-nav-btn { display: none; }
-    .ops-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); z-index: 25; }
+    .ops-mobile-backdrop { display: none; position: fixed; inset: 0; background: var(--scrim); z-index: 25; }
     @media (pointer: coarse), (max-width: 820px) {
       .staff-rail-pin, .ops-cmdk-trigger, .ops-btn, .staff-acct-item, .staff-rail a.nav-item, .ops-seg-btn { min-height: 44px; }
       .staff-rail-pin { min-width: 44px; }
@@ -1554,7 +1598,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           <hr class="staff-acct-hr" role="separator" />
           <div role="group" aria-label="Appearance">
             <div class="staff-acct-heading" aria-hidden="true">Appearance</div>
-            <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio" aria-checked="true" tabindex="-1"><span>${ICONS.sun} Light</span></button>
+            <button type="button" class="staff-acct-item" data-set-theme="system" role="menuitemradio" aria-checked="true" tabindex="-1"><span>${ICONS.monitor} System</span></button>
+            <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.sun} Light</span></button>
             <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.moon} Dark</span></button>
             <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.contrast} High contrast</span></button>
           </div>
@@ -1736,6 +1781,32 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       const acctTrigger = document.getElementById("staff-acct-trigger");
       const acctMenu = document.getElementById("staff-acct-menu");
 
+      const THEME_STORAGE_KEY = ${JSON.stringify(SSRA_THEME_STORAGE_KEY)};
+      const THEME_COLORS = ${JSON.stringify(SSRA_THEME_COLORS)};
+      const VALID_THEMES = ["light", "dark", "high-contrast"];
+      function systemTheme() {
+        if (window.matchMedia?.("(prefers-contrast: more)")?.matches) return "high-contrast";
+        return window.matchMedia?.("(prefers-color-scheme: light)")?.matches ? "light" : "dark";
+      }
+      // Same order as the pre-paint bootstrap: shared choice, the public assistant's store, the legacy console key.
+      function readThemeChoice() {
+        try {
+          const shared = localStorage.getItem(THEME_STORAGE_KEY);
+          if (shared === "system" || VALID_THEMES.includes(shared)) return shared;
+          const store = JSON.parse(localStorage.getItem("ssra-chat-store-v2") || "null");
+          if (store && VALID_THEMES.includes(store.theme)) return store.theme;
+          const legacy = localStorage.getItem("ssra-ops-theme");
+          if (VALID_THEMES.includes(legacy)) return legacy;
+        } catch {}
+        return "system";
+      }
+      function writeThemeChoice(choice) {
+        try {
+          localStorage.setItem(THEME_STORAGE_KEY, choice);
+          localStorage.removeItem("ssra-ops-theme");
+        } catch {}
+      }
+
       function readUiPreference(key, fallback) {
         try {
           return localStorage.getItem(key) || fallback;
@@ -1768,7 +1839,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         route: mainEl?.getAttribute("data-route") || "/admin",
         role: initialSession?.role || readUiPreference("ssra-ops-preview-persona", "ssra_admin"),
         session: initialSession,
-        theme: readUiPreference("ssra-ops-theme", "light"),
+        themeChoice: readThemeChoice(),
+        theme: "light",
         railMode: readUiPreference("ssra-ops-rail-mode", "always-open"),
         periodDays: 30,
         degradationLevel: 1,
@@ -1837,7 +1909,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       let lastRenderedRailKey = "ssra_admin|" + (mainEl?.getAttribute("data-route") || "/admin");
 
       function applyChrome() {
-        if (!["light", "dark", "high-contrast"].includes(state.theme)) state.theme = "light";
+        if (state.themeChoice !== "system" && !VALID_THEMES.includes(state.themeChoice)) state.themeChoice = "system";
+        state.theme = state.themeChoice === "system" ? systemTheme() : state.themeChoice;
         if (state.session && ROLE_META[state.session.role]) {
           state.role = state.session.role;
         }
@@ -1848,10 +1921,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         document.documentElement.setAttribute("data-rail-mode", state.railMode);
         const themeColorMeta = document.getElementById("ops-theme-color");
         if (themeColorMeta) {
-          themeColorMeta.setAttribute(
-            "content",
-            state.theme === "dark" ? "#0B1220" : state.theme === "high-contrast" ? "#000000" : "#FFFFFF",
-          );
+          themeColorMeta.setAttribute("content", THEME_COLORS[state.theme]);
         }
         const shouldExpandRail = state.railMode === "always-open" || Boolean(
           railEl?.matches(":hover") || railEl?.contains(document.activeElement) || acctMenu?.classList.contains("open"),
@@ -1933,7 +2003,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           barSignOutBtn?.classList.add("is-hidden");
         }
         document.querySelectorAll("[data-set-theme]").forEach((btn) => {
-          const isSelected = btn.getAttribute("data-set-theme") === state.theme;
+          const isSelected = btn.getAttribute("data-set-theme") === state.themeChoice;
           btn.setAttribute("aria-checked", String(isSelected));
           btn.classList.toggle("active", isSelected);
         });
@@ -3065,8 +3135,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         }
         const themeBtn = e.target.closest("[data-set-theme]");
         if (themeBtn) {
-          state.theme = themeBtn.getAttribute("data-set-theme") || "dark";
-          writeUiPreference("ssra-ops-theme", state.theme);
+          state.themeChoice = themeBtn.getAttribute("data-set-theme") || "system";
+          writeThemeChoice(state.themeChoice);
           closeAcctMenu(true);
           applyChrome();
         }
@@ -3093,8 +3163,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           { label: "Preview persona: Tax Agent", hint: "Preview", run: () => setPreviewPersona("ssra_staff") },
           { label: "Preview persona: Auditor", hint: "Preview", run: () => setPreviewPersona("ssra_auditor") },
           { label: "Cycle Theme (Dark / Light / High-Contrast)", hint: "Appearance", run: () => {
-            state.theme = state.theme === "dark" ? "light" : state.theme === "light" ? "high-contrast" : "dark";
-            writeUiPreference("ssra-ops-theme", state.theme);
+            state.themeChoice = state.theme === "dark" ? "light" : state.theme === "light" ? "high-contrast" : "dark";
+            writeThemeChoice(state.themeChoice);
             applyChrome();
           } },
         ];
@@ -3218,6 +3288,18 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           else if (e.key === "k") { e.preventDefault(); state.selectedTicketIdx = (state.selectedTicketIdx + 2) % 3; renderCurrentRoute(); }
           else if (e.key === "r") { e.preventDefault(); document.getElementById("copilot-draft-box")?.focus(); }
         }
+      });
+
+      // Follow the device while "System" is chosen, and apply a theme picked on another page or tab.
+      ["(prefers-color-scheme: light)", "(prefers-contrast: more)"].forEach((query) => {
+        window.matchMedia?.(query)?.addEventListener?.("change", () => {
+          if (state.themeChoice === "system") applyChrome();
+        });
+      });
+      window.addEventListener("storage", (e) => {
+        if (e.key !== THEME_STORAGE_KEY) return;
+        state.themeChoice = VALID_THEMES.includes(e.newValue) ? e.newValue : "system";
+        applyChrome();
       });
 
       renderCurrentRoute();

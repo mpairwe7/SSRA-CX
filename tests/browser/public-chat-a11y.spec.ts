@@ -353,6 +353,47 @@ test("the theme follows the system until the user chooses one", async ({ page })
   await expect(html).toHaveAttribute("data-theme", "light");
 });
 
+test("one theme choice applies to the chat and the staff console", async ({ page }) => {
+  await page.goto("/en");
+  await page.getByRole("button", { name: "Settings & Privacy" }).click();
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("radio", { name: "Dark" }).click();
+  const html = page.locator("html");
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  // Gemini-style dark: #1F1F1F sidebar beside a near-black canvas.
+  const chat = await page.evaluate(() => ({
+    rail: getComputedStyle(document.querySelector(".rail-wrap") as Element).backgroundColor,
+    canvas: getComputedStyle(document.querySelector(".app-main-col") as Element).backgroundColor,
+  }));
+  expect(chat).toEqual({ rail: "rgb(31, 31, 31)", canvas: "rgb(15, 16, 17)" });
+
+  await page.goto("/admin");
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("#staff-rail")).toHaveCSS("background-color", "rgb(31, 31, 31)");
+
+  // "System" in the console's Appearance menu hands control back to the device on every page.
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.locator("#staff-acct-trigger").click();
+  await page.getByRole("menuitemradio", { name: "System" }).click();
+  await expect(html).toHaveAttribute("data-theme", "light");
+  await page.goto("/en");
+  await expect(html).toHaveAttribute("data-theme", "light");
+});
+
+test("the theme is applied before the page body renders", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => {
+    new MutationObserver((_records, observer) => {
+      if (!document.body) return;
+      (window as unknown as { themeAtBody?: string | null }).themeAtBody = document.documentElement.getAttribute("data-theme");
+      observer.disconnect();
+    }).observe(document, { childList: true, subtree: true });
+  });
+  for (const path of ["/en", "/admin"]) {
+    await page.goto(path);
+    expect(await page.evaluate(() => (window as unknown as { themeAtBody?: string | null }).themeAtBody)).toBe("dark");
+  }
+});
+
 test("continuous voice conversation auto-advances across turns and filters speaker echo", async ({ page }) => {
   await page.addInitScript(() => {
     const startCalls: string[] = [];

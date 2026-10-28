@@ -51,6 +51,10 @@ R2-F renders the preview card, heading, and page title on the server for every r
 5. **Shared visual language with the public assistant (2026-10-28):**
    - The console uses the main chat page's tokens: light canvas with the indigo top glow, `#1E40AF` rail, IBM Plex Sans, pill buttons, and white cards. Light is the default theme; dark and high contrast are opt-in.
    - Non-interactive readings (session state, preview state, priority, status) render as plain text in text-safe inks rather than capsules, and no component carries a leading-edge colour bar. Provenance text ("Preview only", `ILLUSTRATIVE_FALLBACK telemetry`) stays visible in the top bar on every route, so restyling never makes reference data look live.
+6. **One theme choice shared with the public assistant (2026-10-28):**
+   - `packages/ui/theme.js` owns the palette for both surfaces: Gemini-style dark (`#0F1011` canvas, `#1F1F1F` rail) and GitHub-style high contrast (`#0A0C10`).
+   - It also owns the `ssra-theme` storage key (`system`, `light`, `dark`, `high-contrast`) and a pre-paint bootstrap script.
+   - The console's Appearance menu offers System, Light, Dark and High contrast. A theme is presentation state only and never affects authorization.
 
 
 

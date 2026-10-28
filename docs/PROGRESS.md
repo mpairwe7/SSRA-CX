@@ -62,6 +62,30 @@
   - **Checks:** rendered contrast is at least 5.3:1 for every sampled label in all three themes. `tools/verify_frontend_budgets_and_a11y.py` FE-G7 now requires the civic palette token and rejects a reintroduced ribbon, and `tests/browser/staff-console.spec.ts` asserts the ribbon is absent.
   - **Threat-model delta:** none. This is presentation only: no new endpoints, storage, dependencies or authorization paths.
 - **Phase 19 (Qwen3 Thinking Mode Enabled Across Sovereign Model Routing & vLLM Serving):** Enabled `enable_thinking: true` across `ai/routing/model-routing.yaml` (`vllm_serving` and `node_routes` for `input_guard`, `understand`, and `compose`), `SovereignModelRouter` (`ModelRouteDecision.enable_thinking` and `reasoner_model`), `VllmServingGuard` (`build_guided_json_request`, `build_thinking_chat_request`, and `extract_thinking_and_answer` with fail-closed `<think>` tag handling), and `infra/compose/docker-compose.gpu.yml` (`SSRA_ENABLE_THINKING: "true"`, `Qwen/Qwen3.8-27B-FP8` @ `017b9c7af6b5689d5dd426a76e0bc077eb5ca20a`).
+- **Phase 20 (Gemini-Style Dark Mode, Professional High Contrast & One Shared Theme Choice across `apps/web/server.js`, `packages/ui/ops-console.js` and the new `packages/ui/theme.js`):**
+  - **Dark (was a near-light palette):**
+    - The canvas is near-black `#0F1011`. On the chat page a navy glow (`#18285F`) sits behind the composer, as in Gemini; the dashboards use a navy top glow.
+    - The sidebar is Gemini's `#1F1F1F`, with a darker `rgba(0,0,0,.25)` current row.
+    - Cards and the composer are `#1E1F20`; text runs `#E3E3E3`, `#C4C7C5`, `#A8ABAF`, `#9AA0A6`.
+    - The accent is `#A8C7FA`, primary buttons are `#1F3B9B`, and the status inks are `#6DD58C`, `#FDD663`, `#F2B8B5`.
+  - **High contrast:** a GitHub "Dark high contrast"-style palette.
+    - Canvas `#0A0C10`, a dark rail with a trailing border, and borders of at least 3:1.
+    - Accent and primary `#71B7FF`; the selected rail row and controls get an accent ring. Yellow `#FFD60A` is kept for focus only.
+  - **One shared choice:**
+    - `ssra-theme` holds `system`, `light`, `dark` or `high-contrast`, so a choice made on any same-origin page applies everywhere.
+    - Tabs update live through `storage` events. The console's Appearance menu gains "System".
+    - Legacy `ssra-chat-store-v2.theme` and `ssra-ops-theme` values are adopted once.
+    - A nonced pre-paint `<head>` bootstrap removes the theme flash.
+    - `theme-color` values are light `#FFFFFF`, dark `#0F1011`, high contrast `#0A0C10`; the manifest no longer uses the old green palette.
+  - **Main-page consistency fixes:**
+    - Hard-coded light colours are now semantic tokens: rail text and CTA, tooltip, composer, segmented controls, switches, scrim, modal shadow, focus ring.
+    - The `.rail-wrap :focus-visible` selector, which the minifier broke, is fixed.
+    - The assistant bubble, callout and gen-UI card lose their leading/top colour bars.
+    - The status badge, the "auto" language reading, the meta, citation, document and call-status labels become plain text in text-safe inks, with 20px spacing between adjacent labels.
+  - **Checks:**
+    - A pixel-sampled contrast audit of every visible label on `/en`, `/signin`, `/admin`, `/agent` and `/analytics` measures at least 4.8:1 in all three themes.
+    - New browser tests cover the shared choice (the chat's Settings giving the dashboard rail its dark colour, and "System" in the console handing control back to the device) and that the theme is set before the body renders.
+  - **Threat-model delta:** none. This is presentation-only. The one new browser-storage key holds only a theme name and no personal data.
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 
