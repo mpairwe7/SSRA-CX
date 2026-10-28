@@ -27,12 +27,14 @@ def test_sovereign_model_router_and_5_step_degradation_ladder() -> None:
     assert r1.degradation_mode == "PRIMARY_SOVEREIGN_VLLM"
     assert r1.llm_enabled is True
     assert r1.enable_thinking is True
+    assert r1.reasoner_model == "Qwen/Qwen3.8-27B-FP8"
 
     router.set_degradation_level(4)
     r4 = router.select_route(node_name="compose", tier=RiskTier.T0)
     assert r4.degradation_mode == "RETRIEVAL_ONLY_ANSWER_CARDS"
     assert r4.llm_enabled is False
     assert r4.enable_thinking is False
+    assert r4.reasoner_model is None
 
     from ssra_llm import VllmServingGuard
 
@@ -53,6 +55,9 @@ def test_sovereign_model_router_and_5_step_degradation_ladder() -> None:
     )
     assert think2 == "Verify statutory rate"
     assert ans2 == "PAYE is 10%."
+    think3, ans3 = guard.extract_thinking_and_answer("<think>Truncated reasoning without closing")
+    assert think3 == "Truncated reasoning without closing"
+    assert ans3 == ""
 
     router.set_degradation_level(5)
     r5 = router.select_route(node_name="compose", tier=RiskTier.T0)

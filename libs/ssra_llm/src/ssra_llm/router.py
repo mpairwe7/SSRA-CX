@@ -57,6 +57,7 @@ class ModelRouteDecision:
     max_tokens: int
     timeout_ms: int
     enable_thinking: bool = True
+    reasoner_model: str | None = None
 
 
 class SovereignModelRouter:
@@ -103,6 +104,8 @@ class SovereignModelRouter:
         node_cfg = self._config.get("node_routes", {}).get(node_name, {})
         primary = str(node_cfg.get("primary_model", "ssra-sovereign/sunflower-qwen3.5-9b"))
         secondary = str(node_cfg.get("secondary_model", "ssra-sovereign/qwen3-8b"))
+        raw_reasoner = node_cfg.get("reasoner_model")
+        reasoner = str(raw_reasoner).strip() if raw_reasoner else None
         max_tokens = int(node_cfg.get("max_tokens", 512))
         timeout_ms = int(node_cfg.get("timeout_ms", 2000))
         cfg_thinking = bool(node_cfg.get("enable_thinking", True))
@@ -133,6 +136,7 @@ class SovereignModelRouter:
             max_tokens=max_tokens,
             timeout_ms=timeout_ms,
             enable_thinking=cfg_thinking and llm_enabled,
+            reasoner_model=reasoner if llm_enabled else None,
         )
 
 
@@ -292,6 +296,10 @@ class VllmServingGuard:
             think_part, after = raw_content.split("</think>", 1)
             clean_think = re.sub(r"^\s*<think>\s*", "", think_part, flags=re.IGNORECASE).strip()
             return (clean_think or (str(reasoning).strip() if reasoning else None), after.strip())
+
+        if re.search(r"<think\b", raw_content, flags=re.IGNORECASE):
+            clean_think = re.sub(r"^\s*<think>\s*", "", raw_content, flags=re.IGNORECASE).strip()
+            return (clean_think or (str(reasoning).strip() if reasoning else None), "")
 
         return (str(reasoning).strip() if reasoning else None, raw_content.strip())
 
