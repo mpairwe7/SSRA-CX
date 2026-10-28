@@ -11,6 +11,7 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
 
   const main = page.locator("#staff-main");
   await expect(page.getByText("Preview only · no authenticated staff session")).toBeVisible();
+  await expect(page.locator(".ssra-flag-ribbon")).toHaveCount(0);
   await expect(main).toContainText("This screen is not connected to an authenticated staff session.");
 
   const commandTrigger = page.getByRole("button", { name: "Search console destinations" });

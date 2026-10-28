@@ -148,8 +148,8 @@ export const SSRA_DESIGN_TOKENS = {
     tapDurationMs: 140,
   },
   opsConsole: {
-    collapsedRailWidthPx: 52,
-    expandedRailWidthPx: 208,
+    collapsedRailWidthPx: 56,
+    expandedRailWidthPx: 248,
     navHeightPx: 56,
     maxWidthPx: 1440,
     readMaxWidthPx: 1180,

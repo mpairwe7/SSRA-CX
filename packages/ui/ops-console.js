@@ -1,12 +1,14 @@
 /**
  * SSRA Assist Operations Console Preview & Staff Sidebar Design System (`packages/ui/ops-console.js`).
  *
- * Inspired by the `FinalYearProject` (`urabot`) Operations Console & `StaffGuard` architecture:
- * - `.ops-*` design tokens (`--ops-font-sans`, `--ops-font-mono`, 8-step type scale, 4pt grid, 5-ingredient `.ops-glass`)
- * - Collapsible `.staff-rail` (`52px` collapsed / `216px` expanded, `always-open` vs `hover` mode)
+ * Shares the public assistant's visual language (`apps/web/server.js`):
+ * - IBM Plex Sans (400/500/600), white canvas with the indigo top glow, `#1E40AF` rail with pill rows
+ * - Pill buttons with ghost hovers and a spring press; white cards with hairline borders and soft shadows
+ * - Status readings are plain text in text-safe inks (no capsules, no leading-edge colour bars)
+ * - Collapsible `.staff-rail` (`56px` collapsed / `248px` expanded, `always-open` vs `hover` mode)
  * - 4-group navigation hierarchy (`Work` / `Audit` / `Configure` / `Observe`) + `AccountMenu` upward popover
  * - `CommandPalette` (`⌘K` / `Ctrl+K`) modal with keyboard navigation and role-scoped destinations
- * - `OpsPage`, `OpsPanel` (`default`, `is-bare`, `is-glass`), `StatCard` (`splitMeasure`, `.ops-delta`, SVG `Sparkline`)
+ * - Light (default), Dark and High contrast themes
  * - Explicit non-operational preview until authenticated staff sessions and provenance-bearing data are available
  */
 
@@ -292,12 +294,7 @@ function resolvePublicAssistantUrl(publicWebOrigin) {
 }
 
 // Rendered on the server so the preview state is readable without JavaScript.
-function renderPreviewCard(
-  title,
-  group = "Work",
-  publicAssistantUrl = "http://127.0.0.1:3000/en",
-  routePath = "/admin",
-) {
+function renderPreviewCard(title, group = "Work", routePath = "/admin") {
   const spec = ROUTE_SPECS[routePath] || ROUTE_SPECS["/admin"];
   return `<header class="ops-page-head">
           <div>
@@ -308,13 +305,12 @@ function renderPreviewCard(
           <div class="ops-page-actions">
             <span class="ops-fresh"><span class="ops-fresh-dot is-stale" aria-hidden="true"></span>Session unverified · preview only</span>
             <a class="ops-btn" id="ops-header-signin-link" href="/signin" data-nav="/signin">Sign in</a>
-            <a class="ops-btn" id="ops-header-signup-link" href="/signup" data-nav="/signup">Create account</a>
-            <a class="ops-btn is-primary primary" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Open the public assistant ${ICONS.arrowUpRight}</a>
+            <a class="ops-btn primary" id="ops-header-signup-link" href="/signup" data-nav="/signup">Create account</a>
           </div>
         </header>
 
         <section class="ops-panel ops-preview-card" aria-labelledby="preview-title">
-          <span class="ops-preview-chip">Preview only</span>
+          <span class="ops-preview-chip">${ICONS.eye} Preview only</span>
           <p>This screen is not connected to an authenticated staff session. It contains no live taxpayer records, casework, service telemetry, or operational controls.</p>
           <p>Staff access will be enabled after SSRA approves the identity provider and role mapping, and the service can verify those permissions on the server.</p>
           <ul><li>Use a staff identity provider with server-validated sessions.</li><li>Show live data only with its source, observation time, and freshness state.</li><li>Require server-side authorization and an audit record for every staff action.</li></ul>
@@ -589,7 +585,7 @@ function renderRouteBody(currentPath, currentTitle, currentGroup, publicAssistan
   if (currentPath === "/signin") return renderSignInCard(publicAssistantUrl);
   if (currentPath === "/signup") return renderSignUpCard(publicAssistantUrl);
   if (currentPath === "/signin/callback") return renderSignInCallbackCard(publicAssistantUrl);
-  return renderPreviewCard(currentTitle, currentGroup, publicAssistantUrl, currentPath);
+  return renderPreviewCard(currentTitle, currentGroup, currentPath);
 }
 
 function renderServerRailGroups(currentPath = "/admin", role = "ssra_admin") {
@@ -652,15 +648,15 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
   const currentTitle = currentMeta.label;
   const publicAssistantUrl = resolvePublicAssistantUrl(publicWebOrigin);
   const rawHtml = `<!DOCTYPE html>
-<html lang="en" data-theme="dark" data-rail-mode="always-open">
+<html lang="en" data-theme="light" data-rail-mode="always-open">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-  <meta name="theme-color" id="ops-theme-color" content="#091310" />
+  <meta name="theme-color" id="ops-theme-color" content="#FFFFFF" />
   <meta name="description" content="Non-operational preview of SSRA Assist staff navigation. No live taxpayer data, service telemetry, or staff actions." />
   <link rel="preload" href="/fonts/IBMPlexSans-Regular.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/IBMPlexSans-Medium.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/IBMPlexSans-SemiBold.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/fonts/IBMPlexMono-Light.woff2" as="font" type="font/woff2" crossorigin />
   <title>SSRA Operations Console Preview — ${escapeHtml(currentTitle)}</title>
   <style nonce="${nonce}">
     @font-face {
@@ -699,277 +695,192 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       font-display: swap;
     }
 
-    :root {
-      color-scheme: dark;
-      --ops-font-sans: "IBM Plex Sans", "Segoe UI", "Aptos", "Avenir Next", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-      --ops-font-mono: "IBM Plex Mono", "Cascadia Code", "SFMono-Regular", "Fira Code", monospace;
-      --ops-text-2xs: 11px;
-      --ops-text-xs: 12px;
-      --ops-text-sm: 13px;
-      --ops-text-base: 14px;
-      --ops-text-md: 16px;
-      --ops-text-lg: 20px;
-      --ops-text-xl: 26px;
-      --ops-text-2xl: 34px;
-      --ops-lh-tight: 1.2;
-      --ops-lh-snug: 1.4;
-      --ops-lh-normal: 1.55;
-      --ops-weight-light: 300;
-      --ops-weight-normal: 400;
-      --ops-weight-reg: var(--ops-weight-normal);
-      --ops-weight-medium: 500;
-      --ops-weight-semi: 600;
-      --ops-weight-bold: 700;
-      --ops-tracking-caps: 0.04em;
-      --ops-tracking-meta: 0.06em;
-      --ops-tracking-tight: -0.01em;
-      --ops-space-1: 4px;
-      --ops-space-2: 8px;
-      --ops-space-3: 12px;
-      --ops-space-4: 16px;
-      --ops-space-5: 20px;
-      --ops-space-6: 24px;
-      --ops-space-8: 32px;
-      --ops-space-10: 40px;
-      --ops-space-12: 48px;
-      --ops-space-16: 64px;
-      --ops-gutter: var(--ops-space-5);
-      --ops-band: var(--ops-space-8);
-      --ops-radius-xs: 6px;
-      --ops-radius-sm: 8px;
-      --ops-radius-md: 12px;
-      --ops-radius-lg: 16px;
-      --ops-radius-pill: 999px;
-      --ops-nav-h: 56px;
-      --ops-max-w: 1440px;
-      --ops-max-w-read: 1180px;
-      --ops-dur-fast: 110ms;
-      --ops-dur-base: 180ms;
-      --ops-dur-slow: 320ms;
-      --ops-ease: cubic-bezier(0.2, 0, 0.15, 1);
-
-      --bg-0: #091310;
-      --bg-1: #0E1C17;
-      --bg-2: #142720;
-      --surface-1: rgba(236, 245, 238, 0.038);
-      --surface-2: rgba(236, 245, 238, 0.068);
-      --surface-3: rgba(236, 245, 238, 0.105);
-      --surface-4: rgba(236, 245, 238, 0.145);
-      --surface-ink: #0B1713;
-      --border-0: rgba(220, 235, 224, 0.075);
-      --border-1: rgba(220, 235, 224, 0.13);
-      --border-2: rgba(220, 235, 224, 0.22);
-      --text-0: #F6F8F5;
-      --text-1: #DCE4DD;
-      --text-2: #9BB0A3;
-      --text-3: #7E9688;
-      --accent: #F4C430;
-      --ssra-green: #078930;
-      --ssra-green-light: #2ECC71;
-      --ssra-blue: #0F47AF;
-      --ssra-red: #DA121A;
-      --ssra-teal: #078930;
-      --ssra-teal-light: #2ECC71;
-
-      --ops-panel: var(--surface-ink);
-      --ops-panel-inset: var(--surface-1);
-      --ops-row: var(--surface-1);
-      --ops-row-hover: var(--surface-2);
-      --ops-row-active: var(--surface-3);
-      --ops-hairline: var(--border-0);
-      --ops-line: var(--border-1);
-      --ops-line-strong: var(--border-2);
-      --ops-scroll-thumb: var(--border-2);
-      --ops-scroll-thumb-hover: var(--text-3);
-      --ops-glass-bg: linear-gradient(150deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.04) 46%, rgba(255, 255, 255, 0.015) 100%);
-      --ops-glass-line: rgba(220, 235, 224, 0.16);
-      --ops-glass-blur: blur(22px) saturate(165%);
-      --ops-glass-spec: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
-      --ops-glass-cast: 0 16px 40px rgba(0, 0, 0, 0.34);
-      --ops-glass-solid: var(--ops-panel);
-      --ops-elev-1: 0 4px 12px rgba(0, 0, 0, 0.35);
-      --ops-elev-2: 0 12px 32px rgba(0, 0, 0, 0.45);
-      --ops-elev-3: 0 24px 60px rgba(0, 0, 0, 0.56);
-
-      --ops-good-ink: #34D399;
-      --ops-warn-ink: #FBBF24;
-      --ops-bad-ink: #FB7185;
-      --ops-info-ink: #60A5FA;
-      --ops-focus: #F4C430;
-      --ops-focus-ring: 2px;
-      --ops-focus-gap: 2px;
-
-      --ops-series-1: #3987e5;
-      --ops-series-2: #d95926;
-      --ops-series-3: #199e70;
-      --ops-series-4: #c98500;
-      --ops-series-5: #d55181;
-      --ops-series-6: #008300;
-      --ops-series-7: #9085e9;
-      --ops-series-8: #e66767;
-    }
-
+    /* Design tokens shared with the public assistant (apps/web/server.js): IBM Plex Sans, white canvas with
+       an indigo top glow, #1E40AF rail, pill buttons with ghost hovers, and text-safe status inks. */
+    :root,
     :root[data-theme="light"] {
       color-scheme: light;
-      --bg-0: #F6F7F2;
-      --bg-1: #FFFFFF;
-      --bg-2: #EBF0E8;
-      --surface-1: rgba(12, 28, 20, 0.032);
-      --surface-2: rgba(12, 28, 20, 0.058);
-      --surface-3: rgba(12, 28, 20, 0.092);
-      --surface-4: rgba(12, 28, 20, 0.13);
-      --surface-ink: #FFFFFF;
-      --border-0: rgba(12, 28, 20, 0.08);
-      --border-1: rgba(12, 28, 20, 0.14);
-      --border-2: rgba(12, 28, 20, 0.23);
-      --text-0: #0C1C14;
-      --text-1: #1F3329;
-      --text-2: #4A5E53;
-      --text-3: #4E6358;
-      --accent: #704B00;
-      --ops-glass-bg: linear-gradient(150deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.68) 100%);
-      --ops-glass-line: rgba(12, 28, 20, 0.12);
-      --ops-glass-blur: blur(22px) saturate(135%);
-      --ops-glass-spec: inset 0 1px 0 rgba(255, 255, 255, 0.95);
-      --ops-glass-cast: 0 12px 32px rgba(12, 28, 20, 0.08);
-      --ops-good-ink: #066926;
+      --ops-font-sans: "IBM Plex Sans", "Aptos", "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --ops-font-mono: "IBM Plex Mono", "Cascadia Code", "SFMono-Regular", "Fira Code", monospace;
+      --ops-text-xl: 28px;
+      --ops-band: 24px;
+      --ops-max-w: 1440px;
+      --ops-dur-fast: 160ms;
+      --ops-dur-base: 200ms;
+      --ops-dur-slow: 280ms;
+      --ops-ease: ease;
+      --ops-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+      --ops-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
+
+      --bg-0: #FFFFFF;
+      --border-0: rgba(0, 72, 145, 0.10);
+      --border-1: rgba(0, 72, 145, 0.18);
+      --border-2: rgba(0, 72, 145, 0.28);
+      --text-0: #0B192C;
+      --text-1: #1E293B;
+      --text-2: #334155;
+      --text-3: #475569;
+      --accent: #1E40AF;
+      --accent-soft: #EEF2FF;
+      --ssra-blue: #005DB4;
+      --ssra-civic-green: #078930;
+      --ssra-gold: #FCD34D;
+      --grad-primary: linear-gradient(135deg, #005DB4 0%, #056824 100%);
+      --canvas-glow: #C7D2FE;
+      --topbar-bg: rgba(255, 255, 255, 0.78);
+      --ghost-hover: rgba(15, 23, 42, 0.08);
+      --ghost-active: rgba(15, 23, 42, 0.12);
+      --seg-track: rgba(15, 23, 42, 0.05);
+      --seg-active-bg: #FFFFFF;
+      --btn-primary-bg: #1E40AF;
+      --btn-primary-hover: #1E3A8A;
+      --btn-primary-ink: #FFFFFF;
+
+      --ops-panel: #FFFFFF;
+      --ops-inset: #F8FAFC;
+      --ops-row-hover: rgba(15, 23, 42, 0.035);
+      --ops-hairline: rgba(0, 72, 145, 0.08);
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(0, 45, 98, 0.06);
+      --shadow-md: 0 6px 20px rgba(0, 45, 98, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
+      --shadow-lg: 0 16px 44px rgba(0, 45, 98, 0.14), 0 0 0 1px rgba(0, 72, 145, 0.08);
+      --shadow-modal: 0 24px 64px rgba(15, 23, 42, 0.18);
+
+      --rail-bg: #1E40AF;
+      --rail-text: #FFFFFF;
+      --rail-current: rgba(0, 0, 0, 0.18);
+      --rail-hover: rgba(255, 255, 255, 0.12);
+      --rail-active: rgba(255, 255, 255, 0.18);
+      --rail-muted: rgba(255, 255, 255, 0.72);
+      --rail-field: rgba(255, 255, 255, 0.12);
+      --rail-field-hover: rgba(255, 255, 255, 0.2);
+
+      --ops-good-ink: #056824;
       --ops-warn-ink: #853A06;
       --ops-bad-ink: #B91C1C;
-      --ops-info-ink: #0F47AF;
-      --ops-focus: #078930;
-      --ops-series-1: #2a78d6;
-      --ops-series-2: #eb6834;
-      --ops-series-3: #1baf7a;
-      --ops-series-4: #eda100;
-      --ops-series-5: #e87ba4;
-      --ops-series-6: #008300;
-      --ops-series-7: #4a3aa7;
-      --ops-series-8: #e34948;
+      --ops-info-ink: #1E40AF;
+      --ops-focus: #005DB4;
+      --ops-focus-rail: #FFD60A;
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg-0: #0B1220;
+      --border-0: rgba(148, 163, 184, 0.14);
+      --border-1: rgba(148, 163, 184, 0.26);
+      --border-2: rgba(148, 163, 184, 0.38);
+      --text-0: #F1F5F9;
+      --text-1: #E2E8F0;
+      --text-2: #CBD5E1;
+      --text-3: #A3B1C6;
+      --accent: #A5B4FC;
+      --accent-soft: rgba(129, 140, 248, 0.16);
+      --ssra-blue: #93C5FD;
+      --canvas-glow: rgba(79, 70, 229, 0.30);
+      --topbar-bg: rgba(11, 18, 32, 0.78);
+      --ghost-hover: rgba(148, 163, 184, 0.12);
+      --ghost-active: rgba(148, 163, 184, 0.2);
+      --seg-track: rgba(148, 163, 184, 0.12);
+      --seg-active-bg: #1E293B;
+      --btn-primary-bg: #C7D2FE;
+      --btn-primary-hover: #E0E7FF;
+      --btn-primary-ink: #0B1220;
+      --ops-panel: #111A2E;
+      --ops-inset: #0F1729;
+      --ops-row-hover: rgba(148, 163, 184, 0.07);
+      --ops-hairline: rgba(148, 163, 184, 0.12);
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.32);
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.42);
+      --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.5);
+      --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6);
+      --rail-bg: #172554;
+      --ops-good-ink: #4ADE80;
+      --ops-warn-ink: #FBBF24;
+      --ops-bad-ink: #FCA5A5;
+      --ops-info-ink: #A5B4FC;
+      --ops-focus: #93C5FD;
     }
 
     :root[data-theme="high-contrast"] {
       color-scheme: dark;
       --bg-0: #000000;
-      --bg-1: #050505;
-      --surface-ink: #000000;
-      --surface-1: #0D0D0D;
-      --surface-2: #171717;
-      --surface-3: #242424;
       --border-0: #737373;
       --border-1: #FFFFFF;
       --border-2: #FFD60A;
       --text-0: #FFFFFF;
       --text-1: #FFFFFF;
       --text-2: #E5E7EB;
-      --text-3: #D1D5DB;
-      --ops-glass-bg: #050505;
-      --ops-glass-line: #FFFFFF;
+      --text-3: #E5E7EB;
+      --accent: #FFD60A;
+      --accent-soft: #111111;
+      --ssra-blue: #60A5FA;
+      --canvas-glow: transparent;
+      --topbar-bg: #000000;
+      --ghost-hover: #222222;
+      --ghost-active: #2E2E2E;
+      --seg-track: transparent;
+      --seg-active-bg: #000000;
+      --btn-primary-bg: #FFD60A;
+      --btn-primary-hover: #FFE45C;
+      --btn-primary-ink: #000000;
+      --ops-panel: #000000;
+      --ops-inset: #0D0D0D;
+      --ops-row-hover: #161616;
+      --ops-hairline: #4B4B4B;
+      --shadow-sm: none;
+      --shadow-md: none;
+      --shadow-lg: none;
+      --shadow-modal: none;
+      --ops-good-ink: #4ADE80;
+      --ops-warn-ink: #FFD60A;
+      --ops-bad-ink: #FCA5A5;
+      --ops-info-ink: #93C5FD;
+      --ops-focus: #FFD60A;
     }
 
     *, *::before, *::after { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0; min-height: 100dvh;
-      font-family: var(--ops-font-sans);
-      font-variant-numeric: tabular-nums;
-      font-feature-settings: "tnum" 1, "zero" 1, "cv01" 1;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
+      font-family: var(--ops-font-sans); font-feature-settings: "cv11", "ss01";
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
       background: var(--bg-0); color: var(--text-1);
     }
-    .staff-shell, .ops-page {
-      font-family: var(--ops-font-sans);
-      font-variant-numeric: tabular-nums;
-      font-feature-settings: "tnum" 1, "zero" 1, "cv01" 1;
-    }
-    body::before {
-      content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-      background:
-        radial-gradient(ellipse 58% 48% at 16% 12%, rgba(7, 137, 48, 0.22), transparent 62%),
-        radial-gradient(ellipse 48% 42% at 84% 24%, rgba(15, 71, 175, 0.18), transparent 58%),
-        radial-gradient(ellipse 52% 38% at 50% 92%, rgba(244, 196, 48, 0.08), transparent 60%),
-        linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 55%, var(--bg-0) 100%);
-    }
-    :root[data-theme="light"] body::before {
-      background:
-        radial-gradient(ellipse 58% 48% at 16% 12%, rgba(7, 137, 48, 0.07), transparent 62%),
-        radial-gradient(ellipse 48% 42% at 84% 24%, rgba(15, 71, 175, 0.06), transparent 58%),
-        linear-gradient(180deg, var(--bg-0) 0%, #ECEFE6 55%, var(--bg-0) 100%);
-    }
-    .ssra-flag-ribbon {
-      position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 60; pointer-events: none;
-      background: linear-gradient(90deg, #0F47AF 0%, #0F47AF 18%, #F4C430 18%, #F4C430 24%, #111815 24%, #111815 48%, #DA121A 48%, #DA121A 74%, #078930 74%, #078930 100%);
-    }
+    code, kbd { font-family: var(--ops-font-mono); font-size: 0.92em; font-weight: 400; }
 
     .ops-sr-only {
       position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
       overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;
     }
-
     .staff-skip {
-      position: absolute; left: var(--ops-space-3); top: -44px; z-index: 50;
-      padding: var(--ops-space-2) var(--ops-space-3); background: var(--ops-panel);
-      color: var(--text-0); border: 1px solid var(--ops-line-strong); border-radius: var(--ops-radius-sm);
-      font-size: var(--ops-text-sm); font-weight: var(--ops-weight-semi); text-decoration: none;
+      position: absolute; left: 12px; top: -48px; z-index: 95; padding: 8px 14px;
+      background: var(--ops-panel); color: var(--text-0); border: 2px solid var(--ops-focus);
+      border-radius: 10px; font-size: 0.84rem; font-weight: 600; text-decoration: none;
     }
-    .staff-skip:focus { top: var(--ops-space-2); }
+    .staff-skip:focus { top: 10px; }
     :is(a, button, input, select, textarea, [tabindex]):focus-visible {
-      outline: var(--ops-focus-ring) solid var(--ops-focus);
-      outline-offset: var(--ops-focus-gap);
+      outline: 3px solid var(--ops-focus);
+      outline-offset: 2px;
     }
+    .staff-rail *:focus-visible { outline-color: var(--ops-focus-rail); outline-offset: 1px; }
+    .staff-rail .staff-acct-menu *:focus-visible { outline-color: var(--ops-focus); }
+    #staff-main:focus { outline: none; }
 
-    /* ── Metadata & Figure Voices (ops.css pattern) ── */
-    .ops-meta,
-    .ops-eyebrow,
-    .ops-stat-label,
-    .ops-fresh,
-    .staff-rail-group-label,
-    .ops-chip,
-    .ov-chip {
-      font-family: var(--ops-font-mono);
-      font-weight: var(--ops-weight-light);
-      letter-spacing: var(--ops-tracking-meta);
-      font-variant-numeric: tabular-nums;
+    /* Neutral scrollbars that only appear on hover, as on the public assistant. */
+    .staff-shell *::-webkit-scrollbar { width: 10px; height: 10px; }
+    .staff-shell *::-webkit-scrollbar-track,
+    .staff-shell *::-webkit-scrollbar-corner { background: transparent; }
+    .staff-shell *::-webkit-scrollbar-thumb {
+      background-color: transparent; background-clip: padding-box;
+      border: 3px solid transparent; border-radius: 999px;
     }
-    .ops-figure,
-    .ops-kbd {
-      font-family: var(--ops-font-mono);
-      font-weight: var(--ops-weight-light);
-      letter-spacing: 0;
-      font-variant-numeric: tabular-nums;
-    }
+    .staff-shell *:hover::-webkit-scrollbar-thumb { background-color: var(--border-2); }
+    .staff-shell * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+    .staff-shell *:hover { scrollbar-color: var(--border-2) transparent; }
 
-    /* ── Hover-Only Neutral Scrollbars (ops.css pattern) ── */
-    .staff-shell ::-webkit-scrollbar { width: 10px; height: 10px; }
-    .staff-shell ::-webkit-scrollbar-track,
-    .staff-shell ::-webkit-scrollbar-corner { background: transparent; }
-    .staff-shell ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-    .staff-shell ::-webkit-scrollbar-thumb {
-      background-color: transparent;
-      background-clip: padding-box;
-      border: 3px solid transparent;
-      border-radius: var(--ops-radius-pill);
-      transition: background-color var(--ops-dur-fast) var(--ops-ease);
-    }
-    .staff-shell *:hover::-webkit-scrollbar-thumb,
-    .staff-shell *:focus-within::-webkit-scrollbar-thumb {
-      background-color: var(--ops-scroll-thumb);
-    }
-    .staff-shell *:hover::-webkit-scrollbar-thumb:hover {
-      background-color: var(--ops-scroll-thumb-hover);
-    }
-    .staff-shell * {
-      scrollbar-width: thin;
-      scrollbar-color: transparent transparent;
-    }
-    .staff-shell *:hover,
-    .staff-shell *:focus-within {
-      scrollbar-color: var(--ops-scroll-thumb) transparent;
-    }
-
-    /* ── Staff Shell & Collapsible Vertical Rail (staffGuard.css pattern) ── */
+    /* App shell: fixed indigo rail (56px collapsed / 248px expanded) beside the content column. */
     .staff-shell {
-      --rail-w-collapsed: 52px;
-      --rail-w-expanded: 220px;
+      --rail-w-collapsed: 56px;
+      --rail-w-expanded: 248px;
       --rail-w: var(--rail-w-collapsed);
       min-height: 100dvh;
     }
@@ -979,564 +890,622 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     }
     .staff-shell-content {
       margin-inline-start: var(--rail-w);
-      transition: margin-inline-start var(--ops-dur-base) var(--ops-ease);
-      min-height: 100dvh; display: flex; flex-direction: column;
+      transition: margin-inline-start var(--ops-dur-slow) var(--ops-ease-out);
+      min-height: 100dvh; min-width: 0; display: flex; flex-direction: column;
+      background:
+        radial-gradient(125% 125% at 50% -50%, var(--canvas-glow) 40%, transparent 100%) top center / 100% 760px no-repeat,
+        var(--bg-0);
     }
 
     .staff-rail {
       position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 30;
       display: flex; flex-direction: column;
       width: var(--rail-w-collapsed);
-      background: var(--ops-glass-bg);
-      border-inline-end: 1px solid var(--ops-glass-line);
-      box-shadow: var(--ops-glass-spec);
-      -webkit-backdrop-filter: var(--ops-glass-blur);
-      backdrop-filter: var(--ops-glass-blur);
+      background: var(--rail-bg); color: var(--rail-text);
       overflow: hidden; contain: paint;
-      transition: width var(--ops-dur-base) var(--ops-ease);
+      transition: width var(--ops-dur-slow) var(--ops-ease-out), box-shadow var(--ops-dur-base) var(--ops-ease);
     }
     .staff-rail.is-expanded,
     :root[data-rail-mode="always-open"] .staff-rail {
       width: var(--rail-w-expanded);
-      box-shadow: var(--ops-elev-3);
     }
-    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-      .staff-rail, .call-console-bar, .ops-stat, .ops-panel.is-glass {
-        background: var(--ops-glass-solid);
-        border-color: var(--ops-line);
-        box-shadow: var(--ops-elev-1);
-      }
-    }
-    @media (prefers-reduced-transparency: reduce) {
-      .staff-rail, .call-console-bar, .ops-stat, .ops-panel.is-glass {
-        background: var(--ops-glass-solid);
-        border-color: var(--ops-line);
-        box-shadow: var(--ops-elev-1);
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
-      }
-    }
+    :root[data-rail-mode="hover"] .staff-rail.is-expanded { box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32); }
+    :root[data-theme="high-contrast"] .staff-rail { border-inline-end: 1px solid #FFFFFF; }
 
     .staff-rail-head {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: var(--ops-space-1); min-height: var(--ops-nav-h);
-      padding: var(--ops-space-2); flex: none;
+      display: flex; align-items: center; justify-content: space-between; gap: 4px;
+      min-height: 60px; padding: 10px 8px 6px 14px; flex: none;
     }
     .staff-brand {
-      display: flex; align-items: center; gap: var(--ops-space-2);
-      min-width: 0; color: var(--text-0); text-decoration: none; white-space: nowrap;
+      display: flex; align-items: center; gap: 10px; min-width: 0;
+      color: var(--rail-text); text-decoration: none; white-space: nowrap; border-radius: 10px;
     }
     .staff-brand-mark {
       display: inline-flex; align-items: center; justify-content: center; flex: none;
-      width: 28px; height: 28px; border-radius: var(--ops-radius-sm);
-      background: var(--accent); color: #0B1220;
-      font-size: 10px; font-weight: var(--ops-weight-bold); letter-spacing: 0.02em;
+      width: 28px; height: 28px; color: var(--ssra-gold);
     }
-    :root[data-theme="light"] .staff-brand-mark { color: #FFFFFF; }
+    .staff-brand-mark svg { width: 22px; height: 22px; }
     .staff-brand-text {
-      display: flex; flex-direction: column; min-width: 0;
-      line-height: var(--ops-lh-tight); font-size: var(--ops-text-sm);
-      font-weight: var(--ops-weight-semi); opacity: 0;
-      transition: opacity var(--ops-dur-fast) var(--ops-ease);
+      display: flex; flex-direction: column; min-width: 0; line-height: 1.2;
+      font-size: 1.05rem; font-weight: 500; letter-spacing: -0.01em;
+      opacity: 0; transition: opacity var(--ops-dur-fast) var(--ops-ease);
     }
     .staff-rail.is-expanded .staff-brand-text { opacity: 1; }
     .staff-brand-sub {
-      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-normal);
-      color: var(--text-3); overflow: hidden; text-overflow: ellipsis;
+      font-size: 0.72rem; font-weight: 400; letter-spacing: 0; color: var(--rail-muted);
+      overflow: hidden; text-overflow: ellipsis;
     }
     .staff-rail-pin {
-      flex: none; width: 28px; height: 28px; border-radius: var(--ops-radius-xs);
-      background: transparent; border: 1px solid transparent; color: var(--text-2);
-      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      flex: none; width: 36px; height: 36px; border-radius: 50%; padding: 0;
+      background: transparent; border: 1px solid transparent; color: var(--rail-text); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background-color var(--ops-dur-fast) var(--ops-ease);
     }
-    .staff-rail-pin:hover { background: var(--ops-row-hover); color: var(--text-0); }
+    .staff-rail-pin:hover { background: var(--rail-hover); }
+    .staff-rail-pin:active { background: var(--rail-active); }
     .staff-rail.is-collapsed .staff-rail-pin { display: none; }
-    .staff-rail-pin.is-on { color: var(--accent); border-color: var(--ops-line); }
 
-    .staff-rail-search {
-      flex: none; padding: 0 var(--ops-space-2) var(--ops-space-2);
-      border-bottom: 1px solid var(--ops-line);
-    }
+    .staff-rail-search { flex: none; padding: 4px 8px 8px; }
     .ops-cmdk-trigger {
-      width: 100%; min-height: 34px; padding: 0 var(--ops-space-2);
-      border-radius: var(--ops-radius-sm); background: var(--ops-row);
-      border: 1px solid var(--ops-line); color: var(--text-2);
-      font-family: inherit; font-size: var(--ops-text-xs); cursor: pointer;
-      display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-2);
+      width: 100%; min-height: 40px; padding: 0 14px 0 12px; border-radius: 999px;
+      background: var(--rail-field); border: 1px solid transparent; color: var(--rail-text);
+      font: inherit; font-size: 0.8125rem; font-weight: 400; cursor: pointer;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      transition: background-color var(--ops-dur-fast) var(--ops-ease);
     }
-    .ops-cmdk-trigger:hover { background: var(--ops-row-hover); color: var(--text-0); border-color: var(--ops-line-strong); }
+    .ops-cmdk-trigger:hover { background: var(--rail-field-hover); }
+    .ops-cmdk-trigger:active { background: var(--rail-active); }
+    .ops-cmdk-trigger > span:first-child { display: inline-flex; align-items: center; gap: 10px; min-width: 0; white-space: nowrap; }
+    .ops-cmdk-trigger-text { color: rgba(255, 255, 255, 0.9); overflow: hidden; text-overflow: ellipsis; }
+    .ops-kbd { font: inherit; font-size: 0.72rem; font-weight: 400; color: var(--text-3); white-space: nowrap; }
+    .ops-cmdk-kbd { color: var(--rail-muted); opacity: 0; transition: opacity var(--ops-dur-fast) var(--ops-ease); }
+    .ops-cmdk-trigger:hover .ops-cmdk-kbd,
+    .ops-cmdk-trigger:focus-visible .ops-cmdk-kbd { opacity: 1; }
+    @media (hover: none) { .ops-cmdk-kbd { display: none; } }
     .staff-rail.is-collapsed .ops-cmdk-trigger { justify-content: center; padding-inline: 0; }
     .staff-rail.is-collapsed .ops-cmdk-trigger-text,
     .staff-rail.is-collapsed .ops-cmdk-kbd { display: none; }
-    .staff-rail.is-collapsed .staff-acct-trigger { justify-content: center; padding-inline: 0; }
-    .staff-rail.is-collapsed .staff-acct-meta,
-    .staff-rail.is-collapsed .staff-acct-chevron { display: none; }
-    .ops-kbd {
-      font-family: var(--ops-font-mono); font-size: 10px; padding: 1px 5px;
-      border-radius: 4px; background: var(--ops-row-active); border: 1px solid var(--ops-line);
-      color: var(--text-2);
-    }
 
     .staff-rail-scroll {
-      flex: 1; overflow-y: auto; overflow-x: hidden;
-      padding: var(--ops-space-3) 0; scrollbar-width: thin;
+      flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 12px;
+      scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
     }
-    .staff-rail-group + .staff-rail-group {
-      margin-top: var(--ops-space-3); padding-top: var(--ops-space-3);
-      border-top: 1px solid var(--ops-line);
-    }
+    .staff-rail-group + .staff-rail-group { margin-top: 6px; }
     .staff-rail-group-label {
-      margin: 0 0 var(--ops-space-1); padding: 0 var(--ops-space-3);
-      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-semi);
-      letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3);
-      white-space: nowrap; opacity: 0; height: 0; overflow: hidden;
+      margin: 0; padding: 0 20px; height: 0; overflow: hidden; opacity: 0;
+      font-size: 0.75rem; font-weight: 500; color: var(--rail-muted); white-space: nowrap;
+      transition: opacity var(--ops-dur-fast) var(--ops-ease);
     }
-    .staff-rail.is-expanded .staff-rail-group-label {
-      opacity: 1; height: auto; margin-bottom: var(--ops-space-1);
-    }
+    .staff-rail.is-expanded .staff-rail-group-label { opacity: 1; height: auto; padding-block: 12px 6px; }
     .staff-rail ul {
-      list-style: none; margin: 0; padding: 0 var(--ops-space-2);
+      list-style: none; margin: 0; padding: 0 8px;
       display: flex; flex-direction: column; gap: 2px;
     }
     .staff-rail a.nav-item {
-      position: relative; display: flex; align-items: center; gap: var(--ops-space-2);
-      padding: 8px 10px; border-radius: var(--ops-radius-sm);
-      font-size: var(--ops-text-sm); font-weight: var(--ops-weight-medium);
-      color: var(--text-2); text-decoration: none; white-space: nowrap;
-      transition: background var(--ops-dur-fast) var(--ops-ease), color var(--ops-dur-fast) var(--ops-ease);
+      position: relative; display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 10px;
+      border-radius: 999px; color: var(--rail-text); text-decoration: none; white-space: nowrap;
+      font-size: 0.8125rem; font-weight: 400;
+      transition: background-color var(--ops-dur-base) var(--ops-ease);
     }
-    .staff-rail a.nav-item:hover { background: var(--ops-row-hover); color: var(--text-0); }
-    .staff-rail a.nav-item.active {
-      color: var(--text-0); font-weight: var(--ops-weight-semi);
-      background: var(--ops-row-active); border: 1px solid var(--ops-line);
+    .staff-rail a.nav-item:hover { background: var(--rail-hover); }
+    .staff-rail a.nav-item:active { background: var(--rail-active); }
+    .staff-rail a.nav-item.active { background: var(--rail-current); font-weight: 500; }
+    .staff-rail a.nav-item.active:hover { background: var(--rail-hover); }
+    .staff-rail-icon { display: inline-flex; flex: none; width: 20px; justify-content: center; }
+    .staff-rail-icon svg, .ops-cmdk-trigger svg { width: 18px; height: 18px; }
+    .staff-rail-label {
+      min-width: 0; overflow: hidden; text-overflow: ellipsis;
+      opacity: 0; transition: opacity var(--ops-dur-fast) var(--ops-ease);
     }
-    .staff-rail-icon { display: inline-flex; flex: none; width: 20px; justify-content: center; font-size: 14px; }
-    .staff-rail-label { opacity: 0; transition: opacity var(--ops-dur-fast) var(--ops-ease); }
     .staff-rail.is-expanded .staff-rail-label { opacity: 1; }
 
-    /* AccountMenu Footer & Upward Popover */
-    .staff-rail-foot {
-      flex: none; padding: var(--ops-space-2); border-top: 1px solid var(--ops-line);
-      position: relative;
-    }
+    /* Account footer with an upward popover menu (public assistant header-menu pattern). */
+    .staff-rail-foot { flex: none; padding: 8px; position: relative; }
     .staff-acct-trigger {
-      width: 100%; display: flex; align-items: center; gap: var(--ops-space-2);
-      padding: 6px 8px; border-radius: var(--ops-radius-sm);
-      background: transparent; border: 1px solid transparent; color: var(--text-0);
-      cursor: pointer; text-align: start; font-family: inherit;
+      width: 100%; min-height: 48px; display: flex; align-items: center; gap: 10px;
+      padding: 4px 10px 4px 4px; border-radius: 999px; background: transparent; border: 1px solid transparent;
+      color: var(--rail-text); cursor: pointer; text-align: start; font: inherit;
+      transition: background-color var(--ops-dur-fast) var(--ops-ease);
     }
-    .staff-acct-trigger:hover { background: var(--ops-row-hover); border-color: var(--ops-line); }
+    .staff-acct-trigger:hover,
+    .staff-acct-trigger[aria-expanded="true"] { background: var(--rail-hover); }
     .staff-acct-avatar {
-      position: relative; width: 26px; height: 26px; border-radius: 50%;
-      background: var(--accent); color: #0B1220;
-      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-bold); letter-spacing: 0.02em;
+      position: relative; width: 36px; height: 36px; border-radius: 50%;
+      background: #FFFFFF; color: #1E40AF; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;
       display: inline-flex; align-items: center; justify-content: center; flex: none;
     }
-    :root[data-theme="light"] .staff-acct-avatar { color: #FFFFFF; }
-    .staff-acct-dot {
-      position: absolute; right: -2px; bottom: -2px; width: 8px; height: 8px;
-      border-radius: 50%; background: var(--ops-good-ink); border: 2px solid var(--bg-0);
-    }
     .staff-acct-meta {
-      display: flex; flex-direction: column; min-width: 0; flex: 1;
+      display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1;
       opacity: 0; transition: opacity var(--ops-dur-fast) var(--ops-ease);
     }
     .staff-rail.is-expanded .staff-acct-meta { opacity: 1; }
-    .staff-acct-name { font-size: var(--ops-text-xs); font-weight: var(--ops-weight-semi); color: var(--text-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .staff-acct-role { font-size: var(--ops-text-2xs); color: var(--text-3); white-space: nowrap; }
+    .staff-acct-name,
+    .staff-acct-role { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .staff-acct-name { font-size: 0.8125rem; font-weight: 500; color: var(--rail-text); }
+    .staff-acct-role { font-size: 0.72rem; color: var(--rail-muted); }
+    .staff-acct-chevron { display: inline-flex; flex: none; color: var(--rail-muted); }
+    .staff-rail.is-collapsed .staff-acct-trigger { justify-content: center; padding-inline: 0; }
+    .staff-rail.is-collapsed .staff-acct-meta,
+    .staff-rail.is-collapsed .staff-acct-chevron { display: none; }
     .staff-acct-menu {
-      position: absolute; bottom: calc(100% + 6px); left: var(--ops-space-2); right: var(--ops-space-2);
-      background: var(--ops-panel); border: 1px solid var(--ops-line-strong);
-      border-radius: var(--ops-radius-md); box-shadow: var(--ops-elev-3);
-      padding: var(--ops-space-2); display: none; flex-direction: column; gap: 4px; z-index: 45;
+      position: absolute; bottom: calc(100% + 6px); left: 8px; right: 8px;
+      background: var(--ops-panel); color: var(--text-0); border: 1px solid var(--border-0);
+      border-radius: 16px; box-shadow: var(--shadow-lg); padding: 6px;
+      display: none; flex-direction: column; gap: 2px; z-index: 45;
     }
-    .staff-acct-menu.open { display: flex; }
+    .staff-acct-menu.open { display: flex; animation: opsMenuIn var(--ops-dur-base) var(--ops-ease-out) both; }
+    .staff-acct-heading { padding: 8px 12px 4px; font-size: 0.75rem; font-weight: 500; color: var(--text-3); }
+    .staff-acct-hr { border: 0; border-top: 1px solid var(--border-0); margin: 4px 6px; }
     .staff-acct-item {
-      padding: 6px 8px; border-radius: var(--ops-radius-xs); background: transparent;
-      border: none; color: var(--text-1); font-size: var(--ops-text-xs); font-family: inherit;
-      cursor: pointer; display: flex; align-items: center; justify-content: space-between;
-      text-decoration: none; width: 100%; text-align: start;
+      width: 100%; min-height: 40px; padding: 8px 12px; border-radius: 10px; border: none;
+      background: transparent; color: var(--text-0); font: inherit; font-size: 0.8125rem; text-align: start;
+      cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      text-decoration: none; transition: background-color var(--ops-dur-fast) var(--ops-ease);
     }
-    .staff-acct-item:hover { background: var(--ops-row-hover); color: var(--text-0); }
-    .staff-acct-item.active { color: var(--accent); font-weight: var(--ops-weight-semi); }
+    .staff-acct-item > span:first-child { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+    .staff-acct-item:hover { background: var(--ghost-hover); }
+    .staff-acct-item:active { background: var(--ghost-active); }
+    .staff-acct-item.active { color: var(--accent); font-weight: 500; }
 
-    /* ── Sticky CallConsoleBar (StaffCallLayer pattern) ── */
+    /* Top bar: session state as plain text plus the global actions. */
     .call-console-bar {
+      position: sticky; top: 0; z-index: 20;
       display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
-      gap: var(--ops-space-3); padding: 8px var(--ops-space-5);
-      background: var(--ops-glass-bg); border-bottom: 1px solid var(--ops-line);
-      -webkit-backdrop-filter: var(--ops-glass-blur); backdrop-filter: var(--ops-glass-blur);
-      font-size: var(--ops-text-xs);
+      gap: 8px 16px; min-height: 56px; padding: 8px 32px;
+      background: var(--topbar-bg); border-bottom: 1px solid var(--border-0);
+      -webkit-backdrop-filter: saturate(180%) blur(12px); backdrop-filter: saturate(180%) blur(12px);
+      font-size: 0.8125rem;
     }
-    .call-bar-left, .call-bar-right { display: flex; align-items: center; gap: var(--ops-space-3); flex-wrap: wrap; }
-    .presence-pill {
-      display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
-      border-radius: var(--ops-radius-pill); background: rgba(251, 191, 36, 0.12);
-      border: 1px solid rgba(251, 191, 36, 0.4); color: var(--ops-warn-ink); font-weight: var(--ops-weight-semi);
-    }
+    .call-bar-left, .call-bar-right { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+    .call-bar-left { flex: 1 1 360px; column-gap: 0; row-gap: 2px; }
+    .call-bar-right { flex: none; margin-inline-start: auto; }
+    .presence-pill { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; color: var(--ops-warn-ink); }
+    .presence-pill.is-authenticated { color: var(--ops-good-ink); }
+    .presence-icon { display: inline-flex; flex: none; }
+    #ops-presence-note { margin-inline-start: 20px; color: var(--text-2); }
 
-    /* ── OpsPage, OpsPanel & StatCard (Hercules + ops.css + admin.css pattern) ── */
+    /* Page layout & header */
     .ops-page {
       max-width: var(--ops-max-w); width: 100%; margin: 0 auto;
-      padding: var(--ops-space-6) var(--ops-space-5) var(--ops-space-12);
-      color: var(--text-1);
+      padding: 28px 32px 64px; color: var(--text-1);
     }
+    .ops-page > * + * { margin-top: var(--ops-band); }
     .ops-page-head {
       display: flex; align-items: flex-end; justify-content: space-between;
-      gap: var(--ops-space-4); flex-wrap: wrap; margin-bottom: var(--ops-space-5);
+      gap: 16px 24px; flex-wrap: wrap;
     }
     .ops-page-head > * { min-width: 0; }
-    .ops-eyebrow {
-      display: block; margin-bottom: var(--ops-space-2);
-      font-family: var(--ops-font-mono); font-size: var(--ops-text-2xs);
-      font-weight: var(--ops-weight-light); letter-spacing: var(--ops-tracking-meta);
-      text-transform: uppercase; color: var(--text-3);
-    }
+    .ops-eyebrow { display: block; margin-bottom: 6px; font-size: 0.8125rem; font-weight: 500; color: var(--text-3); }
     .ops-page-head h1 {
-      margin: 0; font-size: var(--ops-text-xl); line-height: var(--ops-lh-tight);
-      font-weight: var(--ops-weight-semi); letter-spacing: var(--ops-tracking-tight); color: var(--text-0);
+      margin: 0; font-size: clamp(1.5rem, 2.2vw, 1.75rem); line-height: 1.2;
+      font-weight: 500; letter-spacing: -0.015em; color: var(--text-0); text-wrap: balance;
     }
-    .ops-page-desc {
-      margin: var(--ops-space-2) 0 0; max-width: 68ch;
-      font-size: var(--ops-text-sm); line-height: var(--ops-lh-normal); color: var(--text-2);
-    }
-    .ops-page-actions { display: flex; align-items: center; gap: var(--ops-space-2); flex-wrap: wrap; max-width: 100%; }
+    .ops-page-desc { margin: 8px 0 0; max-width: 68ch; font-size: 0.875rem; line-height: 1.55; color: var(--text-2); }
+    .ops-page-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; max-width: 100%; }
     .ops-page-actions > * { min-width: 0; }
 
+    /* Segmented control (public assistant Settings pattern) */
     .ops-segmented {
-      display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--ops-radius-sm);
-      background: var(--ops-row); border: 1px solid var(--ops-line);
+      display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+      border-radius: 999px; background: var(--seg-track); flex-wrap: wrap; max-width: 100%;
     }
     .ops-seg-btn {
-      min-height: 28px; min-width: 36px; padding: 4px 11px; border-radius: var(--ops-radius-xs); border: none;
-      background: transparent; color: var(--text-2); font-size: var(--ops-text-xs);
-      font-weight: var(--ops-weight-semi); cursor: pointer; font-family: inherit;
+      min-height: 32px; min-width: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid transparent;
+      background: transparent; color: var(--text-1); font: inherit; font-size: 0.78rem; font-weight: 500; cursor: pointer;
       display: inline-flex; align-items: center; justify-content: center;
-      transition: background var(--ops-dur-fast) var(--ops-ease), color var(--ops-dur-fast) var(--ops-ease);
+      transition: background-color var(--ops-dur-fast) var(--ops-ease), color var(--ops-dur-fast) var(--ops-ease), box-shadow var(--ops-dur-fast) var(--ops-ease);
     }
-    .ops-seg-btn.active { background: var(--ops-panel); color: var(--text-0); box-shadow: var(--ops-elev-1), inset 0 0 0 1px var(--ops-line); }
+    .ops-seg-btn:hover:not(.active) { background: var(--ghost-hover); }
+    .ops-seg-btn.active { background: var(--seg-active-bg); color: var(--accent); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16); }
+    :root[data-theme="high-contrast"] .ops-seg-btn.active { border-color: #FFD60A; color: #FFFFFF; box-shadow: none; }
 
+    /* Buttons: pill shaped, ghost hover, spring press */
     .ops-btn {
-      min-height: 36px; padding: 8px 14px; border-radius: var(--ops-radius-sm);
-      background: var(--ops-row-active); border: 1px solid var(--ops-line-strong); color: var(--text-0);
-      font-size: var(--ops-text-sm); font-weight: var(--ops-weight-semi);
-      cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: var(--ops-space-2); text-decoration: none; white-space: nowrap;
-      transition: background var(--ops-dur-fast) var(--ops-ease), border-color var(--ops-dur-fast) var(--ops-ease);
+      min-height: 40px; padding: 0 16px; border-radius: 999px;
+      background: transparent; border: 1px solid var(--border-1); color: var(--text-0);
+      font: inherit; font-size: 0.8125rem; font-weight: 500; line-height: 1.2;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      text-decoration: none; white-space: nowrap;
+      transition: background-color var(--ops-dur-fast) var(--ops-ease), border-color var(--ops-dur-fast) var(--ops-ease),
+        box-shadow var(--ops-dur-fast) var(--ops-ease), transform 140ms var(--ops-spring);
     }
-    .ops-btn:hover { background: var(--surface-4); border-color: var(--ops-line-strong); }
+    .ops-btn svg { flex: none; }
+    .ops-btn:hover { background: var(--ghost-hover); }
+    .ops-btn:active { background: var(--ghost-active); transform: scale(0.97); }
     a.ops-btn { color: var(--text-0); }
-    .ops-btn.primary, a.ops-btn.primary, a.ops-btn.primary:hover { background: linear-gradient(135deg, #07792B 0%, #0D6E38 50%, #0F47AF 100%); color: #fff; border-color: rgba(255,255,255,0.18); box-shadow: var(--ops-elev-1); }
-    .ops-btn.gold { background: var(--accent); color: #0B1220; border-color: transparent; font-weight: var(--ops-weight-bold); }
-    :root[data-theme="light"] .ops-btn.gold { color: #FFFFFF; }
+    .ops-btn.primary,
+    .ops-btn.gold,
+    a.ops-btn.primary { background: var(--btn-primary-bg); border-color: transparent; color: var(--btn-primary-ink); }
+    .ops-btn.primary:hover,
+    .ops-btn.gold:hover,
+    a.ops-btn.primary:hover { background: var(--btn-primary-hover); box-shadow: var(--shadow-sm); }
 
-    /* StatCard Grid (Hercules tabular/proportional figure hierarchy) */
+    /* KPI cards */
     .ops-stat-grid {
-      display: grid;
-      grid-template-columns: repeat(var(--ops-stat-cols, 3), minmax(0, 1fr));
-      gap: var(--ops-space-3); margin-bottom: var(--ops-band);
+      display: grid; grid-template-columns: repeat(var(--ops-stat-cols, 3), minmax(0, 1fr)); gap: 16px;
     }
-    @media (max-width: 1100px) { .ops-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .ops-stat-grid.cols-3 { --ops-stat-cols: 3; }
+    .ops-stat-grid.cols-4,
+    .ov-stats { --ops-stat-cols: 4; }
+    @media (max-width: 1180px) { .ops-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 640px) { .ops-stat-grid { grid-template-columns: minmax(0, 1fr); } }
-
     .ops-stat {
-      position: relative; display: flex; flex-direction: column; gap: var(--ops-space-1);
-      padding: var(--ops-space-5); border-radius: var(--ops-radius-md);
-      background: var(--ops-glass-bg); border: 1px solid var(--ops-glass-line);
-      box-shadow: var(--ops-glass-spec), var(--ops-glass-cast);
-      -webkit-backdrop-filter: var(--ops-glass-blur); backdrop-filter: var(--ops-glass-blur);
-      contain: paint; text-decoration: none; color: inherit;
-      transition: border-color var(--ops-dur-fast) var(--ops-ease), background var(--ops-dur-fast) var(--ops-ease);
+      position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+      padding: 18px 20px; border-radius: 16px;
+      background: var(--ops-panel); border: 1px solid var(--border-0); box-shadow: var(--shadow-sm);
+      text-decoration: none; color: inherit;
+      transition: border-color var(--ops-dur-fast) var(--ops-ease), box-shadow var(--ops-dur-base) var(--ops-ease), transform 140ms var(--ops-spring);
     }
-    .ops-stat:hover { border-color: var(--ops-line-strong); background: var(--ops-row-hover); }
+    a.ops-stat:hover { border-color: var(--border-1); box-shadow: var(--shadow-md); }
+    a.ops-stat:active { transform: scale(0.99); }
     .ops-stat-label {
-      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-light);
-      letter-spacing: var(--ops-tracking-meta); text-transform: uppercase; color: var(--text-3);
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: 0.8125rem; font-weight: 500; line-height: 1.35; color: var(--text-2);
     }
-    .ops-stat-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--ops-space-2); flex-wrap: wrap; margin-top: 2px; }
+    .ops-stat-go {
+      display: inline-flex; flex: none; color: var(--text-3); opacity: 0; transform: translate(-2px, 2px);
+      transition: opacity var(--ops-dur-fast) var(--ops-ease), transform var(--ops-dur-base) var(--ops-ease-out), color var(--ops-dur-fast) var(--ops-ease);
+    }
+    a.ops-stat:hover .ops-stat-go,
+    a.ops-stat:focus-visible .ops-stat-go { opacity: 1; transform: none; color: var(--accent); }
+    @media (hover: none) { .ops-stat-go { opacity: 1; transform: none; } }
+    .ops-stat-row { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; }
     .ops-stat-value {
-      font-size: var(--ops-text-xl); line-height: var(--ops-lh-tight);
-      min-height: calc(var(--ops-text-xl) * var(--ops-lh-tight));
-      font-weight: var(--ops-weight-semi); letter-spacing: var(--ops-tracking-tight);
-      color: var(--text-0); font-variant-numeric: proportional-nums; text-wrap: balance;
+      font-size: var(--ops-text-xl); line-height: 1.15; font-weight: 600; letter-spacing: -0.02em;
+      color: var(--text-0); font-variant-numeric: tabular-nums;
     }
-    .ops-stat-unit { font-size: 0.6em; font-weight: var(--ops-weight-normal); letter-spacing: 0; color: var(--text-2); white-space: pre; }
+    .ops-stat-unit { font-size: 0.875rem; font-weight: 400; letter-spacing: 0; color: var(--text-2); white-space: pre; }
     .ops-delta {
-      display: inline-flex; align-items: center; gap: 3px;
-      font-family: var(--ops-font-mono); font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-semi);
-      font-variant-numeric: tabular-nums; color: var(--text-3);
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.78rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-2);
     }
     .ops-delta.is-good { color: var(--ops-good-ink); }
     .ops-delta.is-bad { color: var(--ops-bad-ink); }
-    .ops-stat-hint { font-size: var(--ops-text-2xs); color: var(--text-3); line-height: var(--ops-lh-snug); }
-    .ops-sparkline { width: 100%; height: 28px; margin-top: var(--ops-space-1); overflow: visible; }
+    .ops-stat-hint { font-size: 0.78rem; line-height: 1.45; color: var(--text-3); }
+    .ops-sparkline { display: block; width: 100%; height: 36px; margin-top: 6px; color: var(--accent); overflow: visible; }
 
-    /* OpsPanel & Two-Column Layouts */
-    .ov-cols { display: grid; grid-template-columns: 1.45fr 1fr; gap: var(--ops-band); align-items: start; }
-    @media (max-width: 900px) { .ov-cols { grid-template-columns: minmax(0, 1fr); } }
-    .ov-side { display: grid; gap: var(--ops-band); }
-
+    /* Cards, two-column layouts and card headers */
+    .ov-cols { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: var(--ops-band); align-items: start; }
+    @media (max-width: 1080px) { .ov-cols { grid-template-columns: minmax(0, 1fr); } }
+    .ov-side { display: grid; gap: var(--ops-band); min-width: 0; }
     .ops-panel {
-      background: var(--ops-panel); border: 1px solid var(--ops-line);
-      border-radius: var(--ops-radius-md); overflow: hidden;
-    }
-    .ops-panel.is-bare { background: none; border: 0; border-radius: 0; box-shadow: none; }
-    .ops-panel.is-glass {
-      background: var(--ops-glass-bg); border-color: var(--ops-glass-line);
-      border-radius: var(--ops-radius-lg);
-      box-shadow: var(--ops-glass-spec), var(--ops-elev-2);
-      -webkit-backdrop-filter: var(--ops-glass-blur); backdrop-filter: var(--ops-glass-blur);
+      min-width: 0; background: var(--ops-panel); border: 1px solid var(--border-0);
+      border-radius: 16px; box-shadow: var(--shadow-sm); overflow: hidden;
     }
     .ops-panel-head {
-      display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-2);
-      padding: var(--ops-space-3) var(--ops-space-4); border-bottom: 1px solid var(--ops-hairline);
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px;
+      min-height: 56px; padding: 14px 20px; border-bottom: 1px solid var(--ops-hairline);
     }
-    .ops-panel.is-bare .ops-panel-head { padding: 0 0 var(--ops-space-2); border-bottom: 1px solid var(--ops-line); }
-    .ops-panel-head h2 { margin: 0; font-size: var(--ops-text-base); font-weight: var(--ops-weight-semi); color: var(--text-0); }
-    .ops-panel.is-bare .ops-panel-head h2 { font-size: var(--ops-text-lg); }
-    .ops-panel-body { padding: var(--ops-space-4); overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .ops-panel.is-bare .ops-panel-body { padding: var(--ops-space-4) 0 0; }
-    .ops-page > .ops-panel.is-bare,
-    .ops-page > .ops-panel.is-glass,
-    .ops-page > .ops-panel.is-bare + *,
-    .ops-page > .ops-panel.is-glass + * {
-      margin-top: var(--ops-band);
-    }
+    .ops-panel-head h2 { margin: 0; min-width: 0; font-size: 0.9375rem; line-height: 1.35; font-weight: 600; color: var(--text-0); }
+    .ops-panel-body { padding: 16px 20px 20px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .ops-panel-body:has(> .ops-table:only-child) { padding: 0; }
+    .ops-panel-end { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; }
+    .ops-panel-note { margin: 0 0 16px; font-size: 0.8125rem; line-height: 1.55; color: var(--text-2); }
 
-    /* Lists, Tables & Chips (ink-only readings in IBM Plex Mono Light) */
-    .ov-review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ops-space-2); }
-    .ov-review-item {
-      display: grid; gap: var(--ops-space-1); padding: var(--ops-space-3) var(--ops-space-4);
-      border: 1px solid var(--ops-hairline); border-radius: var(--ops-radius-sm); background: var(--ops-row);
+    /* Status readings: plain text, meaning carried by a text-safe ink (no capsules). */
+    .ops-chip,
+    .ov-chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; border-radius: 0; background: none;
+      font-size: 0.8125rem; font-weight: 500; line-height: 1.4; color: var(--text-2);
     }
-    .ov-review-top { display: flex; align-items: center; justify-content: space-between; gap: var(--ops-space-2); }
-    .ops-chip {
-      display: inline-flex; align-items: center; gap: 5px; padding: 0;
-      border: 0; border-radius: 0; background: none;
-      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-light); color: var(--text-3); white-space: nowrap;
-    }
-    .ops-chip + .ops-chip { margin-inline-start: var(--ops-space-3); }
-    .ops-chip.good, .ops-chip.is-good { color: var(--ops-good-ink); }
-    .ops-chip.warn, .ops-chip.is-warn { color: var(--ops-warn-ink); }
+    .ops-chip svg, .ov-chip svg { flex: none; }
+    .ops-chip + .ops-chip { margin-inline-start: 20px; }
+    .ops-page-actions > .ops-chip,
+    .ops-page-actions > .ops-fresh { margin-inline-end: 8px; }
+    .ops-chip.good, .ops-chip.is-good, .ov-chip.good { color: var(--ops-good-ink); }
+    .ops-chip.warn, .ops-chip.is-warn, .ov-chip.warn { color: var(--ops-warn-ink); }
     .ops-chip.bad, .ops-chip.is-danger { color: var(--ops-bad-ink); }
     .ops-chip.info, .ops-chip.is-info { color: var(--ops-info-ink); }
+    .ops-fresh { display: inline-flex; align-items: center; gap: 8px; font-size: 0.8125rem; font-weight: 500; color: var(--text-2); }
+    .ops-fresh-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ssra-civic-green); flex: none; }
+    .ops-fresh-dot.is-stale { background: var(--text-3); }
+    .ops-meta-xs { font-size: 0.75rem; color: var(--text-3); }
 
-    .ops-table { width: 100%; border-collapse: collapse; font-size: var(--ops-text-sm); }
+    /* Tables */
+    .ops-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8125rem; color: var(--text-1); }
     .ops-table th, .ops-table td {
-      padding: var(--ops-space-3) var(--ops-space-4); text-align: start; border-bottom: 1px solid var(--ops-hairline);
+      padding: 12px 16px; text-align: start; vertical-align: middle; border-bottom: 1px solid var(--ops-hairline);
     }
     .ops-table th {
-      padding: var(--ops-space-2) var(--ops-space-4);
-      font-size: var(--ops-text-2xs); font-weight: var(--ops-weight-semi);
-      text-transform: uppercase; letter-spacing: var(--ops-tracking-caps); color: var(--text-3);
-      border-bottom: 1px solid var(--ops-line);
+      padding-block: 10px; background: var(--ops-inset); border-bottom-color: var(--border-0);
+      font-size: 0.75rem; font-weight: 500; color: var(--text-3); white-space: nowrap;
     }
-    .ops-table tr:hover td { background: var(--ops-row); }
+    .ops-panel-body > .ops-table:only-child th:first-child,
+    .ops-panel-body > .ops-table:only-child td:first-child { padding-inline-start: 20px; }
+    .ops-panel-body > .ops-table:only-child th:last-child,
+    .ops-panel-body > .ops-table:only-child td:last-child { padding-inline-end: 20px; }
+    .ops-table tbody tr { transition: background-color var(--ops-dur-fast) var(--ops-ease); }
+    .ops-table tbody tr:hover { background: var(--ops-row-hover); }
+    .ops-table tbody tr:last-child td { border-bottom: 0; }
+    .ops-table td strong { font-weight: 500; color: var(--text-0); }
 
-    .ov-kv { margin: 0; display: grid; gap: var(--ops-space-2); }
-    .ov-kv > div { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--ops-space-1) var(--ops-space-3); min-height: 24px; padding: 2px 0; border-bottom: 1px solid var(--ops-hairline); }
-    .ov-kv dt { font-size: var(--ops-text-xs); color: var(--text-3); }
-    .ov-kv dd { margin: 0; font-size: var(--ops-text-xs); font-weight: var(--ops-weight-semi); color: var(--text-1); text-align: end; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    /* Definition lists */
+    .ov-kv { margin: 0; display: grid; }
+    .ov-kv > div {
+      display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px;
+      padding: 10px 0; border-bottom: 1px solid var(--ops-hairline);
+    }
+    .ov-kv > div:first-child { padding-top: 0; }
+    .ov-kv > div:last-child { padding-bottom: 0; border-bottom: 0; }
+    .ov-kv dt { font-size: 0.8125rem; color: var(--text-2); }
+    .ov-kv dd { margin: 0; font-size: 0.8125rem; font-weight: 500; color: var(--text-0); text-align: end; overflow-wrap: anywhere; }
 
-    /* Command Palette Modal (CommandPalette.tsx pattern) */
+    /* Review queue rows: selection is carried by the row's own border colour and a surface tint. */
+    .ov-review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+    .ov-review-item {
+      display: grid; gap: 4px; padding: 12px 14px; border: 1px solid transparent; border-radius: 12px; background: transparent;
+      transition: background-color var(--ops-dur-fast) var(--ops-ease), border-color var(--ops-dur-fast) var(--ops-ease);
+    }
+    .ov-review-item.is-clickable { cursor: pointer; }
+    .ov-review-item.is-clickable:hover { background: var(--ops-row-hover); }
+    .ov-review-item.is-selected,
+    .ov-review-item.is-selected:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .ov-review-list > .ov-review-item:not(.is-clickable) {
+      padding-inline: 0; border-radius: 0; border-bottom-color: var(--ops-hairline);
+    }
+    .ov-review-list > .ov-review-item:not(.is-clickable):first-child { padding-top: 0; }
+    .ov-review-list > .ov-review-item:not(.is-clickable):last-child { padding-bottom: 0; border-bottom-color: transparent; }
+    .ov-review-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; row-gap: 4px; }
+    .ov-review-top > * + * { margin-inline-start: 20px; }
+    .ops-ticket-title { font-size: 0.875rem; font-weight: 500; color: var(--text-0); }
+    .ops-review-link { justify-self: start; font-size: 0.875rem; font-weight: 500; color: var(--text-0); text-decoration: none; }
+    .ops-review-link:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+    .ops-review-quote { margin: 0; font-size: 0.8125rem; line-height: 1.5; color: var(--text-2); }
+    .ops-duty-lead { margin: 0 0 16px; font-size: 0.875rem; color: var(--text-2); }
+    .ops-duty-lead strong { font-weight: 600; color: var(--text-0); }
+
+    /* Copilot case panel */
+    .ops-msg-box { margin-bottom: 16px; padding: 14px 16px; border-radius: 12px; background: var(--ops-inset); border: 1px solid var(--border-0); }
+    .ops-msg-head { margin-bottom: 4px; font-size: 0.75rem; font-weight: 500; color: var(--text-3); }
+    .ops-msg-body { font-size: 0.875rem; line-height: 1.55; color: var(--text-0); }
+    .ops-draft-wrap { margin-bottom: 12px; }
+    .ops-draft-label { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 0.8125rem; font-weight: 500; color: var(--text-1); }
+    .ops-draft-label svg { color: var(--accent); }
+    .ops-draft-textarea {
+      display: block; width: 100%; min-height: 136px; padding: 12px 14px; border-radius: 12px; resize: vertical;
+      background: var(--ops-panel); color: var(--text-0); border: 1px solid var(--border-1);
+      font: inherit; font-size: 0.875rem; line-height: 1.55;
+      transition: border-color 150ms var(--ops-ease), box-shadow 150ms var(--ops-ease);
+    }
+    .ops-draft-textarea:hover { border-color: var(--border-2); }
+    .ops-draft-textarea:focus { border-color: var(--ssra-blue); }
+    .ops-chips-row { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 16px; }
+    .ops-chips-row > .ops-chip + .ops-chip { margin-inline-start: 0; }
+    .ops-actions-row, .ops-actions-row-mt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .ops-actions-row-mt { margin-top: 16px; }
+    .ops-status-msg { margin-top: 12px; font-size: 0.8125rem; font-weight: 500; color: var(--ops-good-ink); }
+
+    /* Control-plane pieces */
+    .ops-degrade-bar {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+      margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--ops-hairline);
+    }
+    .ops-degrade-label { font-size: 0.8125rem; font-weight: 500; color: var(--text-0); }
+    .ops-release-steps { margin: 0; padding: 0; list-style: none; display: grid; font-size: 0.8125rem; line-height: 1.5; }
+    .ops-release-steps li { padding: 10px 0; border-bottom: 1px solid var(--ops-hairline); }
+    .ops-release-steps li:first-child { padding-top: 0; }
+    .ops-release-steps li:last-child { padding-bottom: 0; border-bottom: 0; }
+    .ops-release-steps strong { font-weight: 600; color: var(--text-0); }
+    .ops-release-steps .ops-chip { display: inline; }
+
+    /* Empty states & the preview notice */
+    .ops-empty {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 32px 20px; text-align: center; border-radius: 12px; background: var(--ops-inset);
+    }
+    .ops-empty-mark {
+      display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 4px;
+      border-radius: 50%; background: var(--accent-soft); color: var(--accent);
+    }
+    .ops-empty-title { margin: 0; font-size: 0.9375rem; font-weight: 600; color: var(--text-0); }
+    .ops-empty-body { margin: 0; max-width: 44ch; font-size: 0.8125rem; line-height: 1.55; color: var(--text-2); }
+    .ops-preview-card { padding: 20px 24px; }
+    .ops-preview-card p, .ops-preview-card li { margin: 0; font-size: 0.875rem; line-height: 1.6; color: var(--text-1); }
+    .ops-preview-card p + p { margin-top: 8px; }
+    .ops-preview-card ul { display: grid; gap: 4px; margin: 12px 0 0; padding-inline-start: 1.25rem; }
+    .ops-preview-chip { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.8125rem; font-weight: 600; color: var(--ops-warn-ink); }
+    .is-hidden { display: none !important; }
+
+    /* Command palette (public assistant Settings modal motion) */
     .ops-cmdk-backdrop {
-      position: fixed; inset: 0; z-index: 90; background: rgba(5, 7, 14, 0.72);
-      backdrop-filter: blur(10px); display: none; place-items: start center; padding-top: 12vh;
+      position: fixed; inset: 0; z-index: 90; display: none; place-items: start center; padding: 12vh 16px 16px;
+      background: rgba(15, 23, 42, 0.32); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     }
-    .ops-cmdk-backdrop.open { display: grid; }
+    .ops-cmdk-backdrop.open { display: grid; animation: opsFade 180ms var(--ops-ease) both; }
     .ops-cmdk-dialog {
-      width: min(560px, 92vw); background: var(--ops-panel); border: 1px solid var(--ops-line-strong);
-      border-radius: var(--ops-radius-lg); box-shadow: var(--ops-elev-3); overflow: hidden;
+      width: min(600px, 100%); background: var(--ops-panel); border: 1px solid var(--border-0);
+      border-radius: 20px; box-shadow: var(--shadow-modal); overflow: hidden;
     }
+    .ops-cmdk-backdrop.open .ops-cmdk-dialog { animation: opsRise 240ms var(--ops-ease-out) both; }
     .ops-cmdk-input {
-      width: 100%; padding: 14px 16px; border: none; border-bottom: 1px solid var(--ops-line);
-      background: transparent; color: var(--text-0); font-family: inherit; font-size: var(--ops-text-base); outline: none;
+      width: 100%; min-height: 56px; padding: 0 20px; border: none; border-bottom: 1px solid var(--border-0);
+      background: transparent; color: var(--text-0); font: inherit; font-size: 1rem;
     }
-    .ops-cmdk-list { list-style: none; margin: 0; padding: 8px; max-height: 340px; overflow-y: auto; }
+    .ops-cmdk-input::placeholder { color: var(--text-3); }
+    .ops-cmdk-input:focus-visible { outline-offset: -3px; }
+    .ops-cmdk-list { list-style: none; margin: 0; padding: 8px; max-height: min(360px, 50vh); overflow-y: auto; }
     .ops-cmdk-item {
-      padding: 9px 12px; border-radius: var(--ops-radius-sm); cursor: pointer;
+      min-height: 40px; padding: 8px 12px; border-radius: 10px; cursor: pointer;
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      color: var(--text-1); font-size: var(--ops-text-sm);
+      color: var(--text-0); font-size: 0.875rem; transition: background-color 120ms var(--ops-ease);
     }
-    .ops-cmdk-item:hover, .ops-cmdk-item[data-active="true"] { background: var(--ops-row-active); color: var(--text-0); }
+    .ops-cmdk-item:hover,
+    .ops-cmdk-item[data-active="true"] { background: var(--ghost-hover); }
     .ops-cmdk-foot {
-      padding: 8px 14px; border-top: 1px solid var(--ops-hairline);
-      font-size: var(--ops-text-2xs); color: var(--text-3); display: flex; justify-content: space-between;
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 10px 16px;
+      border-top: 1px solid var(--border-0); background: var(--ops-inset); font-size: 0.75rem; color: var(--text-3);
     }
+    .ops-cmdk-foot > span { display: inline-flex; align-items: center; gap: 6px; }
 
+    /* Sign-in & sign-up cards */
+    .signin-wrap { display: grid; place-items: center; padding: 8px 0 32px; }
+    .signin-card {
+      width: 100%; max-width: 560px; padding: clamp(24px, 4vw, 40px);
+      background: var(--ops-panel); border: 1px solid var(--border-0); border-radius: 24px;
+      box-shadow: 0 24px 64px rgba(15, 23, 42, 0.10), 0 1px 3px rgba(15, 23, 42, 0.05);
+    }
+    .signin-head { text-align: center; margin-bottom: 24px; }
+    .signin-mark {
+      display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 16px;
+      border-radius: 50%; background: var(--grad-primary); color: #FFFFFF; box-shadow: 0 6px 20px rgba(0, 93, 180, 0.25);
+    }
+    .signin-mark svg { width: 24px; height: 24px; }
+    .signin-head .ops-eyebrow { margin-bottom: 8px; font-size: 0.75rem; }
+    .signin-head h1 { margin: 0; font-size: 1.75rem; line-height: 1.2; font-weight: 500; letter-spacing: -0.015em; color: var(--text-0); }
+    .signin-sub { margin: 8px 0 0; font-size: 0.875rem; line-height: 1.5; color: var(--text-2); }
+    .signin-block { padding: 20px 0; border-top: 1px solid var(--border-0); }
+    .signin-block h2 { margin: 0 0 8px; font-size: 1rem; font-weight: 600; color: var(--text-0); }
+    .signin-note { margin: 0 0 16px; font-size: 0.8125rem; line-height: 1.6; color: var(--text-2); }
+    .signin-roles { display: grid; gap: 8px; margin: 0 0 16px; padding: 0; border: 0; }
+    .signin-roles legend { margin-bottom: 8px; padding: 0; font-size: 0.8125rem; font-weight: 500; color: var(--text-1); }
+    .role-opt {
+      display: grid; grid-template-columns: auto 1fr; grid-template-areas: "radio name" "radio hint"; gap: 2px 12px; align-items: center;
+      padding: 12px 14px; border: 1px solid var(--border-1); border-radius: 14px; background: var(--ops-panel); cursor: pointer;
+      transition: border-color var(--ops-dur-fast) var(--ops-ease), background-color var(--ops-dur-fast) var(--ops-ease);
+    }
+    .role-opt:hover { background: var(--ops-row-hover); }
+    .role-opt.active,
+    .role-opt.active:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .role-opt input { grid-area: radio; width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+    .role-name { grid-area: name; font-size: 0.875rem; font-weight: 500; color: var(--text-0); }
+    .role-hint { grid-area: hint; font-size: 0.78rem; line-height: 1.45; color: var(--text-2); }
+    .signin-form { display: grid; gap: 14px; margin: 0 0 12px; }
+    .signin-field { display: grid; gap: 6px; }
+    .signin-label { font-size: 0.8125rem; font-weight: 500; color: var(--text-1); }
+    .signin-input {
+      width: 100%; min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border-1);
+      background: var(--ops-panel); color: var(--text-0); font: inherit; font-size: 0.875rem;
+      transition: border-color 150ms var(--ops-ease), box-shadow 150ms var(--ops-ease);
+    }
+    .signin-input:hover { border-color: var(--border-2); }
+    .signin-input:focus { border-color: var(--ssra-blue); }
+    .signin-input::placeholder { color: var(--text-3); }
+    .signin-primary, .signin-secondary {
+      width: 100%; min-height: 44px; padding: 0 20px; border-radius: 999px;
+      font: inherit; font-size: 0.875rem; font-weight: 500; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background-color var(--ops-dur-fast) var(--ops-ease), box-shadow var(--ops-dur-fast) var(--ops-ease), transform 140ms var(--ops-spring);
+    }
+    .signin-primary { background: var(--btn-primary-bg); color: var(--btn-primary-ink); border: 1px solid transparent; }
+    .signin-primary:hover { background: var(--btn-primary-hover); box-shadow: var(--shadow-sm); }
+    .signin-secondary { margin-top: 8px; background: transparent; color: var(--text-0); border: 1px solid var(--border-1); }
+    .signin-secondary:hover { background: var(--ghost-hover); }
+    .signin-primary:active, .signin-secondary:active { transform: scale(0.98); }
+    .signin-kv { margin-top: 20px; }
+    .signin-benefits { list-style: none; margin: 8px 0 0; padding: 0; display: grid; }
+    .signin-benefits li { display: grid; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--ops-hairline); }
+    .signin-benefits li:last-child { border-bottom: 0; padding-bottom: 0; }
+    .signin-benefits strong { font-size: 0.875rem; font-weight: 500; color: var(--text-0); }
+    .signin-benefits span { font-size: 0.8125rem; line-height: 1.55; color: var(--text-2); }
+    .signin-status {
+      margin: 16px 0 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border-1);
+      background: var(--ops-inset); color: var(--text-1); font-size: 0.8125rem; line-height: 1.5; overflow-wrap: anywhere;
+    }
+    .signin-status.ok {
+      border-color: color-mix(in srgb, var(--ops-good-ink) 35%, transparent);
+      background: color-mix(in srgb, var(--ops-good-ink) 7%, var(--ops-panel)); color: var(--ops-good-ink);
+    }
+    .signin-status.error {
+      border-color: color-mix(in srgb, var(--ops-bad-ink) 35%, transparent);
+      background: color-mix(in srgb, var(--ops-bad-ink) 6%, var(--ops-panel)); color: var(--ops-bad-ink);
+    }
+    .signin-onward { display: grid; gap: 2px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-0); }
+    .signin-onward a {
+      display: flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 999px;
+      color: var(--text-0); font-size: 0.875rem; text-decoration: none; transition: background-color var(--ops-dur-fast) var(--ops-ease);
+    }
+    .signin-onward a:hover { background: var(--ghost-hover); }
+    .signin-switch {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+      margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-0); font-size: 0.8125rem; color: var(--text-2);
+    }
+    .signin-switch p { margin: 0; }
+    .signin-switch a,
+    .signin-benefits a { color: var(--accent); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+    .signin-switch-links { display: flex; flex-wrap: wrap; gap: 16px; }
+    .signin-switch .signin-switch-alt { color: var(--text-2); font-weight: 400; text-decoration: none; }
+    .signin-switch .signin-switch-alt:hover { color: var(--text-0); text-decoration: underline; }
+
+    @keyframes opsFade { from { opacity: 0; } }
+    @keyframes opsRise { from { opacity: 0; transform: translateY(8px) scale(0.985); } }
+    @keyframes opsMenuIn { from { opacity: 0; transform: translateY(4px); } }
+
+    /* Phone drawer */
     .mobile-nav-btn { display: none; }
-    .ops-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(5, 10, 8, 0.55); z-index: 25; }
+    .ops-mobile-backdrop { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); z-index: 25; }
     @media (pointer: coarse), (max-width: 820px) {
-      .staff-rail-pin, .ops-cmdk-trigger, .ops-btn, .staff-acct-trigger, .staff-acct-item, .staff-rail a.nav-item {
-        min-height: 44px;
-      }
+      .staff-rail-pin, .ops-cmdk-trigger, .ops-btn, .staff-acct-item, .staff-rail a.nav-item, .ops-seg-btn { min-height: 44px; }
       .staff-rail-pin { min-width: 44px; }
     }
     @media (max-width: 820px) {
       .staff-shell { --rail-w: 0px !important; }
-      .staff-rail { transform: translateX(-100%); visibility: hidden; width: min(240px, 84vw) !important; transition: transform var(--ops-dur-base) var(--ops-ease), visibility 0s linear var(--ops-dur-base); }
-      .staff-rail.is-drawer-open { transform: translateX(0); visibility: visible; transition: transform var(--ops-dur-base) var(--ops-ease), visibility 0s; }
+      .staff-rail {
+        transform: translateX(-100%); visibility: hidden; width: min(280px, 86vw) !important;
+        transition: transform 220ms var(--ops-ease), visibility 0s linear 220ms;
+      }
+      .staff-rail.is-drawer-open {
+        transform: translateX(0); visibility: visible; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+        transition: transform 220ms var(--ops-ease), visibility 0s;
+      }
       .ops-mobile-backdrop.open { display: block; }
       .mobile-nav-btn { display: inline-flex; }
-      .ops-page { padding: var(--ops-space-4) var(--ops-space-3) var(--ops-space-8); }
-      .call-console-bar { padding: 8px var(--ops-space-3); }
-    }
-    .staff-acct-heading { padding: 4px 8px; font-size: 10px; text-transform: uppercase; color: var(--text-3); font-weight: 700; }
-    .staff-acct-hr { border: 0; border-top: 1px solid var(--ops-hairline); margin: 4px 0; }
-    .staff-acct-chevron { color: var(--text-3); font-size: 11px; }
-    .ops-stat-grid.cols-3 { --ops-stat-cols: 3; }
-    .ops-stat-grid.cols-4 { --ops-stat-cols: 4; }
-    .ops-meta-xs { font-size: 11px; color: var(--text-3); }
-    .ops-review-link { color: var(--text-0); font-weight: 600; text-decoration: none; }
-    .ops-review-quote { margin: 0; font-size: 12px; color: var(--text-2); }
-    .ops-duty-lead { margin: 0 0 12px; font-size: 13px; color: var(--text-2); }
-    .ov-review-item.is-clickable { cursor: pointer; }
-    .ov-review-item.is-selected { border-color: var(--accent); }
-    .ops-ticket-title { font-weight: 600; color: var(--text-0); font-size: 13px; }
-    .ops-msg-box { padding: 10px 12px; border-radius: 8px; background: var(--ops-row); border: 1px solid var(--ops-line); margin-bottom: 12px; }
-    .ops-msg-head { font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
-    .ops-msg-body { font-size: 13px; color: var(--text-0); }
-    .ops-draft-wrap { margin-bottom: 10px; }
-    .ops-draft-label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
-    .ops-draft-textarea { width: 100%; padding: 10px; border-radius: 8px; background: var(--ops-panel); color: var(--text-0); border: 1px solid var(--ops-line-strong); font-family: inherit; font-size: 13px; }
-    .ops-chips-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-    .ops-actions-row { display: flex; gap: 8px; flex-wrap: wrap; }
-    .ops-actions-row-mt { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
-    .ops-status-msg { margin-top: 10px; font-size: 12px; color: var(--ops-good-ink); }
-    .ops-degrade-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--ops-hairline); }
-    .ops-degrade-label { font-size: 12px; font-weight: 600; color: var(--text-0); }
-    .ops-release-steps { margin: 0; padding-inline-start: 18px; display: grid; gap: 8px; font-size: 13px; }
-    .ops-panel-mt { margin-top: 24px; }
-    .ov-stats { --ops-stat-cols: 4; margin-bottom: var(--ops-band); }
-    .ops-fresh {
-      display: inline-flex; align-items: center; gap: var(--ops-space-2);
-      font-size: var(--ops-text-2xs); color: var(--text-3);
-      font-variant-numeric: tabular-nums;
-    }
-    .ops-fresh-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--ops-good-ink); flex: none;
-    }
-    .ops-fresh-dot.is-stale { background: var(--text-3); }
-    .ops-panel-end { margin-inline-start: auto; display: flex; align-items: center; gap: var(--ops-space-2); }
-    .ops-panel-note {
-      margin: 0 0 var(--ops-space-3); font-size: var(--ops-text-xs);
-      line-height: var(--ops-lh-normal); color: var(--text-2);
-    }
-    .ops-empty {
-      display: flex; flex-direction: column; align-items: center;
-      gap: var(--ops-space-2); padding: var(--ops-space-6) var(--ops-space-4);
-      text-align: center; border: 1px dashed var(--ops-line); border-radius: var(--ops-radius-md);
-      background: var(--ops-row);
-    }
-    .ops-empty-mark {
-      display: grid; place-items: center; width: 40px; height: 40px;
-      border-radius: var(--ops-radius-md); background: var(--ops-row-active); color: var(--text-3);
-    }
-    .ops-empty-title {
-      margin: 0; font-size: var(--ops-text-base); font-weight: var(--ops-weight-semi); color: var(--text-1);
-    }
-    .ops-empty-body {
-      margin: 0; max-width: 44ch; font-size: var(--ops-text-sm);
-      line-height: var(--ops-lh-normal); color: var(--text-3);
-    }
-    .ov-chip { padding: 0; font-size: var(--ops-text-2xs); color: var(--text-3); }
-    .ov-chip.good { color: var(--ops-good-ink); }
-    .ov-chip.warn { color: var(--ops-warn-ink); }
-    .ops-chip.is-warn { color: var(--ops-warn-ink); }
-    .ops-preview-card { margin: 0 0 var(--ops-band); padding: var(--ops-space-5); }
-    .ops-preview-card p, .ops-preview-card li { line-height: 1.6; font-size: var(--ops-text-sm); }
-    .ops-preview-card ul { padding-inline-start: 1.25rem; margin: var(--ops-space-2) 0 0; }
-    .ops-preview-chip { display: inline-block; padding: 4px 9px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-weight: 700; margin-bottom: var(--ops-space-2); }
-    .is-hidden { display: none !important; }
-    .signin-wrap { display: grid; place-items: center; padding: var(--ops-space-4) 0 var(--ops-space-8); }
-    .signin-card { width: 100%; max-width: 560px; background: var(--ops-panel); border: 1px solid var(--ops-line-strong); border-radius: var(--ops-radius-lg); box-shadow: var(--ops-elev-2); padding: clamp(20px, 4vw, 34px); }
-    .signin-head { text-align: center; margin-bottom: 22px; }
-    .signin-mark { width: 52px; height: 52px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 14px; background: linear-gradient(135deg, #07792B 0%, #0F47AF 100%); color: #fff; box-shadow: var(--ops-elev-1); }
-    .signin-head h1 { margin: 4px 0 0; font-size: 24px; font-weight: 700; color: var(--text-0); }
-    .signin-sub { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
-    .signin-block { padding: 18px 0; border-top: 1px solid var(--ops-hairline); }
-    .signin-block h2 { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--text-0); }
-    .signin-note { margin: 0 0 14px; font-size: 13px; line-height: 1.55; color: var(--text-2); }
-    .signin-roles { margin: 0 0 14px; padding: 0; border: 0; display: grid; gap: 8px; }
-    .signin-roles legend { padding: 0; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text-2); }
-    .role-opt { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "radio name" "radio hint"; gap: 2px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius-sm); background: var(--ops-row); cursor: pointer; }
-    .role-opt.active { border-color: var(--accent); background: var(--ops-row-active); }
-    .role-opt input { grid-area: radio; width: 16px; height: 16px; accent-color: var(--accent); }
-    .role-name { grid-area: name; font-size: 13px; font-weight: 600; color: var(--text-0); }
-    .role-hint { grid-area: hint; font-size: 11.5px; color: var(--text-2); line-height: 1.45; }
-    .signin-form { display: grid; gap: 12px; margin: 0 0 12px; }
-    .signin-field { display: grid; gap: 6px; }
-    .signin-label { font-size: 12px; font-weight: 600; color: var(--text-1); }
-    .signin-input { width: 100%; min-height: 44px; padding: 9px 12px; border-radius: var(--ops-radius-sm); border: 1px solid var(--ops-line-strong); background: var(--ops-row); color: var(--text-0); font-family: inherit; font-size: 13.5px; }
-    .signin-input::placeholder { color: var(--text-3); }
-    .presence-pill.is-authenticated { background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.45); color: var(--ops-good-ink); }
-    .signin-primary, .signin-secondary { width: 100%; min-height: 44px; padding: 10px 16px; border-radius: var(--ops-radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-family: inherit; }
-    .signin-primary { background: linear-gradient(135deg, #07792B 0%, #0D6E38 50%, #0F47AF 100%); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); }
-    .signin-secondary { margin-top: 10px; background: var(--ops-row); color: var(--text-0); border: 1px solid var(--ops-line-strong); }
-    .signin-secondary:hover { background: var(--ops-row-hover); }
-    .signin-kv { margin-top: 14px; }
-    .signin-benefits { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
-    .signin-benefits li { padding: 12px 14px; border-radius: var(--ops-radius-sm); background: var(--ops-row); border: 1px solid var(--ops-hairline); display: grid; gap: 4px; }
-    .signin-benefits strong { font-size: 13px; color: var(--text-0); }
-    .signin-benefits span { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
-    .signin-status { margin: 12px 0 0; padding: 11px 13px; border-radius: var(--ops-radius-sm); font-size: 12.5px; line-height: 1.5; border: 1px solid var(--ops-line); background: var(--ops-row); color: var(--text-1); overflow-wrap: anywhere; }
-    .signin-status.ok { border-color: rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.1); color: var(--ops-good-ink); }
-    .signin-status.error { border-color: rgba(251, 113, 133, 0.45); background: rgba(251, 113, 133, 0.1); color: var(--ops-bad-ink); }
-    .signin-onward { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ops-hairline); display: grid; gap: 8px; }
-    .signin-onward a { padding: 9px 12px; border-radius: var(--ops-radius-sm); background: var(--ops-row); border: 1px solid var(--ops-line); color: var(--text-0); font-size: 13px; text-decoration: none; }
-    .signin-onward a:hover { background: var(--ops-row-hover); }
-    .signin-switch { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--ops-hairline); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 13px; color: var(--text-2); }
-    .signin-switch p { margin: 0; }
-    .signin-switch a { color: var(--accent); font-weight: 600; text-decoration: none; }
-    .signin-switch a:hover { text-decoration: underline; }
-    .signin-switch-links { display: flex; gap: 12px; flex-wrap: wrap; }
-    .signin-switch-alt { color: var(--text-2) !important; font-weight: 500 !important; }
-    /* Phone drawer overrides: always show labels, group headings, search text & account meta inside the 240px drawer regardless of desktop .is-collapsed state (staffGuard.css pattern) */
-    @media (max-width: 820px) {
+      .call-console-bar {
+        position: static; display: grid; grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas: "menu actions" "presence presence" "note note"; gap: 8px 12px; padding: 8px 16px 12px;
+      }
+      .call-bar-left { display: contents; }
+      .call-bar-right { grid-area: actions; justify-content: flex-end; }
+      #mobile-ops-nav-btn { grid-area: menu; justify-self: start; }
+      .presence-pill { grid-area: presence; }
+      #ops-presence-note { grid-area: note; margin-inline-start: 0; }
+      .ops-page { padding: 20px 16px 48px; }
+      /* Always show labels, group headings, search text & account details inside the drawer. */
       .staff-rail .staff-rail-label,
       .staff-rail .staff-rail-group-label,
-      .staff-rail .staff-brand-text {
-        opacity: 1;
-        height: auto;
-      }
-      .staff-rail.is-collapsed .ops-cmdk-trigger {
-        justify-content: flex-start;
-        padding-inline: var(--ops-space-2);
-      }
-      .staff-rail.is-collapsed .ops-cmdk-trigger-text {
-        display: inline;
-      }
-      .staff-rail.is-collapsed .staff-acct-trigger {
-        justify-content: flex-start;
-        padding-inline: 8px;
-      }
+      .staff-rail .staff-brand-text,
+      .staff-rail .staff-acct-meta { opacity: 1; }
+      .staff-rail .staff-rail-group-label { height: auto; padding-block: 12px 6px; }
+      .staff-rail.is-collapsed .ops-cmdk-trigger { justify-content: space-between; padding-inline: 12px 14px; }
+      .staff-rail.is-collapsed .ops-cmdk-trigger-text { display: inline; }
+      .staff-rail.is-collapsed .staff-acct-trigger { justify-content: flex-start; padding-inline: 4px 10px; }
       .staff-rail.is-collapsed .staff-acct-meta,
-      .staff-rail.is-collapsed .staff-acct-chevron {
-        display: flex;
-        opacity: 1;
-      }
-      .staff-rail-pin {
-        display: none;
+      .staff-rail.is-collapsed .staff-acct-chevron { display: flex; }
+      .staff-rail-pin { display: none; }
+    }
+    @media (max-width: 480px) {
+      .ops-panel-head, .ops-panel-body { padding-inline: 16px; }
+      .ops-stat { padding: 16px; }
+      .call-bar-right .ops-btn.primary { width: 44px; padding: 0; }
+      .call-bar-right .ops-btn-label {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
       }
     }
+
+    @media (prefers-reduced-transparency: reduce) {
+      .call-console-bar, .ops-cmdk-backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+      .call-console-bar { background: var(--bg-0); }
+    }
     @media (forced-colors: active) {
-      .staff-rail, .ops-stat, .ops-panel, .ops-btn, .role-opt, .ops-cmdk-dialog, .signin-card {
+      .staff-rail, .ops-stat, .ops-panel, .ops-btn, .role-opt, .ops-cmdk-dialog, .signin-card, .staff-acct-menu {
         border: 1px solid CanvasText;
       }
-      .staff-rail a.nav-item.active, .role-opt.active, .ops-seg-btn.active {
+      .staff-rail a.nav-item.active, .role-opt.active, .ops-seg-btn.active, .ov-review-item.is-selected {
         outline: 2px solid Highlight;
         outline-offset: -2px;
       }
+      :is(a, button, input, select, textarea, [tabindex]):focus-visible { outline-color: Highlight; }
     }
     @media print {
-      .staff-rail, .call-console-bar, .ops-cmdk-backdrop, .ssra-flag-ribbon, .ops-mobile-backdrop {
+      .staff-rail, .call-console-bar, .ops-cmdk-backdrop, .ops-mobile-backdrop {
         display: none !important;
       }
       .staff-shell-content {
         margin-inline-start: 0 !important;
+        background: #FFFFFF !important;
       }
       body, .ops-page, .ops-panel, .ops-stat {
-        background: #ffffff !important;
+        background: #FFFFFF !important;
         color: #000000 !important;
         box-shadow: none !important;
       }
@@ -1548,7 +1517,6 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
   </style>
 </head>
 <body>
-  <div class="ssra-flag-ribbon" aria-hidden="true"></div>
   <a class="staff-skip" href="#staff-main">Skip to content</a>
 
   <div class="staff-shell" id="ssra-staff-shell">
@@ -1559,8 +1527,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         <a class="staff-brand" href="/admin" aria-label="SSRA Operations Console preview">
           <span class="staff-brand-mark" aria-hidden="true">${ICONS.ssraCrest}</span>
           <span class="staff-brand-text">
-            Operations
-            <span class="staff-brand-sub">Taxpayer assistant</span>
+            SSRA Assist
+            <span class="staff-brand-sub">Operations console</span>
           </span>
         </a>
         <button type="button" id="rail-pin-btn" class="staff-rail-pin is-on" aria-label="Toggle preview navigation width" aria-pressed="true" title="Toggle preview navigation width">${ICONS.chevronsLeft}</button>
@@ -1586,8 +1554,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           <hr class="staff-acct-hr" role="separator" />
           <div role="group" aria-label="Appearance">
             <div class="staff-acct-heading" aria-hidden="true">Appearance</div>
-            <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio" aria-checked="true" tabindex="-1"><span>${ICONS.moon} Dark</span></button>
-            <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.sun} Light</span></button>
+            <button type="button" class="staff-acct-item" data-set-theme="light" role="menuitemradio" aria-checked="true" tabindex="-1"><span>${ICONS.sun} Light</span></button>
+            <button type="button" class="staff-acct-item" data-set-theme="dark" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.moon} Dark</span></button>
             <button type="button" class="staff-acct-item" data-set-theme="high-contrast" role="menuitemradio" aria-checked="false" tabindex="-1"><span>${ICONS.contrast} High contrast</span></button>
           </div>
           <hr class="staff-acct-hr" role="separator" />
@@ -1612,14 +1580,14 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       <div class="call-console-bar" id="call-console-bar" role="note" aria-label="Staff console preview status">
         <div class="call-bar-left">
           <button type="button" id="mobile-ops-nav-btn" class="ops-btn mobile-nav-btn" aria-expanded="false" aria-controls="staff-rail">${ICONS.panelLeft} Menu</button>
-          <span id="ops-presence-pill" class="presence-pill">Preview only · no authenticated staff session</span>
+          <span id="ops-presence-pill" class="presence-pill"><span id="ops-presence-icon" class="presence-icon" aria-hidden="true">${ICONS.eye}</span><span id="ops-presence-text">Preview only · no authenticated staff session</span></span>
           <span id="ops-presence-note">No live calls, taxpayer records, or service telemetry are shown.</span>
         </div>
         <div class="call-bar-right">
           <a id="call-bar-signin-link" href="/signin" data-nav="/signin" class="ops-btn">Sign in</a>
           <a id="call-bar-signup-link" href="/signup" data-nav="/signup" class="ops-btn">Sign up</a>
-          <button type="button" id="ops-signout-btn" class="ops-btn is-hidden" data-testid="ops-signout-btn" data-action="signout">${ICONS.close} Sign out</button>
-          <a href="${escapeHtml(publicAssistantUrl)}" class="ops-btn primary">${ICONS.messageSquare} Taxpayer MainChat</a>
+          <button type="button" id="ops-signout-btn" class="ops-btn is-hidden" data-testid="ops-signout-btn" data-action="signout">Sign out</button>
+          <a href="${escapeHtml(publicAssistantUrl)}" class="ops-btn primary">${ICONS.messageSquare}<span class="ops-btn-label">Taxpayer MainChat</span></a>
         </div>
       </div>
 
@@ -1800,7 +1768,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         route: mainEl?.getAttribute("data-route") || "/admin",
         role: initialSession?.role || readUiPreference("ssra-ops-preview-persona", "ssra_admin"),
         session: initialSession,
-        theme: readUiPreference("ssra-ops-theme", "dark"),
+        theme: readUiPreference("ssra-ops-theme", "light"),
         railMode: readUiPreference("ssra-ops-rail-mode", "always-open"),
         periodDays: 30,
         degradationLevel: 1,
@@ -1869,7 +1837,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       let lastRenderedRailKey = "ssra_admin|" + (mainEl?.getAttribute("data-route") || "/admin");
 
       function applyChrome() {
-        if (!["dark", "light", "high-contrast"].includes(state.theme)) state.theme = "dark";
+        if (!["light", "dark", "high-contrast"].includes(state.theme)) state.theme = "light";
         if (state.session && ROLE_META[state.session.role]) {
           state.role = state.session.role;
         }
@@ -1882,7 +1850,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         if (themeColorMeta) {
           themeColorMeta.setAttribute(
             "content",
-            state.theme === "light" ? "#F6F7F2" : state.theme === "high-contrast" ? "#000000" : "#091310",
+            state.theme === "dark" ? "#0B1220" : state.theme === "high-contrast" ? "#000000" : "#FFFFFF",
           );
         }
         const shouldExpandRail = state.railMode === "always-open" || Boolean(
@@ -1919,6 +1887,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           acctTrigger?.setAttribute("aria-label", "Preview persona menu; not signed in");
         }
         const presencePillEl = document.getElementById("ops-presence-pill");
+        const presenceTextEl = document.getElementById("ops-presence-text");
+        const presenceIconEl = document.getElementById("ops-presence-icon");
         const presenceNoteEl = document.getElementById("ops-presence-note");
         const barSignInEl = document.getElementById("call-bar-signin-link");
         const barSignUpEl = document.getElementById("call-bar-signup-link");
@@ -1927,7 +1897,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           if (presencePillEl) {
             presencePillEl.classList.add("is-authenticated");
             presencePillEl.setAttribute("data-testid", "authenticated-session-pill");
-            presencePillEl.textContent =
+          }
+          if (presenceIconEl) setSafeHtml(presenceIconEl, ICONS.shieldCheck);
+          if (presenceTextEl) {
+            presenceTextEl.textContent =
               "Signed in · " +
               state.session.displayName +
               " (" +
@@ -1939,7 +1912,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           if (presenceNoteEl) {
             presenceNoteEl.textContent =
               state.session.role === "ssra_auditor"
-                ? "Read-only Separation of Duties (ISO/IEC 42001 Clause 9.2) enforced · Reference workbench"
+                ? "Read-only Separation of Duties (ISO/IEC 42001 Clause 9.2) · ILLUSTRATIVE_FALLBACK telemetry"
                 : "Reference console workbench active · ILLUSTRATIVE_FALLBACK telemetry";
           }
           barSignInEl?.classList.add("is-hidden");
@@ -1949,8 +1922,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           if (presencePillEl) {
             presencePillEl.classList.remove("is-authenticated");
             presencePillEl.removeAttribute("data-testid");
-            presencePillEl.textContent = "Preview only · no authenticated staff session";
           }
+          if (presenceIconEl) setSafeHtml(presenceIconEl, ICONS.eye);
+          if (presenceTextEl) presenceTextEl.textContent = "Preview only · no authenticated staff session";
           if (presenceNoteEl) {
             presenceNoteEl.textContent = "No live calls, taxpayer records, or service telemetry are shown.";
           }
@@ -1988,20 +1962,21 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         }
       }
 
-      function renderSparklineSvg(points, color = "var(--ssra-teal-light)") {
+      function renderSparklineSvg(points) {
         if (!Array.isArray(points) || points.length < 2) return "";
         const min = Math.min(...points);
         const max = Math.max(...points);
         const span = max - min || 1;
         const w = 160;
-        const h = 26;
+        const h = 36;
         const coords = points.map((p, i) => {
           const x = ((i / (points.length - 1)) * w).toFixed(1);
-          const y = (h - 3 - ((p - min) / span) * (h - 6)).toFixed(1);
+          const y = (h - 4 - ((p - min) / span) * (h - 10)).toFixed(1);
           return x + "," + y;
         });
-        return '<svg class="ops-sparkline" viewBox="0 0 ' + w + " " + h + '" aria-hidden="true">' +
-          '<polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + coords.join(" ") + '" />' +
+        return '<svg class="ops-sparkline" viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="none" aria-hidden="true">' +
+          '<polygon fill="currentColor" fill-opacity="0.08" stroke="none" points="0,' + h + " " + coords.join(" ") + " " + w + "," + h + '" />' +
+          '<polyline fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="' + coords.join(" ") + '" />' +
         "</svg>";
       }
 
@@ -2009,11 +1984,14 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         const tag = href ? "a" : "div";
         const hrefAttr = href ? ' href="' + escapeHtml(href) + '" data-nav="' + escapeHtml(href) + '"' : "";
         const deltaCls = deltaGood === true ? " is-good" : deltaGood === false ? " is-bad" : "";
+        const trendIcon = /^[+][0-9]/.test(deltaText || "") ? ICONS.trendUp : /^-[0-9]/.test(deltaText || "") ? ICONS.trendDown : "";
         return "<" + tag + ' class="ops-stat"' + hrefAttr + ">" +
-          '<span class="ops-stat-label">' + escapeHtml(label) + "</span>" +
+          '<span class="ops-stat-label"><span>' + escapeHtml(label) + "</span>" +
+            (href ? '<span class="ops-stat-go" aria-hidden="true">' + ICONS.arrowUpRight + "</span>" : "") +
+          "</span>" +
           '<span class="ops-stat-row">' +
             '<strong class="ops-stat-value">' + escapeHtml(figure) + (unit ? '<span class="ops-stat-unit"> ' + escapeHtml(unit) + "</span>" : "") + "</strong>" +
-            (deltaText ? '<span class="ops-delta' + deltaCls + '">' + escapeHtml(deltaText) + "</span>" : "") +
+            (deltaText ? '<span class="ops-delta' + deltaCls + '">' + trendIcon + escapeHtml(deltaText) + "</span>" : "") +
           "</span>" +
           (hint ? '<span class="ops-stat-hint">' + escapeHtml(hint) + "</span>" : "") +
           (sparkline ? renderSparklineSvg(sparkline) : "") +
@@ -2023,8 +2001,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       function renderAuthenticatedPageHeader(eyebrow, title, desc) {
         const sess = state.session;
         const roleBadge = state.role === "ssra_auditor"
-          ? '<span class="ops-chip info">' + ICONS.lock + " Auditor Read-Only Separation of Duties</span>"
-          : '<span class="ops-chip good">' + ICONS.shieldCheck + " Verified Session · " + escapeHtml(sess?.email || state.role) + "</span>";
+          ? '<span class="ops-chip info">' + ICONS.lock + " Auditor read-only · Separation of Duties</span>"
+          : '<span class="ops-chip good">' + ICONS.shieldCheck + " Verified session · " + escapeHtml(sess?.email || state.role) + "</span>";
         return '<header class="ops-page-head">' +
           "<div>" +
             '<span id="preview-eyebrow" class="ops-eyebrow">' + escapeHtml(eyebrow) + "</span>" +
@@ -2035,11 +2013,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
             roleBadge +
             '<div class="ops-segmented" role="group" aria-label="Comparison window">' +
               [7, 30, 90].map((d) =>
-                '<button type="button" class="ops-seg-btn' + (state.periodDays === d ? " active" : "") + '" data-period="' + d + '">' + d + "d</button>"
+                '<button type="button" class="ops-seg-btn' + (state.periodDays === d ? " active" : "") + '" aria-pressed="' + (state.periodDays === d) + '" data-period="' + d + '">' + d + "d</button>"
               ).join("") +
             "</div>" +
-            '<button type="button" class="ops-btn" data-action="signout">' + ICONS.close + " Sign out</button>" +
-            '<a class="ops-btn is-primary primary" href="' + escapeHtml(PUBLIC_ASSISTANT_URL) + '" data-nav="' + escapeHtml(PUBLIC_ASSISTANT_URL) + '">Open the public assistant ' + ICONS.arrowUpRight + "</a>" +
           "</div>" +
         "</header>";
       }
@@ -2137,11 +2113,11 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
               "</div>" +
               '<div class="ops-panel-body">' +
                 '<div class="ops-msg-box">' +
-                  '<div class="ops-msg-head">TAXPAYER MESSAGE (' + escapeHtml(active.locale) + ")</div>" +
+                  '<div class="ops-msg-head">Taxpayer message · ' + escapeHtml(active.locale) + "</div>" +
                   '<div class="ops-msg-body">' + escapeHtml(active.userMsg) + "</div>" +
                 "</div>" +
                 '<div class="ops-draft-wrap">' +
-                  '<label for="copilot-draft-box" class="ops-draft-label">' + ICONS.sparkles + " AI Copilot Cited Draft (Principle 1 Verified)</label>" +
+                  '<label for="copilot-draft-box" class="ops-draft-label">' + ICONS.sparkles + " AI Copilot cited draft (Principle 1 verified)</label>" +
                   '<textarea id="copilot-draft-box" rows="5" class="ops-draft-textarea">' + escapeHtml(active.draftReply) + "</textarea>" +
                 "</div>" +
                 '<div class="ops-chips-row">' +
@@ -2151,7 +2127,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
                   ? '<div class="ops-chip warn" data-testid="auditor-readonly-notice">' + ICONS.lock + " Auditor Role (ssra_auditor) is strictly read-only and cannot send taxpayer replies (Separation of Duties).</div>"
                   : '<div class="ops-actions-row">' +
                       '<button type="button" class="ops-btn gold" id="approve-send-btn" data-testid="approve-send-btn">' + ICONS.check + " Approve &amp; Send Cited Reply</button>" +
-                      '<button type="button" class="ops-btn primary" id="maker-checker-btn" data-testid="maker-checker-btn">' + ICONS.shieldCheck + " Sign T3 Maker-Checker Approval</button>" +
+                      '<button type="button" class="ops-btn" id="maker-checker-btn" data-testid="maker-checker-btn">' + ICONS.shieldCheck + " Sign T3 Maker-Checker Approval</button>" +
                     "</div>"
                 ) +
                 '<div id="agent-action-status" class="ops-status-msg" role="status" aria-live="polite"></div>' +
@@ -2219,8 +2195,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
               label: "Quality-Adjusted Resolution",
               figure: "91.0",
               unit: "%",
-              deltaText: "LIVE_TELEMETRY",
-              deltaGood: true,
+              deltaText: "ILLUSTRATIVE_FALLBACK",
               hint: "Grounded resolution with verified citations & zero user re-asks",
               sparkline: [85, 87, 88.5, 89.2, 90.4, 91.0],
             }) +
@@ -2308,7 +2283,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
                     ? '<span class="ops-chip" data-testid="auditor-readonly-notice">L' + escapeHtml(state.degradationLevel) + " (Read-Only)</span>"
                     : '<div class="ops-segmented" role="group" aria-label="Select degradation level">' +
                         [1, 2, 3, 4, 5].map((lvl) =>
-                          '<button type="button" class="ops-seg-btn' + (state.degradationLevel === lvl ? " active" : "") + '" data-set-degrade="' + lvl + '">L' + lvl + "</button>"
+                          '<button type="button" class="ops-seg-btn' + (state.degradationLevel === lvl ? " active" : "") + '" aria-pressed="' + (state.degradationLevel === lvl) + '" data-set-degrade="' + lvl + '">L' + lvl + "</button>"
                         ).join("") +
                       "</div>"
                   ) +
@@ -2319,7 +2294,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
                     "<td>" +
                     (state.role !== "ssra_admin"
                       ? '<span class="ops-chip">' + (v ? "ON (Read-Only)" : "OFF (Read-Only)") + "</span>"
-                      : '<button type="button" class="ops-btn ' + (v ? "gold" : "") + '" data-toggle-flag="' + escapeHtml(k) + '">' + (v ? "ON (Enabled)" : "OFF (Disabled)") + "</button>"
+                      : '<button type="button" class="ops-btn' + (v ? " gold" : "") + '" aria-pressed="' + v + '" data-toggle-flag="' + escapeHtml(k) + '">' + (v ? "ON (Enabled)" : "OFF (Disabled)") + "</button>"
                     ) +
                     "</td></tr>"
                   ).join("") +
@@ -2527,7 +2502,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         return ${JSON.stringify(renderSignInCallbackCard(publicAssistantUrl))};
       }
       function buildPreviewHtml(title, group) {
-        return ${JSON.stringify(renderPreviewCard("__TITLE__", "__GROUP__", publicAssistantUrl))}
+        return ${JSON.stringify(renderPreviewCard("__TITLE__", "__GROUP__"))}
           .replace(/__TITLE__/g, escapeHtml(title))
           .replace(/__GROUP__/g, escapeHtml(group));
       }
@@ -2876,7 +2851,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         document.getElementById("ops-mobile-backdrop")?.classList.remove("open");
         syncStaffRailA11y(false);
         renderCurrentRoute();
-        mainEl?.focus();
+        window.scrollTo(0, 0);
+        mainEl?.focus({ preventScroll: true });
       }
 
       window.addEventListener("popstate", () => {

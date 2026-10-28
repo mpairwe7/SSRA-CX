@@ -24,6 +24,14 @@ export const ICONS = {
   close: svgWrap('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 18),
   check: svgWrap('<polyline points="20 6 9 17 4 12"/>', 16),
   arrowUpRight: svgWrap('<path d="M8 16 16 8"/><path d="M9.5 8H16v6.5"/>', 14),
+  trendUp: svgWrap(
+    '<polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/>',
+    14,
+  ),
+  trendDown: svgWrap(
+    '<polyline points="3 7 9 13 13 9 21 17"/><polyline points="15 17 21 17 21 11"/>',
+    14,
+  ),
   refresh: svgWrap(
     '<path d="M20 11a8 8 0 0 0-13.7-5.3L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 13.7 5.3L20 16"/><path d="M20 20v-4h-4"/>',
     14,

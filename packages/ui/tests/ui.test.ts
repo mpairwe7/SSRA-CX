@@ -28,8 +28,8 @@ describe("@ssra/ui design tokens and RTL layout", () => {
     expect(SSRA_DESIGN_TOKENS.typography.fontFeatureSettings).toBe('"cv11", "ss01"');
     expect(SSRA_DESIGN_TOKENS.typography.opsTypeScalePx["2xl"]).toBe(34);
     expect(SSRA_DESIGN_TOKENS.chatv2.railWidthPx).toBe(300);
-    expect(SSRA_DESIGN_TOKENS.opsConsole.collapsedRailWidthPx).toBe(52);
-    expect(SSRA_DESIGN_TOKENS.opsConsole.expandedRailWidthPx).toBe(208);
+    expect(SSRA_DESIGN_TOKENS.opsConsole.collapsedRailWidthPx).toBe(56);
+    expect(SSRA_DESIGN_TOKENS.opsConsole.expandedRailWidthPx).toBe(248);
     expect(SSRA_DESIGN_TOKENS.opsConsole.seriesPaletteDark).toHaveLength(8);
     const otpAr = buildAccessibleOtpInputProps("ar");
     expect(otpAr.autoComplete).toBe("one-time-code");

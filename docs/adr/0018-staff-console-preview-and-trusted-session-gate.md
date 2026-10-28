@@ -48,6 +48,9 @@ R2-F renders the preview card, heading, and page title on the server for every r
    - Adds `/signin`, `/signup` (`prompt=create`), and `/signin/callback` routes to the Operations Console with Web Crypto PKCE `S256` generation, `CWE-208` constant-time `state` and RFC 9207 `iss` verification, URL query scrubbing (`history.replaceState`), and explicit fail-closed messaging (`OQ-005` / `OQ-014`) while keeping all `/api/*` and `/v1/*` routes on `ssra-console` denied with `403 AUTHENTICATED_STAFF_SESSION_REQUIRED`.
 4. **MainChat Sign-In/Register Linking & Role-Scoped Reference Workbenches (`apps/web/server.js`, `packages/ui/ops-console.js`, `apps/console/src/oidc-keycloak.ts`):**
    - Links `#rail-signin-btn` and `#rail-register-btn` in the MainChat sidebar footer to `/signin` and `/signup`, provides a non-authoritative reference/demo sign-in flow (`CONSOLE_ACCOUNT_DIRECTORY` / `verifyConsoleCredentialDigest`) that routes `ssra_admin` -> `/admin`, `ssra_staff` -> `/agent`, `ssra_auditor` -> `/analytics` (with read-only Separation of Duties), and `verified_taxpayer` -> `/en`, does not grant server-side authorization, and leaves the fail-closed preview gate (`403 AUTHENTICATED_STAFF_SESSION_REQUIRED` on `/api/*` and `/v1/*`) in full effect.
+5. **Shared visual language with the public assistant (2026-10-28):**
+   - The console uses the main chat page's tokens: light canvas with the indigo top glow, `#1E40AF` rail, IBM Plex Sans, pill buttons, and white cards. Light is the default theme; dark and high contrast are opt-in.
+   - Non-interactive readings (session state, preview state, priority, status) render as plain text in text-safe inks rather than capsules, and no component carries a leading-edge colour bar. Provenance text ("Preview only", `ILLUSTRATIVE_FALLBACK telemetry`) stays visible in the top bar on every route, so restyling never makes reference data look live.
 
 
 

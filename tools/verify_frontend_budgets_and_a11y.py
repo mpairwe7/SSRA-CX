@@ -130,10 +130,10 @@ def main() -> None:
     )
     assert (
         "ssra_auditor" in ops_ui_src
-        and "ssra-flag-ribbon" in ops_ui_src
-        and "#078930" in ops_ui_src
+        and "--ssra-civic-green: #078930" in ops_ui_src
+        and "ssra-flag-ribbon" not in ops_ui_src
     ), (
-        "FE-G7 Auditor read-only SoD or South Sudan civic palette missing in packages/ui/ops-console.js"
+        "FE-G7 Auditor read-only SoD or South Sudan civic palette token missing, or decorative flag ribbon reintroduced, in packages/ui/ops-console.js"
     )
 
     # FE-G8, FE2-G1..G8 & SEC2-G6/G7: Executable verification of cross-subject purge, safe offline abstention, BFF staff-header stripping, AbortController cancellation, modal focus trap, CSAT feedback & SVG icon library

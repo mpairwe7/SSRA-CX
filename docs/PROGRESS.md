@@ -1,6 +1,6 @@
 # SSRA Assist — Delivery Progress Across Phases 0–4 (`docs/PROGRESS.md`)
 
-**Last Updated:** 2026-10-25
+**Last Updated:** 2026-10-28
 
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
@@ -54,6 +54,13 @@
   - **Threat-model delta:** none.
   - **Next:** the "Dark" option still renders today's near-light palette until the dedicated dark theme lands.
 - **Phase 17 (MainChat Sign-In/Register Linking & Role-Scoped Admin, Staff & Auditor Reference Workbenches across `apps/web/server.js`, `packages/ui/ops-console.js`, and `apps/console/src/oidc-keycloak.ts`):** Linked `#rail-signin-btn` (`Sign in`) and `#rail-register-btn` (`Register`) in `apps/web/server.js` (and the Settings `profile` tab) to `/signin` and `/signup`, enabled `ssra-ops-html` in Trusted Types CSP on `apps/web/server.js`, and served `renderOpsDashboardHtml` on `/signin`, `/signup`, `/signin/callback`, and browser document navigations (`Accept: text/html` or `Sec-Fetch-Mode: navigate`) to `/admin`, `/agent`, `/calls`, `/analytics`, `/queue`, `/auditor`, and `/ops`; added `CONSOLE_ACCOUNT_DIRECTORY`, `computeConsoleCredentialSha256Hex`, and `verifyConsoleCredentialDigest` in `apps/console/src/oidc-keycloak.ts` and `packages/ui/ops-console.js` as a client-side reference/testing workbench demo for `ssra_admin` (`/admin`), `ssra_staff` (`/agent`), `ssra_auditor` (`/analytics`, enforcing ISO/IEC 42001 Clause 9.2 read-only Separation of Duties), and `verified_taxpayer` (`/en`), while preserving the server-side fail-closed preview gate (`403 AUTHENTICATED_STAFF_SESSION_REQUIRED` on `/api/*` and `/v1/*`).
+- **Phase 18 (Admin, Staff & Auditor Dashboards Adopt the Public Assistant Design Language in `packages/ui/ops-console.js`):** Restyled the console to match the main chat page.
+  - **Visual system:** light theme by default: a white canvas with the `#C7D2FE` top glow, a `#1E40AF` rail with pill rows, IBM Plex Sans at 400/500/600 in sentence case, pill buttons with ghost hovers and a spring press, white 16px cards with hairline borders, and a segmented period control. The rail is now 56px collapsed and 248px expanded (`opsConsole` tokens in `packages/ui/src/index.ts`). Dark mode is rebuilt as slate-navy, and high contrast follows the main page.
+  - **Labels:** status, priority, presence and preview labels are plain text in text-safe inks (good `#056824`, warn `#853A06`, bad `#B91C1C`, info `#1E40AF`), with no capsules, and adjacent labels are spaced 20px apart. Leading-edge colour bars and the flag ribbon are gone; the civic green stays as the `--ssra-civic-green` token. Queue selection uses the row's own border and an `#EEF2FF` tint.
+  - **Layout:** KPI cards gain trend icons, a hover arrow on linked cards and an area sparkline. The Sign out and public assistant buttons appear only in the top bar, which becomes a two-row grid on phones. Navigating between dashboard routes now scrolls back to the top.
+  - **Provenance:** the auditor scorecard says `ILLUSTRATIVE_FALLBACK` instead of `LIVE_TELEMETRY`, and the auditor top bar also says the telemetry is illustrative (invariant 10).
+  - **Checks:** rendered contrast is at least 5.3:1 for every sampled label in all three themes. `tools/verify_frontend_budgets_and_a11y.py` FE-G7 now requires the civic palette token and rejects a reintroduced ribbon, and `tests/browser/staff-console.spec.ts` asserts the ribbon is absent.
+  - **Threat-model delta:** none. This is presentation only: no new endpoints, storage, dependencies or authorization paths.
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 
