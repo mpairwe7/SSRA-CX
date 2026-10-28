@@ -19,7 +19,7 @@
   "subject": [
     {
       "digest": {
-        "sha256": "d9d6088593ff66a4a0fd3169116061df48fa7844c26b393a0ac7527e29770fb0"
+        "sha256": "34f8046163af6c76cffc3614d906e2a379490718b2a769462dab020ef4627994"
       },
       "name": "infra/observability/cyclonedx-sbom.json"
     },

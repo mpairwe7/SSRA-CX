@@ -26,11 +26,38 @@ def test_sovereign_model_router_and_5_step_degradation_ladder() -> None:
     r1 = router.select_route(node_name="compose", tier=RiskTier.T0)
     assert r1.degradation_mode == "PRIMARY_SOVEREIGN_VLLM"
     assert r1.llm_enabled is True
+    assert r1.enable_thinking is True
+    assert r1.reasoner_model == "Qwen/Qwen3.8-27B-FP8"
 
     router.set_degradation_level(4)
     r4 = router.select_route(node_name="compose", tier=RiskTier.T0)
     assert r4.degradation_mode == "RETRIEVAL_ONLY_ANSWER_CARDS"
     assert r4.llm_enabled is False
+    assert r4.enable_thinking is False
+    assert r4.reasoner_model is None
+
+    from ssra_llm import VllmServingGuard
+
+    guard = VllmServingGuard()
+    req = guard.build_thinking_chat_request(
+        model="Qwen/Qwen3.8-27B-FP8",
+        system_prompt="You are SSRA Assist.",
+        user_prompt="How do I register for a TIN?",
+    )
+    assert req["chat_template_kwargs"] == {"enable_thinking": True}
+    think, ans = guard.extract_thinking_and_answer(
+        "<think>Check TIN steps</think>\n\nRegister at https://etax.nra.gov.ss/."
+    )
+    assert think == "Check TIN steps"
+    assert ans == "Register at https://etax.nra.gov.ss/."
+    think2, ans2 = guard.extract_thinking_and_answer(
+        {"reasoning": "Verify statutory rate", "content": "PAYE is 10%."}
+    )
+    assert think2 == "Verify statutory rate"
+    assert ans2 == "PAYE is 10%."
+    think3, ans3 = guard.extract_thinking_and_answer("<think>Truncated reasoning without closing")
+    assert think3 == "Truncated reasoning without closing"
+    assert ans3 == ""
 
     router.set_degradation_level(5)
     r5 = router.select_route(node_name="compose", tier=RiskTier.T0)

@@ -239,6 +239,21 @@
             "type": "supervised"
           },
           "architectureFamily": "vllm",
+          "task": "llm_reasoner"
+        }
+      },
+      "name": "Qwen/Qwen3.8-27B-FP8",
+      "purl": "pkg:huggingface/Qwen/Qwen3.8-27B-FP8@017b9c7af6b5689d5dd426a76e0bc077eb5ca20a",
+      "type": "machine-learning-model",
+      "version": "017b9c7af6b5689d5dd426a76e0bc077eb5ca20a"
+    },
+    {
+      "modelCard": {
+        "modelParameters": {
+          "approach": {
+            "type": "supervised"
+          },
+          "architectureFamily": "vllm",
           "task": "llm_secondary"
         }
       },

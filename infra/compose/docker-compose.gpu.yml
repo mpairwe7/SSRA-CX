@@ -361,6 +361,7 @@ services:
       VLLM_BASE_URL: ${VLLM_BASE_URL:-http://ssra-vllm-sunflower:8001/v1}
       REASONER_BASE_URL: ${REASONER_BASE_URL:-http://ssra-vllm-reasoner:8001/v1}
       REASONER_MODEL: "${REASONER_MODEL:-Qwen/Qwen3.8-27B-FP8}"
+      SSRA_ENABLE_THINKING: "${SSRA_ENABLE_THINKING:-true}"
       ORPHEUS_TTS_URL: ${ORPHEUS_TTS_URL:-http://ssra-orpheus-tts:8100}
       WHISPER_SALT_MODEL: ${WHISPER_SALT_MODEL:-Sunbird/SunflowerASR-51-african-languages}
       SSRA_MEMORY_VECTOR_BACKEND: ${SSRA_MEMORY_VECTOR_BACKEND:-qdrant}

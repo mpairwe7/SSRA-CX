@@ -61,6 +61,7 @@
   - **Provenance:** the auditor scorecard says `ILLUSTRATIVE_FALLBACK` instead of `LIVE_TELEMETRY`, and the auditor top bar also says the telemetry is illustrative (invariant 10).
   - **Checks:** rendered contrast is at least 5.3:1 for every sampled label in all three themes. `tools/verify_frontend_budgets_and_a11y.py` FE-G7 now requires the civic palette token and rejects a reintroduced ribbon, and `tests/browser/staff-console.spec.ts` asserts the ribbon is absent.
   - **Threat-model delta:** none. This is presentation only: no new endpoints, storage, dependencies or authorization paths.
+- **Phase 19 (Qwen3 Thinking Mode Enabled Across Sovereign Model Routing & vLLM Serving):** Enabled `enable_thinking: true` across `ai/routing/model-routing.yaml` (`vllm_serving` and `node_routes` for `input_guard`, `understand`, and `compose`), `SovereignModelRouter` (`ModelRouteDecision.enable_thinking` and `reasoner_model`), `VllmServingGuard` (`build_guided_json_request`, `build_thinking_chat_request`, and `extract_thinking_and_answer` with fail-closed `<think>` tag handling), and `infra/compose/docker-compose.gpu.yml` (`SSRA_ENABLE_THINKING: "true"`, `Qwen/Qwen3.8-27B-FP8` @ `017b9c7af6b5689d5dd426a76e0bc077eb5ca20a`).
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 

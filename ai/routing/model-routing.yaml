@@ -12,6 +12,9 @@ vllm_serving:
   min_version: "0.26.0"  # Patched against CVE-2026-73559, CVE-2026-54233, CVE-2026-54234, CVE-2026-54236, CVE-2026-44222
   guided_decoding_backend: "xgrammar"
   enable_prefix_caching: true
+  enable_thinking: true
+  chat_template_kwargs:
+    enable_thinking: true
   max_prompts_per_request: 1  # CVE-2026-73559: Disallow prompt list fan-out
 
 hf_cache:
@@ -23,6 +26,10 @@ hf_cache:
     llm_primary:
       repo_id: "Sunbird/Sunflower-Qwen3.5-9B"
       revision: "c56081c5024b1c11186a69898f5f6a7a2dabe454"
+      engine: "vllm"
+    llm_reasoner:
+      repo_id: "Qwen/Qwen3.8-27B-FP8"
+      revision: "017b9c7af6b5689d5dd426a76e0bc077eb5ca20a"
       engine: "vllm"
     llm_fast_router:
       repo_id: "Sunbird/Sunflower-Qwen3.5-9B"
@@ -79,17 +86,21 @@ node_routes:
   input_guard:
     tier: "fast_guard"
     primary_model: "ssra-sovereign/sunflower-qwen3.5-9b"
+    enable_thinking: true
     max_tokens: 256
     timeout_ms: 1200
   understand:
     tier: "fast_router"
     primary_model: "ssra-sovereign/sunflower-qwen3.5-9b"
+    enable_thinking: true
     max_tokens: 512
     timeout_ms: 1500
   compose:
     tier: "multilingual_composer"
     primary_model: "ssra-sovereign/sunflower-qwen3.5-9b"
+    reasoner_model: "Qwen/Qwen3.8-27B-FP8"
     secondary_model: "ssra-sovereign/qwen3-8b"
+    enable_thinking: true
     max_tokens: 1024
     timeout_ms: 4500
 
