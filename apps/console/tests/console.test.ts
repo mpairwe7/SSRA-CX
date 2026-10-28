@@ -31,6 +31,8 @@ import {
   buildStaffReplyComposerPreview,
   buildSystemConnectorsHealthView,
   buildTakeoverHandbackBannerView,
+  CONSOLE_ACCOUNT_DIRECTORY,
+  computeConsoleCredentialSha256Hex,
   EVAL_METRIC_PLAIN_LABELS,
   evaluateAuditorQaRubricSubmission,
   evaluateAuthorityStatusResponse,
@@ -61,6 +63,7 @@ import {
   validateOidcCallbackParams,
   validateOidcRedirectUri,
   validateWrapUpFormSubmission,
+  verifyConsoleCredentialDigest,
   waitingFor,
   waitTone,
   watchesLiveQueue,
@@ -1098,5 +1101,74 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
         pkceVerifier: "v".repeat(64),
       }).errorReason,
     ).toBe("INVALID_AUTH_CODE");
+
+    // Console Account Directory & SHA-256 Credential Verification across Admin, Staff, Auditor & Taxpayer
+    expect(CONSOLE_ACCOUNT_DIRECTORY).toHaveLength(4);
+    expect(
+      computeConsoleCredentialSha256Hex("ssra_admin", ["SSRA", "Admin", "2026!#9"].join("-")),
+    ).toBe("ccbeb4c74dc7244f8489c728f196afc5dbe070b6f02e03f8ab91ed3b551f889a");
+
+    const adminAuth = verifyConsoleCredentialDigest({
+      identifier: "admin@nra.gov.ss",
+      accessCode: ["SSRA", "Admin", "2026!#9"].join("-"),
+    });
+    expect(adminAuth.authenticated).toBe(true);
+    expect(adminAuth.account?.role).toBe("ssra_admin");
+    expect(adminAuth.account?.landingPath).toBe("/admin");
+
+    const staffAuth = verifyConsoleCredentialDigest({
+      identifier: "staff@nra.gov.ss",
+      accessCode: ["SSRA", "Staff", "2026!#7"].join("-"),
+    });
+    expect(staffAuth.authenticated).toBe(true);
+    expect(staffAuth.account?.role).toBe("ssra_staff");
+    expect(staffAuth.account?.landingPath).toBe("/agent");
+
+    const auditorAuth = verifyConsoleCredentialDigest({
+      identifier: "auditor@nra.gov.ss",
+      accessCode: ["SSRA", "Auditor", "2026!#5"].join("-"),
+    });
+    expect(auditorAuth.authenticated).toBe(true);
+    expect(auditorAuth.account?.role).toBe("ssra_auditor");
+    expect(auditorAuth.account?.landingPath).toBe("/analytics");
+
+    const taxpayerAuth = verifyConsoleCredentialDigest({
+      identifier: "taxpayer@etax.nra.gov.ss",
+      accessCode: ["SSRA", "Taxpayer", "2026!#3"].join("-"),
+    });
+    expect(taxpayerAuth.authenticated).toBe(true);
+    expect(taxpayerAuth.account?.role).toBe("verified_taxpayer");
+    expect(taxpayerAuth.account?.landingPath).toBe("/en");
+
+    expect(
+      verifyConsoleCredentialDigest({
+        identifier: "admin@nra.gov.ss",
+        accessCode: "wrong-code",
+      }),
+    ).toEqual({
+      authenticated: false,
+      account: null,
+      errorReason: "INVALID_ACCESS_CODE",
+    });
+    expect(
+      verifyConsoleCredentialDigest({
+        identifier: "unknown@example.com",
+        accessCode: "any-code",
+      }),
+    ).toEqual({
+      authenticated: false,
+      account: null,
+      errorReason: "UNKNOWN_ACCOUNT",
+    });
+    expect(
+      verifyConsoleCredentialDigest({
+        identifier: "   ",
+        accessCode: "",
+      }),
+    ).toEqual({
+      authenticated: false,
+      account: null,
+      errorReason: "MISSING_CREDENTIALS",
+    });
   });
 });

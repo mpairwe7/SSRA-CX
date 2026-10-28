@@ -21,6 +21,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 import { ICONS } from "../../packages/ui/icons.js";
+import { renderOpsDashboardHtml } from "../../packages/ui/ops-console.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FONTS_DIR = path.resolve(__dirname, "../../packages/ui/fonts");
@@ -128,7 +129,7 @@ function negotiateAcceptLanguage(acceptLanguage) {
 
 function buildSecurityHeaders(nonce) {
   return {
-    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; font-src 'self' data:; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types ssra-web-html ssra-web-script-url`,
+    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; font-src 'self' data:; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types ssra-web-html ssra-web-script-url ssra-ops-html`,
     "X-Nonce": nonce,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -1850,6 +1851,56 @@ function renderPwaShellHtml(locale, nonce) {
         } catch {}
       }
 
+      const AUTH_SESSION_STORAGE_KEY = "ssra-authenticated-session-v1";
+      function readActiveAuthSession() {
+        try {
+          const raw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.role === "string" && typeof parsed.email === "string") {
+            return parsed;
+          }
+        } catch {}
+        return null;
+      }
+
+      function clearActiveAuthSession() {
+        try {
+          localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+          document.cookie = "ssra_ops_session=; Path=/; Max-Age=0; SameSite=Lax";
+        } catch {}
+        dispatchSwLogoutPurge();
+        syncRailAuthButtons();
+      }
+
+      function syncRailAuthButtons() {
+        const signInBtnEl = document.getElementById("rail-signin-btn");
+        const registerBtnEl = document.getElementById("rail-register-btn");
+        const uiLocale = LOCALE_UI_STRINGS[state.locale] ? state.locale : "en";
+        const dict = LOCALE_UI_STRINGS[uiLocale];
+        const authSess = readActiveAuthSession();
+        if (authSess) {
+          if (signInBtnEl) {
+            signInBtnEl.textContent =
+              authSess.role === "ssra_admin"
+                ? "Admin Console"
+                : authSess.role === "ssra_staff"
+                  ? "Staff Queue"
+                  : authSess.role === "ssra_auditor"
+                    ? "Auditor Console"
+                    : authSess.displayName || "My Account";
+            signInBtnEl.removeAttribute("aria-haspopup");
+          }
+          if (registerBtnEl) {
+            registerBtnEl.textContent = "Sign out";
+            registerBtnEl.removeAttribute("aria-haspopup");
+          }
+        } else {
+          if (signInBtnEl && dict.signInLabel) signInBtnEl.textContent = dict.signInLabel;
+          if (registerBtnEl && dict.registerLabel) registerBtnEl.textContent = dict.registerLabel;
+        }
+      }
+
       function syncLangAutoBadge() {
         const effectiveLocale = state.localeExplicit ? state.locale : (state.detectedLocale || state.locale);
         const code = String(effectiveLocale || "en").toUpperCase();
@@ -2045,6 +2096,7 @@ function renderPwaShellHtml(locale, nonce) {
         }
         syncLangAutoBadge();
         syncNetworkStatusBadge();
+        syncRailAuthButtons();
       }
       let prevNetConnectionState = null;
       const DEFAULT_NEW_CHAT_TITLES = new Set(["New Conversation", "Wanasa Jadida", "محادثة جديدة"]);
@@ -4171,10 +4223,25 @@ function renderPwaShellHtml(locale, nonce) {
           );
         } else if (state.settingsTab === "profile") {
           if (settingsTitleEl) settingsTitleEl.textContent = "Your e-Tax account";
+          const activeAuth = readActiveAuthSession();
+          const authRowHtml = activeAuth
+            ? '<div class="set-row">' +
+                '<div class="set-row-text"><span class="set-row-title">' + escapeHtml(activeAuth.displayName) + " (" + escapeHtml(activeAuth.roleLabel) + ')</span><span class="set-row-desc">' + escapeHtml(activeAuth.email) + " · Office: " + escapeHtml(activeAuth.officeCode || "JUBA_HQ") + "</span></div>" +
+                (activeAuth.landingPath && activeAuth.landingPath !== "/en"
+                  ? '<a class="set-btn" href="' + escapeHtml(activeAuth.landingPath) + '">Open console</a>'
+                  : "") +
+                '<button type="button" class="set-btn set-btn-danger" id="settings-signout-btn">Sign out</button>' +
+              "</div>"
+            : '<div class="set-row">' +
+                '<div class="set-row-text"><span class="set-row-title">SSRA Assist &amp; Operations Console</span><span class="set-row-desc">Sign in as Administrator, Tax Agent, Forensic Auditor, or Verified Taxpayer.</span></div>' +
+                '<a class="set-btn" href="/signin">Sign in</a>' +
+                '<a class="set-btn" href="/signup">Register</a>' +
+              "</div>";
           setSafeHtml(
             settingsBodyEl,
             '<p class="set-intro">This public chat does not show personal balances, filing records, or taxpayer identity details.</p>' +
             '<div class="set-list">' +
+              authRowHtml +
               '<div class="set-row">' +
                 '<div class="set-row-text"><span class="set-row-title">Official e-Tax portal</span><span class="set-row-desc">Sign in there for your balances, filings, payments and TIN registration.</span></div>' +
                 '<a class="set-btn" href="' + OFFICIAL_PORTAL + '" rel="noopener noreferrer">Open portal ' + ICONS.arrowUpRight + "</a>" +
@@ -4220,25 +4287,28 @@ function renderPwaShellHtml(locale, nonce) {
         syncSettingsIndicator(false);
       }
 
-      // Signed-out footer: SSRA Assist has no taxpayer sign-in yet (OQ-001/OQ-005), so both buttons say so in-page and offer the official portal.
-      const PORTAL_AUTH_DIALOGS = {
-        signin: {
-          title: "Sign in",
-          message: "Sign in isn’t available in SSRA Assist yet. To check your balance, filings or payments, sign in on the official e-Tax portal. This chat answers public questions only.",
-        },
-        register: {
-          title: "Register",
-          message: "Creating an SSRA Assist account isn’t available yet. To register for a TIN or an e-Tax account, use the official e-Tax portal. You can also ask here how TIN registration works.",
-        },
-      };
-      function explainPortalAuth(kind) {
-        const dialog = PORTAL_AUTH_DIALOGS[kind];
-        askInPage({ title: dialog.title, message: dialog.message, confirmLabel: "Open e-Tax portal" }).then((confirmed) => {
-          if (confirmed === true) window.open(OFFICIAL_PORTAL, "_blank", "noopener,noreferrer");
-        });
-      }
-      document.getElementById("rail-signin-btn")?.addEventListener("click", () => explainPortalAuth("signin"));
-      document.getElementById("rail-register-btn")?.addEventListener("click", () => explainPortalAuth("register"));
+      document.getElementById("rail-signin-btn")?.addEventListener("click", () => {
+        const authSess = readActiveAuthSession();
+        if (authSess && authSess.landingPath && authSess.landingPath !== "/en") {
+          window.location.assign(authSess.landingPath);
+          return;
+        }
+        if (authSess) {
+          renderSettingsTabContent("profile");
+          openModal(settingsBackdrop, settingsBackdrop?.querySelector('[data-settings-tab][aria-selected="true"]'), document.getElementById("rail-signin-btn"));
+          syncSettingsIndicator(false);
+          return;
+        }
+        window.location.assign("/signin");
+      });
+      document.getElementById("rail-register-btn")?.addEventListener("click", () => {
+        const authSess = readActiveAuthSession();
+        if (authSess) {
+          clearActiveAuthSession();
+          return;
+        }
+        window.location.assign("/signup");
+      });
 
       const openSettingsBtn = document.getElementById("open-settings-btn");
       openSettingsBtn?.addEventListener("click", () => openSettings(openSettingsBtn));
@@ -4352,6 +4422,11 @@ function renderPwaShellHtml(locale, nonce) {
               ? "مرحبا، أنا " + spk.name + "، مساعد هيئة الإيرادات في جنوب السودان."
               : "Hello, I am " + spk.name + " (" + spk.dialect + ") from SSRA Assist. I can read tax answers aloud.";
           speakAssistantReply(sample);
+          return;
+        }
+        if (e.target.closest("#settings-signout-btn")) {
+          clearActiveAuthSession();
+          renderSettingsTabContent("profile");
           return;
         }
         if (e.target.closest("#purge-local-btn")) {
@@ -6240,7 +6315,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (
+    isGetOrHead &&
+    (pathname === "/signin" || pathname === "/signup" || pathname === "/signin/callback")
+  ) {
+    sendBodyWithCompression(
+      req,
+      res,
+      200,
+      { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+      renderOpsDashboardHtml(pathname, nonce, "/en"),
+    );
+    return;
+  }
+
   if (/^\/(?:admin|agent|calls|analytics|queue|auditor|ops)(?:\/|$)/.test(pathname)) {
+    const acceptHdr = String(req.headers.accept ?? "").toLowerCase();
+    const cookieHdr = String(req.headers.cookie ?? "");
+    const isBrowserDocNav =
+      acceptHdr.includes("text/html") ||
+      req.headers["sec-fetch-mode"] === "navigate" ||
+      cookieHdr.includes("ssra_ops_session=");
+    if (isGetOrHead && isBrowserDocNav) {
+      sendBodyWithCompression(
+        req,
+        res,
+        200,
+        { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+        renderOpsDashboardHtml(pathname, nonce, "/en"),
+      );
+      return;
+    }
     res.writeHead(404, {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
