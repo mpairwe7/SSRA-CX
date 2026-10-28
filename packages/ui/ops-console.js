@@ -1612,12 +1612,13 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       <div class="call-console-bar" id="call-console-bar" role="note" aria-label="Staff console preview status">
         <div class="call-bar-left">
           <button type="button" id="mobile-ops-nav-btn" class="ops-btn mobile-nav-btn" aria-expanded="false" aria-controls="staff-rail">${ICONS.panelLeft} Menu</button>
-          <span class="presence-pill">Preview only · no authenticated staff session</span>
-          <span>No live calls, taxpayer records, or service telemetry are shown.</span>
+          <span id="ops-presence-pill" class="presence-pill">Preview only · no authenticated staff session</span>
+          <span id="ops-presence-note">No live calls, taxpayer records, or service telemetry are shown.</span>
         </div>
         <div class="call-bar-right">
-          <a href="/signin" data-nav="/signin" class="ops-btn">Sign in</a>
-          <a href="/signup" data-nav="/signup" class="ops-btn">Sign up</a>
+          <a id="call-bar-signin-link" href="/signin" data-nav="/signin" class="ops-btn">Sign in</a>
+          <a id="call-bar-signup-link" href="/signup" data-nav="/signup" class="ops-btn">Sign up</a>
+          <button type="button" id="ops-signout-btn" class="ops-btn is-hidden" data-testid="ops-signout-btn" data-action="signout">${ICONS.close} Sign out</button>
           <a href="${escapeHtml(publicAssistantUrl)}" class="ops-btn primary">${ICONS.messageSquare} Taxpayer MainChat</a>
         </div>
       </div>
@@ -1827,7 +1828,6 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         };
         try {
           localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(sessionObj));
-          document.cookie = "ssra_ops_session=" + encodeURIComponent(account.role) + "; Path=/; SameSite=Lax";
         } catch {}
         if (account.role === "verified_taxpayer") {
           window.location.assign(PUBLIC_ASSISTANT_URL);
@@ -1843,7 +1843,6 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
         state.session = null;
         try {
           localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
-          document.cookie = "ssra_ops_session=; Path=/; Max-Age=0; SameSite=Lax";
         } catch {}
         navigateTo("/signin");
       }
@@ -1919,36 +1918,45 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           if (acctRoleEl) acctRoleEl.textContent = roleMeta.label;
           acctTrigger?.setAttribute("aria-label", "Preview persona menu; not signed in");
         }
-        const callBarEl = document.getElementById("call-console-bar");
-        if (callBarEl) {
-          if (state.session) {
-            setSafeHtml(
-              callBarEl,
-              '<div class="call-bar-left">' +
-                '<button type="button" id="mobile-ops-nav-btn" class="ops-btn mobile-nav-btn" aria-expanded="false" aria-controls="staff-rail">' + ICONS.panelLeft + " Menu</button>" +
-                '<span class="presence-pill is-authenticated" data-testid="authenticated-session-pill">' + ICONS.shieldCheck + " Signed in · " + escapeHtml(state.session.displayName) + " (" + escapeHtml(state.session.roleLabel) + " · " + escapeHtml(state.session.officeCode) + ")</span>" +
-                '<span>' + (state.session.role === "ssra_auditor" ? "Read-only Separation of Duties (ISO/IEC 42001 Clause 9.2) enforced." : "Authenticated SSRA console workspace active.") + "</span>" +
-              "</div>" +
-              '<div class="call-bar-right">' +
-                '<button type="button" id="ops-signout-btn" class="ops-btn" data-testid="ops-signout-btn" data-action="signout">' + ICONS.close + " Sign out</button>" +
-                '<a href="' + escapeHtml(PUBLIC_ASSISTANT_URL) + '" class="ops-btn primary">' + ICONS.messageSquare + " Taxpayer MainChat</a>" +
-              "</div>",
-            );
-          } else if (callBarEl.querySelector('[data-testid="authenticated-session-pill"]')) {
-            setSafeHtml(
-              callBarEl,
-              '<div class="call-bar-left">' +
-                '<button type="button" id="mobile-ops-nav-btn" class="ops-btn mobile-nav-btn" aria-expanded="false" aria-controls="staff-rail">' + ICONS.panelLeft + " Menu</button>" +
-                '<span class="presence-pill">Preview only · no authenticated staff session</span>' +
-                "<span>No live calls, taxpayer records, or service telemetry are shown.</span>" +
-              "</div>" +
-              '<div class="call-bar-right">' +
-                '<a href="/signin" data-nav="/signin" class="ops-btn">Sign in</a>' +
-                '<a href="/signup" data-nav="/signup" class="ops-btn">Sign up</a>' +
-                '<a href="' + escapeHtml(PUBLIC_ASSISTANT_URL) + '" class="ops-btn primary">' + ICONS.messageSquare + " Taxpayer MainChat</a>" +
-              "</div>",
-            );
+        const presencePillEl = document.getElementById("ops-presence-pill");
+        const presenceNoteEl = document.getElementById("ops-presence-note");
+        const barSignInEl = document.getElementById("call-bar-signin-link");
+        const barSignUpEl = document.getElementById("call-bar-signup-link");
+        const barSignOutBtn = document.getElementById("ops-signout-btn");
+        if (state.session) {
+          if (presencePillEl) {
+            presencePillEl.classList.add("is-authenticated");
+            presencePillEl.setAttribute("data-testid", "authenticated-session-pill");
+            presencePillEl.textContent =
+              "Signed in · " +
+              state.session.displayName +
+              " (" +
+              state.session.roleLabel +
+              " · " +
+              state.session.officeCode +
+              ")";
           }
+          if (presenceNoteEl) {
+            presenceNoteEl.textContent =
+              state.session.role === "ssra_auditor"
+                ? "Read-only Separation of Duties (ISO/IEC 42001 Clause 9.2) enforced · Reference workbench"
+                : "Reference console workbench active · ILLUSTRATIVE_FALLBACK telemetry";
+          }
+          barSignInEl?.classList.add("is-hidden");
+          barSignUpEl?.classList.add("is-hidden");
+          barSignOutBtn?.classList.remove("is-hidden");
+        } else {
+          if (presencePillEl) {
+            presencePillEl.classList.remove("is-authenticated");
+            presencePillEl.removeAttribute("data-testid");
+            presencePillEl.textContent = "Preview only · no authenticated staff session";
+          }
+          if (presenceNoteEl) {
+            presenceNoteEl.textContent = "No live calls, taxpayer records, or service telemetry are shown.";
+          }
+          barSignInEl?.classList.remove("is-hidden");
+          barSignUpEl?.classList.remove("is-hidden");
+          barSignOutBtn?.classList.add("is-hidden");
         }
         document.querySelectorAll("[data-set-theme]").forEach((btn) => {
           const isSelected = btn.getAttribute("data-set-theme") === state.theme;

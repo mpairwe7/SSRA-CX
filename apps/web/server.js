@@ -1118,11 +1118,11 @@ function renderPwaShellHtml(locale, nonce) {
       <p id="rail-device-note" class="rail-device-note is-hidden" role="status"></p>
       <nav id="rail-conv-list" class="rail-list" aria-label="Saved conversations"></nav>
 
-      <!-- Signed-out footer: Sign in · Register explain portal sign-in in-page; the gear opens Settings -->
+      <!-- Signed-out footer: Sign in · Register navigate to /signin and /signup; the gear opens Settings -->
       <div class="rail-footer">
         <div class="rail-auth" role="group" aria-label="Your e-Tax account">
-          <button type="button" id="rail-signin-btn" class="rail-auth-btn rail-auth-signin" aria-haspopup="dialog">Sign in</button>
-          <button type="button" id="rail-register-btn" class="rail-auth-btn rail-auth-register" aria-haspopup="dialog">Register</button>
+          <button type="button" id="rail-signin-btn" class="rail-auth-btn rail-auth-signin">Sign in</button>
+          <button type="button" id="rail-register-btn" class="rail-auth-btn rail-auth-register">Register</button>
         </div>
         <button type="button" id="open-settings-btn" class="rail-icon-btn" data-tip="Settings" aria-label="Settings &amp; Privacy">${ICONS.settings}</button>
       </div>
@@ -1867,7 +1867,6 @@ function renderPwaShellHtml(locale, nonce) {
       function clearActiveAuthSession() {
         try {
           localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
-          document.cookie = "ssra_ops_session=; Path=/; Max-Age=0; SameSite=Lax";
         } catch {}
         dispatchSwLogoutPurge();
         syncRailAuthButtons();
@@ -6330,12 +6329,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (/^\/(?:admin|agent|calls|analytics|queue|auditor|ops)(?:\/|$)/.test(pathname)) {
+    // Navigation heuristic only (not an authorization check): serves the Operations Console HTML
+    // shell for browser document requests while keeping programmatic API probes at 404.
     const acceptHdr = String(req.headers.accept ?? "").toLowerCase();
-    const cookieHdr = String(req.headers.cookie ?? "");
     const isBrowserDocNav =
-      acceptHdr.includes("text/html") ||
-      req.headers["sec-fetch-mode"] === "navigate" ||
-      cookieHdr.includes("ssra_ops_session=");
+      acceptHdr.includes("text/html") || req.headers["sec-fetch-mode"] === "navigate";
     if (isGetOrHead && isBrowserDocNav) {
       sendBodyWithCompression(
         req,
