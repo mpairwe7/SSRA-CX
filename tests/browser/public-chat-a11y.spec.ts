@@ -37,24 +37,20 @@ test("the composer status stays visible on a phone", async ({ page }) => {
   await expect(page.locator("#composer-hint")).toHaveText("Not answered. Your message is back in the box.");
 });
 
-test("Sign in and Register explain portal sign-in in an in-page dialog", async ({ page }) => {
+test("Sign in and Register navigate to /signin and /signup and link back to the assistant", async ({ page }) => {
   await page.goto("/en");
   await expect(page.locator('[role="menu"], [role="menuitem"]')).toHaveCount(0);
   const footer = page.getByRole("group", { name: "Your e-Tax account" });
-  for (const [name, text] of [
-    ["Sign in", "Sign in isn’t available in SSRA Assist yet"],
-    ["Register", "To register for a TIN or an e-Tax account, use the official e-Tax portal"],
-  ] as const) {
-    const opener = footer.getByRole("button", { name });
-    await opener.click();
-    const dialog = page.getByRole("dialog", { name });
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(text);
-    await expect(dialog.getByRole("button", { name: "Open e-Tax portal" })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
-    await expect(opener).toBeFocused();
-  }
+  await footer.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/signin$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
+  await expect(page.getByTestId("signin-email-input")).toBeVisible();
+  await expect(page.getByTestId("signin-password-input")).toBeVisible();
+
+  await page.goto("/en");
+  await footer.getByRole("button", { name: "Register" }).click();
+  await expect(page).toHaveURL(/\/signup$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Create an account" })).toBeVisible();
 });
 
 test("settings tabs follow the APG keyboard model", async ({ page }) => {
