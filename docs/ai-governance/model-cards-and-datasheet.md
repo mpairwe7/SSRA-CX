@@ -15,9 +15,9 @@
 - **Safety Constraint:** Never assigns risk tiers; risk tiers are resolved deterministically from `ai/policies/risk-tiers.yaml`.
 - **Target Latency:** p95 ≤ 300 ms.
 
-### 1.2 Model Card 2: Multilingual Grounded Composer (`ssra-sovereign/sunflower-qwen3.5-9b` / `Sunbird/Sunflower-Qwen3.5-9B`)
+### 1.2 Model Card 2: Multilingual Grounded Composer & Thinking Reasoner (`ssra-sovereign/sunflower-qwen3.5-9b` / `Sunbird/Sunflower-Qwen3.5-9B` & `Qwen/Qwen3.8-27B-FP8`)
 - **Role in Graph:** Node 8 (`compose`).
-- **Hosting:** In-country NCA Docker Compose GPU host (secondary fallback: `ssra-sovereign/qwen3-8b`; CPU emergency fallback: `ssra-sovereign/qwen2.5-3b-cpu-gguf`).
+- **Hosting:** In-country NCA Docker Compose GPU host (`Sunbird/Sunflower-Qwen3.5-9B` @ `c56081c5024b1c11186a69898f5f6a7a2dabe454` and `Qwen/Qwen3.8-27B-FP8` @ `017b9c7af6b5689d5dd426a76e0bc077eb5ca20a` with `enable_thinking: true` / `--reasoning-parser qwen3`; secondary fallback: `ssra-sovereign/qwen3-8b`; CPU emergency fallback: `ssra-sovereign/qwen2.5-3b-cpu-gguf`).
 - **Inputs & Outputs:** Receives layered prompt `L0`–`L5` with spotlighted data-only delimiters (`<untrusted_retrieved_evidence>`, `<untrusted_tool_artifacts>`) and `ai/termbase/glossary.yaml`; emits structured `Answer` (`segments[]`, `citations[]`, `numbers[]`, `ui_component`), synthesizing compound multi-tool turns across PAYE, Withholding Tax, Customs Duty/Tariff, and authenticated T1 Ledger/TCC records (`ADR-028`).
 - **Safety Constraint:** Every output passes Stage 9 quiet-fault verification (`_detect_quiet_tool_fault` / `QUIET_FAULT_DETECTED` abstention gate) and Node 9 (`output_guard`: `numeric_provenance` 100% gate, `grounding`, `pii`, `neutrality`) before reaching any user.
 

@@ -56,6 +56,7 @@ class ModelRouteDecision:
     llm_enabled: bool
     max_tokens: int
     timeout_ms: int
+    enable_thinking: bool = True
 
 
 class SovereignModelRouter:
@@ -104,6 +105,7 @@ class SovereignModelRouter:
         secondary = str(node_cfg.get("secondary_model", "ssra-sovereign/qwen3-8b"))
         max_tokens = int(node_cfg.get("max_tokens", 512))
         timeout_ms = int(node_cfg.get("timeout_ms", 2000))
+        cfg_thinking = bool(node_cfg.get("enable_thinking", True))
         mode = _LADDER_MAP[self._level]
 
         if self._level == 1:
@@ -130,6 +132,7 @@ class SovereignModelRouter:
             llm_enabled=llm_enabled,
             max_tokens=max_tokens,
             timeout_ms=timeout_ms,
+            enable_thinking=cfg_thinking and llm_enabled,
         )
 
 
@@ -223,6 +226,7 @@ class VllmServingGuard:
         prompt: str | list[str],
         json_schema: dict[str, Any],
         max_tokens: int = 512,
+        enable_thinking: bool = True,
     ) -> dict[str, Any]:
         if not isinstance(prompt, str):
             raise SSRAError(
@@ -237,16 +241,59 @@ class VllmServingGuard:
             "max_tokens": max_tokens,
             "temperature": 0.0,
             "guided_decoding_backend": "xgrammar",
+            "chat_template_kwargs": {"enable_thinking": enable_thinking},
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {"name": "ssra_structured_output", "schema": json_schema},
             },
             "extra_body": {
                 "enable_prefix_caching": True,
+                "enable_thinking": enable_thinking,
+                "chat_template_kwargs": {"enable_thinking": enable_thinking},
                 "hf_home": self.hf_home,
                 "local_files_only": True,
             },
         }
+
+    def build_thinking_chat_request(
+        self,
+        *,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 1024,
+        enable_thinking: bool = True,
+    ) -> dict[str, Any]:
+        """Build an OpenAI-compatible vLLM `/v1/chat/completions` payload with `enable_thinking: True`."""
+        clean_sys = _VLLM_SPECIAL_TOKEN_RE.sub("", system_prompt).strip()
+        clean_usr = _VLLM_SPECIAL_TOKEN_RE.sub("", user_prompt).strip()
+        return {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": clean_sys},
+                {"role": "user", "content": clean_usr},
+            ],
+            "max_tokens": max_tokens,
+            "temperature": 0.6 if enable_thinking else 0.0,
+            "chat_template_kwargs": {"enable_thinking": enable_thinking},
+        }
+
+    @staticmethod
+    def extract_thinking_and_answer(message_obj: dict[str, Any] | str) -> tuple[str | None, str]:
+        """Extract `(thinking_trace, answer_text)` from a vLLM choice message or `<think>...</think>` text."""
+        if isinstance(message_obj, dict):
+            reasoning = message_obj.get("reasoning") or message_obj.get("reasoning_content")
+            raw_content = str(message_obj.get("content") or "")
+        else:
+            reasoning = None
+            raw_content = str(message_obj or "")
+
+        if "</think>" in raw_content:
+            think_part, after = raw_content.split("</think>", 1)
+            clean_think = re.sub(r"^\s*<think>\s*", "", think_part, flags=re.IGNORECASE).strip()
+            return (clean_think or (str(reasoning).strip() if reasoning else None), after.strip())
+
+        return (str(reasoning).strip() if reasoning else None, raw_content.strip())
 
     @staticmethod
     def sanitize_upstream_error(raw_message: str) -> str:
