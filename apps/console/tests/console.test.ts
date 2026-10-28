@@ -1104,13 +1104,13 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
 
     // Console Account Directory & SHA-256 Credential Verification across Admin, Staff, Auditor & Taxpayer
     expect(CONSOLE_ACCOUNT_DIRECTORY).toHaveLength(4);
-    expect(
-      computeConsoleCredentialSha256Hex("ssra_admin", ["SSRA", "Admin", "2026!#9"].join("-")),
-    ).toBe("ccbeb4c74dc7244f8489c728f196afc5dbe070b6f02e03f8ab91ed3b551f889a");
+    expect(computeConsoleCredentialSha256Hex("ssra_admin", ["Admin", "123"].join(""))).toBe(
+      "15e2bad00ca51b94f0f4f6c54b0191467fd68a5678b9fa585a10dbab1db3ab0b",
+    );
 
     const adminAuth = verifyConsoleCredentialDigest({
       identifier: "admin@nra.gov.ss",
-      accessCode: ["SSRA", "Admin", "2026!#9"].join("-"),
+      accessCode: ["Admin", "123"].join(""),
     });
     expect(adminAuth.authenticated).toBe(true);
     expect(adminAuth.account?.role).toBe("ssra_admin");
@@ -1118,7 +1118,7 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
 
     const staffAuth = verifyConsoleCredentialDigest({
       identifier: "staff@nra.gov.ss",
-      accessCode: ["SSRA", "Staff", "2026!#7"].join("-"),
+      accessCode: ["Staff", "123"].join(""),
     });
     expect(staffAuth.authenticated).toBe(true);
     expect(staffAuth.account?.role).toBe("ssra_staff");
@@ -1126,7 +1126,7 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
 
     const auditorAuth = verifyConsoleCredentialDigest({
       identifier: "auditor@nra.gov.ss",
-      accessCode: ["SSRA", "Auditor", "2026!#5"].join("-"),
+      accessCode: ["Auditor", "123"].join(""),
     });
     expect(auditorAuth.authenticated).toBe(true);
     expect(auditorAuth.account?.role).toBe("ssra_auditor");
@@ -1134,7 +1134,7 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
 
     const taxpayerAuth = verifyConsoleCredentialDigest({
       identifier: "taxpayer@etax.nra.gov.ss",
-      accessCode: ["SSRA", "Taxpayer", "2026!#3"].join("-"),
+      accessCode: ["Taxpayer", "123"].join(""),
     });
     expect(taxpayerAuth.authenticated).toBe(true);
     expect(taxpayerAuth.account?.role).toBe("verified_taxpayer");

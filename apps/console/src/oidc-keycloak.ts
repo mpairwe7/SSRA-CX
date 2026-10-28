@@ -564,7 +564,7 @@ export const CONSOLE_ACCOUNT_DIRECTORY: readonly ConsoleAccountRecord[] = [
     officeCode: "JUBA_HQ",
     initials: "GA",
     landingPath: "/admin",
-    digestSha256: "ccbeb4c74dc7244f8489c728f196afc5dbe070b6f02e03f8ab91ed3b551f889a",
+    digestSha256: "15e2bad00ca51b94f0f4f6c54b0191467fd68a5678b9fa585a10dbab1db3ab0b",
   },
   {
     role: "ssra_staff",
@@ -585,7 +585,7 @@ export const CONSOLE_ACCOUNT_DIRECTORY: readonly ConsoleAccountRecord[] = [
     officeCode: "JUBA_HQ",
     initials: "DM",
     landingPath: "/agent",
-    digestSha256: "5442142a4b8f30f8de772dbf3f36da3c905ccd1721c6abbe608c7f73971a7a04",
+    digestSha256: "3974ad6a9bfae75807da570ddae63d49e1c4fe0176c619a0aac998fd7289d347",
   },
   {
     role: "ssra_auditor",
@@ -605,7 +605,7 @@ export const CONSOLE_ACCOUNT_DIRECTORY: readonly ConsoleAccountRecord[] = [
     officeCode: "JUBA_HQ",
     initials: "NK",
     landingPath: "/analytics",
-    digestSha256: "b39d198c3d53c930e7646711e64cb2b285835a8b4220100b5f4515591d5ed93d",
+    digestSha256: "400c6c4df7c2cf00c0b4ac189325343348e90c64acc7e80fa7cedf3ff4021a46",
   },
   {
     role: "verified_taxpayer",
@@ -625,7 +625,7 @@ export const CONSOLE_ACCOUNT_DIRECTORY: readonly ConsoleAccountRecord[] = [
     officeCode: "JUBA_HQ",
     initials: "AM",
     landingPath: "/en",
-    digestSha256: "0626d14ece9920ba388a15ecf3fa7bdafa834f779fe3bb270b6c888abcd7c0fa",
+    digestSha256: "13f0de343c3ef088f5b4d62702b01ca6a1ce22748dea5cc0366653e52d405012",
   },
 ] as const;
 
