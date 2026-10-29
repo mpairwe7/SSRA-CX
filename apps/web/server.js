@@ -3632,9 +3632,32 @@ function renderPwaShellHtml(locale, nonce) {
         sendTurn(val);
       });
 
+      // Grow the composer with its text, wrapped lines included, up to five lines; longer drafts scroll inside.
+      function syncComposerRows() {
+        if (!input) return;
+        const scrollTop = input.scrollTop;
+        input.rows = 1;
+        if (input.value) {
+          const style = getComputedStyle(input);
+          const lineHeight = Number.parseFloat(style.lineHeight) || 24;
+          const paddingY = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
+          input.rows = Math.min(5, Math.max(1, Math.round((input.scrollHeight - paddingY) / lineHeight)));
+        }
+        input.scrollTop = scrollTop;
+      }
+      // Re-wrap when the composer's width changes (window resize, rail toggle, landing to chat view).
+      if (input && "ResizeObserver" in window) {
+        let composerWidth = 0;
+        new ResizeObserver(([entry]) => {
+          const width = Math.round(entry.contentRect.width);
+          if (width === composerWidth) return;
+          composerWidth = width;
+          syncComposerRows();
+        }).observe(input);
+      }
+
       input?.addEventListener("input", () => {
-        const lines = String(input.value || "").split("\\n").length;
-        input.rows = Math.min(5, Math.max(1, lines));
+        syncComposerRows();
         if (!state.localeExplicit) {
           state.detectedLocale = detectClientLocaleHint(input.value);
           syncLangAutoBadge();
@@ -5165,8 +5188,7 @@ function renderPwaShellHtml(locale, nonce) {
             stopActiveSpeechRecognition();
             if (input && !input.value.includes(lastHeardVoiceTranscript.trim())) {
               input.value = joinDictatedText(input.value, lastHeardVoiceTranscript);
-              const lines = String(input.value || "").split("\\n").length;
-              input.rows = Math.min(5, Math.max(1, lines));
+              syncComposerRows();
             }
             lastHeardVoiceTranscript = "";
             syncComposerRecordingUi();
@@ -5537,8 +5559,7 @@ function renderPwaShellHtml(locale, nonce) {
             if (voiceSilenceTimeoutMs === 0) {
               if (input) {
                 input.value = joinDictatedText(input.value, transcript);
-                const lines = String(input.value || "").split("\\n").length;
-                input.rows = Math.min(5, Math.max(1, lines));
+                syncComposerRows();
               }
               setVoiceStatus("Voice text ready. Tap Send to submit.");
               return;
@@ -5549,8 +5570,7 @@ function renderPwaShellHtml(locale, nonce) {
             stopActiveSpeechRecognition();
             if (input) {
               input.value = joinDictatedText(input.value, transcript);
-              const lines = String(input.value || "").split("\\n").length;
-              input.rows = Math.min(5, Math.max(1, lines));
+              syncComposerRows();
               input.focus();
             }
             lastHeardVoiceTranscript = "";

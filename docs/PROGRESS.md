@@ -138,6 +138,13 @@
     - The headline sits about 48 px above the box, the suggestions about 35 px below it, at a 48 px row pitch.
   - **Checks:** the landing browser test now asserts the pill size, the placeholder/suggestion alignment, and the slim docked height in the chat view.
   - **Threat-model delta:** none.
+- **Phase 25 (Composer Grows with Wrapped Text in `apps/web/server.js`):**
+  - **Bug:** the composer set its height by counting Enter-key line breaks, so one long line that wrapped scrolled inside a box sized for one line and hid its first line.
+  - **Fix:** a single `syncComposerRows()` measures the text's real height (`scrollHeight` against the line height) and sets `rows`, up to five lines, so no inline style is needed under the CSP. Longer drafts scroll inside the box.
+    - It runs on typing and when dictation adds text.
+    - A `ResizeObserver` re-measures when the box's width changes: a window resize, the rail toggling, or the switch from the start page to the chat view.
+  - **Checks:** a new browser test checks that a long single-line question grows the box with nothing hidden, that it re-wraps when the window narrows, that the box stops growing at five lines, and that it returns to 64 px when cleared.
+  - **Threat-model delta:** none.
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 

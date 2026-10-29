@@ -308,6 +308,33 @@ test("the composer placeholder rotates only while idle", async ({ page }) => {
   await expect(phrase).toBeHidden();
 });
 
+test("the composer grows with wrapped text up to five lines", async ({ page }) => {
+  await page.goto("/en");
+  const input = page.getByRole("textbox", { name: "Ask SSRA Assist" });
+  const form = page.locator("#ssra-chat-form");
+  const emptyHeight = (await form.boundingBox())?.height ?? 0;
+  const fits = () => input.evaluate((el) => el.scrollHeight <= el.clientHeight + 1);
+
+  // One long line with no Enter presses still grows the box, so no wrapped line is hidden.
+  await input.fill("How do I register for a TIN, file my first PAYE return and pay withholding tax on a contract invoice?");
+  await expect(input).toHaveAttribute("rows", "2");
+  expect(await fits()).toBeTruthy();
+  expect((await form.boundingBox())?.height ?? 0).toBeGreaterThan(emptyHeight);
+
+  // Narrowing the window re-wraps the draft and grows the box again.
+  await page.setViewportSize({ height: 800, width: 390 });
+  await expect.poll(() => input.getAttribute("rows")).not.toBe("2");
+  expect(await fits()).toBeTruthy();
+
+  // Past five lines the box stops growing and the draft scrolls inside it.
+  await input.fill("PAYE and withholding tax question. ".repeat(20));
+  await expect(input).toHaveAttribute("rows", "5");
+  await input.fill("");
+  await expect(input).toHaveAttribute("rows", "1");
+  await page.setViewportSize({ height: 720, width: 1280 });
+  await expect.poll(async () => (await form.boundingBox())?.height ?? 0).toBeLessThanOrEqual(emptyHeight + 1);
+});
+
 test("reduced motion keeps a static one-line composer placeholder on phones", async ({ page }) => {
   await page.clock.install();
   await page.setViewportSize({ height: 740, width: 360 });
