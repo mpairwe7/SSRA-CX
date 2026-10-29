@@ -3,7 +3,8 @@
  *
  * The public assistant (`apps/web/server.js`) and the operations console (`packages/ui/ops-console.js`)
  * read one stored choice, so picking System, Light, Dark or High contrast on any page applies everywhere
- * on the same origin. Dark follows Gemini's dark UI (near-black canvas, navy glow, #1F1F1F sidebar);
+ * on the same origin. Dark pairs Gemini's dark sidebar and cards (#1F1F1F, #1E1F20) with the dark variant of
+ * 21st.dev gradient-background-4: an indigo top glow over a #0A0A0A canvas, the light theme's gradient in black.
  * High contrast follows GitHub's "Dark high contrast" palette.
  */
 
@@ -14,13 +15,13 @@ export const SSRA_THEMES = ["light", "dark", "high-contrast"];
 // Browser UI colour for <meta name="theme-color">.
 export const SSRA_THEME_COLORS = {
   light: "#FFFFFF",
-  dark: "#0F1011",
+  dark: "#0A0A0A",
   "high-contrast": "#0A0C10",
 };
 
 export const SSRA_PALETTE = {
   dark: {
-    canvas: "#0F1011",
+    canvas: "#0A0A0A",
     card: "#1E1F20",
     popover: "#282A2C",
     surface2: "#26272A",
@@ -48,9 +49,8 @@ export const SSRA_PALETTE = {
     ghostActive: "rgba(255, 255, 255, 0.12)",
     rowHover: "rgba(255, 255, 255, 0.04)",
     scrim: "rgba(0, 0, 0, 0.6)",
-    glow: "#18285F",
-    glowMid: "#16234F",
-    glowOuter: "#131B36",
+    // Top-glow stop: indigo-500 at 0x36 alpha (gradient-background-4, dark). Light uses #C7D2FE.
+    glow: "#6366F136",
     railBg: "#1F1F1F",
     railText: "#E3E3E3",
     railMuted: "#9A9A9A",

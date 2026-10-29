@@ -369,12 +369,15 @@ test("one theme choice applies to the chat and the staff console", async ({ page
   await page.getByRole("dialog", { name: "Settings" }).getByRole("radio", { name: "Dark" }).click();
   const html = page.locator("html");
   await expect(html).toHaveAttribute("data-theme", "dark");
-  // Gemini-style dark: #1F1F1F sidebar beside a near-black canvas.
+  // Dark: Gemini's #1F1F1F sidebar beside a #0A0A0A canvas carrying the light theme's top glow in indigo.
   const chat = await page.evaluate(() => ({
     rail: getComputedStyle(document.querySelector(".rail-wrap") as Element).backgroundColor,
     canvas: getComputedStyle(document.querySelector(".app-main-col") as Element).backgroundColor,
+    glow: getComputedStyle(document.querySelector(".ssra-main-gradient") as Element).backgroundImage,
   }));
-  expect(chat).toEqual({ rail: "rgb(31, 31, 31)", canvas: "rgb(15, 16, 17)" });
+  expect(chat.rail).toBe("rgb(31, 31, 31)");
+  expect(chat.canvas).toBe("rgb(10, 10, 10)");
+  expect(chat.glow).toMatch(/^radial-gradient\(125% 125% at 50% -50%, rgba\(99, 102, 241, 0\.2\d*\) 40%/);
 
   await page.goto("/admin");
   await expect(html).toHaveAttribute("data-theme", "dark");

@@ -393,7 +393,7 @@ function renderPwaShellHtml(locale, nonce) {
       --status-offline: #991B1B;
       --status-lowdata: #853A06;
     }
-    /* Dark: Gemini-style near-black canvas, navy glow behind the composer, #1F1F1F sidebar (packages/ui/theme.js). */
+    /* Dark: #0A0A0A canvas with the light theme's top glow in indigo, Gemini's #1F1F1F sidebar (packages/ui/theme.js). */
     :root[data-theme="dark"] {
       color-scheme: dark;
       --bg-0: ${DARK.canvas};
@@ -443,7 +443,7 @@ function renderPwaShellHtml(locale, nonce) {
       --card-bg: ${DARK.card};
       --popover-bg: ${DARK.popover};
       --modal-bg: ${DARK.card};
-      --canvas-glow: radial-gradient(ellipse 50% 64% at 50% 62%, ${DARK.glow} 0%, ${DARK.glowMid} 30%, ${DARK.glowOuter} 65%, rgba(15, 16, 17, 0) 100%);
+      --canvas-glow: radial-gradient(125% 125% at 50% -50%, ${DARK.glow} 40%, transparent 100%);
       --composer-border: ${DARK.border0};
       --composer-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
       --composer-focus-shadow: 0 0 0 1px ${DARK.accent}, 0 8px 28px rgba(0, 0, 0, 0.35);
@@ -716,7 +716,7 @@ function renderPwaShellHtml(locale, nonce) {
 
     /* Main Column & In-Canvas ChatHeader: no separate bar; controls float on the main surface (Gemini pattern). */
     .app-main-col { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; position: relative; isolation: isolate; background: var(--bg-0); }
-    /* gradient-background-4 (21st.dev) ported to native CSS: apps/web stays framework-free under ADR-020. */
+    /* gradient-background-4 (21st.dev), light and dark variants, ported to native CSS: apps/web stays framework-free under ADR-020. */
     .ssra-main-gradient { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--canvas-glow); }
     :root[data-theme="high-contrast"] .ssra-main-gradient, :root[data-low-data="true"] .ssra-main-gradient { display: none; }
     .chat-header {

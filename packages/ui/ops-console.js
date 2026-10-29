@@ -715,7 +715,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       --ops-focus-rail: #FFD60A;
     }
 
-    /* Dark: Gemini-style near-black canvas with a navy top glow and a #1F1F1F rail (packages/ui/theme.js). */
+    /* Dark: #0A0A0A canvas with the public assistant's indigo top glow and a #1F1F1F rail (packages/ui/theme.js). */
     :root[data-theme="dark"] {
       color-scheme: dark;
       --bg-0: ${DARK.canvas};
@@ -730,9 +730,9 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       --accent-soft: ${DARK.accentSoft};
       --ssra-blue: ${DARK.accent};
       --canvas-glow: ${DARK.glow};
-      --auth-canvas: radial-gradient(ellipse 50% 64% at 50% 62%, ${DARK.glow} 0%, ${DARK.glowMid} 30%, ${DARK.glowOuter} 65%, rgba(15, 16, 17, 0) 100%);
+      --auth-canvas: radial-gradient(125% 125% at 50% -50%, ${DARK.glow} 40%, transparent 100%);
       --auth-card-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
-      --topbar-bg: rgba(15, 16, 17, 0.78);
+      --topbar-bg: rgba(10, 10, 10, 0.78);
       --ghost-hover: ${DARK.ghostHover};
       --ghost-active: ${DARK.ghostActive};
       --seg-track: rgba(255, 255, 255, 0.06);

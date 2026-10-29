@@ -103,6 +103,22 @@
     - A new test checks the dark card colour.
     - A pixel-sampled contrast audit of the three pages at 1440px and 390px, in all three themes and including the error and SSO messages, measures at least 5.0:1. The one lower reading was the sampler landing on the "or" hairline; the text itself is about 8:1.
   - **Threat-model delta:** reduced. A client-side role choice can no longer select an account. Server-side gates are unchanged (`403 AUTHENTICATED_STAFF_SESSION_REQUIRED` on `/api/*` and `/v1/*`).
+- **Phase 22 (Dark Mode Uses the Light Theme's Gradient in Black: 21st.dev `gradient-background-4`, Dark Variant, in `packages/ui/theme.js`, `apps/web/server.js` and `packages/ui/ops-console.js`):**
+  - **Chat background:** dark mode now draws the same gradient as light mode, `radial-gradient(125% 125% at 50% -50%, … 40%, transparent 100%)`, with the component's dark stop `#6366F136` (indigo-500 at 21%) over a `#0A0A0A` canvas.
+    - This replaces Gemini's centred navy glow behind the composer.
+    - Rendered, the chat column runs from `#1D1D3A` at the top to `#0A0A0A` by about 75% of its height, matching the product owner's reference.
+  - **Same look elsewhere:**
+    - `/signin`, `/signup` and `/signin/callback` use the same gradient (`--auth-canvas`).
+    - The dashboards' top glow takes the same colour.
+    - The dark canvas, `theme-color` and the translucent top bar move to `#0A0A0A`.
+    - The Gemini sidebar and cards (`#1F1F1F`, `#1E1F20`) are unchanged.
+    - High contrast and low-data mode still draw no gradient.
+  - **Native CSS, no React, Tailwind or shadcn:** the component is ported as native CSS, as its light variant already was, because `apps/web` stays framework-free under ADR-020 and no dependency is added.
+  - **Checks:**
+    - The shared-theme browser test now asserts the `#0A0A0A` canvas and the top-glow `background-image`.
+    - The theme-color test expects `#0A0A0A`.
+    - A pixel-sampled contrast audit of every dark label on `/en`, `/signin`, `/admin`, `/agent` and `/analytics` measures at least 4.8:1.
+  - **Threat-model delta:** none. This is presentation only.
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 

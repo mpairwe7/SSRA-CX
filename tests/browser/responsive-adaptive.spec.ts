@@ -138,7 +138,7 @@ test("the viewport adapts to the on-screen keyboard and the browser UI follows t
   await page.locator("#header-menu-theme-btn").click();
   const theme = await page.locator("html").getAttribute("data-theme");
   const colors = await page.locator('meta[name="theme-color"]').evaluateAll((metas) => metas.map((m) => m.getAttribute("content")));
-  const expected = theme === "dark" ? "#0F1011" : theme === "light" ? "#FFFFFF" : "#0A0C10";
+  const expected = theme === "dark" ? "#0A0A0A" : theme === "light" ? "#FFFFFF" : "#0A0C10";
   expect(colors.every((c) => c === expected)).toBeTruthy();
 });
 
