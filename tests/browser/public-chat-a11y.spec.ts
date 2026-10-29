@@ -209,6 +209,18 @@ test("the landing centres the composer between the headline and three suggestion
   );
   expect((headline?.y ?? 0) + (headline?.height ?? 0)).toBeLessThanOrEqual(composer?.y ?? 0);
   expect((composer?.y ?? 0) + (composer?.height ?? 0)).toBeLessThanOrEqual(prompts?.y ?? 0);
+  // Gemini-sized pill: about 660 x 64, with suggestion text starting where the placeholder text starts.
+  expect(composer?.width ?? 0).toBeLessThanOrEqual(662);
+  expect(composer?.height ?? 0).toBeGreaterThanOrEqual(62);
+  expect(composer?.height ?? 0).toBeLessThanOrEqual(66);
+  const textStarts = await page.evaluate(() =>
+    ["#composer-placeholder-text", ".landing-chip-text"].map((selector) => {
+      const range = document.createRange();
+      range.selectNodeContents(document.querySelector(selector) as Element);
+      return range.getClientRects()[0]?.left ?? 0;
+    }),
+  );
+  expect(Math.abs(textStarts[0] - textStarts[1])).toBeLessThanOrEqual(2);
   // Keyboard order follows the visual order: add, input, dictate, voice mode, then the suggestions.
   await page.locator("#composer-add-btn").focus();
   for (const next of ["#ssra-chat-input", "#voice-dictate-btn", "#composer-voicemode-btn"]) {
@@ -220,6 +232,9 @@ test("the landing centres the composer between the headline and three suggestion
   await ask(page, "Synthetic public guidance question");
   await expect(main).toHaveAttribute("data-view", "chat");
   await expect(page.locator("#landing-prompts")).toBeHidden();
+  // The docked composer keeps the slim height in the conversation view.
+  const docked = await page.locator("#ssra-chat-form").boundingBox();
+  expect(docked?.height ?? 0).toBeLessThanOrEqual(66);
 });
 
 test("Ctrl+Shift+O starts a new conversation and the rail fades only where content scrolls under", async ({ page }) => {

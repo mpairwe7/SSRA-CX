@@ -128,6 +128,16 @@
     - Arabic (RTL) truncates at the correct end.
   - **Checks:** the reduced-motion browser test now runs at 360px. It asserts that the overlay is visible, static, one line high with an ellipsis, that the native placeholder is transparent, and that the overlay hides once text is entered.
   - **Threat-model delta:** none.
+- **Phase 24 (Gemini-Sized Composer on the Main Chat Page in `apps/web/server.js`):** at the product owner's request, the composer now matches Gemini's start page. Sizes were measured from both pages at 150% scaling.
+  - **Size:**
+    - On the start page the input is a 660 × 64 px pill (it was 788 × 76). The chat view keeps the slim 64 px height and stays aligned with the conversation column.
+    - Desktop circle buttons are 40 px. Touch screens and phones keep 44 px targets with thinner padding, so the empty composer is 64 px tall there too.
+    - Multi-line drafts still grow the box upward, with the buttons at the bottom.
+  - **Placement:**
+    - The placeholder text starts 56 px in from the pill's edge, and the suggestion text starts at the same x, also on phones and mirrored for Arabic.
+    - The headline sits about 48 px above the box, the suggestions about 35 px below it, at a 48 px row pitch.
+  - **Checks:** the landing browser test now asserts the pill size, the placeholder/suggestion alignment, and the slim docked height in the chat view.
+  - **Threat-model delta:** none.
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 

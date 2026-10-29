@@ -772,11 +772,13 @@ function renderPwaShellHtml(locale, nonce) {
     .app-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; background: transparent; }
     .app-content[data-view="landing"] { overflow-y: auto; }
     .app-content[data-view="landing"] > .landing { margin-top: auto; }
-    .app-content[data-view="landing"] > .composer-dock { margin-bottom: auto; }
+    /* Gemini-sized landing composer: a 660px pill (692px dock less the 16px gutters); the chat view keeps the dock aligned with the conversation column. */
+    .app-content[data-view="landing"] > .composer-dock { margin-bottom: auto; max-width: 692px; }
     .app-content[data-view="chat"] .landing-prompts { display: none; }
-    .landing { flex: none; display: flex; flex-direction: column; align-items: center; padding: 1rem 1.25rem 1.5rem; max-width: 820px; width: 100%; margin-inline: auto; }
+    .landing { flex: none; display: flex; flex-direction: column; align-items: center; padding: 1rem 1.25rem 2.375rem; max-width: 820px; width: 100%; margin-inline: auto; }
     .ldv2-headline { font-size: clamp(1.6rem, 3.4vw, 2.4rem); font-weight: 500; color: var(--text-0); margin: 0; letter-spacing: -0.015em; line-height: 1.2; text-align: center; text-wrap: balance; }
-    .landing-prompts { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; margin-top: 0.75rem; padding-inline: 0.5rem; }
+    /* Suggestion text starts at the same x as the composer placeholder (56px in from the pill edge). */
+    .landing-prompts { display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; margin-top: 1.5rem; padding-inline: 0.575rem; }
     .landing-chip { display: inline-flex; align-items: center; gap: 0.75rem; max-width: 100%; min-height: 44px; padding: 0.55rem 1rem; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--text-0); font: inherit; font-size: 0.95rem; font-weight: 400; text-align: start; cursor: pointer; transition: background-color 160ms ease; }
     .landing-chip:hover { background: var(--ghost-hover); }
     .landing-chip:active { background: var(--ghost-active); }
@@ -855,9 +857,9 @@ function renderPwaShellHtml(locale, nonce) {
     .narration-btn { min-width: 36px; min-height: 36px; padding: 0 0.5rem; border-radius: 8px; border: 1px solid var(--border-1); background: var(--surface-1); color: var(--text-0); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
     /* Gemini-style pill composer: [+] [input] [mic · primary slot] on one row; attachments, recording and hints span the pill. */
     .composer-box {
-      position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; column-gap: 0.25rem; row-gap: 0;
+      position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; column-gap: 0; row-gap: 0;
       grid-template-areas: "attach attach attach" "privacy privacy privacy" "add input tools" "rec rec rec" "hint hint hint";
-      min-height: 72px; padding: 0.95rem 0.65rem; background: var(--card-bg); backdrop-filter: blur(20px); border: 1px solid var(--composer-border); border-radius: 32px;
+      min-height: 64px; padding: 0.6875rem 0.65rem; background: var(--card-bg); backdrop-filter: blur(20px); border: 1px solid var(--composer-border); border-radius: 32px;
       box-shadow: var(--composer-shadow); transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
     .composer-box:focus-within, .composer-box.composer-drag-active { border-color: var(--ssra-blue); box-shadow: var(--composer-focus-shadow); }
@@ -871,7 +873,7 @@ function renderPwaShellHtml(locale, nonce) {
     .cmpv2 .composer-keys { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     /* Placeholder overlay: one line with an ellipsis over the empty textarea, rotating (pass-by) unless motion is reduced.
        A textarea's native placeholder wraps and gets clipped on phones, so it stays only as the accessible hint. */
-    .composer-placeholder { grid-area: input; align-self: end; display: flex; align-items: center; min-width: 0; height: 40px; padding-inline: 0.35rem; overflow: hidden; pointer-events: none; color: var(--text-3); font-size: 1rem; line-height: 1.5; }
+    .composer-placeholder { grid-area: input; align-self: end; display: flex; align-items: center; min-width: 0; height: 40px; padding-inline: 0.3rem; overflow: hidden; pointer-events: none; color: var(--text-3); font-size: 1rem; line-height: 1.5; }
     .composer-placeholder-text { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .composer-placeholder-text.is-leaving { animation: placeholderLeave 260ms ease-in forwards; }
     .composer-placeholder-text.is-entering { animation: placeholderEnter 320ms cubic-bezier(0.22, 1, 0.36, 1); }
@@ -888,7 +890,7 @@ function renderPwaShellHtml(locale, nonce) {
     .composer-rec-cancel, .composer-rec-confirm { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border-1); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .composer-rec-cancel { background: var(--surface-1); color: var(--danger); }
     .composer-rec-confirm { background: var(--grad-primary); color: var(--on-primary); border-color: transparent; }
-    .composer-textarea { grid-area: input; width: 100%; min-height: 40px; max-height: 140px; padding: 0.5rem 0.35rem; resize: none; border: none; background: transparent; color: var(--text-0); font: inherit; font-size: 1rem; outline: none; line-height: 1.5; }
+    .composer-textarea { grid-area: input; width: 100%; min-height: 40px; max-height: 140px; padding: 0.5rem 0.3rem; resize: none; border: none; background: transparent; color: var(--text-0); font: inherit; font-size: 1rem; outline: none; line-height: 1.5; }
     .composer-textarea::placeholder { color: var(--text-3); opacity: 1; }
     .composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
     .composer-tools-left, .composer-tools-right { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
@@ -923,9 +925,14 @@ function renderPwaShellHtml(locale, nonce) {
     .doc-modal-prompt-btn { display: inline-flex; align-items: center; gap: 0.45rem; width: 100%; min-height: 40px; padding: 0.4rem 0.65rem; border-radius: 8px; border: 1px solid var(--border-1); background: var(--surface-2); color: var(--text-0); font: inherit; font-size: 0.8rem; cursor: pointer; text-align: start; }
     .doc-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; padding-top: 0.4rem; border-top: 1px solid var(--border-1); }
     .camera-video { width: 100%; max-height: 280px; border-radius: 10px; background: #000; object-fit: cover; }
-    .voicemode-circle-btn, .send-circle-btn { width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; border-radius: 50%; background: var(--grad-primary); border: 1px solid rgba(46, 204, 113, 0.48); color: var(--on-primary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .voicemode-circle-btn, .send-circle-btn { width: 40px; height: 40px; min-width: 40px; min-height: 40px; padding: 0; border-radius: 50%; background: var(--grad-primary); border: 1px solid rgba(46, 204, 113, 0.48); color: var(--on-primary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .voicemode-circle-btn:not(.is-active):hover:not(:disabled), .send-circle-btn:hover:not(:disabled) { background: var(--grad-primary); filter: brightness(1.08); }
     .voicemode-circle-btn.is-active { background: rgba(7, 137, 48, 0.28); border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.28); color: #2ECC71; }
+    /* Touch and phones keep 44px targets; thinner pill padding keeps the empty composer 64px tall. */
+    @media (pointer: coarse), (max-width: 640px) {
+      .voicemode-circle-btn, .send-circle-btn { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+      .composer-box { padding-block: 0.5625rem; }
+    }
     .stop-circle-btn { background: var(--text-0) !important; color: var(--bg-0) !important; border-color: var(--text-0) !important; }
     .voice-dock { --orb-size: 40px; --orb-wrap-w: 52px; --orb-wrap-h: 52px; --vd-floor: var(--border-1); display: flex; flex-direction: column; gap: 8px; padding: 12px 10px 10px 12px; background: var(--card-bg); border: 1px solid var(--vd-floor); border-radius: 16px; box-shadow: var(--shadow-sm), 0 0 0 3px color-mix(in srgb, var(--vd-floor) 16%, transparent); transition: border-color 200ms ease, box-shadow 200ms ease; }
     .voice-dock[data-floor="listening"] { --vd-floor: var(--ssra-teal-light); }
@@ -1218,7 +1225,7 @@ function renderPwaShellHtml(locale, nonce) {
       .langsel-btn { width: 44px; min-width: 44px; padding: 0; justify-content: center; }
       .chat-header .btn-label { display: none; }
       .landing { padding: 1rem 0.85rem 1.25rem; }
-      .landing-prompts { padding-inline: 0; }
+      .landing-prompts { padding-inline: 0.825rem; }
       .composer-keys { display: none; }
       .composer-dock { padding: 0.45rem 0.6rem 0.25rem; }
       .composer-disclosure { padding: 0.15rem 0.85rem max(0.55rem, env(safe-area-inset-bottom)); }
