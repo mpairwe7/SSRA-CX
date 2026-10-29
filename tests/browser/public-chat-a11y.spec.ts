@@ -293,12 +293,30 @@ test("the composer placeholder rotates only while idle", async ({ page }) => {
   await expect(phrase).toBeHidden();
 });
 
-test("reduced motion keeps a static composer placeholder", async ({ page }) => {
+test("reduced motion keeps a static one-line composer placeholder on phones", async ({ page }) => {
+  await page.clock.install();
+  await page.setViewportSize({ height: 740, width: 360 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/en");
-  await expect(page.locator("#ssra-chat-form")).not.toHaveClass(/has-rotating-placeholder/);
-  await expect(page.locator("#composer-placeholder")).toBeHidden();
-  await expect(page.getByRole("textbox", { name: "Ask SSRA Assist" })).toHaveAttribute("placeholder", "Ask anything you need about taxes");
+  const form = page.locator("#ssra-chat-form");
+  const input = page.getByRole("textbox", { name: "Ask SSRA Assist" });
+  const phrase = page.locator("#composer-placeholder-text");
+  await expect(form).not.toHaveClass(/has-rotating-placeholder/);
+  await expect(form).toHaveClass(/has-placeholder-overlay/);
+  await expect(input).toHaveAttribute("placeholder", "Ask anything you need about taxes");
+  await expect(phrase).toBeVisible();
+  await page.clock.runFor(11_000);
+  await expect(phrase).toHaveText("Ask anything you need about taxes");
+  // One line with an ellipsis: the textarea's own placeholder would wrap and be clipped at this width.
+  const fit = await phrase.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return { lineHeight: Number.parseFloat(style.lineHeight), height: el.getBoundingClientRect().height, textOverflow: style.textOverflow };
+  });
+  expect(fit.height).toBeLessThanOrEqual(fit.lineHeight + 1);
+  expect(fit.textOverflow).toBe("ellipsis");
+  expect(await input.evaluate((el) => getComputedStyle(el, "::placeholder").color)).toBe("rgba(0, 0, 0, 0)");
+  await input.fill("Synthetic draft");
+  await expect(phrase).toBeHidden();
 });
 
 test("the offline status meets 4.5:1 contrast in the light theme", async ({ browser }) => {

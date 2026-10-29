@@ -119,6 +119,15 @@
     - The theme-color test expects `#0A0A0A`.
     - A pixel-sampled contrast audit of every dark label on `/en`, `/signin`, `/admin`, `/agent` and `/analytics` measures at least 4.8:1.
   - **Threat-model delta:** none. This is presentation only.
+- **Phase 23 (Composer Placeholder Stays on One Line on Phones in `apps/web/server.js`):**
+  - **Bug:** with reduced motion on, the rotating overlay was switched off, so the textarea's own placeholder showed. It wraps, so on narrow phones "Ask anything you need about taxes" broke onto a second line that the 40px field clipped.
+  - **Fix:** the one-line overlay (`white-space: nowrap`, ellipsis) now shows whenever there is placeholder text (`.has-placeholder-overlay`). Only the rotation depends on motion: with reduced motion the first phrase stays still (WCAG 2.2.2).
+  - **Unchanged:**
+    - The native `placeholder` attribute stays as the accessible hint.
+    - Forced-colours mode still uses the native placeholder.
+    - Arabic (RTL) truncates at the correct end.
+  - **Checks:** the reduced-motion browser test now runs at 360px. It asserts that the overlay is visible, static, one line high with an ellipsis, that the native placeholder is transparent, and that the overlay hides once text is entered.
+  - **Threat-model delta:** none.
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 

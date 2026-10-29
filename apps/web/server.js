@@ -869,15 +869,16 @@ function renderPwaShellHtml(locale, nonce) {
     .cmpv2 .composer-active-recording { grid-area: rec; margin-top: 0.5rem; }
     .cmpv2 .composer-hint { grid-area: hint; padding: 0.4rem 0.75rem 0; }
     .cmpv2 .composer-keys { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-    /* Rotating placeholder (pass-by): decorative overlay over the empty textarea; the native placeholder stays the accessible hint. */
+    /* Placeholder overlay: one line with an ellipsis over the empty textarea, rotating (pass-by) unless motion is reduced.
+       A textarea's native placeholder wraps and gets clipped on phones, so it stays only as the accessible hint. */
     .composer-placeholder { grid-area: input; align-self: end; display: flex; align-items: center; min-width: 0; height: 40px; padding-inline: 0.35rem; overflow: hidden; pointer-events: none; color: var(--text-3); font-size: 1rem; line-height: 1.5; }
     .composer-placeholder-text { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .composer-placeholder-text.is-leaving { animation: placeholderLeave 260ms ease-in forwards; }
     .composer-placeholder-text.is-entering { animation: placeholderEnter 320ms cubic-bezier(0.22, 1, 0.36, 1); }
     @keyframes placeholderLeave { to { opacity: 0; transform: translateY(-70%); } }
     @keyframes placeholderEnter { from { opacity: 0; transform: translateY(70%); } }
-    .composer-box:not(.has-rotating-placeholder) .composer-placeholder, .composer-textarea:not(:placeholder-shown) ~ .composer-placeholder { display: none; }
-    .composer-box.has-rotating-placeholder .composer-textarea::placeholder { color: transparent; }
+    .composer-box:not(.has-placeholder-overlay) .composer-placeholder, .composer-textarea:not(:placeholder-shown) ~ .composer-placeholder { display: none; }
+    .composer-box.has-placeholder-overlay .composer-textarea::placeholder { color: transparent; }
     .composer-box.is-recording { border-color: var(--danger); }
     .composer-drop-overlay { position: absolute; inset: 4px; z-index: 6; display: flex; align-items: center; justify-content: center; padding: 0.75rem; border: 1.5px dashed var(--ssra-gold); border-radius: 12px; background: var(--bg-1); color: var(--text-0); font-size: 0.84rem; font-weight: 600; text-align: center; pointer-events: none; }
     .composer-active-recording { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; min-height: 48px; padding: 0.25rem 0.35rem; border-radius: 12px; background: rgba(251, 113, 133, 0.08); border: 1px solid rgba(251, 113, 133, 0.35); }
@@ -1248,7 +1249,7 @@ function renderPwaShellHtml(locale, nonce) {
       .set-switch::before { border: 1px solid CanvasText; background: Canvas; }
       .set-switch[aria-checked="true"]::before { background: Highlight; }
       .set-switch::after { forced-color-adjust: none; background: CanvasText; }
-      .composer-box.has-rotating-placeholder .composer-textarea::placeholder { color: GrayText; }
+      .composer-box.has-placeholder-overlay .composer-textarea::placeholder { color: GrayText; }
       :focus-visible { outline-color: Highlight; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -2185,7 +2186,7 @@ function renderPwaShellHtml(locale, nonce) {
       document.addEventListener("pointermove", showTips, { passive: true });
       document.addEventListener("focusin", showTips);
 
-      // Rotating composer placeholder (pass-by): pauses while the composer is hovered, focused or filled and while the tab is hidden; reduced motion keeps the static native placeholder (WCAG 2.2.2).
+      // Composer placeholder overlay (one line, ellipsis). It rotates (pass-by), pausing while the composer is hovered, focused or filled and while the tab is hidden; reduced motion keeps the first phrase static (WCAG 2.2.2).
       const placeholderTextEl = document.getElementById("composer-placeholder-text");
       const PLACEHOLDER_ROTATE_MS = 5000;
       const PLACEHOLDER_LEAVE_MS = 260;
@@ -2214,7 +2215,9 @@ function renderPwaShellHtml(locale, nonce) {
           placeholderTextEl.classList.remove("is-leaving", "is-entering");
           placeholderTextEl.textContent = placeholderPhrases[0] || "";
         }
-        const rotate = Boolean(placeholderTextEl) && placeholderPhrases.length > 1 && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        const overlay = Boolean(placeholderTextEl) && placeholderPhrases.length > 0;
+        const rotate = overlay && placeholderPhrases.length > 1 && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        form?.classList.toggle("has-placeholder-overlay", overlay);
         form?.classList.toggle("has-rotating-placeholder", rotate);
         window.clearInterval(placeholderTimer);
         placeholderTimer = rotate ? window.setInterval(rotateComposerPlaceholder, PLACEHOLDER_ROTATE_MS) : 0;
