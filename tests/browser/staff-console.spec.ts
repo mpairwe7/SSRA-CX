@@ -62,28 +62,29 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
   await expect(page.locator("#acct-initials")).toHaveText("ST");
   await expect(page.locator("#spec-standard")).toContainText("OWASP ASI03");
 
-  // Sign-in (/signin), Sign-up (/signup), and Callback (/signin/callback) Keycloak 26 OIDC + Passkey flows
+  // Dedicated sign-in (/signin) and sign-up (/signup) pages: no rail, top bar or role choice.
   await page.locator("#ops-header-signin-link").click();
   await expect(main.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
-  await expect(main.locator(".role-opt.active")).toHaveCount(1);
-  await expect(main.locator('[data-role-card="ssra_staff"]')).toHaveClass(/active/);
+  await expect(page.locator("#ssra-staff-shell")).toHaveAttribute("data-layout", "auth");
+  await expect(page.locator("#staff-rail")).toBeHidden();
+  await expect(page.locator("#call-console-bar")).toBeHidden();
+  await expect(main.locator('.role-opt, input[name="signin-role-target"]')).toHaveCount(0);
   await page.getByTestId("keycloak-signin-btn").click();
-  await expect(page.locator("#signin-status-banner")).toContainText(
-    "https://sso.ssra.gov.ss/realms/ssra/protocol/openid-connect/auth",
+  const signInBanner = page.locator("#signin-status-banner");
+  await expect(signInBanner).toContainText("single sign-on isn't connected in this preview");
+  await expect(signInBanner).toHaveAttribute(
+    "data-auth-url",
+    /^https:\/\/sso\.ssra\.gov\.ss\/realms\/ssra\/protocol\/openid-connect\/auth\?/,
   );
-  await expect(page.locator("#signin-status-banner")).toContainText(
-    "acr_values=urn%3Assra%3Aacr%3Apasskey",
-  );
-  await expect(page.locator("#signin-status-banner")).toContainText("nonce=");
-
-  await page.getByTestId("signin-different-account").click();
-  await expect(page.locator("#signin-status-banner")).toContainText("prompt=login");
+  await expect(signInBanner).toHaveAttribute("data-auth-url", /acr_values=urn%3Assra%3Aacr%3Apasskey/);
+  await expect(signInBanner).toHaveAttribute("data-auth-url", /nonce=/);
 
   await main.getByRole("link", { name: "Create one" }).click();
   await expect(main.getByRole("heading", { level: 1, name: "Create an account" })).toBeVisible();
+  await expect(page.locator("#staff-rail")).toBeHidden();
   await page.getByTestId("keycloak-signup-btn").click();
-  await expect(page.locator("#signup-status-banner")).toContainText("prompt=create");
-  await expect(page.locator("#signup-status-banner")).toContainText("screen_hint=signup");
+  await expect(page.locator("#signup-status-banner")).toHaveAttribute("data-auth-url", /prompt=create/);
+  await expect(page.locator("#signup-status-banner")).toHaveAttribute("data-auth-url", /screen_hint=signup/);
 
   // Credential sign-in for Admin (/admin), Staff (/agent), and Auditor (/analytics) accounts
   await main.getByRole("link", { name: "Sign in" }).click();
@@ -95,11 +96,14 @@ test("the staff dashboard remains preview-only and returns focus after navigatio
   await expect(main.getByRole("heading", { level: 1, name: "Operations overview" })).toBeVisible();
   await page.getByTestId("ops-signout-btn").click();
   await expect(page).toHaveURL(/\/signin$/);
+  await expect(page.locator("#staff-rail")).toBeHidden();
 
   await page.getByTestId("signin-email-input").fill("staff@nra.gov.ss");
   await page.getByTestId("signin-password-input").fill(["Staff", "123"].join(""));
   await page.getByTestId("console-signin-submit-btn").click();
   await expect(page).toHaveURL(/\/agent$/);
+  await expect(page.locator("#ssra-staff-shell")).toHaveAttribute("data-layout", "app");
+  await expect(page.locator("#staff-rail")).toBeVisible();
   await expect(page.getByTestId("authenticated-session-pill")).toContainText("Deng M.");
   await expect(page.getByTestId("approve-send-btn")).toBeVisible();
   await page.getByTestId("ops-signout-btn").click();

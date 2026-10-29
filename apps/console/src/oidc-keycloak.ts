@@ -448,41 +448,6 @@ export function validateOidcCallbackParams(
   };
 }
 
-export interface ConsoleSignInRoleOption {
-  readonly role: StaffRole;
-  readonly label: string;
-  readonly badge: string;
-  readonly landingPath: "/admin" | "/agent" | "/analytics";
-  readonly description: string;
-}
-
-export const CONSOLE_SIGNIN_ROLE_OPTIONS: readonly ConsoleSignInRoleOption[] = [
-  {
-    role: "ssra_admin",
-    label: "Administrator (ssra_admin)",
-    badge: "AD",
-    landingPath: "/admin",
-    description:
-      "Operations overview, 5-step degradation ladder, 6-step knowledge release governance, and JIT passkey elevation (/admin).",
-  },
-  {
-    role: "ssra_staff",
-    label: "Tax Agent & Officer (ssra_staff)",
-    badge: "ST",
-    landingPath: "/agent",
-    description:
-      "One-case-at-a-time escalation queue, Cited Copilot drafts, phone call takeover desk, and T3 two-officer maker-checker (/agent).",
-  },
-  {
-    role: "ssra_auditor",
-    label: "Forensic & QA Auditor (ssra_auditor)",
-    badge: "AU",
-    landingPath: "/analytics",
-    description:
-      "Read-only Separation of Duties (ISO/IEC 42001 Clause 9.2): WORM hash-chain & Merkle seal inspector, forensic turn replay, and QA rubric scoring (/analytics).",
-  },
-] as const;
-
 export const CONSOLE_SIGNUP_BENEFITS = [
   {
     title: "Ask without an account (T0 Public Assistant)",
@@ -498,24 +463,19 @@ export const CONSOLE_SIGNUP_BENEFITS = [
   },
 ] as const;
 
+// There is no role picker: the account's verified role decides the workspace. A safe returnTo is the only
+// pre-sign-in destination; null means "the account's own landing page".
 export function buildSignInPageViewModel(params?: {
-  readonly selectedRole?: StaffRole | undefined;
   readonly returnTo?: string | null | undefined;
 }) {
-  const selectedRole: StaffRole = params?.selectedRole ?? "ssra_admin";
-  const roleOption =
-    CONSOLE_SIGNIN_ROLE_OPTIONS.find((r) => r.role === selectedRole) ??
-    CONSOLE_SIGNIN_ROLE_OPTIONS[0];
   return {
     title: "Sign in",
-    subtitle: "South Sudan Revenue Authority (SSRA) — Operations, Staff & Audit Console",
+    subtitle: "Use your SSRA account. You'll go straight to your workspace.",
     keycloakRealm: KEYCLOAK_CONSOLE_OIDC_CONFIG.realm,
     keycloakIssuer: KEYCLOAK_CONSOLE_OIDC_CONFIG.issuer,
     keycloakClientId: KEYCLOAK_CONSOLE_OIDC_CONFIG.consoleClientId,
     requiredAcr: KEYCLOAK_CONSOLE_OIDC_CONFIG.requiredStaffAcr,
-    selectedRole,
-    targetLandingPath: sanitizeReturnTo(params?.returnTo) ?? roleOption?.landingPath ?? "/admin",
-    roleOptions: CONSOLE_SIGNIN_ROLE_OPTIONS,
+    targetLandingPath: sanitizeReturnTo(params?.returnTo) ?? null,
   };
 }
 

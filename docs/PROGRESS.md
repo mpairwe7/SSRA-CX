@@ -1,6 +1,6 @@
 # SSRA Assist — Delivery Progress Across Phases 0–4 (`docs/PROGRESS.md`)
 
-**Last Updated:** 2026-10-28
+**Last Updated:** 2026-10-29
 
 **Current Status:** Phases 0–4 contain reference implementations; Gates R0 and R1 are approved for non-production remediation. Production readiness remains blocked by provider, staff identity, analytics provenance, durable-state questions, artifact/model trust, and later phase gates. Local verification is separate from production approval.
 **Single Source of Truth:** [`docs/00-master-prompt.md`](./00-master-prompt.md)
@@ -86,6 +86,23 @@
     - A pixel-sampled contrast audit of every visible label on `/en`, `/signin`, `/admin`, `/agent` and `/analytics` measures at least 4.8:1 in all three themes.
     - New browser tests cover the shared choice (the chat's Settings giving the dashboard rail its dark colour, and "System" in the console handing control back to the device) and that the theme is set before the body renders.
   - **Threat-model delta:** none. This is presentation-only. The one new browser-storage key holds only a theme name and no personal data.
+- **Phase 21 (Dedicated Sign-In & Sign-Up Pages; the Account Comes from the Credentials in `packages/ui/ops-console.js` and `apps/console/src/oidc-keycloak.ts`):**
+  - **Dedicated layout:**
+    - `/signin`, `/signup` and `/signin/callback` render with `#ssra-staff-shell[data-layout="auth"]`, set on the server and again by the client router.
+    - That layout removes the sidebar, the top status bar, the mobile backdrop and the `Ctrl+K` palette, and centres one 420px card.
+    - Page titles are `Sign in — SSRA Assist`, `Create an account — SSRA Assist` and `Signing you in — SSRA Assist`.
+  - **Theme match:** the background reuses the chat page's look through a new `--auth-canvas` token: the `#C7D2FE` top glow in light, Gemini's navy centre glow on `#0F1011` with a `#1E1F20` card in dark, and flat `#0A0C10` in high contrast.
+  - **No role choice:**
+    - Removed: the Administrator, Tax Agent and Auditor radio cards, the "Sign in with Passkey (Selected Role)" button (it signed in as the chosen role without credentials, contrary to invariant 10), and the "different account" button.
+    - The email and password decide the account, and so the landing page: `/admin`, `/agent`, `/analytics` or `/en`.
+    - `buildSignInPageViewModel` drops `roleOptions`. Its `targetLandingPath` is `null` unless a sanitised `returnTo` is given.
+  - **Simpler cards:** brand, heading, form, an "or" divider, one "Continue with SSRA single sign-on" button, a footer link to the other page, and one line saying the preview checks sign-in in this browser only.
+  - **SSO in preview:** the SSO button now says plainly that single sign-on isn't connected yet (OQ-005/OQ-014). The prepared PKCE S256 / nonce / `acr_values=urn:ssra:acr:passkey` request (`prompt=create&screen_hint=signup` for sign-up) is kept in the banner's `data-auth-url` instead of being printed. An optional `?next=` return path is accepted only as a same-origin path outside `/signin`, `/signup`, `/api` and `/v1`.
+  - **Checks:**
+    - Browser tests assert the auth layout, the hidden rail and top bar, no role inputs, the SSO request parameters, and that each credential lands on its own workspace with the rail back.
+    - A new test checks the dark card colour.
+    - A pixel-sampled contrast audit of the three pages at 1440px and 390px, in all three themes and including the error and SSO messages, measures at least 5.0:1. The one lower reading was the sampler landing on the "or" hairline; the text itself is about 8:1.
+  - **Threat-model delta:** reduced. A client-side role choice can no longer select an account. Server-side gates are unchanged (`403 AUTHENTICATED_STAFF_SESSION_REQUIRED` on `/api/*` and `/v1/*`).
 
 ## 0.21 [Multi-Turn Conversation Continuity & Toolathlon Orchestration Hardening](./adr/0028-multiturn-continuity-and-toolathlon-orchestration-hardening.md) (2026-10-24)
 

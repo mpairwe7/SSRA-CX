@@ -46,11 +46,21 @@ test("Sign in and Register navigate to /signin and /signup and link back to the 
   await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
   await expect(page.getByTestId("signin-email-input")).toBeVisible();
   await expect(page.getByTestId("signin-password-input")).toBeVisible();
+  await expect(page.locator("#staff-rail")).toBeHidden();
 
   await page.goto("/en");
   await footer.getByRole("button", { name: "Register" }).click();
   await expect(page).toHaveURL(/\/signup$/);
   await expect(page.getByRole("heading", { level: 1, name: "Create an account" })).toBeVisible();
+  await expect(page.locator("#staff-rail")).toBeHidden();
+});
+
+test("the dedicated sign-in page follows the shared dark theme", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("ssra-theme", "dark"));
+  await page.goto("/signin");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator(".signin-card")).toHaveCSS("background-color", "rgb(30, 31, 32)");
+  await expect(page.locator("#staff-rail")).toBeHidden();
 });
 
 test("settings tabs follow the APG keyboard model", async ({ page }) => {

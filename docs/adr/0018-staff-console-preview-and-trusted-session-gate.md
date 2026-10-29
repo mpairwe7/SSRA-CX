@@ -55,6 +55,11 @@ R2-F renders the preview card, heading, and page title on the server for every r
    - `packages/ui/theme.js` owns the palette for both surfaces: Gemini-style dark (`#0F1011` canvas, `#1F1F1F` rail) and GitHub-style high contrast (`#0A0C10`).
    - It also owns the `ssra-theme` storage key (`system`, `light`, `dark`, `high-contrast`) and a pre-paint bootstrap script.
    - The console's Appearance menu offers System, Light, Dark and High contrast. A theme is presentation state only and never affects authorization.
+7. **Dedicated sign-in and sign-up pages; the role comes from the credentials (2026-10-29):**
+   - `/signin`, `/signup` and `/signin/callback` use an auth layout (`data-layout="auth"`) with no sidebar, top bar or command palette, themed through the shared tokens.
+   - The sign-in page offers no role choice. The role, and with it the landing workspace, is resolved from the account the credentials match (later, from the Keycloak token's roles). It is never chosen in the browser.
+   - The passkey shortcut that signed in as a selected role without credentials is removed.
+   - Single sign-on stays a disclosed, unconnected preview (OQ-005/OQ-014).
 
 
 

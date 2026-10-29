@@ -417,175 +417,112 @@ function renderPreviewCard(title, group = "Work", routePath = "/admin") {
         </div>`;
 }
 
+const AUTH_ROUTES = new Set(["/signin", "/signup", "/signin/callback"]);
+
+function isAuthRoute(route) {
+  return AUTH_ROUTES.has(route);
+}
+
+// Dedicated auth pages: brand, heading, one form, single sign-on, and a way back. No navigation or role choice;
+// the account you sign in with decides the workspace you land in.
+function renderAuthBrand() {
+  return `<div class="auth-brand">
+              <span class="signin-mark" aria-hidden="true">${ICONS.ssraCrest}</span>
+              <span class="auth-wordmark">SSRA Assist</span>
+            </div>`;
+}
+
+function renderAuthDivider() {
+  return `<div class="auth-divider"><span class="auth-divider-line" aria-hidden="true"></span><span>or</span><span class="auth-divider-line" aria-hidden="true"></span></div>`;
+}
+
 function renderSignInCard(publicAssistantUrl = "http://127.0.0.1:3000/en") {
   return `<div class="signin-wrap">
           <div class="signin-card">
+            ${renderAuthBrand()}
             <header class="signin-head">
-              <div class="signin-mark" aria-hidden="true">${ICONS.ssraCrest}</div>
-              <span id="preview-eyebrow" class="ops-eyebrow">Keycloak 26.4.11 · OAuth 2.1 + PKCE S256 + Passkey AAL3</span>
               <h1 id="preview-title">Sign in</h1>
-              <p class="signin-sub">South Sudan Revenue Authority (SSRA) — Admin, Staff &amp; Auditor Console</p>
+              <p class="signin-sub">Use your SSRA account. You&#39;ll go straight to your workspace.</p>
             </header>
 
-            <section class="signin-block" aria-labelledby="oidc-h">
-              <h2 id="oidc-h">Sign in with your SSRA Keycloak account</h2>
-              <p class="signin-note">
-                Accounts, hardware-backed WebAuthn passkeys (<code>urn:ssra:acr:passkey</code>), and role assignments are managed by the SSRA sovereign Keycloak identity realm (<code>https://sso.ssra.gov.ss/realms/ssra</code>). OAuth 2.1 tokens are bound via PKCE <code>S256</code> and RFC 9449 DPoP.
-              </p>
-
-              <fieldset class="signin-roles">
-                <legend>Target console workspace upon sign-in</legend>
-                <label class="role-opt active" data-role-card="ssra_admin">
-                  <input type="radio" name="signin-role-target" value="ssra_admin" data-landing="/admin" checked />
-                  <span class="role-name">Administrator (ssra_admin) — /admin</span>
-                  <span class="role-hint">Operations overview, 5-step degradation ladder, 6-step knowledge release governance, and JIT passkey elevation.</span>
-                </label>
-                <label class="role-opt" data-role-card="ssra_staff">
-                  <input type="radio" name="signin-role-target" value="ssra_staff" data-landing="/agent" />
-                  <span class="role-name">Tax Agent &amp; Officer (ssra_staff) — /agent</span>
-                  <span class="role-hint">One-case-at-a-time escalation queue, Cited Copilot drafts, phone call takeover desk, and T3 two-officer maker-checker.</span>
-                </label>
-                <label class="role-opt" data-role-card="ssra_auditor">
-                  <input type="radio" name="signin-role-target" value="ssra_auditor" data-landing="/analytics" />
-                  <span class="role-name">Forensic &amp; QA Auditor (ssra_auditor) — /analytics</span>
-                  <span class="role-hint">Read-only Separation of Duties (ISO/IEC 42001 Clause 9.2): WORM ledger inspector, forensic turn replay, and QA rubric scoring.</span>
-                </label>
-              </fieldset>
-
-              <form id="console-signin-form" class="signin-form" data-testid="console-signin-form" novalidate>
-                <div class="signin-field">
-                  <label for="signin-email-input" class="signin-label">Email or username</label>
-                  <input id="signin-email-input" data-testid="signin-email-input" class="signin-input" type="text" name="username" autocomplete="username" placeholder="admin@nra.gov.ss, staff@nra.gov.ss, or auditor@nra.gov.ss" required />
-                </div>
-                <div class="signin-field">
-                  <label for="signin-password-input" class="signin-label">Password</label>
-                  <input id="signin-password-input" data-testid="signin-password-input" class="signin-input" type="password" name="password" autocomplete="current-password" placeholder="Enter your SSRA account password" required />
-                </div>
-                <button type="submit" id="console-signin-submit-btn" class="signin-primary" data-testid="console-signin-submit-btn">
-                  Sign in to dashboard
-                </button>
-              </form>
-
-              <button type="button" id="console-passkey-signin-btn" class="signin-secondary" data-testid="console-passkey-signin-btn">
-                Sign in with Passkey (Selected Role)
-              </button>
-              <button type="button" id="keycloak-signin-btn" class="signin-secondary" data-testid="keycloak-signin-btn">
-                Continue with SSRA Keycloak Passkey SSO
-              </button>
-              <button type="button" id="keycloak-switch-account-btn" class="signin-secondary" data-testid="signin-different-account">
-                Sign in as a different user (prompt=login)
-              </button>
-
-              <dl class="ov-kv signin-kv" aria-label="Keycloak OIDC client configuration">
-                <div><dt>Keycloak realm</dt><dd><code>ssra</code></dd></div>
-                <div><dt>Console client ID</dt><dd><code>ssra-staff-console</code></dd></div>
-                <div><dt>Required passkey ACR</dt><dd><code>urn:ssra:acr:passkey</code> (ES256 / EdDSA)</dd></div>
-                <div><dt>Redirect URI</dt><dd><code>/signin/callback</code> (PKCE S256 + PAR + DPoP)</dd></div>
-              </dl>
-            </section>
-
+            <form id="console-signin-form" class="signin-form" data-testid="console-signin-form" novalidate>
+              <div class="signin-field">
+                <label for="signin-email-input" class="signin-label">Email or username</label>
+                <input id="signin-email-input" data-testid="signin-email-input" class="signin-input" type="text" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="name@example.com" required />
+              </div>
+              <div class="signin-field">
+                <label for="signin-password-input" class="signin-label">Password</label>
+                <input id="signin-password-input" data-testid="signin-password-input" class="signin-input" type="password" name="password" autocomplete="current-password" required />
+              </div>
+              <button type="submit" id="console-signin-submit-btn" class="signin-primary" data-testid="console-signin-submit-btn">Sign in</button>
+            </form>
             <p id="signin-status-banner" class="signin-status is-hidden" role="status" aria-live="polite"></p>
 
-            <footer class="signin-switch">
-              <p>No account yet? <a href="/signup" data-nav="/signup">Create one</a></p>
-              <div class="signin-switch-links">
-                <a class="signin-switch-alt" href="/admin" data-nav="/admin">Back to console preview</a>
-                <a class="signin-switch-alt" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Back to the assistant</a>
-              </div>
+            ${renderAuthDivider()}
+            <button type="button" id="keycloak-signin-btn" class="signin-secondary" data-testid="keycloak-signin-btn">${ICONS.shieldCheck} Continue with SSRA single sign-on</button>
+
+            <footer class="auth-foot">
+              <p>Don&#39;t have an account? <a href="/signup" data-nav="/signup">Create one</a></p>
+              <a class="auth-back" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Back to SSRA Assist</a>
             </footer>
           </div>
+          <p class="auth-note">Preview environment: sign-in is checked in this browser only.</p>
         </div>`;
 }
 
 function renderSignUpCard(publicAssistantUrl = "http://127.0.0.1:3000/en") {
   return `<div class="signin-wrap">
           <div class="signin-card">
+            ${renderAuthBrand()}
             <header class="signin-head">
-              <div class="signin-mark" aria-hidden="true">${ICONS.ssraCrest}</div>
-              <span id="preview-eyebrow" class="ops-eyebrow">Keycloak 26.4.11 · OIDC User Registration (prompt=create)</span>
               <h1 id="preview-title">Create an account</h1>
-              <p class="signin-sub">South Sudan Revenue Authority (SSRA) — Identity &amp; Role Provisioning</p>
+              <p class="signin-sub">For taxpayers. SSRA staff accounts are issued by SSRA, so staff should sign in instead.</p>
             </header>
 
-            <section class="signin-block" aria-labelledby="signup-h">
-              <h2 id="signup-h">Register with the SSRA Keycloak identity provider</h2>
-              <p class="signin-note">
-                Accounts, passkeys, and security recovery are managed by SSRA&#39;s configured Keycloak identity provider — this application never sees a password. Clicking below initiates an OAuth 2.1 + PKCE <code>S256</code> registration request (<code>prompt=create&amp;screen_hint=signup</code>).
-              </p>
-              <form id="console-signup-form" class="signin-form" data-testid="console-signup-form" novalidate>
-                <div class="signin-field">
-                  <label for="signup-name-input" class="signin-label">Full name or business name</label>
-                  <input id="signup-name-input" data-testid="signup-name-input" class="signin-input" type="text" name="name" autocomplete="name" placeholder="e.g. Amina M." required />
-                </div>
-                <div class="signin-field">
-                  <label for="signup-email-input" class="signin-label">Email address</label>
-                  <input id="signup-email-input" data-testid="signup-email-input" class="signin-input" type="email" name="email" autocomplete="email" placeholder="e.g. taxpayer@etax.nra.gov.ss" required />
-                </div>
-                <div class="signin-field">
-                  <label for="signup-password-input" class="signin-label">Create password</label>
-                  <input id="signup-password-input" data-testid="signup-password-input" class="signin-input" type="password" name="new-password" autocomplete="new-password" placeholder="At least 8 characters" required />
-                </div>
-                <button type="submit" id="console-signup-submit-btn" class="signin-primary" data-testid="console-signup-submit-btn">
-                  Create taxpayer account
-                </button>
-              </form>
-              <button type="button" id="keycloak-signup-btn" class="signin-secondary" data-testid="keycloak-signup-btn">
-                Continue to registration
-              </button>
-            </section>
-
-            <section class="signin-block" aria-labelledby="signup-what">
-              <h2 id="signup-what">What an account changes</h2>
-              <ul class="signin-benefits">
-                <li>
-                  <strong>Ask without an account (T0 Public Assistant)</strong>
-                  <span>Tax questions, statutory rates, deadlines, PAYE/WHT calculators, and document preflight checks all work signed out with zero PII stored.</span>
-                </li>
-                <li>
-                  <strong>Taxpayer e-Tax continuity (T1–T3 Progressive Proofing)</strong>
-                  <span>Registering a taxpayer account links saved guidance preferences and enables deterministic TIN + OTP step-up verification outside the LLM.</span>
-                </li>
-                <li>
-                  <strong>SSRA employees, officers, administrators &amp; auditors</strong>
-                  <span>Staff (<code>ssra_staff</code>), administrator (<code>ssra_admin</code>), and read-only auditor (<code>ssra_auditor</code>) roles are predefined and assigned by SSRA Identity Governance in the <code>ssra</code> Keycloak realm with mandatory FIDO2 passkey enrollment. Staff accounts are not self-registered here — sign in directly on <a href="/signin" data-nav="/signin">/signin</a>.</span>
-                </li>
-              </ul>
-            </section>
-
+            <form id="console-signup-form" class="signin-form" data-testid="console-signup-form" novalidate>
+              <div class="signin-field">
+                <label for="signup-name-input" class="signin-label">Full name or business name</label>
+                <input id="signup-name-input" data-testid="signup-name-input" class="signin-input" type="text" name="name" autocomplete="name" required />
+              </div>
+              <div class="signin-field">
+                <label for="signup-email-input" class="signin-label">Email address</label>
+                <input id="signup-email-input" data-testid="signup-email-input" class="signin-input" type="email" name="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="name@example.com" required />
+              </div>
+              <div class="signin-field">
+                <label for="signup-password-input" class="signin-label">Password</label>
+                <input id="signup-password-input" data-testid="signup-password-input" class="signin-input" type="password" name="new-password" autocomplete="new-password" placeholder="At least 8 characters" required />
+              </div>
+              <button type="submit" id="console-signup-submit-btn" class="signin-primary" data-testid="console-signup-submit-btn">Create account</button>
+            </form>
             <p id="signup-status-banner" class="signin-status is-hidden" role="status" aria-live="polite"></p>
 
-            <footer class="signin-switch">
+            ${renderAuthDivider()}
+            <button type="button" id="keycloak-signup-btn" class="signin-secondary" data-testid="keycloak-signup-btn">${ICONS.shieldCheck} Continue with SSRA single sign-on</button>
+
+            <footer class="auth-foot">
               <p>Already have an account? <a href="/signin" data-nav="/signin">Sign in</a></p>
-              <div class="signin-switch-links">
-                <a class="signin-switch-alt" href="/admin" data-nav="/admin">Back to console preview</a>
-                <a class="signin-switch-alt" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Continue without an account</a>
-              </div>
+              <a class="auth-back" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Continue without an account</a>
             </footer>
           </div>
+          <p class="auth-note">Preview environment: accounts are kept in this browser only.</p>
         </div>`;
 }
 
 function renderSignInCallbackCard(publicAssistantUrl = "http://127.0.0.1:3000/en") {
   return `<div class="signin-wrap">
           <div class="signin-card">
+            ${renderAuthBrand()}
             <header class="signin-head">
-              <div class="signin-mark" aria-hidden="true">${ICONS.ssraCrest}</div>
-              <span id="preview-eyebrow" class="ops-eyebrow">Keycloak 26.4.11 · OIDC Authorization Code Callback</span>
               <h1 id="preview-title">Signing you in</h1>
-              <p class="signin-sub">South Sudan Revenue Authority (SSRA) — Verifying PKCE &amp; CSRF State</p>
+              <p class="signin-sub">Checking the response from SSRA single sign-on.</p>
             </header>
 
-            <p id="callback-status-banner" class="signin-status error" role="alert" aria-live="polite">
-              Verifying OAuth 2.1 authorization code, CSRF state, and PKCE S256 verifier…
-            </p>
+            <p id="callback-status-banner" class="signin-status" role="status" aria-live="polite">Verifying the sign-in response…</p>
 
-            <nav class="signin-onward" aria-label="Continue to">
-              <a href="/signin" data-nav="/signin">Back to sign-in (/signin)</a>
-              <a href="/admin" data-nav="/admin">Operations overview preview (/admin)</a>
-              <a href="/agent" data-nav="/agent">Tax agent queue preview (/agent)</a>
-              <a href="/analytics" data-nav="/analytics">Auditor &amp; analytics preview (/analytics)</a>
-              <a href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Open the public assistant</a>
-            </nav>
+            <div class="auth-actions">
+              <a class="signin-primary" href="/signin" data-nav="/signin">Back to sign in</a>
+              <a class="signin-secondary" href="${escapeHtml(publicAssistantUrl)}" data-nav="${escapeHtml(publicAssistantUrl)}">Back to SSRA Assist</a>
+            </div>
           </div>
         </div>`;
 }
@@ -667,7 +604,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
   <link rel="preload" href="/fonts/IBMPlexSans-Regular.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/IBMPlexSans-Medium.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/IBMPlexSans-SemiBold.woff2" as="font" type="font/woff2" crossorigin />
-  <title>SSRA Operations Console Preview — ${escapeHtml(currentTitle)}</title>
+  <title>${isAuthRoute(currentPath) ? `${escapeHtml(currentTitle)} — SSRA Assist` : `SSRA Operations Console Preview — ${escapeHtml(currentTitle)}`}</title>
   <style nonce="${nonce}">
     @font-face {
       font-family: "IBM Plex Sans";
@@ -766,6 +703,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       --avatar-bg: #FFFFFF;
       --avatar-ink: #1E40AF;
       --on-grad: #FFFFFF;
+      --auth-canvas: radial-gradient(125% 125% at 50% -50%, #C7D2FE 40%, transparent 100%);
+      --auth-card-shadow: 0 24px 64px rgba(15, 23, 42, 0.10), 0 1px 3px rgba(15, 23, 42, 0.05);
       --scrim: rgba(15, 23, 42, 0.32);
 
       --ops-good-ink: #056824;
@@ -791,6 +730,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       --accent-soft: ${DARK.accentSoft};
       --ssra-blue: ${DARK.accent};
       --canvas-glow: ${DARK.glow};
+      --auth-canvas: radial-gradient(ellipse 50% 64% at 50% 62%, ${DARK.glow} 0%, ${DARK.glowMid} 30%, ${DARK.glowOuter} 65%, rgba(15, 16, 17, 0) 100%);
+      --auth-card-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
       --topbar-bg: rgba(15, 16, 17, 0.78);
       --ghost-hover: ${DARK.ghostHover};
       --ghost-active: ${DARK.ghostActive};
@@ -843,6 +784,8 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       --grad-primary: linear-gradient(135deg, ${HC.primary} 0%, ${HC.primary} 100%);
       --on-grad: ${HC.primaryInk};
       --canvas-glow: transparent;
+      --auth-canvas: none;
+      --auth-card-shadow: none;
       --topbar-bg: ${HC.canvas};
       --ghost-hover: ${HC.ghostHover};
       --ghost-active: ${HC.ghostActive};
@@ -1381,39 +1324,34 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     }
     .ops-cmdk-foot > span { display: inline-flex; align-items: center; gap: 6px; }
 
-    /* Sign-in & sign-up cards */
-    .signin-wrap { display: grid; place-items: center; padding: 8px 0 32px; }
-    .signin-card {
-      width: 100%; max-width: 560px; padding: clamp(24px, 4vw, 40px);
-      background: var(--ops-panel); border: 1px solid var(--border-0); border-radius: 24px;
-      box-shadow: 0 24px 64px rgba(15, 23, 42, 0.10), 0 1px 3px rgba(15, 23, 42, 0.05);
+    /* Dedicated auth pages (/signin, /signup, /signin/callback): no rail, top bar or palette; one centred card on the
+       public assistant's canvas. */
+    .staff-shell[data-layout="auth"] .staff-rail,
+    .staff-shell[data-layout="auth"] .call-console-bar,
+    .staff-shell[data-layout="auth"] .ops-mobile-backdrop { display: none !important; }
+    .staff-shell[data-layout="auth"] .staff-shell-content {
+      margin-inline-start: 0; transition: none; background: var(--auth-canvas), var(--bg-0);
     }
-    .signin-head { text-align: center; margin-bottom: 24px; }
+    .staff-shell[data-layout="auth"] .ops-page {
+      max-width: none; min-height: 100dvh; padding: 40px 16px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .signin-wrap { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: stretch; gap: 16px; }
+    .signin-card {
+      width: 100%; padding: 32px; background: var(--ops-panel); border: 1px solid var(--border-0); border-radius: 24px;
+      box-shadow: var(--auth-card-shadow);
+    }
+    .auth-brand { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 20px; }
     .signin-mark {
-      display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 16px;
+      display: grid; place-items: center; width: 48px; height: 48px;
       border-radius: 50%; background: var(--grad-primary); color: var(--on-grad); box-shadow: 0 6px 20px rgba(0, 93, 180, 0.25);
     }
-    .signin-mark svg { width: 24px; height: 24px; }
-    .signin-head .ops-eyebrow { margin-bottom: 8px; font-size: 0.75rem; }
-    .signin-head h1 { margin: 0; font-size: 1.75rem; line-height: 1.2; font-weight: 500; letter-spacing: -0.015em; color: var(--text-0); }
+    .signin-mark svg { width: 22px; height: 22px; }
+    .auth-wordmark { font-size: 0.9375rem; font-weight: 500; letter-spacing: -0.005em; color: var(--text-1); }
+    .signin-head { text-align: center; margin-bottom: 24px; }
+    .signin-head h1 { margin: 0; font-size: 1.625rem; line-height: 1.2; font-weight: 500; letter-spacing: -0.015em; color: var(--text-0); }
     .signin-sub { margin: 8px 0 0; font-size: 0.875rem; line-height: 1.5; color: var(--text-2); }
-    .signin-block { padding: 20px 0; border-top: 1px solid var(--border-0); }
-    .signin-block h2 { margin: 0 0 8px; font-size: 1rem; font-weight: 600; color: var(--text-0); }
-    .signin-note { margin: 0 0 16px; font-size: 0.8125rem; line-height: 1.6; color: var(--text-2); }
-    .signin-roles { display: grid; gap: 8px; margin: 0 0 16px; padding: 0; border: 0; }
-    .signin-roles legend { margin-bottom: 8px; padding: 0; font-size: 0.8125rem; font-weight: 500; color: var(--text-1); }
-    .role-opt {
-      display: grid; grid-template-columns: auto 1fr; grid-template-areas: "radio name" "radio hint"; gap: 2px 12px; align-items: center;
-      padding: 12px 14px; border: 1px solid var(--border-1); border-radius: 14px; background: var(--ops-panel); cursor: pointer;
-      transition: border-color var(--ops-dur-fast) var(--ops-ease), background-color var(--ops-dur-fast) var(--ops-ease);
-    }
-    .role-opt:hover { background: var(--ops-row-hover); }
-    .role-opt.active,
-    .role-opt.active:hover { border-color: var(--accent); background: var(--accent-soft); }
-    .role-opt input { grid-area: radio; width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
-    .role-name { grid-area: name; font-size: 0.875rem; font-weight: 500; color: var(--text-0); }
-    .role-hint { grid-area: hint; font-size: 0.78rem; line-height: 1.45; color: var(--text-2); }
-    .signin-form { display: grid; gap: 14px; margin: 0 0 12px; }
+    .signin-form { display: grid; gap: 16px; }
     .signin-field { display: grid; gap: 6px; }
     .signin-label { font-size: 0.8125rem; font-weight: 500; color: var(--text-1); }
     .signin-input {
@@ -1426,21 +1364,18 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
     .signin-input::placeholder { color: var(--text-3); }
     .signin-primary, .signin-secondary {
       width: 100%; min-height: 44px; padding: 0 20px; border-radius: 999px;
-      font: inherit; font-size: 0.875rem; font-weight: 500; cursor: pointer;
+      font: inherit; font-size: 0.875rem; font-weight: 500; cursor: pointer; text-decoration: none;
       display: inline-flex; align-items: center; justify-content: center; gap: 8px;
       transition: background-color var(--ops-dur-fast) var(--ops-ease), box-shadow var(--ops-dur-fast) var(--ops-ease), transform 140ms var(--ops-spring);
     }
-    .signin-primary { background: var(--btn-primary-bg); color: var(--btn-primary-ink); border: 1px solid transparent; }
+    .signin-primary { margin-top: 4px; background: var(--btn-primary-bg); color: var(--btn-primary-ink); border: 1px solid transparent; }
     .signin-primary:hover { background: var(--btn-primary-hover); box-shadow: var(--shadow-sm); }
-    .signin-secondary { margin-top: 8px; background: transparent; color: var(--text-0); border: 1px solid var(--border-1); }
+    .signin-secondary { background: transparent; color: var(--text-0); border: 1px solid var(--border-1); }
     .signin-secondary:hover { background: var(--ghost-hover); }
     .signin-primary:active, .signin-secondary:active { transform: scale(0.98); }
-    .signin-kv { margin-top: 20px; }
-    .signin-benefits { list-style: none; margin: 8px 0 0; padding: 0; display: grid; }
-    .signin-benefits li { display: grid; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--ops-hairline); }
-    .signin-benefits li:last-child { border-bottom: 0; padding-bottom: 0; }
-    .signin-benefits strong { font-size: 0.875rem; font-weight: 500; color: var(--text-0); }
-    .signin-benefits span { font-size: 0.8125rem; line-height: 1.55; color: var(--text-2); }
+    .auth-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; font-size: 0.75rem; color: var(--text-3); }
+    .auth-divider-line { flex: 1; height: 1px; background: var(--border-0); }
+    .auth-actions { display: grid; gap: 8px; margin-top: 20px; }
     .signin-status {
       margin: 16px 0 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border-1);
       background: var(--ops-inset); color: var(--text-1); font-size: 0.8125rem; line-height: 1.5; overflow-wrap: anywhere;
@@ -1453,22 +1388,20 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       border-color: color-mix(in srgb, var(--ops-bad-ink) 35%, transparent);
       background: color-mix(in srgb, var(--ops-bad-ink) 6%, var(--ops-panel)); color: var(--ops-bad-ink);
     }
-    .signin-onward { display: grid; gap: 2px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-0); }
-    .signin-onward a {
-      display: flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 999px;
-      color: var(--text-0); font-size: 0.875rem; text-decoration: none; transition: background-color var(--ops-dur-fast) var(--ops-ease);
+    .signin-status.info {
+      border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+      background: var(--accent-soft); color: var(--text-0);
     }
-    .signin-onward a:hover { background: var(--ghost-hover); }
-    .signin-switch {
-      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
-      margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-0); font-size: 0.8125rem; color: var(--text-2);
+    .auth-foot { display: grid; justify-items: center; gap: 12px; margin-top: 24px; font-size: 0.8125rem; color: var(--text-2); text-align: center; }
+    .auth-foot p { margin: 0; }
+    .auth-foot a { color: var(--accent); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+    .auth-foot .auth-back { color: var(--text-2); font-weight: 400; text-decoration: none; }
+    .auth-foot .auth-back:hover { color: var(--text-0); text-decoration: underline; }
+    .auth-note { margin: 0; font-size: 0.75rem; line-height: 1.5; color: var(--text-2); text-align: center; }
+    @media (max-width: 480px) {
+      .staff-shell[data-layout="auth"] .ops-page { justify-content: flex-start; padding: 24px 16px; }
+      .signin-card { padding: 24px 20px; border-radius: 20px; }
     }
-    .signin-switch p { margin: 0; }
-    .signin-switch a,
-    .signin-benefits a { color: var(--accent); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
-    .signin-switch-links { display: flex; flex-wrap: wrap; gap: 16px; }
-    .signin-switch .signin-switch-alt { color: var(--text-2); font-weight: 400; text-decoration: none; }
-    .signin-switch .signin-switch-alt:hover { color: var(--text-0); text-decoration: underline; }
 
     @keyframes opsFade { from { opacity: 0; } }
     @keyframes opsRise { from { opacity: 0; transform: translateY(8px) scale(0.985); } }
@@ -1531,10 +1464,10 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
       .call-console-bar { background: var(--bg-0); }
     }
     @media (forced-colors: active) {
-      .staff-rail, .ops-stat, .ops-panel, .ops-btn, .role-opt, .ops-cmdk-dialog, .signin-card, .staff-acct-menu {
+      .staff-rail, .ops-stat, .ops-panel, .ops-btn, .ops-cmdk-dialog, .signin-card, .signin-secondary, .staff-acct-menu {
         border: 1px solid CanvasText;
       }
-      .staff-rail a.nav-item.active, .role-opt.active, .ops-seg-btn.active, .ov-review-item.is-selected {
+      .staff-rail a.nav-item.active, .ops-seg-btn.active, .ov-review-item.is-selected {
         outline: 2px solid Highlight;
         outline-offset: -2px;
       }
@@ -1563,7 +1496,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 <body>
   <a class="staff-skip" href="#staff-main">Skip to content</a>
 
-  <div class="staff-shell" id="ssra-staff-shell">
+  <div class="staff-shell" id="ssra-staff-shell" data-layout="${isAuthRoute(currentPath) ? "auth" : "app"}">
     <div id="ops-mobile-backdrop" class="ops-mobile-backdrop" aria-hidden="true"></div>
     <!-- Left Vertical Operations Rail (StaffGuard.tsx pattern) -->
     <nav id="staff-rail" class="staff-rail is-expanded" aria-label="Staff console preview navigation">
@@ -2589,30 +2522,21 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 
       let lastCallbackOutcome = null;
 
+      // Only same-origin workspace paths are honoured as a post-sign-in destination.
+      function readSafeNextPath() {
+        try {
+          const next = new URLSearchParams(window.location.search).get("next") || "";
+          if (!next.startsWith("/") || next.startsWith("//") || !/^[A-Za-z0-9/_-]*$/.test(next)) return "";
+          return ["signin", "signup", "api", "v1"].includes(next.split("/")[1] || "") ? "" : next;
+        } catch {
+          return "";
+        }
+      }
+
       function wireAuthViewInteractions() {
         if (!mainEl) return;
-        const roleRadios = Array.from(mainEl.querySelectorAll('input[name="signin-role-target"]'));
-        roleRadios.forEach((radio) => {
-          radio.checked = radio.value === state.role;
-          radio.closest(".role-opt")?.classList.toggle("active", radio.checked);
-        });
         if (!mainEl.hasAttribute("data-auth-wired")) {
           mainEl.setAttribute("data-auth-wired", "true");
-          roleRadios.forEach((radio) => {
-            radio.addEventListener("change", () => {
-              roleRadios.forEach((r) => r.closest(".role-opt")?.classList.toggle("active", r.checked));
-              if (ROLE_META[radio.value]) {
-                state.role = radio.value;
-                writeUiPreference("ssra-ops-preview-persona", state.role);
-                const emailInput = document.getElementById("signin-email-input");
-                const matchingAccount = ACCOUNT_DIRECTORY.find((a) => a.role === radio.value);
-                if (emailInput && matchingAccount && (!emailInput.value.trim() || ACCOUNT_DIRECTORY.some((a) => a.email === emailInput.value.trim().toLowerCase()))) {
-                  emailInput.value = matchingAccount.email;
-                }
-                applyChrome();
-              }
-            });
-          });
 
           document.getElementById("console-signin-form")?.addEventListener("submit", (e) => {
             e.preventDefault();
@@ -2652,15 +2576,6 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
             setAuthenticatedSession(account);
           });
 
-          document.getElementById("console-passkey-signin-btn")?.addEventListener("click", () => {
-            const selectedRadio = mainEl.querySelector('input[name="signin-role-target"]:checked');
-            const targetRole = selectedRadio?.value || state.role || "ssra_admin";
-            const account = ACCOUNT_DIRECTORY.find((item) => item.role === targetRole) || ACCOUNT_DIRECTORY[0];
-            if (account) {
-              setAuthenticatedSession(account);
-            }
-          });
-
           document.getElementById("console-signup-form")?.addEventListener("submit", (e) => {
             e.preventDefault();
             const nameVal = (document.getElementById("signup-name-input")?.value || "").trim();
@@ -2695,15 +2610,14 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           const challenge = await computePkceChallenge(verifier);
           const csrfState = randomHex(32);
           const oidcNonce = randomHex(32);
-          const selectedRadio = mainEl.querySelector('input[name="signin-role-target"]:checked');
-          const targetRole = selectedRadio?.value || state.role || "ssra_admin";
-          const returnTo = selectedRadio?.getAttribute("data-landing") || ROLE_META[targetRole]?.landing || "/admin";
+          const returnTo = readSafeNextPath();
           lastCallbackOutcome = null;
           try {
             sessionStorage.setItem("ssra_pkce_verifier", verifier);
             sessionStorage.setItem("ssra_oidc_state", csrfState);
             sessionStorage.setItem("ssra_oidc_nonce", oidcNonce);
-            sessionStorage.setItem("ssra_oidc_return_to", returnTo);
+            if (returnTo) sessionStorage.setItem("ssra_oidc_return_to", returnTo);
+            else sessionStorage.removeItem("ssra_oidc_return_to");
           } catch {}
           const authUrl = new URL("https://sso.ssra.gov.ss/realms/ssra/protocol/openid-connect/auth");
           authUrl.searchParams.set("response_type", "code");
@@ -2716,25 +2630,23 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           authUrl.searchParams.set("nonce", oidcNonce);
           authUrl.searchParams.set("acr_values", "urn:ssra:acr:passkey");
           if (mode === "signup") {
-            authUrl.searchParams.set("prompt", "create");
-            authUrl.searchParams.set("screen_hint", "signup");
+            new URLSearchParams("prompt=create&screen_hint=signup").forEach((value, key) => authUrl.searchParams.set(key, value));
           } else if (promptVal) {
             authUrl.searchParams.set("prompt", promptVal);
           }
+          // Single sign-on is not connected in this preview (OQ-005 / OQ-014): say so plainly and keep the prepared
+          // request on the banner's data-auth-url.
           const bannerId = mode === "signup" ? "signup-status-banner" : "signin-status-banner";
           const bannerEl = document.getElementById(bannerId);
           if (bannerEl) {
-            bannerEl.classList.remove("is-hidden", "error");
-            bannerEl.classList.add("ok");
+            bannerEl.classList.remove("is-hidden", "error", "ok");
+            bannerEl.classList.add("info");
             bannerEl.setAttribute("role", "status");
             bannerEl.setAttribute("data-auth-url", authUrl.toString());
             bannerEl.textContent =
-              (mode === "signup"
-                ? "Prepared Keycloak 26.4.11 OIDC Registration request (prompt=create, PKCE S256) for realm ssra -> "
-                : promptVal === "login"
-                  ? "Prepared Keycloak 26.4.11 OIDC Re-Authentication request (prompt=login, acr_values=urn:ssra:acr:passkey) -> "
-                  : "Prepared Keycloak 26.4.11 OIDC Passkey SSO request (acr_values=urn:ssra:acr:passkey, returnTo=" + returnTo + ") -> ") +
-              authUrl.toString();
+              mode === "signup"
+                ? "SSRA single sign-on isn't connected in this preview yet. Create your account with the form above."
+                : "SSRA single sign-on isn't connected in this preview yet. Sign in with your email and password.";
           }
         };
 
@@ -2743,7 +2655,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
             const bannerId = mode === "signup" ? "signup-status-banner" : "signin-status-banner";
             const bannerEl = document.getElementById(bannerId);
             if (!bannerEl) return;
-            bannerEl.classList.remove("is-hidden", "ok");
+            bannerEl.classList.remove("is-hidden", "ok", "info");
             bannerEl.classList.add("error");
             bannerEl.setAttribute("role", "alert");
             bannerEl.textContent =
@@ -2753,9 +2665,6 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 
           document.getElementById("keycloak-signin-btn")?.addEventListener("click", () => {
             runKeycloakRedirect("signin", undefined);
-          });
-          document.getElementById("keycloak-switch-account-btn")?.addEventListener("click", () => {
-            runKeycloakRedirect("signin", "login");
           });
           document.getElementById("keycloak-signup-btn")?.addEventListener("click", () => {
             runKeycloakRedirect("signup", undefined);
@@ -2842,11 +2751,12 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
             } catch {}
           }
         }
+        document.getElementById("ssra-staff-shell")?.setAttribute("data-layout", isAuthRoute ? "auth" : "app");
         applyChrome();
         if (!mainEl) return;
         mainEl.setAttribute("data-route", state.route);
         if (state.route === "/signin") {
-          document.title = "SSRA Operations Console Preview — Sign in";
+          document.title = "Sign in — SSRA Assist";
           if (!document.getElementById("keycloak-signin-btn")) {
             setSafeHtml(mainEl, buildSignInHtml());
           }
@@ -2854,7 +2764,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           return;
         }
         if (state.route === "/signup") {
-          document.title = "SSRA Operations Console Preview — Create an account";
+          document.title = "Create an account — SSRA Assist";
           if (!document.getElementById("keycloak-signup-btn")) {
             setSafeHtml(mainEl, buildSignUpHtml());
           }
@@ -2862,7 +2772,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
           return;
         }
         if (state.route === "/signin/callback") {
-          document.title = "SSRA Operations Console Preview — Signing you in";
+          document.title = "Signing you in — SSRA Assist";
           if (!document.getElementById("callback-status-banner")) {
             setSafeHtml(mainEl, buildCallbackHtml());
           }
@@ -3261,6 +3171,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin) {
 
       window.addEventListener("keydown", (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+          if (document.getElementById("ssra-staff-shell")?.getAttribute("data-layout") === "auth") return;
           e.preventDefault();
           if (cmdkBackdrop?.classList.contains("open")) closeCmdk();
           else openCmdk();

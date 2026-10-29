@@ -1041,8 +1041,13 @@ describe("@ssra/console ASVS L3 Passkey & Knowledge Release Workflow", () => {
     expect(cbAuditor.targetPath).toBe("/analytics");
     expect(cbAuditor.allowedDestinations.map((d) => d.href)).toContain("/admin/audit");
 
-    const signInVm = buildSignInPageViewModel({ selectedRole: "ssra_staff" });
-    expect(signInVm.targetLandingPath).toBe("/agent");
+    // No role picker: without a safe returnTo the account's own role decides the landing page.
+    expect(buildSignInPageViewModel().targetLandingPath).toBeNull();
+    expect(buildSignInPageViewModel({ returnTo: "/agent" }).targetLandingPath).toBe("/agent");
+    expect(
+      buildSignInPageViewModel({ returnTo: "https://evil.example.com/agent" }).targetLandingPath,
+    ).toBeNull();
+    expect(buildSignInPageViewModel()).not.toHaveProperty("roleOptions");
     const signUpVm = buildSignUpPageViewModel();
     expect(signUpVm.benefits).toHaveLength(3);
     expect(validateOidcRedirectUri("https://console.ssra.gov.ss/signin/callback")).toBe(
