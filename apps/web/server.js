@@ -1742,7 +1742,7 @@ function renderPwaShellHtml(locale, nonce) {
       if ("serviceWorker" in navigator) {
         caches?.keys?.().then((keys) => {
           keys.forEach((k) => {
-            if (k !== "ssra-assist-public-shell-v2026.10.7") caches.delete(k);
+            if (k !== "ssra-assist-public-shell-v2026.10.8") caches.delete(k);
           });
         }).catch(() => {});
         navigator.serviceWorker
@@ -6449,6 +6449,620 @@ function sanitizeBrowserTurnBody(rawBodyStr) {
   });
 }
 
+const KEYCLOAK_CANONICAL_ISSUER = "https://sso.ssra.gov.ss/realms/ssra";
+const KEYCLOAK_SIGNING_SECRET =
+  process.env.KEYCLOAK_LOGOUT_VERIFY_KEY || crypto.randomBytes(32).toString("hex");
+const KEYCLOAK_PKCE_CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
+const KEYCLOAK_PKCE_VERIFIER_RE = /^[A-Za-z0-9._~-]{43,128}$/;
+const KEYCLOAK_OPAQUE_STATE_RE = /^[\x21-\x7E]{16,256}$/;
+
+const KEYCLOAK_SEEDED_ACCOUNTS = [
+  {
+    role: "ssra_admin",
+    email: "admin@nra.gov.ss",
+    username: "ssra_admin",
+    aliases: [
+      "admin@nra.gov.ss",
+      "admin@ssra.gov.ss",
+      "ssra_admin",
+      "admin",
+      "officer.admin",
+      "officer.admin@nra.gov.ss",
+    ],
+    displayName: "Grace A.",
+    roleLabel: "Administrator",
+    staffId: "stf_admin_grace_01",
+    officeCode: "JUBA_HQ",
+    initials: "GA",
+    landingPath: "/admin",
+    digestSha256: "15e2bad00ca51b94f0f4f6c54b0191467fd68a5678b9fa585a10dbab1db3ab0b",
+  },
+  {
+    role: "ssra_staff",
+    email: "staff@nra.gov.ss",
+    username: "ssra_staff",
+    aliases: [
+      "staff@nra.gov.ss",
+      "staff@ssra.gov.ss",
+      "ssra_staff",
+      "staff",
+      "agent@nra.gov.ss",
+      "officer.staff",
+      "officer.staff@nra.gov.ss",
+    ],
+    displayName: "Deng M.",
+    roleLabel: "Tax Agent",
+    staffId: "stf_agent_deng_02",
+    officeCode: "JUBA_HQ",
+    initials: "DM",
+    landingPath: "/agent",
+    digestSha256: "3974ad6a9bfae75807da570ddae63d49e1c4fe0176c619a0aac998fd7289d347",
+  },
+  {
+    role: "ssra_auditor",
+    email: "auditor@nra.gov.ss",
+    username: "ssra_auditor",
+    aliases: [
+      "auditor@nra.gov.ss",
+      "auditor@ssra.gov.ss",
+      "ssra_auditor",
+      "auditor",
+      "officer.auditor",
+      "officer.auditor@nra.gov.ss",
+    ],
+    displayName: "Nyabol K.",
+    roleLabel: "Forensic Auditor (Read-Only)",
+    staffId: "stf_auditor_nyabol_03",
+    officeCode: "JUBA_HQ",
+    initials: "NK",
+    landingPath: "/analytics",
+    digestSha256: "400c6c4df7c2cf00c0b4ac189325343348e90c64acc7e80fa7cedf3ff4021a46",
+  },
+  {
+    role: "verified_taxpayer",
+    email: "taxpayer@etax.nra.gov.ss",
+    username: "verified_taxpayer",
+    aliases: [
+      "taxpayer@etax.nra.gov.ss",
+      "taxpayer@nra.gov.ss",
+      "taxpayer@ssra.gov.ss",
+      "verified_taxpayer",
+      "taxpayer",
+      "amina@etax.nra.gov.ss",
+    ],
+    displayName: "Amina M. (TIN ••••1234)",
+    roleLabel: "Verified Taxpayer",
+    staffId: "sub_taxpayer_amina_01",
+    officeCode: "JUBA_HQ",
+    initials: "AM",
+    landingPath: "/en",
+    digestSha256: "13f0de343c3ef088f5b4d62702b01ca6a1ce22748dea5cc0366653e52d405012",
+  },
+];
+
+const KEYCLOAK_REGISTERED_USERS = new Map();
+const KEYCLOAK_AUTH_CODES = new Map();
+const KEYCLOAK_ACCESS_TOKENS = new Map();
+
+function escapeKcHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/\x60/g, "&#96;");
+}
+
+function computeKcCredentialDigest(role, password) {
+  return crypto
+    .createHash("sha256")
+    .update(`ssra-console-auth-v1:${role}:${password}`, "utf8")
+    .digest("hex");
+}
+
+function timingSafeHexMatch(aHex, bHex) {
+  if (typeof aHex !== "string" || typeof bHex !== "string" || aHex.length !== bHex.length) {
+    return false;
+  }
+  const bufA = Buffer.from(aHex, "utf8");
+  const bufB = Buffer.from(bHex, "utf8");
+  return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+}
+
+function registerKeycloakUserAccount(account) {
+  if (!account || typeof account.email !== "string") return;
+  if (KEYCLOAK_REGISTERED_USERS.size >= 1024 && !KEYCLOAK_REGISTERED_USERS.has(account.email)) {
+    const oldestKey = KEYCLOAK_REGISTERED_USERS.keys().next().value;
+    if (oldestKey) KEYCLOAK_REGISTERED_USERS.delete(oldestKey);
+  }
+  KEYCLOAK_REGISTERED_USERS.set(account.email.toLowerCase(), account);
+}
+
+function findKeycloakAccountByIdentifier(rawIdentifier) {
+  const id = String(rawIdentifier ?? "")
+    .trim()
+    .toLowerCase();
+  if (!id) return null;
+  for (const seeded of KEYCLOAK_SEEDED_ACCOUNTS) {
+    if (seeded.aliases.includes(id)) return seeded;
+  }
+  for (const reg of KEYCLOAK_REGISTERED_USERS.values()) {
+    if (Array.isArray(reg.aliases) && reg.aliases.includes(id)) return reg;
+  }
+  return null;
+}
+
+function sanitizeKcReturnTo(raw) {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || !/^[A-Za-z0-9/_-]*$/.test(trimmed)) {
+    return "";
+  }
+  const seg = trimmed.split("/")[1] || "";
+  return ["signin", "signup", "api", "v1", "realms"].includes(seg) ? "" : trimmed;
+}
+
+function issueKeycloakAuthCode({
+  clientId,
+  redirectUri,
+  codeChallenge,
+  state,
+  nonce,
+  account,
+  isNewRegistration = false,
+}) {
+  const now = Date.now();
+  for (const [k, v] of KEYCLOAK_AUTH_CODES.entries()) {
+    if (v.expiresAt <= now) KEYCLOAK_AUTH_CODES.delete(k);
+  }
+  if (KEYCLOAK_AUTH_CODES.size >= 1024) {
+    const oldest = KEYCLOAK_AUTH_CODES.keys().next().value;
+    if (oldest) KEYCLOAK_AUTH_CODES.delete(oldest);
+  }
+  const code = `kc_code_${crypto.randomBytes(24).toString("base64url")}`;
+  KEYCLOAK_AUTH_CODES.set(code, {
+    clientId,
+    redirectUri,
+    codeChallenge,
+    state,
+    nonce: nonce || "",
+    account,
+    isNewRegistration,
+    expiresAt: now + 300_000,
+  });
+  return code;
+}
+
+function consumeKeycloakAuthCode(code, codeVerifier) {
+  const cleanCode = String(code ?? "").trim();
+  const cleanVerifier = String(codeVerifier ?? "").trim();
+  if (!cleanCode || !KEYCLOAK_PKCE_VERIFIER_RE.test(cleanVerifier)) {
+    return null;
+  }
+  const record = KEYCLOAK_AUTH_CODES.get(cleanCode);
+  // CVE-2026-1035: atomic single-use deletion before verification
+  KEYCLOAK_AUTH_CODES.delete(cleanCode);
+  if (!record || Date.now() > record.expiresAt) {
+    return null;
+  }
+  const computedChallenge = crypto
+    .createHash("sha256")
+    .update(cleanVerifier, "utf8")
+    .digest("base64url");
+  const expectedBuf = Buffer.from(record.codeChallenge, "utf8");
+  const actualBuf = Buffer.from(computedChallenge, "utf8");
+  if (expectedBuf.length !== actualBuf.length || !crypto.timingSafeEqual(expectedBuf, actualBuf)) {
+    return null;
+  }
+  return record;
+}
+
+function signKeycloakJwt(payload) {
+  const headerB64 = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sigB64 = crypto
+    .createHmac("sha256", KEYCLOAK_SIGNING_SECRET)
+    .update(`${headerB64}.${payloadB64}`)
+    .digest("base64url");
+  return `${headerB64}.${payloadB64}.${sigB64}`;
+}
+
+function mintKeycloakTokens(account, clientId, oidcNonce) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const jti = `kc_jti_${crypto.randomBytes(16).toString("hex")}`;
+  const baseClaims = {
+    iss: KEYCLOAK_CANONICAL_ISSUER,
+    sub: account.staffId,
+    aud: [clientId || "ssra-staff-console", "ssra-web-bff", "ssra-api"],
+    azp: clientId || "ssra-staff-console",
+    iat: nowSec,
+    exp: nowSec + 300,
+    jti,
+    acr: "urn:ssra:acr:passkey",
+    email: account.email,
+    email_verified: true,
+    preferred_username: account.username,
+    name: account.displayName,
+    office_code: account.officeCode,
+    realm_access: { roles: [account.role] },
+  };
+  const accessToken = signKeycloakJwt({ ...baseClaims, scope: "openid profile email" });
+  const idToken = signKeycloakJwt({
+    ...baseClaims,
+    ...(oidcNonce ? { nonce: oidcNonce } : {}),
+  });
+  if (KEYCLOAK_ACCESS_TOKENS.size >= 1024) {
+    const oldest = KEYCLOAK_ACCESS_TOKENS.keys().next().value;
+    if (oldest) KEYCLOAK_ACCESS_TOKENS.delete(oldest);
+  }
+  KEYCLOAK_ACCESS_TOKENS.set(accessToken, {
+    account,
+    expiresAt: Date.now() + 300_000,
+  });
+  return { accessToken, idToken, expiresIn: 300 };
+}
+
+function renderKeycloakRealmAuthHtml({
+  nonce,
+  mode = "signin",
+  clientId = "ssra-staff-console",
+  redirectUri = "/signin/callback",
+  codeChallenge = "",
+  state = "",
+  oidcNonce = "",
+  errorMsg = "",
+}) {
+  const isRegister = mode === "register";
+  const switchQuery = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: "openid profile email",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+    state,
+    ...(oidcNonce ? { nonce: oidcNonce } : {}),
+    acr_values: "urn:ssra:acr:passkey",
+    ...(isRegister ? {} : { prompt: "create", screen_hint: "signup" }),
+  }).toString();
+  const switchHref = `/realms/ssra/protocol/openid-connect/auth?${switchQuery}`;
+
+  return compactHtmlAssetBlocks(`<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script nonce="${nonce}">${renderThemeBootstrapScript()}</script>
+  <title>${isRegister ? "Register with SSRA Single Sign-On" : "Sign in to SSRA Single Sign-On"} — Keycloak 26.4.11</title>
+  <style nonce="${nonce}">
+    :root {
+      --bg-0: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --text-0: #0F172A;
+      --text-1: #334155;
+      --text-2: #475569;
+      --border-1: #CBD5E1;
+      --border-2: #94A3B8;
+      --ssra-blue: #005DB4;
+      --ssra-green: #078930;
+      --btn-bg: #005DB4;
+      --btn-hover: #004A91;
+      --btn-ink: #FFFFFF;
+      --surface-1: #F1F5F9;
+      --danger-bg: #FEF2F2;
+      --danger-border: #FECACA;
+      --danger-ink: #991B1B;
+    }
+    :root[data-theme="dark"] {
+      --bg-0: #0B1120;
+      --card-bg: #111827;
+      --text-0: #F8FAFC;
+      --text-1: #E2E8F0;
+      --text-2: #94A3B8;
+      --border-1: #1E293B;
+      --border-2: #334155;
+      --btn-bg: #2563EB;
+      --btn-hover: #1D4ED8;
+      --surface-1: #1E293B;
+      --danger-bg: #450A0A;
+      --danger-border: #7F1D1D;
+      --danger-ink: #FECACA;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+      background: var(--bg-0);
+      color: var(--text-0);
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+    }
+    .kc-wrap { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 14px; }
+    .kc-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-1);
+      border-radius: 20px;
+      padding: 28px 26px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    }
+    .kc-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 14px; }
+    .kc-crest {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: var(--ssra-blue);
+      color: #FFFFFF;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .kc-wordmark { font-weight: 600; font-size: 1rem; color: var(--text-0); }
+    .kc-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--ssra-green);
+      background: var(--surface-1);
+      padding: 4px 10px;
+      border-radius: 999px;
+      margin: 0 auto 10px;
+    }
+    .kc-head { text-align: center; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center; }
+    .kc-head h1 { margin: 0; font-size: 1.45rem; font-weight: 600; color: var(--text-0); }
+    .kc-sub { margin: 6px 0 0; font-size: 0.85rem; line-height: 1.45; color: var(--text-2); }
+    .kc-error {
+      margin: 0 0 16px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      color: var(--danger-ink);
+      font-size: 0.82rem;
+      font-weight: 500;
+    }
+    .kc-form { display: grid; gap: 14px; }
+    .kc-field { display: grid; gap: 6px; }
+    .kc-label { font-size: 0.8125rem; font-weight: 500; color: var(--text-1); }
+    .kc-input {
+      min-height: 44px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-1);
+      background: var(--card-bg);
+      color: var(--text-0);
+      font: inherit;
+      font-size: 0.92rem;
+    }
+    .kc-input:focus { outline: 2px solid var(--ssra-blue); outline-offset: 1px; border-color: var(--ssra-blue); }
+    .kc-btn-primary, .kc-btn-secondary {
+      min-height: 44px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font: inherit;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+      width: 100%;
+    }
+    .kc-btn-primary {
+      background: var(--btn-bg);
+      color: var(--btn-ink);
+      border: 1px solid transparent;
+    }
+    .kc-btn-primary:hover { background: var(--btn-hover); }
+    .kc-btn-secondary {
+      background: var(--surface-1);
+      color: var(--text-0);
+      border: 1px solid var(--border-1);
+      justify-content: space-between;
+      text-align: start;
+      font-weight: 500;
+    }
+    .kc-btn-secondary:hover { border-color: var(--border-2); }
+    .kc-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 18px 0 12px;
+      color: var(--text-2);
+      font-size: 0.76rem;
+    }
+    .kc-divider::before, .kc-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border-1);
+    }
+    .kc-passkey-grid { display: grid; gap: 8px; }
+    .kc-role-tag { font-size: 0.74rem; color: var(--text-2); font-weight: 600; }
+    .kc-foot {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border-1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--text-2);
+    }
+    .kc-foot a { color: var(--ssra-blue); font-weight: 600; text-decoration: none; }
+    .kc-foot a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main class="kc-wrap">
+    <div class="kc-card">
+      <div class="kc-brand">
+        <span class="kc-crest" aria-hidden="true">${ICONS.ssraCrest}</span>
+        <span class="kc-wordmark">SSRA Sovereign Identity</span>
+      </div>
+      <header class="kc-head">
+        <span class="kc-badge">${ICONS.shieldCheck} Keycloak 26.4.11 · Realm: ssra · PKCE S256</span>
+        <h1>${isRegister ? "Register your SSRA account" : "Sign in with SSRA Single Sign-On"}</h1>
+        <p class="kc-sub">${
+          isRegister
+            ? "Create a verified taxpayer account in the SSRA Keycloak realm and return directly to SSRA Assist."
+            : "Authenticate via Keycloak OIDC + PKCE S256 or use a WebAuthn Passkey (urn:ssra:acr:passkey)."
+        }</p>
+      </header>
+      ${errorMsg ? `<p class="kc-error" role="alert" data-testid="kc-auth-error">${escapeKcHtml(errorMsg)}</p>` : ""}
+      ${
+        isRegister
+          ? `<form id="kc-register-form" class="kc-form" method="POST" action="/realms/ssra/protocol/openid-connect/auth" data-testid="keycloak-register-form">
+              <input type="hidden" name="mode" value="register" />
+              <input type="hidden" name="client_id" value="${escapeKcHtml(clientId)}" />
+              <input type="hidden" name="redirect_uri" value="${escapeKcHtml(redirectUri)}" />
+              <input type="hidden" name="code_challenge" value="${escapeKcHtml(codeChallenge)}" />
+              <input type="hidden" name="code_challenge_method" value="S256" />
+              <input type="hidden" name="state" value="${escapeKcHtml(state)}" />
+              <input type="hidden" name="nonce" value="${escapeKcHtml(oidcNonce)}" />
+              <div class="kc-field">
+                <label class="kc-label" for="kc-reg-name">Full name or business name</label>
+                <input class="kc-input" id="kc-reg-name" data-testid="kc-reg-name" type="text" name="name" autocomplete="name" required />
+              </div>
+              <div class="kc-field">
+                <label class="kc-label" for="kc-reg-email">Email address</label>
+                <input class="kc-input" id="kc-reg-email" data-testid="kc-reg-email" type="email" name="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="name@example.com" required />
+              </div>
+              <div class="kc-field">
+                <label class="kc-label" for="kc-reg-password">Password</label>
+                <input class="kc-input" id="kc-reg-password" data-testid="kc-reg-password" type="password" name="password" autocomplete="new-password" placeholder="At least 8 characters" required />
+              </div>
+              <button type="submit" class="kc-btn-primary" id="kc-reg-submit-btn" data-testid="kc-reg-submit-btn">Create account &amp; continue</button>
+            </form>`
+          : `<form id="kc-login-form" class="kc-form" method="POST" action="/realms/ssra/protocol/openid-connect/auth" data-testid="keycloak-login-form">
+              <input type="hidden" name="mode" value="signin" />
+              <input type="hidden" name="client_id" value="${escapeKcHtml(clientId)}" />
+              <input type="hidden" name="redirect_uri" value="${escapeKcHtml(redirectUri)}" />
+              <input type="hidden" name="code_challenge" value="${escapeKcHtml(codeChallenge)}" />
+              <input type="hidden" name="code_challenge_method" value="S256" />
+              <input type="hidden" name="state" value="${escapeKcHtml(state)}" />
+              <input type="hidden" name="nonce" value="${escapeKcHtml(oidcNonce)}" />
+              <input type="hidden" name="local_registered_json" id="kc-local-registered-json" value="" />
+              <div class="kc-field">
+                <label class="kc-label" for="kc-login-username">Email or username</label>
+                <input class="kc-input" id="kc-login-username" data-testid="kc-login-username" type="text" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="name@example.com" required />
+              </div>
+              <div class="kc-field">
+                <label class="kc-label" for="kc-login-password">Password</label>
+                <input class="kc-input" id="kc-login-password" data-testid="kc-login-password" type="password" name="password" autocomplete="current-password" required />
+              </div>
+              <button type="submit" class="kc-btn-primary" id="kc-login-submit-btn" data-testid="kc-login-submit-btn">Sign in with Keycloak SSO</button>
+            </form>
+            <div class="kc-divider">or sign in with WebAuthn Passkey (urn:ssra:acr:passkey)</div>
+            <form class="kc-passkey-grid" method="POST" action="/realms/ssra/protocol/openid-connect/auth">
+              <input type="hidden" name="mode" value="passkey" />
+              <input type="hidden" name="client_id" value="${escapeKcHtml(clientId)}" />
+              <input type="hidden" name="redirect_uri" value="${escapeKcHtml(redirectUri)}" />
+              <input type="hidden" name="code_challenge" value="${escapeKcHtml(codeChallenge)}" />
+              <input type="hidden" name="code_challenge_method" value="S256" />
+              <input type="hidden" name="state" value="${escapeKcHtml(state)}" />
+              <input type="hidden" name="nonce" value="${escapeKcHtml(oidcNonce)}" />
+              <button type="submit" name="passkey_role" value="verified_taxpayer" class="kc-btn-secondary" data-testid="kc-passkey-taxpayer">
+                <span>Amina M. · Verified Taxpayer</span>
+                <span class="kc-role-tag">/en</span>
+              </button>
+              <button type="submit" name="passkey_role" value="ssra_admin" class="kc-btn-secondary" data-testid="kc-passkey-admin">
+                <span>Grace A. · Administrator</span>
+                <span class="kc-role-tag">/admin</span>
+              </button>
+              <button type="submit" name="passkey_role" value="ssra_staff" class="kc-btn-secondary" data-testid="kc-passkey-staff">
+                <span>Deng M. · Tax Agent</span>
+                <span class="kc-role-tag">/agent</span>
+              </button>
+              <button type="submit" name="passkey_role" value="ssra_auditor" class="kc-btn-secondary" data-testid="kc-passkey-auditor">
+                <span>Nyabol K. · Forensic Auditor</span>
+                <span class="kc-role-tag">/analytics</span>
+              </button>
+            </form>`
+      }
+      <footer class="kc-foot">
+        <p>${
+          isRegister
+            ? `Already have an account? <a href="${escapeKcHtml(switchHref)}" data-testid="kc-switch-signin">Sign in</a>`
+            : `Need a taxpayer account? <a href="${escapeKcHtml(switchHref)}" data-testid="kc-switch-register">Register with SSRA SSO</a>`
+        }</p>
+        <a href="/en">Back to SSRA Assist</a>
+      </footer>
+    </div>
+  </main>
+  <script nonce="${nonce}">
+    (() => {
+      try {
+        const regInput = document.getElementById("kc-local-registered-json");
+        const stored = localStorage.getItem("ssra-registered-accounts-v1");
+        if (regInput && stored) regInput.value = stored;
+      } catch {}
+    })();
+  </script>
+</body>
+</html>`);
+}
+
+function renderKeycloakSessionExchangeHtml({
+  nonce,
+  account,
+  isNewRegistration,
+  targetPath,
+}) {
+  const sessionObj = {
+    role: account.role,
+    email: account.email,
+    username: account.username,
+    displayName: account.displayName,
+    roleLabel: account.roleLabel,
+    staffId: account.staffId,
+    officeCode: account.officeCode,
+    initials: account.initials,
+    landingPath: account.landingPath,
+    signedInAt: new Date().toISOString(),
+  };
+  return compactHtmlAssetBlocks(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Completing SSRA Sign-In…</title>
+</head>
+<body>
+  <p id="kc-exchange-status" role="status">Completing Keycloak PKCE S256 session handoff…</p>
+  <script nonce="${nonce}">
+    (() => {
+      const sessionObj = ${JSON.stringify(sessionObj)};
+      const accountRecord = ${JSON.stringify(isNewRegistration ? account : null)};
+      const targetPath = ${JSON.stringify(targetPath || account.landingPath || "/en")};
+      try {
+        if (accountRecord && accountRecord.email && accountRecord.digestSha256) {
+          const raw = localStorage.getItem("ssra-registered-accounts-v1");
+          const parsed = raw ? JSON.parse(raw) : [];
+          const list = Array.isArray(parsed)
+            ? parsed.filter((item) => item && item.email !== accountRecord.email)
+            : [];
+          list.push(accountRecord);
+          localStorage.setItem("ssra-registered-accounts-v1", JSON.stringify(list.slice(-64)));
+        }
+        localStorage.setItem("ssra-authenticated-session-v1", JSON.stringify(sessionObj));
+        if (sessionObj.role !== "verified_taxpayer") {
+          localStorage.setItem("ssra-ops-preview-persona", sessionObj.role);
+        }
+      } catch {}
+      window.location.replace(targetPath);
+    })();
+  </script>
+</body>
+</html>`);
+}
+
 const server = http.createServer(async (req, res) => {
   const nonce = crypto.randomBytes(16).toString("base64");
   const secHeaders = buildSecurityHeaders(nonce);
@@ -6561,17 +7175,477 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname.startsWith("/realms/ssra/")) {
+    const protoHdr = String(req.headers["x-forwarded-proto"] ?? "").split(",")[0]?.trim();
+    const scheme = protoHdr === "https" || IS_HF_SPACE_EMBED ? "https" : "http";
+    const realmBase = `${scheme}://${hostHeader}/realms/ssra`;
+
+    if (isGetOrHead && pathname === "/realms/ssra/.well-known/openid-configuration") {
+      res.writeHead(200, { "Content-Type": "application/json", ...secHeaders });
+      res.end(
+        method === "HEAD"
+          ? undefined
+          : JSON.stringify({
+              issuer: KEYCLOAK_CANONICAL_ISSUER,
+              authorization_endpoint: `${realmBase}/protocol/openid-connect/auth`,
+              registration_endpoint: `${realmBase}/protocol/openid-connect/registrations`,
+              token_endpoint: `${realmBase}/protocol/openid-connect/token`,
+              userinfo_endpoint: `${realmBase}/protocol/openid-connect/userinfo`,
+              end_session_endpoint: `${realmBase}/protocol/openid-connect/logout`,
+              jwks_uri: `${realmBase}/protocol/openid-connect/certs`,
+              pushed_authorization_request_endpoint: `${realmBase}/protocol/openid-connect/ext/par/request`,
+              response_types_supported: ["code"],
+              grant_types_supported: [
+                "authorization_code",
+                "urn:ietf:params:oauth:grant-type:token-exchange",
+              ],
+              subject_types_supported: ["public"],
+              id_token_signing_alg_values_supported: ["ES256", "RS256", "EdDSA", "HS256"],
+              code_challenge_methods_supported: ["S256"],
+              authorization_response_iss_parameter_supported: true,
+              dpop_signing_alg_values_supported: ["ES256", "EdDSA"],
+              acr_values_supported: [
+                "urn:ssra:acr:otp-t1",
+                "urn:ssra:acr:t3-step-up",
+                "urn:ssra:acr:passkey",
+              ],
+            }),
+      );
+      return;
+    }
+
+    if (isGetOrHead && pathname === "/realms/ssra/protocol/openid-connect/certs") {
+      res.writeHead(200, { "Content-Type": "application/json", ...secHeaders });
+      res.end(
+        method === "HEAD"
+          ? undefined
+          : JSON.stringify({
+              keys: [
+                {
+                  kid: "ssra-kc-2026-10",
+                  kty: "OKP",
+                  crv: "Ed25519",
+                  alg: "EdDSA",
+                  use: "sig",
+                  x: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+                },
+              ],
+            }),
+      );
+      return;
+    }
+
+    if (
+      isGetOrHead &&
+      (pathname === "/realms/ssra/protocol/openid-connect/auth" ||
+        pathname === "/realms/ssra/protocol/openid-connect/registrations")
+    ) {
+      const urlObj = new URL(req.url ?? pathname, "http://127.0.0.1");
+      const q = urlObj.searchParams;
+      const clientId = (q.get("client_id") || "ssra-staff-console").trim();
+      const redirectUri = (q.get("redirect_uri") || "/signin/callback").trim();
+      const codeChallenge = (q.get("code_challenge") || "").trim();
+      const codeChallengeMethod = (q.get("code_challenge_method") || "S256").trim();
+      const stateParam = (q.get("state") || "").trim();
+      const oidcNonce = (q.get("nonce") || "").trim();
+      const promptParam = (q.get("prompt") || "").trim();
+      const screenHint = (q.get("screen_hint") || "").trim();
+      const isReg =
+        pathname.endsWith("/registrations") ||
+        promptParam === "create" ||
+        screenHint === "signup";
+      const paramsValid =
+        KEYCLOAK_PKCE_CHALLENGE_RE.test(codeChallenge) &&
+        codeChallengeMethod === "S256" &&
+        KEYCLOAK_OPAQUE_STATE_RE.test(stateParam);
+      sendBodyWithCompression(
+        req,
+        res,
+        paramsValid ? 200 : 400,
+        { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+        renderKeycloakRealmAuthHtml({
+          nonce,
+          mode: isReg ? "register" : "signin",
+          clientId,
+          redirectUri,
+          codeChallenge,
+          state: stateParam,
+          oidcNonce,
+          errorMsg: paramsValid
+            ? ""
+            : "Missing or invalid OAuth 2.1 PKCE S256 parameters (code_challenge, state). Start again from /signin or /signup.",
+        }),
+      );
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      (pathname === "/realms/ssra/protocol/openid-connect/auth" ||
+        pathname === "/realms/ssra/protocol/openid-connect/registrations")
+    ) {
+      try {
+        const rawBody = await readRequestBody(req);
+        const form = new URLSearchParams(rawBody);
+        const mode = (form.get("mode") || "signin").trim();
+        const clientId = (form.get("client_id") || "ssra-staff-console").trim();
+        const redirectUri = (form.get("redirect_uri") || "/signin/callback").trim();
+        const codeChallenge = (form.get("code_challenge") || "").trim();
+        const codeChallengeMethod = (form.get("code_challenge_method") || "S256").trim();
+        const stateParam = (form.get("state") || "").trim();
+        const oidcNonce = (form.get("nonce") || "").trim();
+
+        if (
+          !KEYCLOAK_PKCE_CHALLENGE_RE.test(codeChallenge) ||
+          codeChallengeMethod !== "S256" ||
+          !KEYCLOAK_OPAQUE_STATE_RE.test(stateParam)
+        ) {
+          sendBodyWithCompression(
+            req,
+            res,
+            400,
+            { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+            renderKeycloakRealmAuthHtml({
+              nonce,
+              mode: mode === "register" ? "register" : "signin",
+              clientId,
+              redirectUri,
+              codeChallenge,
+              state: stateParam,
+              oidcNonce,
+              errorMsg: "Invalid PKCE S256 code_challenge or OAuth state parameter.",
+            }),
+          );
+          return;
+        }
+
+        const localRegJson = form.get("local_registered_json") || "";
+        if (localRegJson.startsWith("[")) {
+          try {
+            const parsedReg = JSON.parse(localRegJson);
+            if (Array.isArray(parsedReg)) {
+              for (const item of parsedReg.slice(0, 64)) {
+                if (
+                  item &&
+                  typeof item.email === "string" &&
+                  typeof item.role === "string" &&
+                  typeof item.digestSha256 === "string" &&
+                  Array.isArray(item.aliases)
+                ) {
+                  registerKeycloakUserAccount(item);
+                }
+              }
+            }
+          } catch {}
+        }
+
+        let resolvedAccount = null;
+        let isNewRegistration = false;
+
+        if (mode === "register") {
+          const nameVal = (form.get("name") || "").trim();
+          const emailVal = (form.get("email") || "").trim().toLowerCase();
+          const pwVal = (form.get("password") || "").trim();
+          if (!nameVal || !emailVal || !emailVal.includes("@") || pwVal.length < 8) {
+            sendBodyWithCompression(
+              req,
+              res,
+              400,
+              { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+              renderKeycloakRealmAuthHtml({
+                nonce,
+                mode: "register",
+                clientId,
+                redirectUri,
+                codeChallenge,
+                state: stateParam,
+                oidcNonce,
+                errorMsg:
+                  "Enter your full name, a valid email address, and a password of at least 8 characters.",
+              }),
+            );
+            return;
+          }
+          const usernameVal = emailVal.split("@")[0] || "taxpayer";
+          resolvedAccount = {
+            role: "verified_taxpayer",
+            email: emailVal,
+            username: usernameVal,
+            aliases: [emailVal, usernameVal],
+            displayName: nameVal,
+            roleLabel: "Verified Taxpayer",
+            staffId: `sub_taxpayer_${crypto.randomBytes(4).toString("hex")}`,
+            officeCode: "JUBA_HQ",
+            initials: nameVal.slice(0, 2).toUpperCase(),
+            landingPath: "/en",
+            digestSha256: computeKcCredentialDigest("verified_taxpayer", pwVal),
+          };
+          registerKeycloakUserAccount(resolvedAccount);
+          isNewRegistration = true;
+        } else if (mode === "passkey") {
+          const passkeyRole = (form.get("passkey_role") || "").trim();
+          resolvedAccount =
+            KEYCLOAK_SEEDED_ACCOUNTS.find((acc) => acc.role === passkeyRole) || null;
+          if (!resolvedAccount) {
+            sendBodyWithCompression(
+              req,
+              res,
+              400,
+              { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+              renderKeycloakRealmAuthHtml({
+                nonce,
+                mode: "signin",
+                clientId,
+                redirectUri,
+                codeChallenge,
+                state: stateParam,
+                oidcNonce,
+                errorMsg: "Unrecognized WebAuthn Passkey role selection.",
+              }),
+            );
+            return;
+          }
+        } else {
+          const rawUser = (form.get("username") || "").trim().toLowerCase();
+          const rawPw = (form.get("password") || "").trim();
+          const candidate = findKeycloakAccountByIdentifier(rawUser);
+          const computedDigest = candidate
+            ? computeKcCredentialDigest(candidate.role, rawPw)
+            : "";
+          if (
+            !candidate ||
+            !rawPw ||
+            !timingSafeHexMatch(computedDigest, candidate.digestSha256)
+          ) {
+            sendBodyWithCompression(
+              req,
+              res,
+              401,
+              { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+              renderKeycloakRealmAuthHtml({
+                nonce,
+                mode: "signin",
+                clientId,
+                redirectUri,
+                codeChallenge,
+                state: stateParam,
+                oidcNonce,
+                errorMsg:
+                  "Invalid email/username or password. Verify your SSRA credentials or register a new taxpayer account.",
+              }),
+            );
+            return;
+          }
+          resolvedAccount = candidate;
+        }
+
+        const code = issueKeycloakAuthCode({
+          clientId,
+          redirectUri,
+          codeChallenge,
+          state: stateParam,
+          nonce: oidcNonce,
+          account: resolvedAccount,
+          isNewRegistration,
+        });
+        const callbackQs = new URLSearchParams({
+          code,
+          state: stateParam,
+          iss: KEYCLOAK_CANONICAL_ISSUER,
+        }).toString();
+        res.writeHead(303, {
+          Location: `/signin/callback?${callbackQs}`,
+          "Cache-Control": "no-store",
+          ...secHeaders,
+        });
+        res.end();
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json", ...secHeaders });
+        res.end(JSON.stringify({ error: "INVALID_KEYCLOAK_AUTH_REQUEST" }));
+      }
+      return;
+    }
+
+    if (method === "POST" && pathname === "/realms/ssra/protocol/openid-connect/token") {
+      try {
+        const rawBody = await readRequestBody(req);
+        const params = rawBody.startsWith("{")
+          ? new URLSearchParams(JSON.parse(rawBody))
+          : new URLSearchParams(rawBody);
+        const code = (params.get("code") || "").trim();
+        const codeVerifier = (params.get("code_verifier") || "").trim();
+        const clientId = (params.get("client_id") || "ssra-staff-console").trim();
+        const record = consumeKeycloakAuthCode(code, codeVerifier);
+        if (!record) {
+          res.writeHead(400, {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+            ...secHeaders,
+          });
+          res.end(
+            JSON.stringify({
+              error: "invalid_grant",
+              error_description: "Authorization code is expired, already used, or PKCE S256 verification failed.",
+            }),
+          );
+          return;
+        }
+        const tokens = mintKeycloakTokens(record.account, clientId, record.nonce);
+        res.writeHead(200, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          ...secHeaders,
+        });
+        res.end(
+          JSON.stringify({
+            access_token: tokens.accessToken,
+            id_token: tokens.idToken,
+            token_type: "Bearer",
+            expires_in: tokens.expiresIn,
+            scope: "openid profile email",
+            account: {
+              role: record.account.role,
+              email: record.account.email,
+              username: record.account.username,
+              displayName: record.account.displayName,
+              roleLabel: record.account.roleLabel,
+              staffId: record.account.staffId,
+              officeCode: record.account.officeCode,
+              initials: record.account.initials,
+              landingPath: record.account.landingPath,
+            },
+          }),
+        );
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json", ...secHeaders });
+        res.end(JSON.stringify({ error: "invalid_request" }));
+      }
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      pathname === "/realms/ssra/protocol/openid-connect/session-exchange"
+    ) {
+      try {
+        const rawBody = await readRequestBody(req);
+        const params = new URLSearchParams(rawBody);
+        const code = (params.get("code") || "").trim();
+        const codeVerifier = (params.get("code_verifier") || "").trim();
+        const clientId = (params.get("client_id") || "ssra-staff-console").trim();
+        const returnTo = sanitizeKcReturnTo(params.get("return_to"));
+        const record = consumeKeycloakAuthCode(code, codeVerifier);
+        if (!record) {
+          res.writeHead(303, {
+            Location: "/signin/callback?error=invalid_grant&error_description=PKCE+S256+exchange+expired+or+already+consumed",
+            "Cache-Control": "no-store",
+            ...secHeaders,
+          });
+          res.end();
+          return;
+        }
+        const tokens = mintKeycloakTokens(record.account, clientId, record.nonce);
+        const targetPath =
+          returnTo || record.account.landingPath || "/en";
+        sendBodyWithCompression(
+          req,
+          res,
+          200,
+          {
+            "Content-Type": "text/html; charset=utf-8",
+            "Set-Cookie": `ssra_kc_session=${tokens.accessToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=300`,
+            ...secHeaders,
+          },
+          renderKeycloakSessionExchangeHtml({
+            nonce,
+            account: record.account,
+            isNewRegistration: Boolean(record.isNewRegistration),
+            targetPath,
+          }),
+        );
+      } catch {
+        res.writeHead(303, {
+          Location: "/signin?error=session_exchange_failed",
+          "Cache-Control": "no-store",
+          ...secHeaders,
+        });
+        res.end();
+      }
+      return;
+    }
+
+    if (isGetOrHead && pathname === "/realms/ssra/protocol/openid-connect/userinfo") {
+      const authHdr = String(req.headers.authorization ?? "").trim();
+      const token = authHdr.startsWith("Bearer ") ? authHdr.slice(7).trim() : "";
+      const entry = token ? KEYCLOAK_ACCESS_TOKENS.get(token) : null;
+      if (!entry || Date.now() > entry.expiresAt) {
+        res.writeHead(401, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          ...secHeaders,
+        });
+        res.end(JSON.stringify({ error: "invalid_token" }));
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        ...secHeaders,
+      });
+      res.end(
+        JSON.stringify({
+          sub: entry.account.staffId,
+          email: entry.account.email,
+          email_verified: true,
+          preferred_username: entry.account.username,
+          name: entry.account.displayName,
+          office_code: entry.account.officeCode,
+          realm_access: { roles: [entry.account.role] },
+          acr: "urn:ssra:acr:passkey",
+        }),
+      );
+      return;
+    }
+
+    if (isGetOrHead && pathname === "/realms/ssra/protocol/openid-connect/logout") {
+      const urlObj = new URL(req.url ?? pathname, "http://127.0.0.1");
+      const rawRedirect = urlObj.searchParams.get("post_logout_redirect_uri") || "/signin";
+      let target = "/signin";
+      if (rawRedirect === "/en" || rawRedirect === "/signin") {
+        target = rawRedirect;
+      } else {
+        try {
+          const parsed = new URL(rawRedirect);
+          if (parsed.pathname === "/en" || parsed.pathname === "/signin") {
+            target = parsed.pathname;
+          }
+        } catch {}
+      }
+      res.writeHead(303, {
+        Location: target,
+        "Set-Cookie": "ssra_kc_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
+        "Cache-Control": "no-store",
+        ...secHeaders,
+      });
+      res.end();
+      return;
+    }
+
+    res.writeHead(404, { "Content-Type": "application/json", ...secHeaders });
+    res.end(JSON.stringify({ error: "KEYCLOAK_REALM_ROUTE_NOT_FOUND" }));
+    return;
+  }
+
   if (
     isGetOrHead &&
     (pathname === "/signin" || pathname === "/signup" || pathname === "/signin/callback")
   ) {
-    const strictSecHeaders = buildSecurityHeaders(nonce, false);
     sendBodyWithCompression(
       req,
       res,
       200,
-      { "Content-Type": "text/html; charset=utf-8", ...strictSecHeaders },
-      renderOpsDashboardHtml(pathname, nonce, "/en"),
+      { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+      renderOpsDashboardHtml(pathname, nonce, "/en", { keycloakSsoEnabled: true }),
     );
     return;
   }
@@ -6579,7 +7653,6 @@ const server = http.createServer(async (req, res) => {
   if (/^\/(?:admin|agent|calls|analytics|queue|auditor|ops)(?:\/|$)/.test(pathname)) {
     // Navigation heuristic only (not an authorization check): serves the Operations Console HTML
     // shell for browser document requests while keeping programmatic API probes at 404.
-    const strictSecHeaders = buildSecurityHeaders(nonce, false);
     const acceptHdr = String(req.headers.accept ?? "").toLowerCase();
     const isBrowserDocNav =
       acceptHdr.includes("text/html") || req.headers["sec-fetch-mode"] === "navigate";
@@ -6588,15 +7661,15 @@ const server = http.createServer(async (req, res) => {
         req,
         res,
         200,
-        { "Content-Type": "text/html; charset=utf-8", ...strictSecHeaders },
-        renderOpsDashboardHtml(pathname, nonce, "/en"),
+        { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+        renderOpsDashboardHtml(pathname, nonce, "/en", { keycloakSsoEnabled: true }),
       );
       return;
     }
     res.writeHead(404, {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
-      ...strictSecHeaders,
+      ...secHeaders,
     });
     res.end(JSON.stringify({ error: "NOT_FOUND" }));
     return;

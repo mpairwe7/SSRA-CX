@@ -305,6 +305,128 @@ def main() -> None:
         )
         resp_direct_runtime.read()
         conn.close()
+
+        # Verify Keycloak 26.4.11 /realms/ssra OIDC + PKCE S256 Sign-In & Registration flows on apps/web/server.js
+        import base64
+        import hashlib
+        import json
+        import urllib.parse
+
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request("GET", "/realms/ssra/.well-known/openid-configuration")
+        resp_disc = conn.getresponse()
+        disc_json = json.loads(resp_disc.read().decode("utf-8"))
+        assert resp_disc.status == 200
+        assert disc_json.get("issuer") == "https://sso.ssra.gov.ss/realms/ssra"
+        assert "S256" in disc_json.get("code_challenge_methods_supported", [])
+        conn.close()
+
+        pkce_verifier = "v" * 44
+        pkce_challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(pkce_verifier.encode("utf-8")).digest())
+            .decode("ascii")
+            .rstrip("=")
+        )
+        oauth_state = "s" * 32
+        reg_body = urllib.parse.urlencode(
+            {
+                "mode": "register",
+                "client_id": "ssra-staff-console",
+                "redirect_uri": "http://127.0.0.1:39123/signin/callback",
+                "code_challenge": pkce_challenge,
+                "code_challenge_method": "S256",
+                "state": oauth_state,
+                "nonce": "n" * 32,
+                "name": "Juba Traders Ltd",
+                "email": "juba.traders@etax.nra.gov.ss",
+                "password": "TaxpayerPassword123",
+            }
+        )
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request(
+            "POST",
+            "/realms/ssra/protocol/openid-connect/auth",
+            body=reg_body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        resp_reg = conn.getresponse()
+        reg_loc = resp_reg.getheader("Location") or ""
+        resp_reg.read()
+        conn.close()
+        assert resp_reg.status == 303 and reg_loc.startswith("/signin/callback?"), (
+            f"Expected 303 redirect to /signin/callback on Keycloak registration, got {resp_reg.status} {reg_loc}"
+        )
+        cb_qs = urllib.parse.parse_qs(urllib.parse.urlsplit(reg_loc).query)
+        auth_code = cb_qs.get("code", [""])[0]
+        assert auth_code.startswith("kc_code_")
+        assert cb_qs.get("state", [""])[0] == oauth_state
+
+        tok_body = urllib.parse.urlencode(
+            {
+                "grant_type": "authorization_code",
+                "client_id": "ssra-staff-console",
+                "code": auth_code,
+                "code_verifier": pkce_verifier,
+            }
+        )
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request(
+            "POST",
+            "/realms/ssra/protocol/openid-connect/token",
+            body=tok_body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        resp_tok = conn.getresponse()
+        tok_json = json.loads(resp_tok.read().decode("utf-8"))
+        conn.close()
+        assert resp_tok.status == 200 and tok_json.get("access_token"), (
+            f"Expected 200 and access_token on PKCE S256 token exchange, got {resp_tok.status}"
+        )
+        assert tok_json.get("account", {}).get("email") == "juba.traders@etax.nra.gov.ss"
+
+        # Replay of consumed single-use authorization code must fail closed (CVE-2026-1035)
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request(
+            "POST",
+            "/realms/ssra/protocol/openid-connect/token",
+            body=tok_body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        resp_replay = conn.getresponse()
+        resp_replay.read()
+        conn.close()
+        assert resp_replay.status == 400, (
+            f"Expected 400 on replayed authorization code, got {resp_replay.status}"
+        )
+
+        # Sign in with the newly registered account via Keycloak SSO
+        login_body = urllib.parse.urlencode(
+            {
+                "mode": "signin",
+                "client_id": "ssra-staff-console",
+                "redirect_uri": "http://127.0.0.1:39123/signin/callback",
+                "code_challenge": pkce_challenge,
+                "code_challenge_method": "S256",
+                "state": oauth_state,
+                "nonce": "n" * 32,
+                "username": "juba.traders@etax.nra.gov.ss",
+                "password": "TaxpayerPassword123",
+            }
+        )
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request(
+            "POST",
+            "/realms/ssra/protocol/openid-connect/auth",
+            body=login_body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        resp_login = conn.getresponse()
+        login_loc = resp_login.getheader("Location") or ""
+        resp_login.read()
+        conn.close()
+        assert resp_login.status == 303 and login_loc.startswith("/signin/callback?"), (
+            f"Expected 303 redirect on Keycloak login for registered account, got {resp_login.status}"
+        )
     finally:
         proc.terminate()
         proc.wait(timeout=5)
