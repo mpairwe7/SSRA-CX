@@ -3806,22 +3806,22 @@ def verify_call_resume_ticket(
     return payload
 
 
-_SPEECH_CITATION_BRACKET_RE = re.compile(r"\s*\[\d+(?:\s*[,;]\s*\d+)*\](?!\()")
-_SPEECH_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^\)]+\)")
-_SPEECH_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
-_SPEECH_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
-_SPEECH_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*|__([^_]+)__")
-_SPEECH_HEADER_BULLET_RE = re.compile(r"^\s*(?:#{1,6}|[-*+])\s+", re.MULTILINE)
+_SPEECH_CITATION_BRACKET_RE = re.compile(r"[ ]?\[\d{1,3}(?:[,;][ ]?\d{1,3}){0,5}\](?!\()")
+_SPEECH_MD_LINK_RE = re.compile(r"\[([^\[\]\n]{1,200})\]\(([^()\s]{1,500})\)")
+_SPEECH_CODE_BLOCK_RE = re.compile(r"```[^`]{0,2000}```")
+_SPEECH_INLINE_CODE_RE = re.compile(r"`([^`\n]{1,200})`")
+_SPEECH_BOLD_RE = re.compile(r"\*\*([^*\n]{1,200})\*\*|__([^_\n]{1,200})__")
+_SPEECH_HEADER_BULLET_RE = re.compile(r"^[ \t]{0,8}(?:#{1,6}|[-*+])[ \t]{1,4}", re.MULTILINE)
 _SPEECH_NUMBERED_LINE_RE = re.compile(
-    r"^[ \t]*(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]+",
+    r"^[ \t]{0,8}(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]{1,4}",
     re.MULTILINE,
 )
 _SPEECH_NUMBERED_INLINE_RE = re.compile(
-    r"(?<=[:.!?؟؛;])[ \t]+(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]+(?=(?:\*{0,2})?[A-Za-z0-9\u0600-\u06FF\u00C0-\u024F])"
+    r"(?<=[:.!?؟؛;])[ \t]{1,4}(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]{1,4}(?=(?:\*{0,2})?[A-Za-z0-9\u0600-\u06FF\u00C0-\u024F])"
 )
 _SPEECH_VISUAL_FOOTER_RE = re.compile(
-    r"(?:^|\n)[ \t]*(?:\*\*)?(?:You might also want to know|Related questions)\b.*",
-    flags=re.IGNORECASE | re.DOTALL,
+    r"(?:^|\n)[ \t]{0,8}(?:\*\*)?(?:You might also want to know|Related questions)\b[\s\S]{0,1500}$",
+    flags=re.IGNORECASE,
 )
 _STEP_WORD_BY_LOCALE: dict[LocaleCode, str] = {
     LocaleCode.EN: "Step",
