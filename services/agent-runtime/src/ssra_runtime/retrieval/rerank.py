@@ -45,14 +45,21 @@ def rerank_chunks(
     top_k: int = 3,
 ) -> list[dict[str, Any]]:
     expanded = expand_query_with_multilingual_termbase(query).lower()
-    terms = [t for t in expanded.split() if len(t) >= 2]
+    terms = list(
+        dict.fromkeys(
+            t.strip(".,;:!?()[]{}\"'")
+            for t in expanded.split()
+            if len(t.strip(".,;:!?()[]{}\"'")) >= 2
+        )
+    )
+    bounded_top_k = max(1, min(int(top_k), 10))
 
-    def _score(chk: dict[str, Any]) -> int:
+    def _score(chk: dict[str, Any]) -> tuple[int, str]:
         text = f"{chk.get('doc_title', '')} {chk.get('section_anchor', '')} {chk.get('content', '')}".lower()
         score = sum(4 if t in text else 0 for t in terms)
         if chk.get("language") == locale:
             score += 5
-        return score
+        return (-score, str(chk.get("id", "")))
 
-    ranked = sorted(chunks, key=_score, reverse=True)
-    return ranked[:top_k]
+    ranked = sorted(chunks, key=_score)
+    return ranked[:bounded_top_k]

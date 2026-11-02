@@ -362,6 +362,66 @@ describe("@ssra/web Next.js 16 proxy.ts, RTL i18n, and BFF stream", () => {
         filename: "invoice.pdf.exe",
       }),
     ).toEqual({ accepted: false, reason: "UNSAFE_FILENAME" });
+    expect(
+      validateClientUpload({
+        mimeType: "application/pdf",
+        sizeBytes: 1000,
+        filename: "invoice.exe.pdf",
+      }),
+    ).toEqual({ accepted: false, reason: "UNSAFE_FILENAME" });
+    expect(
+      validateClientUpload({
+        mimeType: "application/pdf",
+        sizeBytes: 1000,
+        filename: "invoice\u202Efdp.pdf",
+      }),
+    ).toEqual({ accepted: false, reason: "UNSAFE_FILENAME" });
+    expect(
+      validateClientUpload({
+        mimeType: "application/pdf",
+        sizeBytes: 1000,
+        filename: "clean.pdf",
+        magicBytes: new TextEncoder().encode("%PDF-1.7\n"),
+      }),
+    ).toEqual({ accepted: true });
+    expect(
+      validateClientUpload({
+        mimeType: "application/pdf",
+        sizeBytes: 1000,
+        filename: "spoofed.pdf",
+        magicBytes: new TextEncoder().encode("<html>not a pdf</html>"),
+      }),
+    ).toEqual({ accepted: false, reason: "MAGIC_BYTE_MIME_MISMATCH" });
+    expect(
+      validateClientUpload({
+        mimeType: "image/avif",
+        sizeBytes: 1000,
+        filename: "video_disguised.avif",
+        magicBytes: new TextEncoder().encode("\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00"),
+      }),
+    ).toEqual({ accepted: false, reason: "MAGIC_BYTE_MIME_MISMATCH" });
+    expect(
+      validateClientUpload({
+        mimeType: "image/avif",
+        sizeBytes: 1000,
+        filename: "photo.avif",
+        magicBytes: new TextEncoder().encode("\x00\x00\x00\x18ftypavif\x00\x00\x00\x00"),
+      }),
+    ).toEqual({ accepted: true });
+    expect(
+      validateClientUpload({
+        mimeType: "image/jpeg",
+        sizeBytes: 1000,
+        filename: "polyglot.jpg",
+        magicBytes: new Uint8Array([
+          0xff,
+          0xd8,
+          0xff,
+          0xe0,
+          ...new TextEncoder().encode("<script>alert(1)</script>"),
+        ]),
+      }),
+    ).toEqual({ accepted: false, reason: "MAGIC_BYTE_MIME_MISMATCH" });
 
     const manifest = generatePwaManifest();
     expect(manifest.display).toBe("standalone");

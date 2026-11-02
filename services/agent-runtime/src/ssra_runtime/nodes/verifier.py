@@ -8,7 +8,7 @@ Verifies after specialist subgraph & MCP tool execution that:
 
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from pydantic import BaseModel, ConfigDict, Field
 from ssra_core import Plan
@@ -29,12 +29,13 @@ class OutcomeVerificationResult(BaseModel):
     remediation_notes: list[str] = Field(default_factory=list)
 
 
-def _parse_decimal_safe(val: object) -> Decimal:
-    """Parse a string/number into a `Decimal` safely, returning `Decimal('0')` on malformed values."""
+def _parse_decimal_safe(val: object, *, default: Decimal = Decimal("-1")) -> Decimal:
+    """Parse a string/number into a finite `Decimal` safely, returning `default` on malformed/NaN/Infinite values."""
     try:
-        return Decimal(str(val).replace(",", "").strip())
+        parsed = Decimal("NaN" if isinstance(val, bool) else str(val).replace(",", "").strip())
+        return parsed if parsed.is_finite() else default
     except (InvalidOperation, ValueError):
-        return Decimal("0")
+        return default
 
 
 def _detect_quiet_tool_fault(art: ToolArtifact) -> str | None:
@@ -45,6 +46,28 @@ def _detect_quiet_tool_fault(art: ToolArtifact) -> str | None:
         tax = _parse_decimal_safe(sc.get("estimated_tax_ssp", "-1"))
         net = _parse_decimal_safe(sc.get("net_monthly_ssp", "-1"))
         eff = _parse_decimal_safe(sc.get("effective_rate_percent", "-1"))
+        bands = sc.get("bands")
+        bands_bad = False
+        if isinstance(bands, list) and bands:
+            band_taxable_sum = sum(
+                (
+                    _parse_decimal_safe(b.get("taxable_amount_ssp", "0"))
+                    for b in bands
+                    if isinstance(b, dict)
+                ),
+                Decimal("0"),
+            )
+            band_tax_sum = sum(
+                (
+                    _parse_decimal_safe(b.get("tax_amount_ssp", "0"))
+                    for b in bands
+                    if isinstance(b, dict)
+                ),
+                Decimal("0"),
+            )
+            bands_bad = abs(band_taxable_sum - gross) > Decimal("0.05") or abs(
+                band_tax_sum - tax
+            ) > Decimal("0.05")
         paye_bad = (
             gross < Decimal("0")
             or tax < Decimal("0")
@@ -52,6 +75,7 @@ def _detect_quiet_tool_fault(art: ToolArtifact) -> str | None:
             or net != gross - tax
             or eff < Decimal("0")
             or eff > Decimal("100")
+            or bands_bad
         )
         if paye_bad:
             return "PAYE_INVARIANT_VIOLATION"
@@ -60,6 +84,9 @@ def _detect_quiet_tool_fault(art: ToolArtifact) -> str | None:
         wht = _parse_decimal_safe(sc.get("withholding_tax_ssp", "-1"))
         net = _parse_decimal_safe(sc.get("net_payable_ssp", "-1"))
         rate = _parse_decimal_safe(sc.get("rate_percent", "-1"))
+        expected_wht = (gross * rate / Decimal("100")).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
         wht_bad = (
             gross < Decimal("0")
             or wht < Decimal("0")
@@ -67,6 +94,7 @@ def _detect_quiet_tool_fault(art: ToolArtifact) -> str | None:
             or net != gross - wht
             or rate < Decimal("0")
             or rate > Decimal("100")
+            or abs(wht - expected_wht) > Decimal("0.05")
         )
         if wht_bad:
             return "WHT_INVARIANT_VIOLATION"
@@ -74,7 +102,20 @@ def _detect_quiet_tool_fault(art: ToolArtifact) -> str | None:
         cif = _parse_decimal_safe(sc.get("cif_value_usd", "0"))
         fx = _parse_decimal_safe(sc.get("boss_official_fx_rate_ssp_per_usd", "0"))
         duty = _parse_decimal_safe(sc.get("estimated_duty_ssp", "-1"))
-        if cif <= Decimal("0") or fx <= Decimal("0") or duty < Decimal("0"):
+        duty_cross_bad = False
+        if "customs_value_ssp" in sc and "duty_rate_percent" in sc:
+            customs_val = _parse_decimal_safe(sc.get("customs_value_ssp", "-1"))
+            duty_rate = _parse_decimal_safe(sc.get("duty_rate_percent", "-1"))
+            expected_customs_val = (cif * fx).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            expected_duty = (expected_customs_val * duty_rate / Decimal("100")).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+            duty_cross_bad = (
+                customs_val != expected_customs_val
+                or duty != expected_duty
+                or duty_rate < Decimal("0")
+            )
+        if cif <= Decimal("0") or fx <= Decimal("0") or duty < Decimal("0") or duty_cross_bad:
             return "CUSTOMS_DUTY_INVARIANT_VIOLATION"
     elif art.tool == "lookup_tariff":
         duty_r = _parse_decimal_safe(sc.get("duty_rate_percent", "-1"))

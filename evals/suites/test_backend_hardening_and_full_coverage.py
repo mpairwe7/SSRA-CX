@@ -1965,3 +1965,355 @@ def test_runtime_nodes_subgraphs_gateway_and_channels_remaining_branches() -> No
         )
     with pytest.raises(ValueError):
         lobby.apply_event("call.started", {"call_id": ""})
+
+
+def test_agentic_tool_audit_phases_1_to_4_regression() -> None:
+    """Verify all 6 agentic tool domains (Search, API/MCP, Execution, DB/State, File, Web/Channel — ADR-030)."""
+    from ssra_adapters import MockOfficialChannelsAdapter
+    from ssra_channel_gateway import (
+        WhatsAppListRow,
+        prepare_whatsapp_outbound_message,
+        validate_whatsapp_list_rows,
+    )
+    from ssra_core import McpErrorCode, utc_now
+    from ssra_mcp.sanitiser import scrub_untrusted_urls_and_cap_length
+    from ssra_mcp_appointments import create_appointments_mcp_server
+    from ssra_mcp_knowledge import create_knowledge_mcp_server
+    from ssra_runtime.nodes.verifier import verify_plan_outcomes
+    from ssra_runtime.retrieval.hybrid import postprocess_retrieved_chunks
+    from ssra_runtime.schemas import ToolArtifact, TurnBudget
+
+    # 1. Search Tools: Bi-temporal supersession in get_section & conflict quarantine in postprocess_retrieved_chunks
+    kn_adapter = KnowledgeCorpusAdapter()
+    with pytest.raises(SSRAError) as sup_err:
+        kn_adapter.get_section(section_anchor="chk-superseded-2009-paye")
+    assert sup_err.value.code == McpErrorCode.NOT_FOUND
+    ar_sec = kn_adapter.get_section(section_anchor="Part-I-Sec-1-TIN-Registration", language="ar")
+    assert ar_sec["language"] == "ar"
+    din_hits = kn_adapter.search_knowledge(query="Ajul de Rïöök de Ɣɔɔc", language="en")
+    assert any("Business-Profit-Tax" in h["section_anchor"] for h in din_hits)
+
+    quarantined = postprocess_retrieved_chunks(
+        [
+            {
+                "id": "c_conflict_1",
+                "doc_title": "Act",
+                "section_anchor": "Sec-18",
+                "language": "en",
+                "approval_state": "PUBLISHED",
+                "effective_from": "2023-07-01",
+                "content": "Rate is 20%",
+            },
+            {
+                "id": "c_conflict_2",
+                "doc_title": "Act",
+                "section_anchor": "Sec-18",
+                "language": "en",
+                "approval_state": "PUBLISHED",
+                "effective_from": "2024-12-02",
+                "content": "Rate is 30%",
+            },
+            {
+                "id": "c_clean",
+                "doc_title": "Act",
+                "section_anchor": "Sec-19",
+                "language": "en",
+                "approval_state": "PUBLISHED",
+                "effective_from": "2024-12-02",
+                "content": "Clean PAYE rate rule",
+            },
+        ],
+        query="PAYE rate",
+        locale="en",
+    )
+    assert [c["id"] for c in quarantined] == ["c_clean"]
+
+    # Effective-date-only conflict (identical content, different effective_from) is also quarantined
+    quarantined_date = postprocess_retrieved_chunks(
+        [
+            {
+                "id": "c_date_1",
+                "doc_title": "Act",
+                "section_anchor": "Sec-20",
+                "language": "en",
+                "approval_state": "PUBLISHED",
+                "effective_from": "2023-07-01",
+                "content": "Same content",
+            },
+            {
+                "id": "c_date_2",
+                "doc_title": "Act",
+                "section_anchor": "Sec-20",
+                "language": "en",
+                "approval_state": "PUBLISHED",
+                "effective_from": "2024-12-02",
+                "content": "Same content",
+            },
+            {
+                "id": "c_clean_2",
+                "doc_title": "Act",
+                "section_anchor": "Sec-21",
+                "language": "en",
+                "approval_state": "PUBLISHED",
+                "effective_from": "2024-12-02",
+                "content": "Clean PAYE rule",
+            },
+        ],
+        query="PAYE rule",
+        locale="en",
+    )
+    assert [c["id"] for c in quarantined_date] == ["c_clean_2"]
+
+    # 2. API & MCP Gateway Tools: Argument complexity cap, ANSI/OSC stripping, open-redirect URL sanitisation & deep-copy memoization
+    assert (
+        scrub_untrusted_urls_and_cap_length("Visit \x1b[31mhttps://trade.eservices.gov.ss/")
+        == "Visit https://trade.eservices.gov.ss/"
+    )
+    assert (
+        scrub_untrusted_urls_and_cap_length(
+            "Visit https://etax.nra.gov.ss/login?redirect=https%3A%2F%2Fevil.example"
+        )
+        == "Visit [REDACTED_UNALLOWLISTED_URL]"
+    )
+    assert "\x1b" not in scrub_untrusted_urls_and_cap_length(
+        "\x1b]8;;https://evil.example\x07Click\x1b]8;;\x07 \x9b31mRed"
+    )
+
+    kn_srv = create_knowledge_mcp_server()
+    deep_arg: dict[str, object] = {"q": "paye"}
+    for _ in range(10):
+        deep_arg = {"nested": [deep_arg]}
+    with pytest.raises(SSRAError) as depth_err:
+        kn_srv.handle_call_tool(tool_name="search_knowledge", arguments=deep_arg, bearer_token=None)
+    assert depth_err.value.code == McpErrorCode.VALIDATION_FAILED
+    with pytest.raises(SSRAError):
+        kn_srv.handle_call_tool(
+            tool_name="search_knowledge",
+            arguments={"items": [{f"k{i}": i for i in range(70)}]},
+            bearer_token=None,
+        )
+    with pytest.raises(SSRAError):
+        kn_srv.handle_call_tool(
+            tool_name="search_knowledge",
+            arguments={f"k{i}": i for i in range(70)},
+            bearer_token=None,
+        )
+
+    gw = GovernedMcpGatewayClient()
+    b_memo = TurnBudget()
+    art1 = gw.invoke_tool(
+        server_name="knowledge",
+        tool_name="list_forms",
+        arguments={},
+        budget=b_memo,
+    )
+    art1.structured_content["forms"] = []
+    art2 = gw.invoke_tool(
+        server_name="knowledge",
+        tool_name="list_forms",
+        arguments={},
+        budget=b_memo,
+    )
+    assert len(art2.structured_content["forms"]) >= 4
+
+    # 3. Code / Rule Execution Verifier: Band sum & cross-field arithmetic quiet-fault checks
+    bad_paye_bands = ToolArtifact(
+        id="a1",
+        server="tax-facts",
+        tool="calculate_paye_estimate",
+        tier=RiskTier.T0,
+        structured_content={
+            "gross_monthly_ssp": "250000",
+            "estimated_tax_ssp": "25000",
+            "net_monthly_ssp": "225000",
+            "effective_rate_percent": "10",
+            "bands": [{"taxable_amount_ssp": "100000", "tax_amount_ssp": "5000"}],
+        },
+        provenance={"record_id": "r1", "as_of": "2026-10-16"},
+        data_classification="PUBLIC",
+    )
+    assert not verify_plan_outcomes(None, [bad_paye_bands]).verified
+
+    bad_wht_math = ToolArtifact(
+        id="a2",
+        server="tax-facts",
+        tool="calculate_withholding_estimate",
+        tier=RiskTier.T0,
+        structured_content={
+            "gross_amount_ssp": "100000",
+            "rate_percent": "10",
+            "withholding_tax_ssp": "25000",
+            "net_payable_ssp": "75000",
+        },
+        provenance={"record_id": "r2", "as_of": "2026-10-16"},
+        data_classification="PUBLIC",
+    )
+    assert not verify_plan_outcomes(None, [bad_wht_math]).verified
+
+    bad_duty_math = ToolArtifact(
+        id="a3",
+        server="customs",
+        tool="estimate_duties",
+        tier=RiskTier.T0,
+        structured_content={
+            "cif_value_usd": "1000",
+            "boss_official_fx_rate_ssp_per_usd": "4500",
+            "customs_value_ssp": "4500000",
+            "duty_rate_percent": "20",
+            "estimated_duty_ssp": "100",
+        },
+        provenance={"record_id": "r3", "as_of": "2026-10-16"},
+        data_classification="PUBLIC",
+    )
+    assert not verify_plan_outcomes(None, [bad_duty_math]).verified
+
+    corrupted_paye = ToolArtifact(
+        id="a4",
+        server="tax-facts",
+        tool="calculate_paye_estimate",
+        tier=RiskTier.T0,
+        structured_content={
+            "gross_monthly_ssp": "CORRUPTED",
+            "estimated_tax_ssp": "CORRUPTED",
+            "net_monthly_ssp": "CORRUPTED",
+            "effective_rate_percent": "NaN",
+        },
+        provenance={"record_id": "r4", "as_of": "2026-10-16"},
+        data_classification="PUBLIC",
+    )
+    assert not verify_plan_outcomes(None, [corrupted_paye]).verified
+
+    # 4. Database & State Tools: PostgresRlsSessionContext timeouts/Auditor read-only & Appointment/Case state guards
+    with pytest.raises(SSRAError):
+        PostgresRlsSessionContext(
+            staff_id="bad;drop", office_code="JUBA_HQ", staff_role="agent"
+        ).to_set_local_sql()
+    aud_sql = PostgresRlsSessionContext(
+        staff_id="stf_aud_01", office_code="JUBA_HQ", staff_role="auditor"
+    ).to_set_local_sql()
+    assert "SET LOCAL transaction_read_only = on;" in aud_sql
+    assert "SET LOCAL statement_timeout = '5000ms';" in aud_sql
+
+    appt_srv = create_appointments_mcp_server()
+    tok_appt = appt_srv.token_service.mint_exchanged_token(
+        audience="mcp-appointments",
+        auth_level=AuthLevel.T1_TIN_BOUND,
+        subject_ref="sub_taxpayer_amina_01",
+    )
+    c_args = {"appointment_id": "appt_seed_01"}
+    c_tok1 = appt_srv.confirmation_manager.issue_token(
+        conversation_id="t1",
+        tool_name="cancel_appointment",
+        arguments=c_args,
+        subject_ref="sub_taxpayer_amina_01",
+        idempotency_key="ik_c1",
+    )
+    appt_srv.handle_call_tool(
+        tool_name="cancel_appointment",
+        arguments={**c_args, "confirmation_token": c_tok1.token, "idempotency_key": "ik_c1"},
+        bearer_token=f"Bearer {tok_appt}",
+    )
+    c_tok2 = appt_srv.confirmation_manager.issue_token(
+        conversation_id="t1",
+        tool_name="cancel_appointment",
+        arguments=c_args,
+        subject_ref="sub_taxpayer_amina_01",
+        idempotency_key="ik_c2",
+    )
+    with pytest.raises(SSRAError) as dup_cancel_err:
+        appt_srv.handle_call_tool(
+            tool_name="cancel_appointment",
+            arguments={**c_args, "confirmation_token": c_tok2.token, "idempotency_key": "ik_c2"},
+            bearer_token=f"Bearer {tok_appt}",
+        )
+    assert dup_cancel_err.value.status_code == 409
+
+    bad_slot_args = {"office_code": "JUBA_HQ", "slot_id": "bad slot!"}
+    bad_slot_tok = appt_srv.confirmation_manager.issue_token(
+        conversation_id="t1",
+        tool_name="book_appointment",
+        arguments=bad_slot_args,
+        subject_ref="sub_taxpayer_amina_01",
+        idempotency_key="ik_bad_slot",
+    )
+    with pytest.raises(SSRAError):
+        appt_srv.handle_call_tool(
+            tool_name="book_appointment",
+            arguments={
+                **bad_slot_args,
+                "confirmation_token": bad_slot_tok.token,
+                "idempotency_key": "ik_bad_slot",
+            },
+            bearer_token=f"Bearer {tok_appt}",
+        )
+
+    dup_slot_args = {"office_code": "JUBA_HQ", "slot_id": "slot_2026_10_20_1100"}
+    dup_tok1 = appt_srv.confirmation_manager.issue_token(
+        conversation_id="t1",
+        tool_name="book_appointment",
+        arguments=dup_slot_args,
+        subject_ref="sub_taxpayer_amina_01",
+        idempotency_key="ik_dup_1",
+    )
+    appt_srv.handle_call_tool(
+        tool_name="book_appointment",
+        arguments={
+            **dup_slot_args,
+            "confirmation_token": dup_tok1.token,
+            "idempotency_key": "ik_dup_1",
+        },
+        bearer_token=f"Bearer {tok_appt}",
+    )
+    dup_tok2 = appt_srv.confirmation_manager.issue_token(
+        conversation_id="t1",
+        tool_name="book_appointment",
+        arguments=dup_slot_args,
+        subject_ref="sub_taxpayer_amina_01",
+        idempotency_key="ik_dup_2",
+    )
+    with pytest.raises(SSRAError) as dup_book_err:
+        appt_srv.handle_call_tool(
+            tool_name="book_appointment",
+            arguments={
+                **dup_slot_args,
+                "confirmation_token": dup_tok2.token,
+                "idempotency_key": "ik_dup_2",
+            },
+            bearer_token=f"Bearer {tok_appt}",
+        )
+    assert dup_book_err.value.status_code == 409
+
+    # 5. Web / Portal & Channel Automation Tools: Open-redirect phishing block & WhatsApp outbound URL gate
+    off_adapter = MockOfficialChannelsAdapter()
+    assert (
+        off_adapter.verify_identifier(
+            "https://etax.nra.gov.ss/login?redirect=https://evil.example/phish"
+        ).status
+        == "UNVERIFIED_OR_SCAM"
+    )
+    assert (
+        off_adapter.verify_identifier("https://etax.nra.gov.ss/?next=//evil.example").status
+        == "UNVERIFIED_OR_SCAM"
+    )
+    assert (
+        off_adapter.verify_identifier("https://etax.nra.gov.ss/\r\nX-Injected: 1").status
+        == "UNVERIFIED_OR_SCAM"
+    )
+    assert (
+        off_adapter.verify_identifier(
+            "https://etax.nra.gov.ss/auth?return_to%3Dhttps%3A%2F%2Fevil.example"
+        ).status
+        == "UNVERIFIED_OR_SCAM"
+    )
+
+    with pytest.raises(SSRAError):
+        validate_whatsapp_list_rows(
+            [WhatsAppListRow(id="dup", title="Row 1"), WhatsAppListRow(id="dup", title="Row 2")]
+        )
+    with pytest.raises(SSRAError):
+        prepare_whatsapp_outbound_message(
+            recipient_ref="sub_1",
+            body_text="Pay tax at https://evil-phishing.example/pay",
+            last_inbound_at=utc_now(),
+            opt_in_consent_active=True,
+        )

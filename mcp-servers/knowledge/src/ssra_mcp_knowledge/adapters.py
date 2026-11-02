@@ -13,6 +13,36 @@ from ssra_core import McpErrorCode, SSRAError, expand_ssra_nra_synonyms, juba_to
 
 _SEED_CORPUS = Path(__file__).resolve().parents[4] / "knowledge" / "corpus" / "seed-documents.json"
 _SOURCES_YAML = Path(__file__).resolve().parents[4] / "knowledge" / "sources.yaml"
+_TERMBASE_YAML = Path(__file__).resolve().parents[4] / "ai" / "termbase" / "glossary.yaml"
+MAX_SEARCH_QUERY_CHARS = 512
+MAX_SEARCH_TOP_K = 10
+
+
+@functools.lru_cache(maxsize=2)
+def _load_cached_termbase_terms(termbase_file: Path) -> tuple[dict[str, Any], ...]:
+    raw = (
+        yaml.safe_load(termbase_file.read_text(encoding="utf-8")) or {}
+        if termbase_file.exists()
+        else {}
+    )
+    return tuple(t for t in raw.get("terms", []) if isinstance(t, dict))
+
+
+def _expand_query_with_termbase(query: str, termbase_file: Path = _TERMBASE_YAML) -> str:
+    expanded = expand_ssra_nra_synonyms(query)
+    lower_q = expanded.lower()
+    extra: list[str] = []
+    for entry in _load_cached_termbase_terms(termbase_file):
+        en_term = str(entry.get("en", "")).strip()
+        if not en_term or en_term.lower() in lower_q:
+            continue
+        for loc_key in ("ar", "pga", "din", "nus", "bfa", "zne", "shk"):
+            loc_val = str(entry.get(loc_key, "")).lower().strip()
+            bare = loc_val.split("(", 1)[0].strip()
+            if (loc_val and loc_val in lower_q) or (len(bare) >= 4 and bare in lower_q):
+                extra.append(en_term)
+                break
+    return f"{expanded} {' '.join(extra)}" if extra else expanded
 
 
 @functools.lru_cache(maxsize=4)
@@ -71,8 +101,16 @@ class KnowledgeCorpusAdapter:
         as_of: date | None = None,
     ) -> list[dict[str, Any]]:
         target_date = as_of or juba_today()
-        expanded_q = expand_ssra_nra_synonyms(query).lower()
-        terms = [t for t in expanded_q.replace("?", " ").replace(",", " ").split() if len(t) >= 2]
+        bounded_query = query.strip()[:MAX_SEARCH_QUERY_CHARS]
+        bounded_top_k = max(1, min(int(top_k), MAX_SEARCH_TOP_K))
+        expanded_q = _expand_query_with_termbase(bounded_query).lower()
+        terms = list(
+            dict.fromkeys(
+                t.strip(".,;:!?()[]{}\"'")
+                for t in expanded_q.replace("?", " ").replace(",", " ").split()
+                if len(t.strip(".,;:!?()[]{}\"'")) >= 2
+            )
+        )
 
         scored: list[tuple[int, dict[str, Any]]] = []
         is_tin_faq_query = any(
@@ -244,23 +282,37 @@ class KnowledgeCorpusAdapter:
             if score > 0:
                 scored.append((score, chk))
 
-        scored.sort(key=lambda item: item[0], reverse=True)
+        scored.sort(key=lambda item: (-item[0], str(item[1].get("id", ""))))
         if not scored:
-            fallback = [
-                c
-                for c in self._chunks
-                if c.get("language") == language and self.is_temporally_valid(c, target_date)
-            ]
-            return fallback[:top_k] if fallback else self._chunks[:1]
-        return [item[1] for item in scored[:top_k]]
+            valid_chunks = [c for c in self._chunks if self.is_temporally_valid(c, target_date)]
+            fallback = [c for c in valid_chunks if c.get("language") == language]
+            return fallback[:bounded_top_k] if fallback else valid_chunks[:1]
+        return [item[1] for item in scored[:bounded_top_k]]
 
-    def get_section(self, *, section_anchor: str) -> dict[str, Any]:
-        for chk in self._chunks:
-            if chk["section_anchor"] == section_anchor or chk["id"] == section_anchor:
-                return chk
+    def get_section(
+        self,
+        *,
+        section_anchor: str,
+        language: str | None = None,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        target_date = as_of or juba_today()
+        clean_anchor = section_anchor.strip()
+        matches = [
+            chk
+            for chk in self._chunks
+            if (chk["section_anchor"] == clean_anchor or chk["id"] == clean_anchor)
+            and self.is_temporally_valid(chk, target_date)
+        ]
+        if matches:
+            if language:
+                for chk in matches:
+                    if chk.get("language") == language:
+                        return chk
+            return matches[0]
         raise SSRAError(
             McpErrorCode.NOT_FOUND,
-            f"Knowledge section '{section_anchor}' not found in published snapshot {self.snapshot_version}",
+            f"Knowledge section '{section_anchor}' not found or superseded in published snapshot {self.snapshot_version}",
             status_code=404,
         )
 

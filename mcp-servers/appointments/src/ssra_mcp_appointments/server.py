@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ssra_core import McpErrorCode, RiskTier, SSRAError, juba_today, new_id
@@ -18,6 +19,7 @@ MAX_APPOINTMENTS = 1024
 _ALLOWED_OFFICE_CODES: frozenset[str] = frozenset(
     {"JUBA_HQ", "NIMULE_CUSTOMS", "WAU_BRANCH", "MALAKAL_BRANCH"}
 )
+_SAFE_SLOT_ID_RE = re.compile(r"^[A-Za-z0-9_:-]{2,64}$")
 
 
 def create_appointments_mcp_server() -> StatelessMcpServer:
@@ -63,6 +65,25 @@ def create_appointments_mcp_server() -> StatelessMcpServer:
                 status_code=400,
             )
         slot = str(args["slot_id"]).strip()
+        if not _SAFE_SLOT_ID_RE.match(slot):
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Invalid slot_id format '{slot}'",
+                status_code=400,
+            )
+        if any(
+            aid != "appt_seed_01"
+            and r.get("subject_ref") == sub
+            and r.get("office_code") == office
+            and r.get("slot_id") == slot
+            and r.get("status") == "CONFIRMED"
+            for aid, r in appointment_store.items()
+        ):
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Slot '{slot}' at '{office}' is already booked for this taxpayer",
+                status_code=409,
+            )
         if len(appointment_store) >= MAX_APPOINTMENTS:
             appointment_store.pop(next(k for k in appointment_store if k != "appt_seed_01"), None)
         appt_id = new_id("appt")
@@ -98,6 +119,12 @@ def create_appointments_mcp_server() -> StatelessMcpServer:
                 McpErrorCode.NOT_AUTHORIZED,
                 f"State-handle hijacking blocked: caller does not own appointment '{appt_id}'",
                 status_code=403,
+            )
+        if rec.get("status") == "CANCELLED":
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Appointment '{appt_id}' is already cancelled",
+                status_code=409,
             )
         rec["status"] = "CANCELLED"
         return {

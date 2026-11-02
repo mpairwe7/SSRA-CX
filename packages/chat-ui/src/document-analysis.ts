@@ -76,6 +76,14 @@ export interface PdfPreflightResult {
   readonly findings: readonly string[];
 }
 
+export interface OfficeContainerPreflightResult {
+  readonly ok: boolean;
+  readonly encrypted: boolean;
+  readonly hasMacros: boolean;
+  readonly hasExternalRelationships: boolean;
+  readonly findings: readonly string[];
+}
+
 const KIND_BY_EXTENSION: ReadonlyArray<readonly [string, AttachmentKind]> = [
   [".pdf", "pdf"],
   [".docx", "docx"],
@@ -213,6 +221,69 @@ export function inspectPdfBytesClientPreflight(bytes: Uint8Array): PdfPreflightR
   return {
     ok: findings.length === 0,
     encrypted,
+    findings,
+  };
+}
+
+/**
+ * Perform structural Office OpenXML (`.docx`/`.xlsx`) ZIP container preflight blocking OLE2/encrypted containers,
+ * `vbaProject.bin` macros, external SSRF relationship targets (`TargetMode="External"`), and zip-slip (`../`) entries.
+ */
+export function inspectOfficeContainerBytesPreflight(
+  bytes: Uint8Array,
+): OfficeContainerPreflightResult {
+  if (!bytes || bytes.byteLength === 0) {
+    return {
+      ok: false,
+      encrypted: false,
+      hasMacros: false,
+      hasExternalRelationships: false,
+      findings: ["Empty Office container file."],
+    };
+  }
+  const isOle2 =
+    bytes.byteLength >= 8 &&
+    bytes[0] === 0xd0 &&
+    bytes[1] === 0xcf &&
+    bytes[2] === 0x11 &&
+    bytes[3] === 0xe0;
+  const isZip =
+    bytes.byteLength >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4b &&
+    bytes[2] === 0x03 &&
+    bytes[3] === 0x04;
+  const zipEncrypted =
+    isZip && bytes.byteLength >= 30 && bytes[5] === 0 && ((bytes[6] ?? 0) & 0x01) !== 0;
+  const sample = new TextDecoder("latin1")
+    .decode(bytes.subarray(0, Math.min(bytes.byteLength, 256 * 1024)))
+    .toLowerCase();
+  const encrypted = isOle2 || zipEncrypted || sample.includes("encryptedpackage");
+  const hasMacros = sample.includes("vbaproject.bin");
+  const hasExternalRelationships =
+    sample.includes('targetmode="external"') || sample.includes("targetmode='external'");
+  const hasZipSlip = sample.includes("../") || sample.includes("..\\");
+  const findings: string[] = [];
+  if (encrypted) {
+    findings.push("Encrypted or password-protected Office documents are not accepted.");
+  }
+  if (!isZip && !isOle2) {
+    findings.push("Invalid Office OpenXML ZIP container header.");
+  }
+  if (hasMacros) {
+    findings.push("Office container embeds vbaProject.bin macros (blocked).");
+  }
+  if (hasExternalRelationships) {
+    findings.push("Office container contains external relationship targets (blocked).");
+  }
+  if (hasZipSlip) {
+    findings.push("Office container contains unsafe relative path traversal entries (blocked).");
+  }
+  return {
+    ok: findings.length === 0,
+    encrypted,
+    hasMacros,
+    hasExternalRelationships,
     findings,
   };
 }
@@ -452,65 +523,12 @@ export interface OfficeZipPreflightResult {
  * embedded `vbaProject.bin` macros renamed to `.docx`/`.xlsx`, and `../` archive path traversal (`documents.py`).
  */
 export function inspectOfficeZipClientPreflight(bytes: Uint8Array): OfficeZipPreflightResult {
-  if (!bytes || bytes.byteLength < 4) {
-    return {
-      ok: false,
-      hasMacros: false,
-      encrypted: false,
-      findings: ["Empty or truncated Office container."],
-    };
-  }
-  const isOle2Encrypted =
-    bytes.byteLength >= 8 &&
-    bytes[0] === 0xd0 &&
-    bytes[1] === 0xcf &&
-    bytes[2] === 0x11 &&
-    bytes[3] === 0xe0;
-  if (isOle2Encrypted) {
-    return {
-      ok: false,
-      hasMacros: false,
-      encrypted: true,
-      findings: ["Encrypted or password-protected Office documents are not accepted."],
-    };
-  }
-  const hasZipMagic =
-    bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
-  if (!hasZipMagic) {
-    return {
-      ok: false,
-      hasMacros: false,
-      encrypted: false,
-      findings: [
-        "File content does not match the Office OpenXML ZIP header (PK\\x03\\x04 required).",
-      ],
-    };
-  }
-  const zipEntryEncrypted =
-    bytes.byteLength >= 30 && (bytes[5] ?? 0) === 0 && ((bytes[6] ?? 0) & 0x01) !== 0;
-  const scanSlice = bytes.subarray(0, Math.min(bytes.byteLength, 512 * 1024));
-  const latin1 = new TextDecoder("latin1").decode(scanSlice).toLowerCase();
-  const findings: string[] = [];
-  if (zipEntryEncrypted || latin1.includes("encryptedpackage")) {
-    findings.push("Encrypted or password-protected Office documents are not accepted.");
-  }
-  const hasMacros = latin1.includes("vbaproject.bin");
-  if (hasMacros) {
-    findings.push("Office container embeds vbaProject.bin macros (blocked for security).");
-  }
-  if (latin1.includes('targetmode="external"') || latin1.includes("targetmode='external'")) {
-    findings.push(
-      'Office container contains external relationship targets (TargetMode="External" blocked).',
-    );
-  }
-  if (latin1.includes("../") || latin1.includes("..\\")) {
-    findings.push("Office container contains unsafe relative archive paths (../).");
-  }
+  const res = inspectOfficeContainerBytesPreflight(bytes);
   return {
-    ok: findings.length === 0,
-    hasMacros,
-    encrypted: zipEntryEncrypted || latin1.includes("encryptedpackage"),
-    findings,
+    ok: res.ok,
+    hasMacros: res.hasMacros,
+    encrypted: res.encrypted,
+    findings: res.findings,
   };
 }
 

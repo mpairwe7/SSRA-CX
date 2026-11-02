@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 ALLOWED_SSRA_DOMAINS: frozenset[str] = frozenset(
     {
@@ -17,6 +17,7 @@ ALLOWED_SSRA_DOMAINS: frozenset[str] = frozenset(
         "eservices.gov.ss",
         "business.eservices.gov.ss",
         "customs.eservices.gov.ss",
+        "trade.eservices.gov.ss",
         "www.trade.eservices.gov.ss",
         "ssra.gov.ss",
         "etax.ssra.gov.ss",
@@ -45,20 +46,44 @@ _CONTEXTUAL_PROMPT_INJECTION_RE = re.compile(
     flags=re.IGNORECASE,
 )
 _BIDI_OVERRIDE_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069]")
+_ANSI_ESCAPE_RE = re.compile(
+    r"(?:\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x9b[0-9;?]*[A-Za-z])"
+)
+_OPEN_REDIRECT_QUERY_RE = re.compile(
+    r"(?:^|[&#?;])(?:redirect|redirect_uri|redirect_url|return|return_to|returnurl|next|url|goto|continue|dest|destination|target|callback)=",
+    flags=re.IGNORECASE,
+)
 _SAFE_TOOL_NAME_RE = re.compile(r"^[a-z0-9_.-]{1,64}$")
 MAX_STRING_FIELD_LEN = 2000
 
 
 def is_allowed_ssra_url(url: str) -> bool:
-    """Return True if url is an HTTPS URL on an allow-listed South Sudan government domain."""
+    """Return True if url is a safe HTTPS URL on an allow-listed South Sudan government domain without open-redirect or traversal payloads."""
     try:
-        parsed = urlparse(url.rstrip(".,;:)]"))
-        host = (parsed.hostname or "").lower()
+        cleaned = url.rstrip(".,;:)]")
+        parsed = urlparse(cleaned)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        port = parsed.port
+        path_lower = parsed.path.lower()
+        qf_decoded = unquote(f"{parsed.query}&{parsed.fragment}").lower()
+        has_redirect_or_xss = bool(_OPEN_REDIRECT_QUERY_RE.search(qf_decoded)) or any(
+            tok in qf_decoded
+            for tok in ("http://", "https://", "//", "\\\\", "javascript:", "data:", "vbscript:")
+        )
         return (
-            parsed.scheme == "https"
+            bool(cleaned)
+            and all(ord(ch) >= 32 and ord(ch) != 127 for ch in cleaned)
+            and parsed.scheme == "https"
             and not parsed.username
             and not parsed.password
+            and port in (None, 443)
             and host in ALLOWED_SSRA_DOMAINS
+            and ".." not in path_lower
+            and "//" not in path_lower
+            and "%2e" not in path_lower
+            and "%2f" not in path_lower
+            and "%5c" not in path_lower
+            and not has_redirect_or_xss
         )
     except Exception:
         return False
@@ -79,6 +104,7 @@ def scrub_untrusted_urls_and_cap_length(text: str, max_len: int = MAX_STRING_FIE
         return f"[REDACTED_UNALLOWLISTED_URL]{trailing}"
 
     scrubbed = _BIDI_OVERRIDE_RE.sub("", text)
+    scrubbed = _ANSI_ESCAPE_RE.sub("", scrubbed)
     scrubbed = _DELIMITER_BREAKOUT_RE.sub("[REDACTED_DELIMITER_BREAKOUT]", scrubbed)
     scrubbed = _CONTEXTUAL_PROMPT_INJECTION_RE.sub(
         "[REDACTED_MCP06_CONTEXTUAL_INJECTION]", scrubbed

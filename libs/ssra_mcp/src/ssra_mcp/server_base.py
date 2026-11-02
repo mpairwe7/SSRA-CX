@@ -12,6 +12,7 @@ Implements:
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import ipaddress
 import json
@@ -52,6 +53,9 @@ MAX_MCP_TASKS = 512
 MAX_MCP_IDEMPOTENT_CACHE = 1024
 MAX_MCP_REQUEST_BODY_BYTES = 262_144
 MCP_TASK_TTL_SECONDS = 3600
+MCP_IDEMPOTENCY_TTL_SECONDS = 86400
+MAX_MCP_ARG_DEPTH = 8
+MAX_MCP_ARG_KEYS = 64
 _SHELL_METACHAR_RE = re.compile(r"[;|`$><\r\n\x00]")
 _NUMERIC_HOST_RE = re.compile(r"^(?:0x[0-9a-f]+|0[0-7]+|\d+)$", flags=re.IGNORECASE)
 _INTERNAL_MCP_HOST_RE = re.compile(r"^mcp-[a-z0-9-]+$")
@@ -124,6 +128,39 @@ def _contains_null_byte(val: Any) -> bool:
     if isinstance(val, (list, tuple)):
         return any(_contains_null_byte(item) for item in val)
     return False
+
+
+def _validate_mcp_argument_complexity(
+    val: Any,
+    *,
+    tool_name: str,
+    _depth: int = 0,
+) -> int:
+    """Enforce maximum nesting depth (`MAX_MCP_ARG_DEPTH`) and total key count (`MAX_MCP_ARG_KEYS`) on MCP tool arguments."""
+    if _depth > MAX_MCP_ARG_DEPTH:
+        raise SSRAError(
+            McpErrorCode.VALIDATION_FAILED,
+            f"Tool '{tool_name}' arguments exceed maximum nesting depth of {MAX_MCP_ARG_DEPTH} (ASI08)",
+            status_code=400,
+        )
+    if isinstance(val, dict):
+        total_keys = len(val) + sum(
+            _validate_mcp_argument_complexity(v, tool_name=tool_name, _depth=_depth + 1)
+            for v in val.values()
+        )
+        if total_keys > MAX_MCP_ARG_KEYS:
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Tool '{tool_name}' arguments exceed maximum key count of {MAX_MCP_ARG_KEYS} (ASI08)",
+                status_code=400,
+            )
+        return total_keys
+    if isinstance(val, (list, tuple)):
+        return sum(
+            _validate_mcp_argument_complexity(item, tool_name=tool_name, _depth=_depth + 1)
+            for item in val
+        )
+    return 0
 
 
 async def read_bounded_mcp_json_body(
@@ -399,7 +436,7 @@ class StatelessMcpServer:
         self.confirmation_manager = confirmation_manager or ConfirmationTokenManager()
         self.audit_ledger = audit_ledger or HashChainedAuditLedger()
         self._tools: dict[str, RegisteredTool] = {}
-        self._idempotent_cache: dict[str, tuple[str, dict[str, Any]]] = {}
+        self._idempotent_cache: dict[str, tuple[str, str, dict[str, Any]]] = {}
         self._tasks: dict[str, dict[str, Any]] = {}
 
     @property
@@ -608,6 +645,8 @@ class StatelessMcpServer:
         clean_args = dict(arguments)
         confirmation_token = clean_args.pop("confirmation_token", None)
         idempotency_key = clean_args.pop("idempotency_key", None)
+        _validate_mcp_argument_complexity(clean_args, tool_name=tool_name)
+        now_check_iso = utc_now().isoformat()
 
         if not tool.annotations.readOnlyHint or tool.tier in (RiskTier.T2, RiskTier.T3):
             if not confirmation_token or not idempotency_key:
@@ -616,6 +655,13 @@ class StatelessMcpServer:
                     f"State-changing tool '{tool_name}' ({tool.tier}) requires confirmation_token and idempotency_key",
                     status_code=403,
                 )
+            expired_idem = [
+                ik
+                for ik, (_, exp_iso, _) in self._idempotent_cache.items()
+                if exp_iso < now_check_iso
+            ]
+            for ik in expired_idem:
+                self._idempotent_cache.pop(ik, None)
             action_digest = compute_action_digest(
                 tool_name=tool_name,
                 arguments=clean_args,
@@ -623,14 +669,14 @@ class StatelessMcpServer:
             )
             cache_key = f"{self.server_name}:{tool_name}:{claims.sub or 'anon'}:{idempotency_key}"
             if cache_key in self._idempotent_cache:
-                cached_digest, cached_envelope = self._idempotent_cache[cache_key]
+                cached_digest, _, cached_envelope = self._idempotent_cache[cache_key]
                 if cached_digest != action_digest:
                     raise SSRAError(
                         McpErrorCode.VALIDATION_FAILED,
                         f"Idempotency key '{idempotency_key}' replayed with mutated arguments for '{tool_name}'",
                         status_code=422,
                     )
-                return cached_envelope
+                return copy.deepcopy(cached_envelope)
 
             self.confirmation_manager.consume_token(
                 token=str(confirmation_token),
@@ -728,7 +774,12 @@ class StatelessMcpServer:
             if len(self._idempotent_cache) >= MAX_MCP_IDEMPOTENT_CACHE:
                 oldest_key = next(iter(self._idempotent_cache))
                 self._idempotent_cache.pop(oldest_key, None)
-            self._idempotent_cache[cache_key] = (action_digest, response_envelope)
+            exp_iso = (now + timedelta(seconds=MCP_IDEMPOTENCY_TTL_SECONDS)).isoformat()
+            self._idempotent_cache[cache_key] = (
+                action_digest,
+                exp_iso,
+                copy.deepcopy(response_envelope),
+            )
 
         return response_envelope
 
