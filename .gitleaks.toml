@@ -4,10 +4,7 @@ title = "SSRA Assist Gitleaks Configuration"
 useDefault = true
 
 [allowlist]
-description = "Allowlist SHA-256 contract digests, TaxFact key identifiers, local untracked .env, and prose phrase 'S3-compatible'"
-paths = [
-  '''^\.env$''',
-]
+description = "Allowlist SHA-256 contract digests, TaxFact key identifiers, and prose phrase 'S3-compatible'"
 regexes = [
   '''S3-compatible''',
   '''[0-9a-f]{64}''',

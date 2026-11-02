@@ -1,5 +1,6 @@
 # Hardened Multi-Stage Container for SSRA Assist Unified Space Runtime (CIS Docker Benchmark v1.7)
 FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS node_runtime
+RUN mkdir -p /opt/node-libs && cp -a /usr/lib/*/libstdc++.so.6* /opt/node-libs/
 
 FROM python:3.14.7-slim-bookworm@sha256:82bc3c539b8813ada9d68c63b40158fa002f7f33de9bf3312a3dfdc0620dff56 AS runtime
 
@@ -8,14 +9,14 @@ LABEL org.opencontainers.image.title="ssra-cx-space" \
       org.opencontainers.image.source="https://github.com/mpairwe7/SSRA-CX"
 
 COPY --from=node_runtime /usr/local/bin/node /usr/local/bin/node
-COPY --from=node_runtime /usr/lib/x86_64-linux-gnu/libstdc++.so.6* /usr/lib/x86_64-linux-gnu/
+COPY --from=node_runtime /opt/node-libs/ /usr/local/lib/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONFAULTHANDLER=1 \
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
-    SSRA_RUNTIME_MODE=reference \
+    SSRA_RUNTIME_MODE=production \
     NODE_ENV=production \
     HOSTNAME="0.0.0.0" \
     PORT=7860 \
@@ -43,5 +44,5 @@ COPY --chown=10001:10001 apps/console ./apps/console
 USER 10001:10001
 EXPOSE 7860
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
-  CMD ["python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz'); urllib.request.urlopen('http://127.0.0.1:8001/healthz'); urllib.request.urlopen('http://127.0.0.1:7860/healthz')"]
-CMD ["sh", "-c", "uvicorn ssra_api.main:app --host 127.0.0.1 --port 8000 --no-access-log & uvicorn ssra_runtime.main:app --host 127.0.0.1 --port 8001 --no-access-log & exec node apps/web/server.js"]
+  CMD ["python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/healthz')"]
+CMD ["sh", "-c", "uvicorn ssra_api.main:app --host 127.0.0.1 --port 8000 --no-access-log & API_PID=$!; uvicorn ssra_runtime.main:app --host 127.0.0.1 --port 8001 --no-access-log & RT_PID=$!; node apps/web/server.js & WEB_PID=$!; trap 'kill -TERM $API_PID $RT_PID $WEB_PID 2>/dev/null || true; wait $API_PID $RT_PID $WEB_PID 2>/dev/null || true; exit 0' TERM INT; wait $WEB_PID; STATUS=$?; kill -TERM $API_PID $RT_PID 2>/dev/null || true; wait $API_PID $RT_PID 2>/dev/null || true; exit $STATUS"]
