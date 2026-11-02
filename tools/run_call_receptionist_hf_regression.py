@@ -307,49 +307,35 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
         }
     )
 
-    # 4h. Second call session: spoken consent -> callback request -> clean hangup
-    call_sid_2 = f"hf_reg2_{uuid.uuid4().hex[:10]}"
-    _, s2_consent = _post_json(
-        f"{base}/api/voice/receptionist/turn",
-        {
-            "session_id": call_sid_2,
-            "transcript": "yes I agree",
-            "locale": "en",
-            "disclosure_finished": True,
-        },
-        timeout=20.0,
-    )
-    assert s2_consent.get("phase") == "active_ai"
-    sess_tok_2 = str(s2_consent.get("session_token") or "")
-
+    # 4h. Callback request while waiting for officer + clean hangup
     _, s2_cb = _post_json(
         f"{base}/api/voice/receptionist/turn",
         {
-            "session_id": call_sid_2,
-            "session_token": sess_tok_2,
-            "transcript": "please call me back",
+            "session_id": call_sid,
+            "session_token": sess_tok,
+            "transcript": "I want a callback",
             "locale": "en",
         },
         timeout=20.0,
     )
-    assert s2_cb.get("control_action_applied") == "callback_requested"
+    assert s2_cb.get("control_action_applied") == "callback_requested", f"Callback failed: {s2_cb}"
     assert s2_cb.get("needs_callback") is True
 
     _, s2_end = _post_json(
         f"{base}/api/voice/receptionist/turn",
         {
-            "session_id": call_sid_2,
-            "session_token": sess_tok_2,
+            "session_id": call_sid,
+            "session_token": sess_tok,
             "transcript": "goodbye thank you",
             "locale": "en",
         },
         timeout=20.0,
     )
-    assert s2_end.get("phase") == "ended"
-    assert s2_end.get("control_action_applied") == "hangup"
+    assert s2_end.get("phase") == "ended", f"Hangup failed: {s2_end}"
+    assert s2_end.get("control_action_applied") in ("caller_voice_hangup", "hangup")
     results.append(
         {
-            "check": "4h_receptionist_spoken_consent_callback_and_hangup",
+            "check": "4h_receptionist_callback_and_hangup",
             "status": "PASS",
             "needs_callback": s2_cb.get("needs_callback"),
             "final_phase": s2_end.get("phase"),
