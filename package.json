@@ -17,7 +17,7 @@
     "test": "turbo run test"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.15",
+    "@biomejs/biome": "2.6.3",
     "@go-task/cli": "3.54.0",
     "@playwright/test": "1.58.0",
     "turbo": "2.11.7",
