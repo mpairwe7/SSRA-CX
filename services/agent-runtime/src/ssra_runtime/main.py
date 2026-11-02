@@ -6,9 +6,10 @@ import base64
 import hmac
 import os
 import re
+import secrets
 import socket
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,9 @@ from ssra_security import (
 )
 from ssra_testing import make_conversation_event
 from ssra_voice import (
+    APPROVED_VOICE_WER_EVIDENCE,
+    MAX_TTS_SYNTHESIS_CHARS,
+    TtsSynthesizer,
     VoiceCallSession,
     VoiceWerEvidence,
     build_voice_catalogue_payload,
@@ -137,16 +141,18 @@ class VoiceReceptionistTurnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     session_id: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_:-]+$")
+    session_token: str | None = Field(default=None, max_length=128)
     transcript: str = Field(default="", max_length=1000)
     dtmf_digit: str | None = Field(default=None, max_length=2)
     locale: LocaleCode = LocaleCode.EN
     voice_id: str | None = None
+    disclosure_finished: bool = False
     assistant_speaking: bool = False
     elapsed_since_tts_end_ms: float | None = None
     synthesize_tts: bool = False
 
 
-_REFERENCE_WER_EVIDENCE: dict[LocaleCode, VoiceWerEvidence] = {
+REFERENCE_WER_EVIDENCE: dict[LocaleCode, VoiceWerEvidence] = {
     loc: VoiceWerEvidence(
         locale=loc,
         word_error_rate=0.05,
@@ -220,7 +226,14 @@ async def _read_bounded_runtime_body(request: Request, max_bytes: int) -> bytes 
     return raw
 
 
-def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAPI:
+def create_runtime_app(
+    runtime: SSRAConversationRuntime | None = None,
+    *,
+    local_tts_synthesizer: TtsSynthesizer | None = None,
+    local_asr_transcriber: Callable[[bytes, str], str] | None = None,
+    wer_evidence: Mapping[LocaleCode, VoiceWerEvidence] | None = None,
+    max_voice_call_sessions: int = _MAX_VOICE_CALL_SESSIONS,
+) -> FastAPI:
     """Create the FastAPI application for services/agent-runtime with security middleware and SSE streaming."""
     assert_sovereign_and_production_readiness(
         persisted_flag_overrides={
@@ -234,6 +247,8 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
     )
     active_runtime = runtime or SSRAConversationRuntime()
     voice_call_sessions: dict[str, VoiceCallSession] = {}
+    voice_call_session_tokens: dict[str, str] = {}
+    voice_call_opening_prompts: dict[str, list[str]] = {}
 
     @app.middleware("http")
     async def runtime_security_middleware(
@@ -272,10 +287,11 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
                 media_type="application/problem+json",
                 headers={"traceparent": tp, **_RUNTIME_SECURITY_HEADERS},
             )
-        if await _read_bounded_runtime_body(request, _MAX_RUNTIME_BODY_BYTES) is None:
+        max_body_bytes = 3_145_728 if raw_path == "/v1/voice/asr" else _MAX_RUNTIME_BODY_BYTES
+        if await _read_bounded_runtime_body(request, max_body_bytes) is None:
             err = SSRAError(
                 McpErrorCode.VALIDATION_FAILED,
-                f"Request body exceeds maximum allowed size of {_MAX_RUNTIME_BODY_BYTES} bytes",
+                f"Request body exceeds maximum allowed size of {max_body_bytes} bytes",
                 status_code=413,
             )
             return JSONResponse(
@@ -614,21 +630,25 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
     @app.get("/v1/voice/status")
     def voice_status() -> dict[str, Any]:
         """Return local HF cache + Cloudflare Workers AI voice/speech fallback status and speaker catalogue."""
+        status_wer = wer_evidence if wer_evidence is not None else APPROVED_VOICE_WER_EVIDENCE
         return {
             "service": "ssra-voice-receptionist",
             "fallback_chain": resolve_voice_fallback_chain(LocaleCode.EN),
             "cloudflare_fallback": get_cloudflare_voice_fallback_config().to_public_dict(),
-            "catalogue": build_voice_catalogue_payload(wer_evidence=_REFERENCE_WER_EVIDENCE),
+            "catalogue": build_voice_catalogue_payload(wer_evidence=status_wer),
         }
 
     @app.post("/v1/voice/tts")
     def voice_tts(body: VoiceTtsRequest) -> dict[str, Any]:
         """Synthesize speech preferring local sovereign TTS first, falling back to Cloudflare Workers AI."""
-        cleaned = clean_text_for_speech(body.text, locale=body.locale)
+        cleaned = clean_text_for_speech(body.text, locale=body.locale)[
+            :MAX_TTS_SYNTHESIS_CHARS
+        ].strip()
         res = synthesize_with_cloudflare_fallback(
             body.text,
             locale=body.locale,
             voice=body.voice,
+            local_synthesizer=local_tts_synthesizer,
         )
         return {
             "status": "ok" if not res.error and res.audio else "degraded",
@@ -657,24 +677,65 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
             raw_audio,
             locale=body.locale,
             duration_seconds=body.duration_seconds,
+            local_transcriber=local_asr_transcriber,
         )
 
     @app.post("/v1/voice/receptionist/turn")
-    def voice_receptionist_turn(body: VoiceReceptionistTurnRequest) -> dict[str, Any]:
+    def voice_receptionist_turn(
+        body: VoiceReceptionistTurnRequest,
+        x_voice_session_token: str | None = Header(default=None, alias="X-Voice-Session-Token"),
+    ) -> dict[str, Any]:
         """Execute a Call Receptionist turn (`VoiceCallSession` + 11-node runtime + Cloudflare TTS fallback)."""
         sess = voice_call_sessions.get(body.session_id)
-        if sess is None:
-            if len(voice_call_sessions) >= _MAX_VOICE_CALL_SESSIONS:
-                voice_call_sessions.pop(next(iter(voice_call_sessions)), None)
+        if sess is not None:
+            expected_tok = voice_call_session_tokens.get(body.session_id, "")
+            provided_tok = (body.session_token or x_voice_session_token or "").strip()
+            if not provided_tok or not hmac.compare_digest(expected_tok, provided_tok):
+                raise SSRAError(
+                    McpErrorCode.NOT_AUTHORIZED,
+                    "Invalid or missing voice session_token",
+                    status_code=403,
+                )
+            session_token = expected_tok
+            opening_prompts = voice_call_opening_prompts.get(body.session_id, [])
+        else:
+            if len(voice_call_sessions) >= max_voice_call_sessions:
+                ended_ids = [
+                    sid
+                    for sid, existing in voice_call_sessions.items()
+                    if existing.phase == "ended"
+                ]
+                for sid in ended_ids:
+                    voice_call_sessions.pop(sid, None)
+                    voice_call_session_tokens.pop(sid, None)
+                    voice_call_opening_prompts.pop(sid, None)
+            if len(voice_call_sessions) >= max_voice_call_sessions:
+                raise SSRAError(
+                    McpErrorCode.RATE_LIMITED,
+                    "Maximum concurrent voice call sessions reached",
+                    status_code=429,
+                )
+            active_wer = (
+                wer_evidence
+                if wer_evidence is not None
+                else (
+                    REFERENCE_WER_EVIDENCE if is_reference_mode() else APPROVED_VOICE_WER_EVIDENCE
+                )
+            )
             sess = VoiceCallSession(
                 session_id=body.session_id,
                 locale=body.locale,
                 voice_id=body.voice_id,
-                wer_evidence=_REFERENCE_WER_EVIDENCE,
+                wer_evidence=active_wer,
             )
-            sess.start_call()
-            sess.mark_disclosure_finished()
+            opening_prompts = [p.text for p in sess.start_call()]
+            session_token = secrets.token_urlsafe(24)
             voice_call_sessions[body.session_id] = sess
+            voice_call_session_tokens[body.session_id] = session_token
+            voice_call_opening_prompts[body.session_id] = opening_prompts
+
+        if body.disclosure_finished and sess.disclosure_playing:
+            sess.mark_disclosure_finished()
 
         outcome = sess.process_caller_turn(
             transcript=body.transcript,
@@ -721,6 +782,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
                 spoken_reply,
                 locale=body.locale,
                 voice=sess.voice_id,
+                local_synthesizer=local_tts_synthesizer,
             )
             tts_payload = {
                 "backend": tts_res.backend,
@@ -735,6 +797,9 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
 
         return {
             "session_id": sess.session_id,
+            "session_token": session_token,
+            "opening_prompts": opening_prompts,
+            "disclosure_playing": sess.disclosure_playing,
             "phase": outcome.phase,
             "turn_index": outcome.turn_index,
             "recording_consent_granted": sess.recording_consent_granted,

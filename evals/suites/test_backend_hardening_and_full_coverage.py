@@ -2327,23 +2327,29 @@ def test_cloudflare_voice_fallback_and_receptionist_endpoints(
 
     import httpx
     from fastapi.testclient import TestClient
-    from ssra_runtime.main import create_runtime_app
+    from ssra_runtime.main import REFERENCE_WER_EVIDENCE, create_runtime_app
     from ssra_voice import (
         TtsCachedAudio,
         build_cf_workers_ai_targets,
+        consume_cloudflare_neurons,
         get_cloudflare_voice_fallback_config,
+        reset_cloudflare_neuron_usage_for_tests,
         resolve_voice_fallback_chain,
         synthesize_with_cloudflare_fallback,
         transcribe_with_cloudflare_fallback,
     )
 
+    reset_cloudflare_neuron_usage_for_tests()
+
     # 1. Config & fallback chain resolution
     cfg_disabled = get_cloudflare_voice_fallback_config(
         {"FLAG_CLOUDFLARE_FALLBACK": "false", "CF_NEURON_DAILY_BUDGET": "bad_int"}
     )
+    assert cfg_disabled.neuron_daily_budget == 0
     assert not cfg_disabled.stt_fallback_active
     assert not cfg_disabled.tts_fallback_active
     assert build_cf_workers_ai_targets("@cf/deepgram/aura-2-en", env={}) == []
+    assert not consume_cloudflare_neurons(0, budget=100)
 
     cf_env = {
         "FLAG_CLOUDFLARE_FALLBACK": "true",
@@ -2438,7 +2444,19 @@ def test_cloudflare_voice_fallback_and_receptionist_endpoints(
     assert cf_melo_res.backend == "cf_workers_ai"
     assert cf_melo_res.voice == "@cf/myshell-ai/melotts"
 
+    # Non-English locale skips English-only Aura and uses MeloTTS
+    cf_ar_res = synthesize_with_cloudflare_fallback(
+        "مرحبا",
+        locale=LocaleCode.AR,
+        env=cf_env,
+    )
+    assert cf_ar_res.backend == "cf_workers_ai"
+    assert cf_ar_res.voice == "@cf/myshell-ai/melotts"
+
     def _mock_aura_ok(url: str, **kwargs: object) -> _FakeResp:
+        import socket
+
+        socket.getaddrinfo("localhost", 80)
         return _FakeResp(200, content=mp3_bytes, headers={"content-type": "audio/mpeg"})
 
     monkeypatch.setattr(httpx, "post", _mock_aura_ok)
@@ -2449,10 +2467,14 @@ def test_cloudflare_voice_fallback_and_receptionist_endpoints(
     assert cf_aura_res.backend == "cf_workers_ai"
     assert cf_aura_res.voice == "@cf/deepgram/aura-2-en"
 
-    def _mock_tts_503(url: str, **kwargs: object) -> _FakeResp:
-        return _FakeResp(503)
+    def _mock_tts_oversized(url: str, **kwargs: object) -> _FakeResp:
+        return _FakeResp(
+            200,
+            content=mp3_bytes,
+            headers={"content-type": "audio/mpeg", "content-length": "99999999"},
+        )
 
-    monkeypatch.setattr(httpx, "post", _mock_tts_503)
+    monkeypatch.setattr(httpx, "post", _mock_tts_oversized)
     cf_all_fail = synthesize_with_cloudflare_fallback(
         "PAYE is due by the fifteenth.",
         env={**cf_env, "TTS_FALLBACK_MODEL": ""},
@@ -2506,7 +2528,8 @@ def test_cloudflare_voice_fallback_and_receptionist_endpoints(
     )
     assert asr_cf_fail["status"] == "degraded"
 
-    # 4. Runtime endpoints: /v1/voice/status, /v1/voice/tts, /v1/voice/asr, /v1/voice/receptionist/turn
+    # 4. Runtime endpoints: local-first injection + Cloudflare fallback + session_token security
+    reset_cloudflare_neuron_usage_for_tests()
     for k, v in cf_env.items():
         monkeypatch.setenv(k, v)
 
@@ -2520,7 +2543,28 @@ def test_cloudflare_voice_fallback_and_receptionist_endpoints(
 
     monkeypatch.setattr(httpx, "post", _mock_runtime_voice_post)
 
-    app = create_runtime_app()
+    # 4a. Verify local-first TTS endpoint behavior when local_tts_synthesizer is injected
+    def _local_synth_ok(txt: str, /, *, language: str, voice: str) -> TtsCachedAudio:
+        return TtsCachedAudio(
+            audio=valid_wav,
+            backend="local_orpheus",
+            voice=voice,
+            language=language,
+            latency_ms=2.0,
+        )
+
+    app_local = create_runtime_app(local_tts_synthesizer=_local_synth_ok)
+    client_local = TestClient(app_local)
+    local_tts_res = client_local.post(
+        "/v1/voice/tts",
+        json={"text": "Welcome to SSRA Assist.", "locale": "en"},
+    )
+    assert local_tts_res.status_code == 200
+    assert local_tts_res.json()["backend"] == "local_orpheus"
+    assert local_tts_res.json()["audio_bytes_len"] > 100
+
+    # 4b. Verify Cloudflare fallback & Receptionist session_token binding
+    app = create_runtime_app(wer_evidence=REFERENCE_WER_EVIDENCE)
     client = TestClient(app)
 
     st_res = client.get("/v1/voice/status")
@@ -2533,6 +2577,7 @@ def test_cloudflare_voice_fallback_and_receptionist_endpoints(
     )
     assert tts_res.status_code == 200
     assert tts_res.json()["status"] == "ok"
+    assert tts_res.json()["backend"] == "cf_workers_ai"
     assert tts_res.json()["audio_bytes_len"] > 100
 
     bad_asr = client.post(
@@ -2548,20 +2593,36 @@ def test_cloudflare_voice_fallback_and_receptionist_endpoints(
     assert good_asr.status_code == 200
     assert good_asr.json()["status"] == "ok"
 
-    # Receptionist turn 1: grant consent via DTMF 1
+    # Receptionist turn 1: grant consent via DTMF 1 and receive session_token + opening_prompts
     t1 = client.post(
         "/v1/voice/receptionist/turn",
-        json={"session_id": "call_reg_01", "dtmf_digit": "1", "synthesize_tts": True},
+        json={
+            "session_id": "call_reg_01",
+            "dtmf_digit": "1",
+            "disclosure_finished": True,
+            "synthesize_tts": True,
+        },
     )
     assert t1.status_code == 200
     assert t1.json()["phase"] == "active_ai"
     assert t1.json()["recording_consent_granted"] is True
+    sess_token = t1.json()["session_token"]
+    assert sess_token
+    assert len(t1.json()["opening_prompts"]) >= 1
 
-    # Receptionist turn 2: ask PAYE question with TTS synthesis
+    # Missing or wrong session_token is rejected with 403
+    t_unauth = client.post(
+        "/v1/voice/receptionist/turn",
+        json={"session_id": "call_reg_01", "transcript": "hello"},
+    )
+    assert t_unauth.status_code == 403
+
+    # Receptionist turn 2: ask PAYE question with valid session_token and TTS synthesis
     t2 = client.post(
         "/v1/voice/receptionist/turn",
         json={
             "session_id": "call_reg_01",
+            "session_token": sess_token,
             "transcript": "When is the PAYE monthly filing deadline?",
             "synthesize_tts": True,
         },
@@ -2571,14 +2632,43 @@ def test_cloudflare_voice_fallback_and_receptionist_endpoints(
     assert t2.json()["spoken_response_text"] != ""
     assert t2.json()["tts"]["audio_bytes_len"] > 100
 
-    # Receptionist turn 3: request officer transfer
+    # Receptionist turn 3: request officer transfer via DTMF 0
     t3 = client.post(
         "/v1/voice/receptionist/turn",
         json={
             "session_id": "call_reg_01",
-            "transcript": "Please transfer me to a human tax officer",
+            "session_token": sess_token,
+            "dtmf_digit": "0",
         },
     )
     assert t3.status_code == 200
     assert t3.json()["phase"] == "transferred"
     assert t3.json()["decision_action"] == "WARM_TRANSFER_TO_OFFICER"
+
+    # Receptionist capacity guard (429 when active, evicts only ended sessions)
+    app_cap = create_runtime_app(wer_evidence=REFERENCE_WER_EVIDENCE, max_voice_call_sessions=1)
+    client_cap = TestClient(app_cap)
+    c_s1 = client_cap.post(
+        "/v1/voice/receptionist/turn",
+        json={"session_id": "cap_01", "dtmf_digit": "1", "disclosure_finished": True},
+    )
+    assert c_s1.status_code == 200
+    c_s2_full = client_cap.post(
+        "/v1/voice/receptionist/turn",
+        json={"session_id": "cap_02", "dtmf_digit": "1", "disclosure_finished": True},
+    )
+    assert c_s2_full.status_code == 429
+    # End cap_01 and verify cap_02 can now be created
+    client_cap.post(
+        "/v1/voice/receptionist/turn",
+        json={
+            "session_id": "cap_01",
+            "session_token": c_s1.json()["session_token"],
+            "transcript": "goodbye",
+        },
+    )
+    c_s2_ok = client_cap.post(
+        "/v1/voice/receptionist/turn",
+        json={"session_id": "cap_02", "dtmf_digit": "1", "disclosure_finished": True},
+    )
+    assert c_s2_ok.status_code == 200

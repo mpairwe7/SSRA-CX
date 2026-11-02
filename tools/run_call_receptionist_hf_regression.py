@@ -137,11 +137,19 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
     # 4a. Consent via DTMF 1
     c1_code, c1 = _post_json(
         f"{base}/api/voice/receptionist/turn",
-        {"session_id": call_sid, "dtmf_digit": "1", "locale": "en"},
+        {
+            "session_id": call_sid,
+            "dtmf_digit": "1",
+            "locale": "en",
+            "disclosure_finished": True,
+        },
         timeout=20.0,
     )
     assert c1_code == 200 and c1.get("phase") == "active_ai", f"Consent turn failed: {c1}"
     assert c1.get("recording_consent_granted") is True, f"Consent not granted: {c1}"
+    sess_tok = str(c1.get("session_token") or "")
+    assert sess_tok, f"Missing session_token on created session: {c1}"
+    assert c1.get("opening_prompts"), f"Missing opening_prompts on created session: {c1}"
     results.append(
         {
             "check": "4a_receptionist_dtmf_consent",
@@ -151,12 +159,13 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
         }
     )
 
-    # 4b. Grounded Tax Q&A (PAYE filing deadline) + TTS synthesis
+    # 4b. Grounded Tax Q&A (PAYE salary tax calculation + deadline) + TTS synthesis
     c2_code, c2 = _post_json(
         f"{base}/api/voice/receptionist/turn",
         {
             "session_id": call_sid,
-            "transcript": "When is the monthly PAYE filing deadline in South Sudan?",
+            "session_token": sess_tok,
+            "transcript": "How much is PAYE salary tax on 250000 SSP per month?",
             "locale": "en",
             "synthesize_tts": True,
         },
@@ -165,8 +174,8 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
     assert c2_code == 200, f"Tax Q&A turn failed ({c2_code}): {c2}"
     assert c2.get("decision_action") == "STREAM_ASR", f"Unexpected decision_action: {c2}"
     spoken_qna = str(c2.get("spoken_response_text") or "")
-    assert "15th" in spoken_qna or "fifteenth" in spoken_qna.lower(), (
-        f"Expected PAYE 15th deadline in spoken reply: {spoken_qna}"
+    assert "25000 SSP" in spoken_qna and "day 15" in spoken_qna, (
+        f"Expected PAYE 25000 SSP and day 15 deadline in spoken reply: {spoken_qna}"
     )
     tts_turn = c2.get("tts") or {}
     assert int(tts_turn.get("audio_bytes_len") or 0) > 1000, f"Missing turn TTS audio: {tts_turn}"
@@ -187,6 +196,7 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
         f"{base}/api/voice/receptionist/turn",
         {
             "session_id": call_sid,
+            "session_token": sess_tok,
             "transcript": spoken_qna,
             "elapsed_since_tts_end_ms": 250.0,
             "locale": "en",
@@ -207,6 +217,7 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
         f"{base}/api/voice/receptionist/turn",
         {
             "session_id": call_sid,
+            "session_token": sess_tok,
             "transcript": "uh huh",
             "assistant_speaking": True,
             "locale": "en",
@@ -229,6 +240,7 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
         f"{base}/api/voice/receptionist/turn",
         {
             "session_id": call_sid,
+            "session_token": sess_tok,
             "transcript": "please speak slower",
             "locale": "en",
         },
@@ -252,6 +264,7 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
         f"{base}/api/voice/receptionist/turn",
         {
             "session_id": call_sid,
+            "session_token": sess_tok,
             "transcript": "can you repeat that",
             "locale": "en",
         },
@@ -260,7 +273,7 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
     assert c6_code == 200 and c6.get("control_action_applied") == "repeat", (
         f"Repeat control failed: {c6}"
     )
-    assert "15th" in str(c6.get("spoken_response_text") or "")
+    assert "25000 SSP" in str(c6.get("spoken_response_text") or "")
     results.append(
         {
             "check": "4f_receptionist_repeat_last_answer",
@@ -275,6 +288,7 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
         f"{base}/api/voice/receptionist/turn",
         {
             "session_id": call_sid,
+            "session_token": sess_tok,
             "transcript": "please transfer me to a human tax officer",
             "locale": "en",
             "synthesize_tts": True,
@@ -297,14 +311,25 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
     call_sid_2 = f"hf_reg2_{uuid.uuid4().hex[:10]}"
     _, s2_consent = _post_json(
         f"{base}/api/voice/receptionist/turn",
-        {"session_id": call_sid_2, "transcript": "yes I agree", "locale": "en"},
+        {
+            "session_id": call_sid_2,
+            "transcript": "yes I agree",
+            "locale": "en",
+            "disclosure_finished": True,
+        },
         timeout=20.0,
     )
     assert s2_consent.get("phase") == "active_ai"
+    sess_tok_2 = str(s2_consent.get("session_token") or "")
 
     _, s2_cb = _post_json(
         f"{base}/api/voice/receptionist/turn",
-        {"session_id": call_sid_2, "transcript": "please call me back", "locale": "en"},
+        {
+            "session_id": call_sid_2,
+            "session_token": sess_tok_2,
+            "transcript": "please call me back",
+            "locale": "en",
+        },
         timeout=20.0,
     )
     assert s2_cb.get("control_action_applied") == "callback_requested"
@@ -312,7 +337,12 @@ def run_regression_suite(base_url: str) -> dict[str, Any]:
 
     _, s2_end = _post_json(
         f"{base}/api/voice/receptionist/turn",
-        {"session_id": call_sid_2, "transcript": "goodbye thank you", "locale": "en"},
+        {
+            "session_id": call_sid_2,
+            "session_token": sess_tok_2,
+            "transcript": "goodbye thank you",
+            "locale": "en",
+        },
         timeout=20.0,
     )
     assert s2_end.get("phase") == "ended"
