@@ -6730,7 +6730,7 @@ function renderKeycloakRealmAuthHtml({
   }).toString();
   const switchHref = `/realms/ssra/protocol/openid-connect/auth?${switchQuery}`;
 
-  return compactHtmlAssetBlocks(`<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8" />
@@ -7009,7 +7009,7 @@ function renderKeycloakRealmAuthHtml({
     })();
   </script>
 </body>
-</html>`);
+</html>`;
 }
 
 function renderKeycloakSessionExchangeHtml({ nonce, account, isNewRegistration, targetPath }) {
@@ -7025,7 +7025,7 @@ function renderKeycloakSessionExchangeHtml({ nonce, account, isNewRegistration, 
     landingPath: account.landingPath,
     signedInAt: new Date().toISOString(),
   };
-  return compactHtmlAssetBlocks(`<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -7058,7 +7058,7 @@ function renderKeycloakSessionExchangeHtml({ nonce, account, isNewRegistration, 
     })();
   </script>
 </body>
-</html>`);
+</html>`;
 }
 
 const server = http.createServer(async (req, res) => {
