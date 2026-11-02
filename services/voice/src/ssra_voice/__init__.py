@@ -4946,6 +4946,7 @@ def synthesize_with_cloudflare_fallback(
     gem_key = src.get("GEMINI_API_KEY", "").strip()
     cf_timeout = 3.5 if src.get("SPACE_ID") else 8.0
     max_b64_len = (MAX_COMPRESSED_AUDIO_BYTES * 4) // 3 + 4
+    cf_transport_failed = False
     if time.monotonic() >= _CF_TRANSPORT_COOLDOWN.get("until", 0.0):
         for model in (cf_cfg.tts_model_primary, cf_cfg.tts_model_secondary):
             if not model:
@@ -4996,9 +4997,12 @@ def synthesize_with_cloudflare_fallback(
                         )
                 except Exception as exc:
                     last_err = type(exc).__name__
+                    if isinstance(exc, httpx.TransportError):
+                        cf_transport_failed = True
 
     if gem_key:
-        _CF_TRANSPORT_COOLDOWN["until"] = time.monotonic() + 180.0
+        if cf_transport_failed:
+            _CF_TRANSPORT_COOLDOWN["until"] = time.monotonic() + 180.0
         t0_gem = time.perf_counter()
         gem_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-tts:generateContent"
         gem_payload = {
@@ -5030,8 +5034,8 @@ def synthesize_with_cloudflare_fallback(
                     if len(wav_gem) <= MAX_COMPRESSED_AUDIO_BYTES:
                         return TtsCachedAudio(
                             audio=wav_gem,
-                            backend="cf_workers_ai",
-                            voice=cf_cfg.tts_model_primary,
+                            backend="gemini_tts",
+                            voice="Kore",
                             language=locale.value,
                             latency_ms=round((time.perf_counter() - t0_gem) * 1000.0, 2),
                         )
@@ -5106,6 +5110,7 @@ def transcribe_with_cloudflare_fallback(
     gem_key = src.get("GEMINI_API_KEY", "").strip()
     cf_timeout = 3.5 if src.get("SPACE_ID") else 8.0
     b64_audio = base64.b64encode(audio_bytes).decode("ascii")
+    cf_transport_failed = False
     if time.monotonic() >= _CF_TRANSPORT_COOLDOWN.get("until", 0.0):
         for model in (cf_cfg.stt_model_primary, cf_cfg.stt_model_secondary):
             if not model:
@@ -5137,10 +5142,20 @@ def transcribe_with_cloudflare_fallback(
                         }
                 except Exception as exc:
                     last_err = type(exc).__name__
+                    if isinstance(exc, httpx.TransportError):
+                        cf_transport_failed = True
 
     if gem_key:
-        _CF_TRANSPORT_COOLDOWN["until"] = time.monotonic() + 180.0
-        mime_type = "audio/wav" if audio_bytes.startswith(b"RIFF") else "audio/mp3"
+        if cf_transport_failed:
+            _CF_TRANSPORT_COOLDOWN["until"] = time.monotonic() + 180.0
+        if audio_bytes.startswith(b"RIFF"):
+            mime_type = "audio/wav"
+        elif audio_bytes.startswith(b"OggS"):
+            mime_type = "audio/ogg"
+        elif audio_bytes.startswith(b"fLaC"):
+            mime_type = "audio/flac"
+        else:
+            mime_type = "audio/mp3"
         gem_stt_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
         gem_stt_body = {
             "contents": [
@@ -5171,8 +5186,8 @@ def transcribe_with_cloudflare_fallback(
                     return {
                         "status": "ok",
                         "text": repair_ssra_asr_entities(gem_tx),
-                        "backend": "cf_workers_ai",
-                        "model": cf_cfg.stt_model_primary,
+                        "backend": "gemini",
+                        "model": "gemini-2.5-flash",
                         "locale": locale.value,
                     }
         except Exception as exc:
