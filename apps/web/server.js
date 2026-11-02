@@ -140,25 +140,23 @@ const IS_HF_SPACE_EMBED = Boolean(
   process.env.SPACE_ID || process.env.SPACE_HOST || process.env.SSRA_HF_SPACE_EMBED === "1",
 );
 
-function buildSecurityHeaders(nonce, hostHeader = "") {
-  const host = String(hostHeader).toLowerCase().split(":")[0];
-  const isHfSpace = IS_HF_SPACE_EMBED || host.endsWith(".hf.space");
-  const frameAncestors = isHfSpace
-    ? "frame-ancestors 'self' https://huggingface.co https://*.hf.space"
+function buildSecurityHeaders(nonce, allowHfSpaceEmbed = IS_HF_SPACE_EMBED) {
+  const frameAncestors = allowHfSpaceEmbed
+    ? "frame-ancestors 'self' https://huggingface.co"
     : "frame-ancestors 'none'";
   const headers = {
     "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; font-src 'self' data:; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; ${frameAncestors}; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types ssra-web-html ssra-web-script-url ssra-ops-html`,
     "X-Nonce": nonce,
     "X-Content-Type-Options": "nosniff",
-    "Cross-Origin-Opener-Policy": isHfSpace ? "unsafe-none" : "same-origin",
-    "Cross-Origin-Resource-Policy": isHfSpace ? "cross-origin" : "same-origin",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": allowHfSpaceEmbed ? "cross-origin" : "same-origin",
     "X-Permitted-Cross-Domain-Policies": "none",
     "Referrer-Policy": "no-referrer",
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
     "Permissions-Policy": "geolocation=(), microphone=(self), camera=(), payment=(), usb=()",
     "Cache-Control": "private, no-cache, no-store, must-revalidate",
   };
-  if (!isHfSpace) {
+  if (!allowHfSpaceEmbed) {
     headers["X-Frame-Options"] = "DENY";
   }
   return headers;
@@ -6453,8 +6451,7 @@ function sanitizeBrowserTurnBody(rawBodyStr) {
 
 const server = http.createServer(async (req, res) => {
   const nonce = crypto.randomBytes(16).toString("base64");
-  const hostHeader = String(req.headers.host ?? "localhost");
-  const secHeaders = buildSecurityHeaders(nonce, hostHeader);
+  const secHeaders = buildSecurityHeaders(nonce);
   const method = String(req.method ?? "GET").toUpperCase();
   if (!ALLOWED_METHODS.has(method)) {
     res.writeHead(405, {
@@ -6466,6 +6463,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  const hostHeader = String(req.headers.host ?? "localhost");
   if (!VALID_HOST_RE.test(hostHeader)) {
     res.writeHead(400, { "Content-Type": "application/json", ...secHeaders });
     res.end(JSON.stringify({ error: "INVALID_HOST_HEADER" }));
@@ -6567,11 +6565,12 @@ const server = http.createServer(async (req, res) => {
     isGetOrHead &&
     (pathname === "/signin" || pathname === "/signup" || pathname === "/signin/callback")
   ) {
+    const strictSecHeaders = buildSecurityHeaders(nonce, false);
     sendBodyWithCompression(
       req,
       res,
       200,
-      { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+      { "Content-Type": "text/html; charset=utf-8", ...strictSecHeaders },
       renderOpsDashboardHtml(pathname, nonce, "/en"),
     );
     return;
@@ -6580,6 +6579,7 @@ const server = http.createServer(async (req, res) => {
   if (/^\/(?:admin|agent|calls|analytics|queue|auditor|ops)(?:\/|$)/.test(pathname)) {
     // Navigation heuristic only (not an authorization check): serves the Operations Console HTML
     // shell for browser document requests while keeping programmatic API probes at 404.
+    const strictSecHeaders = buildSecurityHeaders(nonce, false);
     const acceptHdr = String(req.headers.accept ?? "").toLowerCase();
     const isBrowserDocNav =
       acceptHdr.includes("text/html") || req.headers["sec-fetch-mode"] === "navigate";
@@ -6588,7 +6588,7 @@ const server = http.createServer(async (req, res) => {
         req,
         res,
         200,
-        { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+        { "Content-Type": "text/html; charset=utf-8", ...strictSecHeaders },
         renderOpsDashboardHtml(pathname, nonce, "/en"),
       );
       return;
@@ -6596,7 +6596,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404, {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
-      ...secHeaders,
+      ...strictSecHeaders,
     });
     res.end(JSON.stringify({ error: "NOT_FOUND" }));
     return;
