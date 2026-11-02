@@ -81,6 +81,15 @@ hf_cache:
         "facebook/mms-tts-bfa": "5c3a7415e9f5513a64d3c2567ef15c2346556e05"
         "facebook/mms-tts-zne": "4d4b8526f0a6624b75e4d3678fa26d3457667f06"
         "facebook/mms-tts-shk": "3e5c9637a1b7735c86f5e4789ab37e4568778a07"
+  voice_cloudflare_fallback:
+    enabled_by_flag: "FLAG_CLOUDFLARE_FALLBACK"
+    stt_backend: "workers_ai"
+    stt_primary_model: "@cf/openai/whisper-large-v3-turbo"
+    stt_secondary_model: "@cf/openai/whisper"
+    tts_backend: "workers_ai"
+    tts_primary_model: "@cf/deepgram/aura-2-en"
+    tts_secondary_model: "@cf/myshell-ai/melotts"
+    daily_neuron_budget: 10000
 
 node_routes:
   input_guard:

@@ -50,6 +50,7 @@ This file is the authoritative engineering and safety rulebook for all coding ag
   - `task sec` — run full DevSecOps SAST, Live In-Process ASGI DAST, Gitleaks, TruffleHog v3, Trivy (`fs` + `sbom`), Frontend SAST, and `pnpm audit`
   - `task test` — run Vitest, pytest, Hypothesis property tests, contract tests, and Playwright rendered-browser assurance
   - `task eval` — run deterministic and golden evaluation slices
+  - `uv run python tools/run_call_receptionist_hf_regression.py` — run Call Receptionist & Cloudflare Workers AI voice/speech fallback regression suite against `https://landwind22-ssra-assist.hf.space`
   - `task gen` — regenerate Pydantic v2, TypeScript, Zod, OpenAPI client types, CycloneDX 1.6 SBOM/ML-BOM, SLSA v1.0 provenance, and OASIS SARIF v2.1.0 security telemetry from `packages/contracts` and `services/api`
 - **Definition of Done (every task):**
   1. Code, tests (unit, contract, property where relevant), and docs updated; strict types; lint clean.

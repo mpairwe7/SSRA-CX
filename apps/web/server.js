@@ -6403,12 +6403,12 @@ function renderPwaShellHtml(locale, nonce) {
   return compactHtmlAssetBlocks(rawHtml);
 }
 
-async function readRequestBody(req) {
+async function readRequestBody(req, maxBytes = 1_048_576) {
   const chunks = [];
   let total = 0;
   for await (const chunk of req) {
     total += chunk.length;
-    if (total > 1_048_576) {
+    if (total > maxBytes) {
       throw new Error("PAYLOAD_TOO_LARGE");
     }
     chunks.push(chunk);
@@ -7903,6 +7903,91 @@ const server = http.createServer(async (req, res) => {
             : 502;
       res.writeHead(code, { "Content-Type": "application/json", ...secHeaders });
       res.end(JSON.stringify({ error: "BFF_TURN_PROXY_ERROR" }));
+    }
+    return;
+  }
+
+  if (isGetOrHead && pathname === "/api/voice/status") {
+    try {
+      const upstream = await fetchUpstreamWithReloadRetry(
+        `${INTERNAL_RUNTIME_URL}/v1/voice/status`,
+        {
+          headers: { Accept: "application/json", traceparent },
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
+      const text = await upstream.text();
+      res.writeHead(upstream.status, {
+        ...upstreamResponseHeaders(upstream, "application/json"),
+        ...secHeaders,
+      });
+      res.end(method === "HEAD" ? undefined : text);
+    } catch {
+      res.writeHead(502, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ error: "BFF_VOICE_STATUS_PROXY_ERROR" }));
+    }
+    return;
+  }
+
+  if (
+    method === "POST" &&
+    (pathname === "/api/voice/tts" ||
+      pathname === "/api/voice/asr" ||
+      pathname === "/api/voice/receptionist/turn")
+  ) {
+    const contentType = String(req.headers["content-type"] ?? "").toLowerCase();
+    if (!contentType.startsWith("application/json")) {
+      res.writeHead(415, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ error: "BFF_VOICE_UNSUPPORTED_MEDIA_TYPE" }));
+      return;
+    }
+    const secFetchSite = String(req.headers["sec-fetch-site"] ?? "").toLowerCase();
+    if (
+      secFetchSite &&
+      secFetchSite !== "same-origin" &&
+      secFetchSite !== "same-site" &&
+      secFetchSite !== "none"
+    ) {
+      res.writeHead(403, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ error: "BFF_VOICE_CROSS_SITE_FORBIDDEN" }));
+      return;
+    }
+    const upstreamPath = pathname.replace(/^\/api\/voice/, "/v1/voice");
+    const maxBodyLimit = pathname === "/api/voice/asr" ? 3_145_728 : 1_048_576;
+    try {
+      const rawBodyStr = await readRequestBody(req, maxBodyLimit);
+      const parsedBody = JSON.parse(rawBodyStr);
+      if (parsedBody === null || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
+        throw new InvalidTurnRequestError("INVALID_VOICE_BODY");
+      }
+      const fwdHeaders = { "Content-Type": "application/json", traceparent };
+      if (req.headers["x-voice-session-token"]) {
+        const rawTok = String(req.headers["x-voice-session-token"]).trim();
+        if (VALID_OPAQUE_HEADER_RE.test(rawTok)) {
+          fwdHeaders["X-Voice-Session-Token"] = rawTok;
+        }
+      }
+      const upstream = await fetch(`${INTERNAL_RUNTIME_URL}${upstreamPath}`, {
+        method: "POST",
+        headers: fwdHeaders,
+        body: JSON.stringify(parsedBody),
+        signal: AbortSignal.timeout(45_000),
+      });
+      const text = await upstream.text();
+      res.writeHead(upstream.status, {
+        ...upstreamResponseHeaders(upstream, "application/json"),
+        ...secHeaders,
+      });
+      res.end(text);
+    } catch (err) {
+      const code =
+        err instanceof Error && err.message === "PAYLOAD_TOO_LARGE"
+          ? 413
+          : err instanceof SyntaxError || err instanceof InvalidTurnRequestError
+            ? 400
+            : 502;
+      res.writeHead(code, { "Content-Type": "application/json", ...secHeaders });
+      res.end(JSON.stringify({ error: "BFF_VOICE_PROXY_ERROR" }));
     }
     return;
   }

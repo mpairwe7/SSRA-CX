@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import difflib
 import hashlib
 import hmac
@@ -10,12 +11,13 @@ import json
 import math
 import os
 import re
+import socket
 import struct
 import time
 import unicodedata
 import uuid
 from collections import OrderedDict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Generator, Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from types import MappingProxyType
@@ -2087,7 +2089,7 @@ def split_receptionist_spoken_sentences(text: str) -> list[str]:
     """Split text into sentences while keeping numbered procedures and abbreviations attached (`brain.py`)."""
     normalized = _NEWLINE_UNPUNCTUATED_STEP_RE.sub(".\n", text.strip())
     sentences: list[str] = []
-    for piece in re.split(r"(?<=[.!?؟])\s+", normalized):
+    for piece in re.split(r"(?<=[.!?؟;؛])\s+", normalized):
         piece = piece.strip()
         if not piece:
             continue
@@ -3806,22 +3808,22 @@ def verify_call_resume_ticket(
     return payload
 
 
-_SPEECH_CITATION_BRACKET_RE = re.compile(r"\s*\[\d+(?:\s*[,;]\s*\d+)*\](?!\()")
-_SPEECH_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^\)]+\)")
-_SPEECH_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
-_SPEECH_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
-_SPEECH_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*|__([^_]+)__")
-_SPEECH_HEADER_BULLET_RE = re.compile(r"^\s*(?:#{1,6}|[-*+])\s+", re.MULTILINE)
+_SPEECH_CITATION_BRACKET_RE = re.compile(r"[ ]?\[\d{1,3}(?:[,;][ ]?\d{1,3}){0,5}\](?!\()")
+_SPEECH_MD_LINK_RE = re.compile(r"\[([^\[\]\n]{1,200})\]\(([^()\s]{1,500})\)")
+_SPEECH_CODE_BLOCK_RE = re.compile(r"```[^`]{0,2000}```")
+_SPEECH_INLINE_CODE_RE = re.compile(r"`([^`\n]{1,200})`")
+_SPEECH_BOLD_RE = re.compile(r"\*\*([^*\n]{1,200})\*\*|__([^_\n]{1,200})__")
+_SPEECH_HEADER_BULLET_RE = re.compile(r"^[ \t]{0,8}(?:#{1,6}|[-*+])[ \t]{1,4}", re.MULTILINE)
 _SPEECH_NUMBERED_LINE_RE = re.compile(
-    r"^[ \t]*(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]+",
+    r"^[ \t]{0,8}(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]{1,4}",
     re.MULTILINE,
 )
 _SPEECH_NUMBERED_INLINE_RE = re.compile(
-    r"(?<=[:.!?؟؛;])[ \t]+(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]+(?=(?:\*{0,2})?[A-Za-z0-9\u0600-\u06FF\u00C0-\u024F])"
+    r"(?<=[:.!?؟؛;])[ \t]{1,4}(?:\((\d{1,2}|[٠-٩]{1,2})\)|(\d{1,2}|[٠-٩]{1,2})[.)])[ \t]{1,4}(?=(?:\*{0,2})?[A-Za-z0-9\u0600-\u06FF\u00C0-\u024F])"
 )
 _SPEECH_VISUAL_FOOTER_RE = re.compile(
-    r"(?:^|\n)[ \t]*(?:\*\*)?(?:You might also want to know|Related questions)\b.*",
-    flags=re.IGNORECASE | re.DOTALL,
+    r"(?:^|\n)[ \t]{0,8}(?:\*\*)?(?:You might also want to know|Related questions)\b[\s\S]{0,1500}$",
+    flags=re.IGNORECASE,
 )
 _STEP_WORD_BY_LOCALE: dict[LocaleCode, str] = {
     LocaleCode.EN: "Step",
@@ -4539,17 +4541,554 @@ class CallLanguagePolicy:
         return LanguageSwitchDecision("none", self.active, "accumulating_hysteresis", conf)
 
 
+DEFAULT_CF_STT_MODEL = "@cf/openai/whisper-large-v3-turbo"
+DEFAULT_CF_STT_MODEL_2 = "@cf/openai/whisper"
+DEFAULT_CF_TTS_MODEL = "@cf/deepgram/aura-2-en"
+DEFAULT_CF_TTS_MODEL_2 = "@cf/myshell-ai/melotts"
+MAX_TTS_SYNTHESIS_CHARS = 1800
+_CF_GATEWAY_BASE = "https://gateway.ai.cloudflare.com/v1"
+_CF_REST_API_BASE = "https://api.cloudflare.com/client/v4"
+_CF_DAILY_NEURON_USAGE: dict[str, int] = {}
+_routing_yaml_cache: dict[str, dict[str, Any]] = {}
+
+
+def _load_voice_cloudflare_routing_defaults() -> dict[str, Any]:
+    """Load `voice_cloudflare_fallback` defaults from `ai/routing/model-routing.yaml`."""
+    cached = _routing_yaml_cache.get("voice_cloudflare_fallback")
+    if cached is not None:
+        return cached
+    from pathlib import Path
+
+    import yaml
+
+    yaml_path = Path(__file__).resolve().parents[4] / "ai" / "routing" / "model-routing.yaml"
+    doc = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+    hf_cache = doc.get("hf_cache") if isinstance(doc, dict) else {}
+    block = hf_cache.get("voice_cloudflare_fallback") if isinstance(hf_cache, dict) else {}
+    res = block if isinstance(block, dict) else {}
+    _routing_yaml_cache["voice_cloudflare_fallback"] = res
+    return res
+
+
+def get_cloudflare_neurons_used_today() -> int:
+    """Return today's accumulated Cloudflare Workers AI neuron usage."""
+    day_key = date.today().isoformat()
+    return _CF_DAILY_NEURON_USAGE.get(day_key, 0)
+
+
+def consume_cloudflare_neurons(cost: int, *, budget: int) -> bool:
+    """Atomically check and consume *cost* neurons from today's daily budget."""
+    if budget <= 0 or cost <= 0:
+        return False
+    day_key = date.today().isoformat()
+    used = _CF_DAILY_NEURON_USAGE.get(day_key, 0)
+    if used + cost > budget:
+        return False
+    _CF_DAILY_NEURON_USAGE[day_key] = used + cost
+    return True
+
+
+def reset_cloudflare_neuron_usage_for_tests() -> None:
+    """Reset in-process daily neuron counter for deterministic unit tests."""
+    _CF_DAILY_NEURON_USAGE.clear()
+
+
+def cloud_speech_egress_allowed(env: Mapping[str, str] | None = None) -> bool:
+    """Verify OQ-004 cloud speech egress policy: allowed in reference/test mode or when explicitly approved."""
+    from ssra_core.deployment import is_reference_mode
+
+    src = os.environ if env is None else env
+    mode_val = src.get("SSRA_RUNTIME_MODE", "").strip().lower()
+    oq004_val = src.get("SSRA_OQ004_CLOUD_SPEECH_APPROVED", "").strip().lower()
+    if oq004_val in ("1", "true", "yes", "on") or mode_val == "reference":
+        return True
+    if env is not None and "SSRA_RUNTIME_MODE" not in env:
+        return True
+    return is_reference_mode()
+
+
+@dataclass(frozen=True)
+class CloudflareVoiceFallbackConfig:
+    """Configuration for Cloudflare Workers AI voice/speech fallback after local models."""
+
+    flag_enabled: bool
+    account_id_configured: bool
+    api_token_configured: bool
+    aig_gateway: str
+    aig_token_configured: bool
+    stt_backend: str
+    stt_model_primary: str
+    stt_model_secondary: str
+    tts_backend: str
+    tts_model_primary: str
+    tts_model_secondary: str
+    neuron_daily_budget: int
+    neurons_used_today: int = 0
+    cloud_egress_allowed: bool = True
+
+    @property
+    def neurons_remaining(self) -> int:
+        return max(0, self.neuron_daily_budget - self.neurons_used_today)
+
+    @property
+    def stt_fallback_active(self) -> bool:
+        return (
+            self.flag_enabled
+            and self.cloud_egress_allowed
+            and self.account_id_configured
+            and self.api_token_configured
+            and self.stt_backend == "workers_ai"
+            and self.neurons_remaining > 0
+        )
+
+    @property
+    def tts_fallback_active(self) -> bool:
+        return (
+            self.flag_enabled
+            and self.cloud_egress_allowed
+            and self.account_id_configured
+            and self.api_token_configured
+            and self.tts_backend == "workers_ai"
+            and self.neurons_remaining > 0
+        )
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return {
+            "flag_enabled": self.flag_enabled,
+            "cloud_egress_allowed": self.cloud_egress_allowed,
+            "account_id_configured": self.account_id_configured,
+            "api_token_configured": self.api_token_configured,
+            "aig_gateway": self.aig_gateway,
+            "aig_token_configured": self.aig_token_configured,
+            "stt_backend": self.stt_backend,
+            "stt_model_primary": self.stt_model_primary,
+            "stt_model_secondary": self.stt_model_secondary,
+            "tts_backend": self.tts_backend,
+            "tts_model_primary": self.tts_model_primary,
+            "tts_model_secondary": self.tts_model_secondary,
+            "neuron_daily_budget": self.neuron_daily_budget,
+            "neurons_used_today": self.neurons_used_today,
+            "neurons_remaining": self.neurons_remaining,
+            "stt_fallback_active": self.stt_fallback_active,
+            "tts_fallback_active": self.tts_fallback_active,
+        }
+
+
+def get_cloudflare_voice_fallback_config(
+    env: Mapping[str, str] | None = None,
+) -> CloudflareVoiceFallbackConfig:
+    """Resolve Cloudflare Workers AI voice/speech fallback configuration without exposing raw secrets."""
+    src = os.environ if env is None else env
+    yaml_defaults = _load_voice_cloudflare_routing_defaults()
+    flag_key = str(yaml_defaults.get("enabled_by_flag") or "FLAG_CLOUDFLARE_FALLBACK")
+    flag_raw = src.get(flag_key, src.get("FLAG_CLOUDFLARE_FALLBACK", "false")).strip().lower()
+    flag_on = flag_raw in ("1", "true", "yes", "on")
+    acct = src.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    tok = src.get("CLOUDFLARE_API_TOKEN", "").strip()
+    gw = src.get("CF_AIG_GATEWAY", "").strip()
+    aig_tok = src.get("CF_AIG_TOKEN", "").strip()
+
+    default_stt_b = str(yaml_defaults.get("stt_backend") or "workers_ai")
+    default_stt_m1 = str(yaml_defaults.get("stt_primary_model") or DEFAULT_CF_STT_MODEL)
+    default_stt_m2 = str(yaml_defaults.get("stt_secondary_model") or DEFAULT_CF_STT_MODEL_2)
+    default_tts_b = str(yaml_defaults.get("tts_backend") or "workers_ai")
+    default_tts_m1 = str(yaml_defaults.get("tts_primary_model") or DEFAULT_CF_TTS_MODEL)
+    default_tts_m2 = str(yaml_defaults.get("tts_secondary_model") or DEFAULT_CF_TTS_MODEL_2)
+    default_budget = int(yaml_defaults.get("daily_neuron_budget") or 10000)
+
+    stt_b = src.get("STT_FALLBACK_BACKEND", default_stt_b).strip().lower() or default_stt_b
+    stt_m1 = (
+        src.get("STT_FALLBACK_MODEL", default_stt_m1).strip()
+        if "STT_FALLBACK_MODEL" in src
+        else default_stt_m1
+    )
+    stt_m2 = src.get("STT_FALLBACK_MODEL_2", default_stt_m2).strip() or default_stt_m2
+    tts_b = src.get("TTS_FALLBACK_BACKEND", default_tts_b).strip().lower() or default_tts_b
+    tts_m1 = (
+        src.get("TTS_FALLBACK_MODEL", default_tts_m1).strip()
+        if "TTS_FALLBACK_MODEL" in src
+        else default_tts_m1
+    )
+    tts_m2 = src.get("TTS_FALLBACK_MODEL_2", default_tts_m2).strip() or default_tts_m2
+    raw_budget = src.get("CF_NEURON_DAILY_BUDGET")
+    if raw_budget is None:
+        budget = max(0, default_budget)
+    else:
+        try:
+            budget = max(0, int(raw_budget.strip()))
+        except ValueError:
+            budget = 0
+    return CloudflareVoiceFallbackConfig(
+        flag_enabled=flag_on,
+        account_id_configured=bool(acct),
+        api_token_configured=bool(tok),
+        aig_gateway=gw,
+        aig_token_configured=bool(aig_tok),
+        stt_backend=stt_b,
+        stt_model_primary=stt_m1,
+        stt_model_secondary=stt_m2,
+        tts_backend=tts_b,
+        tts_model_primary=tts_m1,
+        tts_model_secondary=tts_m2,
+        neuron_daily_budget=budget,
+        neurons_used_today=get_cloudflare_neurons_used_today(),
+        cloud_egress_allowed=cloud_speech_egress_allowed(src),
+    )
+
+
+def resolve_voice_fallback_chain(
+    locale: LocaleCode = LocaleCode.EN,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Return the ordered local-first -> Cloudflare Workers AI voice/speech model fallback chain."""
+    local_desc = resolve_hf_voice_model_cache(locale)
+    cf_cfg = get_cloudflare_voice_fallback_config(env)
+    return {
+        "locale": locale.value,
+        "asr_chain": [
+            {
+                "tier": 1,
+                "provider": "local_hf_cache",
+                "backend": local_desc.serving_backend,
+                "model": local_desc.asr_repo_id,
+            },
+            {
+                "tier": 2,
+                "provider": "cloudflare_workers_ai",
+                "backend": cf_cfg.stt_backend,
+                "model": cf_cfg.stt_model_primary,
+                "enabled": cf_cfg.stt_fallback_active,
+            },
+            {
+                "tier": 3,
+                "provider": "cloudflare_workers_ai",
+                "backend": cf_cfg.stt_backend,
+                "model": cf_cfg.stt_model_secondary,
+                "enabled": cf_cfg.stt_fallback_active,
+            },
+        ],
+        "tts_chain": [
+            {
+                "tier": 1,
+                "provider": "local_hf_cache",
+                "backend": "orpheus_3b" if locale == LocaleCode.EN else "mms_tts",
+                "model": "Sunbird/orpheus-3b-tts-multilingual"
+                if locale == LocaleCode.EN
+                else local_desc.tts_repo_id,
+            },
+            {
+                "tier": 2,
+                "provider": "local_hf_cache",
+                "backend": "mms_tts",
+                "model": local_desc.tts_repo_id,
+            },
+            {
+                "tier": 3,
+                "provider": "cloudflare_workers_ai",
+                "backend": cf_cfg.tts_backend,
+                "model": cf_cfg.tts_model_primary,
+                "enabled": cf_cfg.tts_fallback_active,
+            },
+            {
+                "tier": 4,
+                "provider": "cloudflare_workers_ai",
+                "backend": cf_cfg.tts_backend,
+                "model": cf_cfg.tts_model_secondary,
+                "enabled": cf_cfg.tts_fallback_active,
+            },
+        ],
+        "cloudflare_config": cf_cfg.to_public_dict(),
+    }
+
+
+@contextlib.contextmanager
+def _prefer_ipv4_getaddrinfo() -> Generator[None]:
+    """Order AF_INET before AF_INET6 in socket.getaddrinfo so container egress without IPv6 does not stall on AAAA timeouts."""
+    orig_getaddrinfo = socket.getaddrinfo
+
+    def _ipv4_first_getaddrinfo(
+        host: str | bytes | None,
+        port: str | bytes | int | None,
+        family: int = 0,
+        type: int = 0,
+        proto: int = 0,
+        flags: int = 0,
+    ) -> list[Any]:
+        res = orig_getaddrinfo(host, port, family, type, proto, flags)
+        return sorted(res, key=lambda item: 0 if item[0] == socket.AF_INET else 1)
+
+    socket.getaddrinfo = _ipv4_first_getaddrinfo  # type: ignore[assignment]
+    try:
+        yield
+    finally:
+        socket.getaddrinfo = orig_getaddrinfo  # type: ignore[assignment]
+
+
+def build_cf_workers_ai_targets(
+    model: str,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> list[tuple[str, dict[str, str]]]:
+    src = os.environ if env is None else env
+    acct = src.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    tok = src.get("CLOUDFLARE_API_TOKEN", "").strip()
+    gw = src.get("CF_AIG_GATEWAY", "").strip()
+    aig_tok = src.get("CF_AIG_TOKEN", "").strip()
+    if not acct or not tok:
+        return []
+    targets: list[tuple[str, dict[str, str]]] = []
+    if gw and aig_tok:
+        targets.append(
+            (
+                f"{_CF_GATEWAY_BASE}/{acct}/{gw}/workers-ai/{model}",
+                {
+                    "Authorization": f"Bearer {tok}",
+                    "cf-aig-authorization": f"Bearer {aig_tok}",
+                    "Content-Type": "application/json",
+                },
+            )
+        )
+    allow_direct_default = "true" if cloud_speech_egress_allowed(src) else "false"
+    allow_direct = src.get("CF_ALLOW_DIRECT_REST_FALLBACK", allow_direct_default).strip().lower()
+    if not (gw and aig_tok) or allow_direct in ("1", "true", "yes", "on"):
+        targets.append(
+            (
+                f"{_CF_REST_API_BASE}/accounts/{acct}/ai/run/{model}",
+                {
+                    "Authorization": f"Bearer {tok}",
+                    "Content-Type": "application/json",
+                },
+            )
+        )
+    return targets
+
+
+def synthesize_with_cloudflare_fallback(
+    text: str,
+    *,
+    locale: LocaleCode = LocaleCode.EN,
+    voice: str | None = None,
+    local_synthesizer: TtsSynthesizer | None = None,
+    env: Mapping[str, str] | None = None,
+) -> TtsCachedAudio:
+    """Synthesize speech preferring local sovereign TTS first, falling back to Cloudflare Workers AI (`@cf/deepgram/aura-2-en` -> `@cf/myshell-ai/melotts`)."""
+    import httpx
+
+    resolved_voice = resolve_tts_voice(locale.value, voice) or TTS_DEFAULT_VOICE["en"]
+    cleaned_text = clean_text_for_speech(text, locale=locale)[:MAX_TTS_SYNTHESIS_CHARS].strip()
+    if not cleaned_text:
+        return TtsCachedAudio(
+            audio=b"",
+            backend="error",
+            voice=resolved_voice,
+            language=locale.value,
+            latency_ms=0.0,
+            error="Empty TTS text",
+        )
+
+    # 1. Try local synthesizer first
+    last_err: str | None = None
+    if local_synthesizer is not None:
+        try:
+            local_res = local_synthesizer(cleaned_text, language=locale.value, voice=resolved_voice)
+            if not local_res.error and looks_like_valid_audio_bytes(local_res.audio):
+                return local_res
+        except Exception as exc:
+            last_err = type(exc).__name__
+
+    # 2. Fall back to Cloudflare Workers AI TTS (`@cf/deepgram/aura-2-en` -> `@cf/myshell-ai/melotts`)
+    cf_cfg = get_cloudflare_voice_fallback_config(env)
+    if not cf_cfg.tts_fallback_active:
+        return TtsCachedAudio(
+            audio=b"",
+            backend="error",
+            voice=resolved_voice,
+            language=locale.value,
+            latency_ms=0.0,
+            error=f"Local TTS unavailable ({last_err or 'none'}) and Cloudflare fallback not active",
+        )
+    if not consume_cloudflare_neurons(5, budget=cf_cfg.neuron_daily_budget):
+        return TtsCachedAudio(
+            audio=b"",
+            backend="error",
+            voice=resolved_voice,
+            language=locale.value,
+            latency_ms=0.0,
+            error="Cloudflare daily neuron budget exhausted",
+        )
+
+    max_b64_len = (MAX_COMPRESSED_AUDIO_BYTES * 4) // 3 + 4
+    for model in (cf_cfg.tts_model_primary, cf_cfg.tts_model_secondary):
+        if not model:
+            continue
+        is_aura = "aura" in model.lower()
+        if is_aura and locale != LocaleCode.EN:
+            continue
+        t0 = time.perf_counter()
+        for url, headers in build_cf_workers_ai_targets(model, env=env):
+            try:
+                payload: dict[str, Any] = (
+                    {"text": cleaned_text}
+                    if is_aura
+                    else {
+                        "prompt": cleaned_text,
+                        "lang": "en" if locale == LocaleCode.EN else locale.value,
+                    }
+                )
+                with _prefer_ipv4_getaddrinfo():
+                    resp = httpx.post(url, headers=headers, json=payload, timeout=8.0)
+                if resp.status_code != 200:
+                    continue
+                cl_hdr = resp.headers.get("content-length")
+                if cl_hdr and cl_hdr.isdigit() and int(cl_hdr) > MAX_COMPRESSED_AUDIO_BYTES:
+                    continue
+                if len(resp.content) > MAX_COMPRESSED_AUDIO_BYTES:
+                    continue
+                if is_aura and "application/json" not in (resp.headers.get("content-type") or ""):
+                    audio_bytes = resp.content
+                else:
+                    body_json = resp.json()
+                    b64_str = str((body_json.get("result") or {}).get("audio") or "")
+                    if not b64_str or len(b64_str) > max_b64_len:
+                        continue
+                    audio_bytes = base64.b64decode(b64_str)
+                if len(audio_bytes) <= MAX_COMPRESSED_AUDIO_BYTES and looks_like_valid_audio_bytes(
+                    audio_bytes
+                ):
+                    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+                    return TtsCachedAudio(
+                        audio=audio_bytes,
+                        backend="cf_workers_ai",
+                        voice=model,
+                        language=locale.value,
+                        latency_ms=elapsed_ms,
+                    )
+            except Exception as exc:
+                last_err = type(exc).__name__
+
+    return TtsCachedAudio(
+        audio=b"",
+        backend="error",
+        voice=resolved_voice,
+        language=locale.value,
+        latency_ms=0.0,
+        error=f"All TTS backends failed ({last_err or 'http_error'})",
+    )
+
+
+def transcribe_with_cloudflare_fallback(
+    audio_bytes: bytes,
+    *,
+    locale: LocaleCode = LocaleCode.EN,
+    duration_seconds: float = 5.0,
+    local_transcriber: Callable[[bytes, str], str] | None = None,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Transcribe speech preferring local sovereign ASR first, falling back to Cloudflare Workers AI (`@cf/openai/whisper-large-v3-turbo` -> `@cf/openai/whisper`)."""
+    import httpx
+
+    validate_audio_pcm_expansion_budget(
+        compressed_bytes=len(audio_bytes),
+        duration_seconds=duration_seconds,
+    )
+
+    # 1. Try local ASR first
+    last_err: str | None = None
+    if local_transcriber is not None:
+        try:
+            local_text = local_transcriber(audio_bytes, locale.value).strip()
+            if local_text:
+                repaired = repair_ssra_asr_entities(local_text)
+                return {
+                    "status": "ok",
+                    "text": repaired,
+                    "backend": "local_hf_asr",
+                    "model": ASR_MODEL_BY_LOCALE[locale],
+                    "locale": locale.value,
+                }
+        except Exception as exc:
+            last_err = type(exc).__name__
+
+    # 2. Fall back to Cloudflare Workers AI STT (`@cf/openai/whisper-large-v3-turbo` -> `@cf/openai/whisper`)
+    cf_cfg = get_cloudflare_voice_fallback_config(env)
+    if not cf_cfg.stt_fallback_active:
+        return {
+            "status": "degraded",
+            "text": "",
+            "backend": "unavailable",
+            "model": ASR_MODEL_BY_LOCALE[locale],
+            "locale": locale.value,
+            "error": f"Local ASR unavailable ({last_err or 'none'}) and Cloudflare STT fallback not active",
+        }
+    if not consume_cloudflare_neurons(5, budget=cf_cfg.neuron_daily_budget):
+        return {
+            "status": "degraded",
+            "text": "",
+            "backend": "unavailable",
+            "model": ASR_MODEL_BY_LOCALE[locale],
+            "locale": locale.value,
+            "error": "Cloudflare daily neuron budget exhausted",
+        }
+
+    b64_audio = base64.b64encode(audio_bytes).decode("ascii")
+    for model in (cf_cfg.stt_model_primary, cf_cfg.stt_model_secondary):
+        if not model:
+            continue
+        for url, headers in build_cf_workers_ai_targets(model, env=env):
+            try:
+                with _prefer_ipv4_getaddrinfo():
+                    if model.rstrip("/").endswith("/whisper"):
+                        raw_headers = {k: v for k, v in headers.items() if k != "Content-Type"}
+                        resp = httpx.post(
+                            url, headers=raw_headers, content=audio_bytes, timeout=8.0
+                        )
+                    else:
+                        resp = httpx.post(
+                            url, headers=headers, json={"audio": b64_audio}, timeout=8.0
+                        )
+                if resp.status_code != 200:
+                    continue
+                res_obj = resp.json().get("result") or {}
+                raw_tx = str(res_obj.get("text") or "").strip()
+                if raw_tx:
+                    repaired = repair_ssra_asr_entities(raw_tx)
+                    return {
+                        "status": "ok",
+                        "text": repaired,
+                        "backend": "cf_workers_ai",
+                        "model": model,
+                        "locale": locale.value,
+                    }
+            except Exception as exc:
+                last_err = type(exc).__name__
+
+    return {
+        "status": "degraded",
+        "text": "",
+        "backend": "unavailable",
+        "model": cf_cfg.stt_model_primary,
+        "locale": locale.value,
+        "error": f"All ASR backends failed ({last_err or 'http_error'})",
+    }
+
+
 __all__ = [
     "APPROVED_VOICE_WER_EVIDENCE",
     "ASR_MODEL_BY_LOCALE",
     "CALLER_RECONNECT_GRACE_SECONDS",
     "CARRYOVER_TTL_SECONDS",
+    "DEFAULT_CF_STT_MODEL",
+    "DEFAULT_CF_STT_MODEL_2",
+    "DEFAULT_CF_TTS_MODEL",
+    "DEFAULT_CF_TTS_MODEL_2",
     "LOBBY_EVENT_TYPES",
     "MAX_CARRYOVER_CONTEXT_CHARS",
     "MAX_COMPRESSED_AUDIO_BYTES",
     "MAX_DECODED_PCM_BYTES",
     "MAX_DTMF_STEP_UP_ATTEMPTS",
     "MAX_SMS_CONTINUATION_CHARS",
+    "MAX_TTS_SYNTHESIS_CHARS",
     "MAX_VOICE_WER_GATE",
     "POST_TTS_ECHO_COOLDOWN_MS",
     "REPLY_FRAME_KINDS",
@@ -4569,6 +5108,7 @@ __all__ = [
     "CallRiskEvaluation",
     "CallToWebCarryover",
     "ChatToCallCarryover",
+    "CloudflareVoiceFallbackConfig",
     "EdgeFieldApplianceProfile",
     "HfVoiceModelDescriptor",
     "HybridVoiceRouteDecision",
@@ -4599,6 +5139,7 @@ __all__ = [
     "assess_whisper_segment",
     "build_call_opening_prompts",
     "build_call_to_web_carryover",
+    "build_cf_workers_ai_targets",
     "build_chat_to_call_carryover",
     "build_voice_catalogue_payload",
     "build_voice_consent_audit_entry",
@@ -4607,7 +5148,9 @@ __all__ = [
     "classify_pending_offer_reply",
     "classify_spoken_call_review",
     "clean_text_for_speech",
+    "cloud_speech_egress_allowed",
     "compute_transfer_queue_position",
+    "consume_cloudflare_neurons",
     "detect_explicit_language_request",
     "detect_ssra_entity_mishear",
     "evaluate_live_call_risk",
@@ -4615,6 +5158,8 @@ __all__ = [
     "format_case_reference",
     "fuse_language_vote",
     "generate_officer_call_brief",
+    "get_cloudflare_neurons_used_today",
+    "get_cloudflare_voice_fallback_config",
     "get_localized_tool_wait_filler",
     "is_backchannel_utterance",
     "is_callback_request",
@@ -4636,12 +5181,14 @@ __all__ = [
     "normalize_statutory_text_for_speech",
     "pcm16_16k_to_mulaw_8k",
     "repair_ssra_asr_entities",
+    "reset_cloudflare_neuron_usage_for_tests",
     "resolve_edge_appliance_profile",
     "resolve_hf_voice_model_cache",
     "resolve_mt_and_tts_turn_plan",
     "resolve_recording_consent",
     "resolve_tts_speaker_profile",
     "resolve_tts_voice",
+    "resolve_voice_fallback_chain",
     "route_voice_turn",
     "select_hybrid_voice_execution_mode",
     "should_drop_ai_frame_when_bridged",
@@ -4649,6 +5196,8 @@ __all__ = [
     "split_tts_sentences",
     "sync_affective_state_to_call_lobby",
     "synthesize_tts_speech_envelope",
+    "synthesize_with_cloudflare_fallback",
+    "transcribe_with_cloudflare_fallback",
     "validate_audio_pcm_expansion_budget",
     "validate_call_wrap_up",
     "verbalize_statutory_figures_for_tts",
