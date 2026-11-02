@@ -541,6 +541,7 @@ def main() -> None:
     # 8. Verify CIS Docker Benchmark v1.7 Non-Root Dockerfiles, .dockerignore, Seccomp, Gateway 11-MCP Catalog & OTel memory_limiter
     assert (ROOT / ".dockerignore").is_file(), "Missing .dockerignore"
     for df_rel in (
+        "Dockerfile",
         "services/api/Dockerfile",
         "services/agent-runtime/Dockerfile",
         "services/channel-gateway/Dockerfile",

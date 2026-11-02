@@ -1,3 +1,14 @@
+---
+title: SSRA Assist — South Sudan Revenue Authority
+emoji: 🏛️
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Sovereign multilingual agentic CX platform for SSRA
+---
+
 # SSRA Assist (`ssra-cx`)
 
 > **Sovereign, multilingual, omnichannel agentic customer-experience platform for the South Sudan Revenue Authority (SSRA).**
