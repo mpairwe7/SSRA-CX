@@ -7,13 +7,19 @@ an unverified TIN from LLM arguments to read another taxpayer's record.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Literal, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from pydantic import BaseModel, ConfigDict
 from ssra_core import McpErrorCode, SSRAError
 from ssra_security import mask_tin
+
+_OPEN_REDIRECT_PARAM_RE = re.compile(
+    r"(?:^|[&#?;])(?:redirect|redirect_uri|redirect_url|return|return_to|returnurl|next|url|goto|continue|dest|destination|target|callback)=",
+    flags=re.IGNORECASE,
+)
 
 
 class TaxpayerProfileMasked(BaseModel):
@@ -310,8 +316,14 @@ class MockOfficialChannelsAdapter:
             ),
             verified_at=self._verified_time,
         )
-        # 1. Block Unicode homoglyphs (IDN homograph attacks), Punycode xn--, and cleartext HTTP downgrades
-        if not raw.isascii() or "xn--" in lower_raw or lower_raw.startswith("http://"):
+        # 1. Block control characters, Unicode homoglyphs (IDN homograph attacks), Punycode xn--, and cleartext HTTP downgrades
+        if (
+            not raw
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in raw)
+            or not raw.isascii()
+            or "xn--" in lower_raw
+            or lower_raw.startswith("http://")
+        ):
             return scam_entry
 
         cleaned = lower_raw.removeprefix("mailto:").strip()
@@ -335,6 +347,19 @@ class MockOfficialChannelsAdapter:
             return scam_entry
 
         host = (parsed.hostname or "").rstrip(".")
+        qf_decoded = unquote(f"{parsed.query}&{parsed.fragment}").lower()
+        has_open_redirect_or_xss = bool(_OPEN_REDIRECT_PARAM_RE.search(qf_decoded)) or any(
+            token in qf_decoded
+            for token in (
+                "http://",
+                "https://",
+                "//",
+                "\\\\",
+                "javascript:",
+                "data:",
+                "vbscript:",
+            )
+        )
         if (
             parsed.scheme != "https"
             or parsed.username is not None
@@ -342,6 +367,10 @@ class MockOfficialChannelsAdapter:
             or port not in (None, 443)
             or ".." in parsed.path
             or "//" in parsed.path
+            or "%2e" in parsed.path.lower()
+            or "%2f" in parsed.path.lower()
+            or "%5c" in parsed.path.lower()
+            or has_open_redirect_or_xss
         ):
             return scam_entry
 

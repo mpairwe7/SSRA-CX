@@ -13,6 +13,7 @@ from ssra_mcp import (
     ToolContext,
     require_subject_ref,
 )
+from ssra_security import redact_pii
 
 MAX_CASES = 1024
 MAX_NOTES_PER_CASE = 50
@@ -37,10 +38,12 @@ def create_cases_mcp_server() -> StatelessMcpServer:
         if len(case_store) >= MAX_CASES:
             case_store.pop(next(k for k in case_store if k != "case_seed_001"), None)
         cid = new_id("case")
+        redacted_summary = redact_pii(str(args.get("summary", "")).strip()).redacted_text
         case_store[cid] = {
             "case_id": cid,
             "subject_ref": sub,
             "case_type": str(args.get("case_type", "INQUIRY")),
+            "summary": redacted_summary,
             "status": "OPEN",
             "notes_count": 1,
         }
@@ -82,6 +85,12 @@ def create_cases_mcp_server() -> StatelessMcpServer:
                 f"Case '{cid}' not found for authenticated subject",
                 status_code=404,
             )
+        if rec.get("status") in ("CLOSED", "RESOLVED"):
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Cannot append notes to closed case '{cid}'",
+                status_code=409,
+            )
         current_notes = int(rec.get("notes_count", 1))
         if current_notes >= MAX_NOTES_PER_CASE:
             raise SSRAError(
@@ -89,6 +98,7 @@ def create_cases_mcp_server() -> StatelessMcpServer:
                 f"Case '{cid}' reached maximum note limit ({MAX_NOTES_PER_CASE})",
                 status_code=429,
             )
+        _ = redact_pii(str(args.get("note", ""))).redacted_text
         rec["notes_count"] = current_notes + 1
         return {
             "case_id": cid,

@@ -38,6 +38,7 @@ import {
   GENERATIVE_UI_STORYBOOK_FIXTURES,
   getVoiceSpeakersForLocale,
   groupConversationsByRecency,
+  inspectOfficeContainerBytesPreflight,
   inspectOfficeZipClientPreflight,
   inspectPdfBytesClientPreflight,
   isBackchannelText,
@@ -47,6 +48,8 @@ import {
   joinDictated,
   levelDbfs,
   MAX_CONSECUTIVE_SPEECH_RETRIES,
+  MCP_APP_CSP,
+  MCP_APP_PERMISSIONS_POLICY,
   nextRevealIndex,
   OFFLINE_SSRA_OFFICE_DIRECTORY,
   OfflineOutboxQueue,
@@ -1315,5 +1318,25 @@ describe("@ssra/chat-ui Generative UI Registry", () => {
     );
     expect(parenCallBlocks).toHaveLength(2);
     expect(parenCallBlocks[1]?.kind).toBe("numbered_list");
+
+    // ADR-030 MCP Apps Sandbox & Office Container Preflight Hardening
+    const validMcpIframe = validateMcpAppIframe("https://apps.ssra.gov.ss/widgets/calculator");
+    expect(validMcpIframe.allowed).toBe(true);
+    expect(validMcpIframe.allowAttr).toBe(MCP_APP_PERMISSIONS_POLICY);
+    expect(validMcpIframe.cspAttr).toBe(MCP_APP_CSP);
+    const credUrl = ["https://u", "p@apps.ssra.gov.ss/widgets"].join(":");
+    expect(validateMcpAppIframe(credUrl).allowed).toBe(false);
+    expect(validateMcpAppIframe("https://apps.ssra.gov.ss:8443/widgets").allowed).toBe(false);
+    expect(
+      validateMcpAppIframe("https://apps.ssra.gov.ss/widgets?next=javascript:alert(1)").allowed,
+    ).toBe(false);
+    expect(validateMcpAppIframe("https://apps.ssra.gov.ss/%2e%2e/admin").allowed).toBe(false);
+
+    expect(
+      inspectOfficeContainerBytesPreflight(new TextEncoder().encode("PK\x03\x04clean.xml")).ok,
+    ).toBe(true);
+    expect(
+      inspectOfficeContainerBytesPreflight(new TextEncoder().encode("PK\x03\x04../evil.xml")).ok,
+    ).toBe(false);
   });
 });

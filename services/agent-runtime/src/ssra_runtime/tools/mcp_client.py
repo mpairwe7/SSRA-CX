@@ -9,6 +9,7 @@ Enforces:
 
 from __future__ import annotations
 
+import copy
 import functools
 import json
 from pathlib import Path
@@ -318,7 +319,9 @@ class GovernedMcpGatewayClient:
                 and fingerprint in budget.memoized_read_artifacts
             )
             if can_memoize:
-                return ToolArtifact.model_validate(budget.memoized_read_artifacts[fingerprint])
+                return ToolArtifact.model_validate(
+                    copy.deepcopy(budget.memoized_read_artifacts[fingerprint])
+                )
 
         def _call_once() -> dict[str, Any]:
             """Execute a single governed MCP tool call under circuit-breaker protection."""
@@ -360,5 +363,7 @@ class GovernedMcpGatewayClient:
             data_classification=str(envelope["data_classification"]),
         )
         if budget is not None and is_retryable_read:
-            budget.memoized_read_artifacts[fingerprint] = artifact.model_dump(mode="json")
+            budget.memoized_read_artifacts[fingerprint] = copy.deepcopy(
+                artifact.model_dump(mode="json")
+            )
         return artifact

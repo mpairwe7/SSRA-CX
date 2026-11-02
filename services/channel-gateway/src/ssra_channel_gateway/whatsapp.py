@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
 
 from ssra_core import McpErrorCode, SSRAError, utc_now
+from ssra_mcp.sanitiser import is_allowed_ssra_url
+
+_OUTBOUND_URL_RE = re.compile(r"https?://[^\s\"'<>]+", flags=re.IGNORECASE)
 
 WHATSAPP_SERVICE_WINDOW_HOURS = 24
 WHATSAPP_MAX_REPLY_BUTTONS = 3
@@ -86,14 +90,22 @@ def validate_whatsapp_reply_buttons(
 
 
 def validate_whatsapp_list_rows(rows: list[WhatsAppListRow]) -> list[WhatsAppListRow]:
-    """Validate Meta Cloud API interactive list row constraints (1..10 rows, title <= 24 chars, desc <= 72 chars)."""
+    """Validate Meta Cloud API interactive list row constraints (1..10 rows, unique id <= 256, title <= 24 chars, desc <= 72 chars)."""
     if not (1 <= len(rows) <= WHATSAPP_MAX_LIST_ROWS):
         raise SSRAError(
             McpErrorCode.VALIDATION_FAILED,
             f"WhatsApp list message must have 1..{WHATSAPP_MAX_LIST_ROWS} rows",
             status_code=400,
         )
+    seen_ids: set[str] = set()
     for row in rows:
+        rid = row.id.strip()
+        if not rid or rid in seen_ids or len(rid) > 256:
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Invalid or duplicate WhatsApp list row id '{row.id}'",
+                status_code=400,
+            )
         if not (1 <= len(row.title.strip()) <= WHATSAPP_MAX_ROW_TITLE_LEN):
             raise SSRAError(
                 McpErrorCode.VALIDATION_FAILED,
@@ -106,6 +118,7 @@ def validate_whatsapp_list_rows(rows: list[WhatsAppListRow]) -> list[WhatsAppLis
                 f"WhatsApp list row description exceeds {WHATSAPP_MAX_ROW_DESC_LEN} chars",
                 status_code=400,
             )
+        seen_ids.add(rid)
     return rows
 
 
@@ -142,6 +155,15 @@ def prepare_whatsapp_outbound_message(
     else:
         # Inside 24-hour customer service window: non-template & UTILITY templates are $0.00; MARKETING is billed
         cost_usd = 0.025 if (template_id and template_category == "MARKETING") else 0.0
+
+    for match in _OUTBOUND_URL_RE.finditer(body_text):
+        candidate_url = match.group(0).rstrip(".,;:)]")
+        if not is_allowed_ssra_url(candidate_url):
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                f"Outbound WhatsApp message contains unallowlisted URL '{candidate_url}'",
+                status_code=400,
+            )
 
     full_text = f"{body_text.strip()}{ANTI_IMPERSONATION_VERIFICATION_FOOTER}"
     return WhatsAppOutboundDispatch(
