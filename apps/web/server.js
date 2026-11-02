@@ -7609,8 +7609,7 @@ const server = http.createServer(async (req, res) => {
         const flowStateCookie = readCookieValue(req.headers.cookie, "ssra_kc_flow_state");
         const clientId = (params.get("client_id") || "ssra-staff-console").trim();
         const returnTo = sanitizeKcReturnTo(params.get("return_to"));
-        const stateCookieOk =
-          !flowStateCookie || timingSafeHexMatch(flowStateCookie, stateParam);
+        const stateCookieOk = !flowStateCookie || timingSafeHexMatch(flowStateCookie, stateParam);
         const record =
           stateParam && stateCookieOk
             ? consumeKeycloakAuthCode(code, codeVerifier, stateParam)
