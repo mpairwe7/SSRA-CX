@@ -2627,6 +2627,22 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin, opti
               }
               return;
             }
+            if (
+              [...ACCOUNT_DIRECTORY, ...readRegisteredAccounts()].some(
+                (item) =>
+                  item.email === emailVal ||
+                  (Array.isArray(item.aliases) && item.aliases.includes(emailVal)),
+              )
+            ) {
+              if (bannerEl) {
+                bannerEl.classList.remove("is-hidden", "ok");
+                bannerEl.classList.add("error");
+                bannerEl.setAttribute("role", "alert");
+                bannerEl.textContent =
+                  "An account already exists for this email. Sign in instead.";
+              }
+              return;
+            }
             const usernameVal = emailVal.split("@")[0] || "taxpayer";
             const customTaxpayer = {
               role: "verified_taxpayer",
@@ -2652,13 +2668,28 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin, opti
           const oidcNonce = randomHex(32);
           const returnTo = readSafeNextPath();
           lastCallbackOutcome = null;
+          let storageReady = false;
           try {
             sessionStorage.setItem("ssra_pkce_verifier", verifier);
             sessionStorage.setItem("ssra_oidc_state", csrfState);
             sessionStorage.setItem("ssra_oidc_nonce", oidcNonce);
             if (returnTo) sessionStorage.setItem("ssra_oidc_return_to", returnTo);
             else sessionStorage.removeItem("ssra_oidc_return_to");
+            storageReady = true;
           } catch {}
+          if (!storageReady) {
+            const storageBannerEl = document.getElementById(
+              mode === "signup" ? "signup-status-banner" : "signin-status-banner",
+            );
+            if (storageBannerEl) {
+              storageBannerEl.classList.remove("is-hidden", "ok", "info");
+              storageBannerEl.classList.add("error");
+              storageBannerEl.setAttribute("role", "alert");
+              storageBannerEl.textContent =
+                "Browser storage is blocked, so sign-in cannot complete here. Allow site storage for this page and try again.";
+            }
+            return;
+          }
           const authUrl = new URL("https://sso.ssra.gov.ss/realms/ssra/protocol/openid-connect/auth");
           authUrl.searchParams.set("response_type", "code");
           authUrl.searchParams.set("client_id", "ssra-staff-console");
@@ -2785,6 +2816,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin, opti
                   : "Keycloak PKCE S256 & CSRF state verified. Server-side token exchange requires live Keycloak connectivity (OQ-005 / OQ-014).",
                 code,
                 verifier,
+                state: st,
                 returnTo,
               };
             }
@@ -2799,6 +2831,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin, opti
               lastCallbackOutcome.ok &&
               lastCallbackOutcome.code &&
               lastCallbackOutcome.verifier &&
+              lastCallbackOutcome.state &&
               !document.getElementById("kc-session-exchange-form")
             ) {
               const exchForm = document.createElement("form");
@@ -2808,6 +2841,7 @@ export function renderOpsDashboardHtml(rawPathname, nonce, publicWebOrigin, opti
               for (const [k, v] of [
                 ["code", lastCallbackOutcome.code],
                 ["code_verifier", lastCallbackOutcome.verifier],
+                ["state", lastCallbackOutcome.state],
                 ["client_id", "ssra-staff-console"],
                 ["return_to", lastCallbackOutcome.returnTo || ""],
               ]) {

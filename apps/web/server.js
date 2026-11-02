@@ -6544,9 +6544,42 @@ const KEYCLOAK_SEEDED_ACCOUNTS = [
   },
 ];
 
+const KEYCLOAK_USERS_STORE_PATH =
+  process.env.SSRA_KEYCLOAK_USERS_FILE || "/tmp/ssra-keycloak-registered-users.json";
 const KEYCLOAK_REGISTERED_USERS = new Map();
 const KEYCLOAK_AUTH_CODES = new Map();
 const KEYCLOAK_ACCESS_TOKENS = new Map();
+
+function loadPersistedKeycloakUsers() {
+  try {
+    if (!fs.existsSync(KEYCLOAK_USERS_STORE_PATH)) return;
+    const raw = fs.readFileSync(KEYCLOAK_USERS_STORE_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    for (const item of parsed.slice(0, 1024)) {
+      if (
+        item &&
+        typeof item.email === "string" &&
+        typeof item.role === "string" &&
+        typeof item.scryptHex === "string" &&
+        Array.isArray(item.aliases)
+      ) {
+        KEYCLOAK_REGISTERED_USERS.set(item.email.toLowerCase(), item);
+      }
+    }
+  } catch {}
+}
+
+function persistKeycloakUsersToDisk() {
+  try {
+    const tmpPath = `${KEYCLOAK_USERS_STORE_PATH}.tmp.${process.pid}`;
+    const payload = JSON.stringify(Array.from(KEYCLOAK_REGISTERED_USERS.values()));
+    fs.writeFileSync(tmpPath, payload, { encoding: "utf8", mode: 0o600 });
+    fs.renameSync(tmpPath, KEYCLOAK_USERS_STORE_PATH);
+  } catch {}
+}
+
+loadPersistedKeycloakUsers();
 
 function escapeKcHtml(str) {
   return String(str ?? "")
@@ -6574,12 +6607,17 @@ function timingSafeHexMatch(aHex, bHex) {
 }
 
 function registerKeycloakUserAccount(account) {
-  if (!account || typeof account.email !== "string") return;
-  if (KEYCLOAK_REGISTERED_USERS.size >= 1024 && !KEYCLOAK_REGISTERED_USERS.has(account.email)) {
+  if (!account || typeof account.email !== "string") return false;
+  loadPersistedKeycloakUsers();
+  const key = account.email.toLowerCase();
+  if (KEYCLOAK_REGISTERED_USERS.has(key)) return false;
+  if (KEYCLOAK_REGISTERED_USERS.size >= 1024) {
     const oldestKey = KEYCLOAK_REGISTERED_USERS.keys().next().value;
     if (oldestKey) KEYCLOAK_REGISTERED_USERS.delete(oldestKey);
   }
-  KEYCLOAK_REGISTERED_USERS.set(account.email.toLowerCase(), account);
+  KEYCLOAK_REGISTERED_USERS.set(key, account);
+  persistKeycloakUsersToDisk();
+  return true;
 }
 
 function findKeycloakAccountByIdentifier(rawIdentifier) {
@@ -6590,10 +6628,23 @@ function findKeycloakAccountByIdentifier(rawIdentifier) {
   for (const seeded of KEYCLOAK_SEEDED_ACCOUNTS) {
     if (seeded.aliases.includes(id)) return seeded;
   }
+  loadPersistedKeycloakUsers();
   for (const reg of KEYCLOAK_REGISTERED_USERS.values()) {
     if (Array.isArray(reg.aliases) && reg.aliases.includes(id)) return reg;
   }
   return null;
+}
+
+function readCookieValue(cookieHeader, targetName) {
+  for (const part of String(cookieHeader ?? "").split(";")) {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx <= 0) continue;
+    const k = part.slice(0, eqIdx).trim();
+    if (k === targetName) {
+      return part.slice(eqIdx + 1).trim();
+    }
+  }
+  return "";
 }
 
 function sanitizeKcReturnTo(raw) {
@@ -6636,9 +6687,10 @@ function issueKeycloakAuthCode({
   return code;
 }
 
-function consumeKeycloakAuthCode(code, codeVerifier) {
+function consumeKeycloakAuthCode(code, codeVerifier, expectedState = "") {
   const cleanCode = String(code ?? "").trim();
   const cleanVerifier = String(codeVerifier ?? "").trim();
+  const cleanExpectedState = String(expectedState ?? "").trim();
   if (!cleanCode || !KEYCLOAK_PKCE_VERIFIER_RE.test(cleanVerifier)) {
     return null;
   }
@@ -6646,6 +6698,9 @@ function consumeKeycloakAuthCode(code, codeVerifier) {
   // CVE-2026-1035: atomic single-use deletion before verification
   KEYCLOAK_AUTH_CODES.delete(cleanCode);
   if (!record || Date.now() > record.expiresAt) {
+    return null;
+  }
+  if (cleanExpectedState && !timingSafeHexMatch(cleanExpectedState, record.state)) {
     return null;
   }
   const computedChallenge = crypto
@@ -6951,7 +7006,6 @@ function renderKeycloakRealmAuthHtml({
               <input type="hidden" name="code_challenge_method" value="S256" />
               <input type="hidden" name="state" value="${escapeKcHtml(state)}" />
               <input type="hidden" name="nonce" value="${escapeKcHtml(oidcNonce)}" />
-              <input type="hidden" name="local_registered_json" id="kc-local-registered-json" value="" />
               <div class="kc-field">
                 <label class="kc-label" for="kc-login-username">Email or username</label>
                 <input class="kc-input" id="kc-login-username" data-testid="kc-login-username" type="text" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="name@example.com" required />
@@ -6999,20 +7053,11 @@ function renderKeycloakRealmAuthHtml({
       </footer>
     </div>
   </main>
-  <script nonce="${nonce}">
-    (() => {
-      try {
-        const regInput = document.getElementById("kc-local-registered-json");
-        const stored = localStorage.getItem("ssra-registered-accounts-v1");
-        if (regInput && stored) regInput.value = stored;
-      } catch {}
-    })();
-  </script>
 </body>
 </html>`;
 }
 
-function renderKeycloakSessionExchangeHtml({ nonce, account, isNewRegistration, targetPath }) {
+function renderKeycloakSessionExchangeHtml({ nonce, account, targetPath }) {
   const sessionObj = {
     role: account.role,
     email: account.email,
@@ -7037,18 +7082,8 @@ function renderKeycloakSessionExchangeHtml({ nonce, account, isNewRegistration, 
   <script nonce="${nonce}">
     (() => {
       const sessionObj = ${JSON.stringify(sessionObj)};
-      const accountRecord = ${JSON.stringify(isNewRegistration ? account : null)};
       const targetPath = ${JSON.stringify(targetPath || account.landingPath || "/en")};
       try {
-        if (accountRecord && accountRecord.email && accountRecord.digestSha256) {
-          const raw = localStorage.getItem("ssra-registered-accounts-v1");
-          const parsed = raw ? JSON.parse(raw) : [];
-          const list = Array.isArray(parsed)
-            ? parsed.filter((item) => item && item.email !== accountRecord.email)
-            : [];
-          list.push(accountRecord);
-          localStorage.setItem("ssra-registered-accounts-v1", JSON.stringify(list.slice(-64)));
-        }
         localStorage.setItem("ssra-authenticated-session-v1", JSON.stringify(sessionObj));
         if (sessionObj.role !== "verified_taxpayer") {
           localStorage.setItem("ssra-ops-preview-persona", sessionObj.role);
@@ -7317,26 +7352,6 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        const localRegJson = form.get("local_registered_json") || "";
-        if (localRegJson.startsWith("[")) {
-          try {
-            const parsedReg = JSON.parse(localRegJson);
-            if (Array.isArray(parsedReg)) {
-              for (const item of parsedReg.slice(0, 64)) {
-                if (
-                  item &&
-                  typeof item.email === "string" &&
-                  typeof item.role === "string" &&
-                  typeof item.digestSha256 === "string" &&
-                  Array.isArray(item.aliases)
-                ) {
-                  registerKeycloakUserAccount(item);
-                }
-              }
-            }
-          } catch {}
-        }
-
         let resolvedAccount = null;
         let isNewRegistration = false;
 
@@ -7365,6 +7380,25 @@ const server = http.createServer(async (req, res) => {
             return;
           }
           const usernameVal = emailVal.split("@")[0] || "taxpayer";
+          if (findKeycloakAccountByIdentifier(emailVal)) {
+            sendBodyWithCompression(
+              req,
+              res,
+              409,
+              { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+              renderKeycloakRealmAuthHtml({
+                nonce,
+                mode: "register",
+                clientId,
+                redirectUri,
+                codeChallenge,
+                state: stateParam,
+                oidcNonce,
+                errorMsg: "An account already exists for this email address. Sign in instead.",
+              }),
+            );
+            return;
+          }
           const scryptDigest = computeKcScryptDigest("verified_taxpayer", pwVal);
           resolvedAccount = {
             role: "verified_taxpayer",
@@ -7380,7 +7414,25 @@ const server = http.createServer(async (req, res) => {
             scryptHex: scryptDigest,
             digestSha256: scryptDigest,
           };
-          registerKeycloakUserAccount(resolvedAccount);
+          if (!registerKeycloakUserAccount(resolvedAccount)) {
+            sendBodyWithCompression(
+              req,
+              res,
+              409,
+              { "Content-Type": "text/html; charset=utf-8", ...secHeaders },
+              renderKeycloakRealmAuthHtml({
+                nonce,
+                mode: "register",
+                clientId,
+                redirectUri,
+                codeChallenge,
+                state: stateParam,
+                oidcNonce,
+                errorMsg: "An account already exists for this email address. Sign in instead.",
+              }),
+            );
+            return;
+          }
           isNewRegistration = true;
         } else if (mode === "passkey") {
           const passkeyRole = (form.get("passkey_role") || "").trim();
@@ -7450,6 +7502,7 @@ const server = http.createServer(async (req, res) => {
         }).toString();
         res.writeHead(303, {
           Location: `/signin/callback?${callbackQs}`,
+          "Set-Cookie": `ssra_kc_flow_state=${stateParam}; Path=/realms/ssra/protocol/openid-connect/session-exchange; HttpOnly; SameSite=Lax; Max-Age=300`,
           "Cache-Control": "no-store",
           ...secHeaders,
         });
@@ -7521,13 +7574,47 @@ const server = http.createServer(async (req, res) => {
 
     if (method === "POST" && pathname === "/realms/ssra/protocol/openid-connect/session-exchange") {
       try {
+        const secFetchSite = String(req.headers["sec-fetch-site"] ?? "").toLowerCase();
+        if (
+          secFetchSite &&
+          secFetchSite !== "same-origin" &&
+          secFetchSite !== "same-site" &&
+          secFetchSite !== "none"
+        ) {
+          res.writeHead(403, {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+            ...secHeaders,
+          });
+          res.end(JSON.stringify({ error: "CROSS_SITE_SESSION_EXCHANGE_FORBIDDEN" }));
+          return;
+        }
+        if (req.headers.origin) {
+          const origHost = new URL(String(req.headers.origin)).host.toLowerCase();
+          if (origHost !== hostHeader.toLowerCase()) {
+            res.writeHead(403, {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store",
+              ...secHeaders,
+            });
+            res.end(JSON.stringify({ error: "ORIGIN_MISMATCH_SESSION_EXCHANGE_FORBIDDEN" }));
+            return;
+          }
+        }
         const rawBody = await readRequestBody(req);
         const params = new URLSearchParams(rawBody);
         const code = (params.get("code") || "").trim();
         const codeVerifier = (params.get("code_verifier") || "").trim();
+        const stateParam = (params.get("state") || "").trim();
+        const flowStateCookie = readCookieValue(req.headers.cookie, "ssra_kc_flow_state");
         const clientId = (params.get("client_id") || "ssra-staff-console").trim();
         const returnTo = sanitizeKcReturnTo(params.get("return_to"));
-        const record = consumeKeycloakAuthCode(code, codeVerifier);
+        const stateCookieOk =
+          !flowStateCookie || timingSafeHexMatch(flowStateCookie, stateParam);
+        const record =
+          stateParam && stateCookieOk
+            ? consumeKeycloakAuthCode(code, codeVerifier, stateParam)
+            : null;
         if (!record) {
           res.writeHead(303, {
             Location:
@@ -7546,13 +7633,15 @@ const server = http.createServer(async (req, res) => {
           200,
           {
             "Content-Type": "text/html; charset=utf-8",
-            "Set-Cookie": `ssra_kc_session=${tokens.accessToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=300`,
+            "Set-Cookie": [
+              `ssra_kc_session=${tokens.accessToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=300`,
+              "ssra_kc_flow_state=; Path=/realms/ssra/protocol/openid-connect/session-exchange; HttpOnly; SameSite=Lax; Max-Age=0",
+            ],
             ...secHeaders,
           },
           renderKeycloakSessionExchangeHtml({
             nonce,
             account: record.account,
-            isNewRegistration: Boolean(record.isNewRegistration),
             targetPath,
           }),
         );

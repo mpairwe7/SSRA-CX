@@ -212,9 +212,13 @@ def main() -> None:
     import os
     import shutil
     import subprocess
+    import tempfile
     import time
 
     node_bin = shutil.which("node") or "node"
+    kc_users_file = os.path.join(tempfile.gettempdir(), f"ssra-kc-users-test-{os.getpid()}.json")
+    if os.path.exists(kc_users_file):
+        os.unlink(kc_users_file)
     clean_env = {
         k: v
         for k, v in os.environ.items()
@@ -222,7 +226,7 @@ def main() -> None:
     }
     proc = subprocess.Popen(  # noqa: S603
         [node_bin, str(ROOT / "apps" / "web" / "server.js")],
-        env={**clean_env, "PORT": "39123"},
+        env={**clean_env, "PORT": "39123", "SSRA_KEYCLOAK_USERS_FILE": kc_users_file},
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -427,9 +431,26 @@ def main() -> None:
         assert resp_login.status == 303 and login_loc.startswith("/signin/callback?"), (
             f"Expected 303 redirect on Keycloak login for registered account, got {resp_login.status}"
         )
+
+        # Duplicate registration for the same email must return 409 Conflict
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request(
+            "POST",
+            "/realms/ssra/protocol/openid-connect/auth",
+            body=reg_body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        resp_dup = conn.getresponse()
+        resp_dup.read()
+        conn.close()
+        assert resp_dup.status == 409, (
+            f"Expected 409 on duplicate registration, got {resp_dup.status}"
+        )
     finally:
         proc.terminate()
         proc.wait(timeout=5)
+        if os.path.exists(kc_users_file):
+            os.unlink(kc_users_file)
 
     console_proc = subprocess.Popen(  # noqa: S603
         [node_bin, str(ROOT / "apps" / "console" / "server.js")],
