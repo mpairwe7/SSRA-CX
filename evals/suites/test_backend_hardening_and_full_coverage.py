@@ -2340,6 +2340,7 @@ def test_cloudflare_voice_fallback_and_receptionist_endpoints(
     )
 
     reset_cloudflare_neuron_usage_for_tests()
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
     # 1. Config & fallback chain resolution
     cfg_disabled = get_cloudflare_voice_fallback_config(
@@ -2527,6 +2528,40 @@ def test_cloudflare_voice_fallback_and_receptionist_endpoints(
         env={**cf_env, "STT_FALLBACK_MODEL": ""},
     )
     assert asr_cf_fail["status"] == "degraded"
+
+    # 3b. Transport-cooldown failover when GEMINI_API_KEY is configured on HF Spaces
+    def _mock_gem_failover(url: str, **kwargs: object) -> _FakeResp:
+        if "googleapis.com" not in url:
+            raise httpx.ConnectTimeout("cf egress blocked on hf space")
+        return _FakeResp(
+            200,
+            headers={"content-type": "application/json"},
+            json_data={
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "inlineData": {
+                                        "data": base64.b64encode(b"\x00\x01" * 100).decode("ascii")
+                                    },
+                                    "text": "PAYE filing deadline",
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(httpx, "post", _mock_gem_failover)
+    gem_env = {**cf_env, "GEMINI_API_KEY": "gem_123", "SPACE_ID": "landwind22/ssra-assist"}
+    gem_tts_ok = synthesize_with_cloudflare_fallback("Hello", env=gem_env)
+    assert gem_tts_ok.backend == "cf_workers_ai"
+    assert gem_tts_ok.audio.startswith(b"RIFF")
+    gem_asr_ok = transcribe_with_cloudflare_fallback(valid_wav, env=gem_env)
+    assert gem_asr_ok["status"] == "ok"
+    assert "PAYE" in gem_asr_ok["text"]
 
     # 4. Runtime endpoints: local-first injection + Cloudflare fallback + session_token security
     reset_cloudflare_neuron_usage_for_tests()
