@@ -6475,6 +6475,7 @@ const KEYCLOAK_SEEDED_ACCOUNTS = [
     officeCode: "JUBA_HQ",
     initials: "GA",
     landingPath: "/admin",
+    scryptHex: "fac50661299dd8730f57d99548c1b2022565757704508216dd2b10828d843e49",
     digestSha256: "15e2bad00ca51b94f0f4f6c54b0191467fd68a5678b9fa585a10dbab1db3ab0b",
   },
   {
@@ -6496,6 +6497,7 @@ const KEYCLOAK_SEEDED_ACCOUNTS = [
     officeCode: "JUBA_HQ",
     initials: "DM",
     landingPath: "/agent",
+    scryptHex: "ead5171cfb0f9d32215c12cb05e210c1df2fbea3bfd2f95e992fd6c907f8d5df",
     digestSha256: "3974ad6a9bfae75807da570ddae63d49e1c4fe0176c619a0aac998fd7289d347",
   },
   {
@@ -6516,6 +6518,7 @@ const KEYCLOAK_SEEDED_ACCOUNTS = [
     officeCode: "JUBA_HQ",
     initials: "NK",
     landingPath: "/analytics",
+    scryptHex: "2eed2c0d224685bb68d25ffe86edb19fe217a55c190ecc0ba283a1c06b086e54",
     digestSha256: "400c6c4df7c2cf00c0b4ac189325343348e90c64acc7e80fa7cedf3ff4021a46",
   },
   {
@@ -6536,6 +6539,7 @@ const KEYCLOAK_SEEDED_ACCOUNTS = [
     officeCode: "JUBA_HQ",
     initials: "AM",
     landingPath: "/en",
+    scryptHex: "f5f3586c44ca76d5decccc778dc0a1ab6897c8b5a9284a5d7cd9d5875ae9c141",
     digestSha256: "13f0de343c3ef088f5b4d62702b01ca6a1ce22748dea5cc0366653e52d405012",
   },
 ];
@@ -6554,11 +6558,10 @@ function escapeKcHtml(str) {
     .replace(/\x60/g, "&#96;");
 }
 
-function computeKcCredentialDigest(role, password) {
+function computeKcScryptDigest(role, credentialInput) {
   return crypto
-    .createHash("sha256")
-    .update(`ssra-console-auth-v1:${role}:${password}`, "utf8")
-    .digest("hex");
+    .scryptSync(String(credentialInput ?? ""), `ssra-kc-salt-v1:${role}`, 32)
+    .toString("hex");
 }
 
 function timingSafeHexMatch(aHex, bHex) {
@@ -7009,12 +7012,7 @@ function renderKeycloakRealmAuthHtml({
 </html>`);
 }
 
-function renderKeycloakSessionExchangeHtml({
-  nonce,
-  account,
-  isNewRegistration,
-  targetPath,
-}) {
+function renderKeycloakSessionExchangeHtml({ nonce, account, isNewRegistration, targetPath }) {
   const sessionObj = {
     role: account.role,
     email: account.email,
@@ -7176,7 +7174,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname.startsWith("/realms/ssra/")) {
-    const protoHdr = String(req.headers["x-forwarded-proto"] ?? "").split(",")[0]?.trim();
+    const protoHdr = String(req.headers["x-forwarded-proto"] ?? "")
+      .split(",")[0]
+      ?.trim();
     const scheme = protoHdr === "https" || IS_HF_SPACE_EMBED ? "https" : "http";
     const realmBase = `${scheme}://${hostHeader}/realms/ssra`;
 
@@ -7251,9 +7251,7 @@ const server = http.createServer(async (req, res) => {
       const promptParam = (q.get("prompt") || "").trim();
       const screenHint = (q.get("screen_hint") || "").trim();
       const isReg =
-        pathname.endsWith("/registrations") ||
-        promptParam === "create" ||
-        screenHint === "signup";
+        pathname.endsWith("/registrations") || promptParam === "create" || screenHint === "signup";
       const paramsValid =
         KEYCLOAK_PKCE_CHALLENGE_RE.test(codeChallenge) &&
         codeChallengeMethod === "S256" &&
@@ -7346,7 +7344,7 @@ const server = http.createServer(async (req, res) => {
           const nameVal = (form.get("name") || "").trim();
           const emailVal = (form.get("email") || "").trim().toLowerCase();
           const pwVal = (form.get("password") || "").trim();
-          if (!nameVal || !emailVal || !emailVal.includes("@") || pwVal.length < 8) {
+          if (!nameVal || !emailVal.includes("@") || pwVal.length < 8) {
             sendBodyWithCompression(
               req,
               res,
@@ -7367,6 +7365,7 @@ const server = http.createServer(async (req, res) => {
             return;
           }
           const usernameVal = emailVal.split("@")[0] || "taxpayer";
+          const scryptDigest = computeKcScryptDigest("verified_taxpayer", pwVal);
           resolvedAccount = {
             role: "verified_taxpayer",
             email: emailVal,
@@ -7378,7 +7377,8 @@ const server = http.createServer(async (req, res) => {
             officeCode: "JUBA_HQ",
             initials: nameVal.slice(0, 2).toUpperCase(),
             landingPath: "/en",
-            digestSha256: computeKcCredentialDigest("verified_taxpayer", pwVal),
+            scryptHex: scryptDigest,
+            digestSha256: scryptDigest,
           };
           registerKeycloakUserAccount(resolvedAccount);
           isNewRegistration = true;
@@ -7409,14 +7409,9 @@ const server = http.createServer(async (req, res) => {
           const rawUser = (form.get("username") || "").trim().toLowerCase();
           const rawPw = (form.get("password") || "").trim();
           const candidate = findKeycloakAccountByIdentifier(rawUser);
-          const computedDigest = candidate
-            ? computeKcCredentialDigest(candidate.role, rawPw)
-            : "";
-          if (
-            !candidate ||
-            !rawPw ||
-            !timingSafeHexMatch(computedDigest, candidate.digestSha256)
-          ) {
+          const computedDigest = candidate ? computeKcScryptDigest(candidate.role, rawPw) : "";
+          const expectedDigest = candidate?.scryptHex || candidate?.digestSha256 || "";
+          if (!candidate || !rawPw || !timingSafeHexMatch(computedDigest, expectedDigest)) {
             sendBodyWithCompression(
               req,
               res,
@@ -7485,7 +7480,8 @@ const server = http.createServer(async (req, res) => {
           res.end(
             JSON.stringify({
               error: "invalid_grant",
-              error_description: "Authorization code is expired, already used, or PKCE S256 verification failed.",
+              error_description:
+                "Authorization code is expired, already used, or PKCE S256 verification failed.",
             }),
           );
           return;
@@ -7523,10 +7519,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (
-      method === "POST" &&
-      pathname === "/realms/ssra/protocol/openid-connect/session-exchange"
-    ) {
+    if (method === "POST" && pathname === "/realms/ssra/protocol/openid-connect/session-exchange") {
       try {
         const rawBody = await readRequestBody(req);
         const params = new URLSearchParams(rawBody);
@@ -7537,7 +7530,8 @@ const server = http.createServer(async (req, res) => {
         const record = consumeKeycloakAuthCode(code, codeVerifier);
         if (!record) {
           res.writeHead(303, {
-            Location: "/signin/callback?error=invalid_grant&error_description=PKCE+S256+exchange+expired+or+already+consumed",
+            Location:
+              "/signin/callback?error=invalid_grant&error_description=PKCE+S256+exchange+expired+or+already+consumed",
             "Cache-Control": "no-store",
             ...secHeaders,
           });
@@ -7545,8 +7539,7 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         const tokens = mintKeycloakTokens(record.account, clientId, record.nonce);
-        const targetPath =
-          returnTo || record.account.landingPath || "/en";
+        const targetPath = returnTo || record.account.landingPath || "/en";
         sendBodyWithCompression(
           req,
           res,
