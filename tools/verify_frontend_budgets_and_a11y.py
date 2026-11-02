@@ -248,9 +248,33 @@ def main() -> None:
         assert resp_none.getheader("Content-Encoding") is None, (
             f"Expected no Content-Encoding when br;q=0, gzip;q=0, got {resp_none.getheader('Content-Encoding')}"
         )
+        assert resp_none.getheader("X-Frame-Options") == "DENY"
+        assert "frame-ancestors 'none'" in (resp_none.getheader("Content-Security-Policy") or "")
         html_en = resp_none.read().decode("utf-8")
         assert 'data-mobile-rail="closed"' in html_en and 'id="rail-mobile-backdrop"' in html_en
         assert 'id="rail-hotzone"' in html_en and "IBMPlexSans-Regular.woff2" in html_en
+        conn.close()
+
+        conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
+        conn.request(
+            "GET",
+            "/en",
+            headers={
+                "Host": "landwind22-ssra-assist.hf.space",
+                "Accept-Encoding": "identity",
+            },
+        )
+        resp_hf = conn.getresponse()
+        assert resp_hf.status == 200
+        assert resp_hf.getheader("X-Frame-Options") is None, (
+            "HF Space embed response must omit X-Frame-Options: DENY so huggingface.co iframe can connect"
+        )
+        assert "frame-ancestors 'self' https://huggingface.co https://*.hf.space" in (
+            resp_hf.getheader("Content-Security-Policy") or ""
+        )
+        assert resp_hf.getheader("Cross-Origin-Resource-Policy") == "cross-origin"
+        assert resp_hf.getheader("Cross-Origin-Opener-Policy") == "unsafe-none"
+        resp_hf.read()
         conn.close()
 
         conn = http.client.HTTPConnection("127.0.0.1", 39123, timeout=2.0)
