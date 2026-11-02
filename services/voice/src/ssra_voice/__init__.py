@@ -4549,7 +4549,30 @@ MAX_TTS_SYNTHESIS_CHARS = 1800
 _CF_GATEWAY_BASE = "https://gateway.ai.cloudflare.com/v1"
 _CF_REST_API_BASE = "https://api.cloudflare.com/client/v4"
 _CF_DAILY_NEURON_USAGE: dict[str, int] = {}
+_CF_TRANSPORT_COOLDOWN: dict[str, float] = {"until": 0.0}
 _routing_yaml_cache: dict[str, dict[str, Any]] = {}
+
+
+def _pcm16_to_wav_bytes(pcm16_bytes: bytes, sample_rate: int = 24000) -> bytes:
+    """Wrap raw mono 16-bit signed PCM bytes in a standard 44-byte RIFF/WAVE header."""
+    data_size = len(pcm16_bytes)
+    header = struct.pack(
+        "<4sI4s4sIHHIIHH4sI",
+        b"RIFF",
+        36 + data_size,
+        b"WAVE",
+        b"fmt ",
+        16,
+        1,
+        1,
+        sample_rate,
+        sample_rate * 2,
+        2,
+        16,
+        b"data",
+        data_size,
+    )
+    return header + pcm16_bytes
 
 
 def _load_voice_cloudflare_routing_defaults() -> dict[str, Any]:
@@ -4589,8 +4612,9 @@ def consume_cloudflare_neurons(cost: int, *, budget: int) -> bool:
 
 
 def reset_cloudflare_neuron_usage_for_tests() -> None:
-    """Reset in-process daily neuron counter for deterministic unit tests."""
+    """Reset in-process daily neuron counter and transport cooldown for deterministic unit tests."""
     _CF_DAILY_NEURON_USAGE.clear()
+    _CF_TRANSPORT_COOLDOWN["until"] = 0.0
 
 
 def cloud_speech_egress_allowed(env: Mapping[str, str] | None = None) -> bool:
@@ -4918,54 +4942,105 @@ def synthesize_with_cloudflare_fallback(
             error="Cloudflare daily neuron budget exhausted",
         )
 
+    src = os.environ if env is None else env
+    gem_key = src.get("GEMINI_API_KEY", "").strip()
+    cf_timeout = 3.5 if src.get("SPACE_ID") else 8.0
     max_b64_len = (MAX_COMPRESSED_AUDIO_BYTES * 4) // 3 + 4
-    for model in (cf_cfg.tts_model_primary, cf_cfg.tts_model_secondary):
-        if not model:
-            continue
-        is_aura = "aura" in model.lower()
-        if is_aura and locale != LocaleCode.EN:
-            continue
-        t0 = time.perf_counter()
-        for url, headers in build_cf_workers_ai_targets(model, env=env):
-            try:
-                payload: dict[str, Any] = (
-                    {"text": cleaned_text}
-                    if is_aura
-                    else {
-                        "prompt": cleaned_text,
-                        "lang": "en" if locale == LocaleCode.EN else locale.value,
-                    }
-                )
-                with _prefer_ipv4_getaddrinfo():
-                    resp = httpx.post(url, headers=headers, json=payload, timeout=8.0)
-                if resp.status_code != 200:
-                    continue
-                cl_hdr = resp.headers.get("content-length")
-                if cl_hdr and cl_hdr.isdigit() and int(cl_hdr) > MAX_COMPRESSED_AUDIO_BYTES:
-                    continue
-                if len(resp.content) > MAX_COMPRESSED_AUDIO_BYTES:
-                    continue
-                if is_aura and "application/json" not in (resp.headers.get("content-type") or ""):
-                    audio_bytes = resp.content
-                else:
-                    body_json = resp.json()
-                    b64_str = str((body_json.get("result") or {}).get("audio") or "")
-                    if not b64_str or len(b64_str) > max_b64_len:
-                        continue
-                    audio_bytes = base64.b64decode(b64_str)
-                if len(audio_bytes) <= MAX_COMPRESSED_AUDIO_BYTES and looks_like_valid_audio_bytes(
-                    audio_bytes
-                ):
-                    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-                    return TtsCachedAudio(
-                        audio=audio_bytes,
-                        backend="cf_workers_ai",
-                        voice=model,
-                        language=locale.value,
-                        latency_ms=elapsed_ms,
+    cf_transport_failed = False
+    if time.monotonic() >= _CF_TRANSPORT_COOLDOWN.get("until", 0.0):
+        for model in (cf_cfg.tts_model_primary, cf_cfg.tts_model_secondary):
+            if not model:
+                continue
+            is_aura = "aura" in model.lower()
+            if is_aura and locale != LocaleCode.EN:
+                continue
+            t0 = time.perf_counter()
+            for url, headers in build_cf_workers_ai_targets(model, env=env):
+                try:
+                    payload: dict[str, Any] = (
+                        {"text": cleaned_text}
+                        if is_aura
+                        else {
+                            "prompt": cleaned_text,
+                            "lang": "en" if locale == LocaleCode.EN else locale.value,
+                        }
                     )
-            except Exception as exc:
-                last_err = type(exc).__name__
+                    with _prefer_ipv4_getaddrinfo():
+                        resp = httpx.post(url, headers=headers, json=payload, timeout=cf_timeout)
+                    if resp.status_code != 200:
+                        continue
+                    cl_hdr = resp.headers.get("content-length")
+                    if cl_hdr and cl_hdr.isdigit() and int(cl_hdr) > MAX_COMPRESSED_AUDIO_BYTES:
+                        continue
+                    if len(resp.content) > MAX_COMPRESSED_AUDIO_BYTES:
+                        continue
+                    if is_aura and "application/json" not in (
+                        resp.headers.get("content-type") or ""
+                    ):
+                        audio_bytes = resp.content
+                    else:
+                        body_json = resp.json()
+                        b64_str = str((body_json.get("result") or {}).get("audio") or "")
+                        if not b64_str or len(b64_str) > max_b64_len:
+                            continue
+                        audio_bytes = base64.b64decode(b64_str)
+                    if len(
+                        audio_bytes
+                    ) <= MAX_COMPRESSED_AUDIO_BYTES and looks_like_valid_audio_bytes(audio_bytes):
+                        elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+                        return TtsCachedAudio(
+                            audio=audio_bytes,
+                            backend="cf_workers_ai",
+                            voice=model,
+                            language=locale.value,
+                            latency_ms=elapsed_ms,
+                        )
+                except Exception as exc:
+                    last_err = type(exc).__name__
+                    if isinstance(exc, httpx.TransportError):
+                        cf_transport_failed = True
+
+    if gem_key:
+        if cf_transport_failed:
+            _CF_TRANSPORT_COOLDOWN["until"] = time.monotonic() + 180.0
+        t0_gem = time.perf_counter()
+        gem_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-tts:generateContent"
+        gem_payload = {
+            "contents": [{"parts": [{"text": cleaned_text}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Kore"}}},
+            },
+        }
+        try:
+            r_gem = httpx.post(
+                gem_url,
+                headers={"x-goog-api-key": gem_key, "Content-Type": "application/json"},
+                json=gem_payload,
+                timeout=18.0,
+            )
+            if r_gem.status_code == 200:
+                cands = r_gem.json().get("candidates") or []
+                parts = (cands[0].get("content") or {}).get("parts") or [] if cands else []
+                inline = parts[0].get("inlineData") or {} if parts else {}
+                b64_gem = str(inline.get("data") or "")
+                if b64_gem and len(b64_gem) <= max_b64_len:
+                    raw_gem = base64.b64decode(b64_gem)
+                    wav_gem = (
+                        raw_gem
+                        if looks_like_valid_audio_bytes(raw_gem)
+                        else _pcm16_to_wav_bytes(raw_gem, 24000)
+                    )
+                    if len(wav_gem) <= MAX_COMPRESSED_AUDIO_BYTES:
+                        return TtsCachedAudio(
+                            audio=wav_gem,
+                            backend="gemini_tts",
+                            voice="Kore",
+                            language=locale.value,
+                            latency_ms=round((time.perf_counter() - t0_gem) * 1000.0, 2),
+                        )
+        except Exception as exc:
+            last_err = type(exc).__name__
 
     return TtsCachedAudio(
         audio=b"",
@@ -5031,37 +5106,92 @@ def transcribe_with_cloudflare_fallback(
             "error": "Cloudflare daily neuron budget exhausted",
         }
 
+    src = os.environ if env is None else env
+    gem_key = src.get("GEMINI_API_KEY", "").strip()
+    cf_timeout = 3.5 if src.get("SPACE_ID") else 8.0
     b64_audio = base64.b64encode(audio_bytes).decode("ascii")
-    for model in (cf_cfg.stt_model_primary, cf_cfg.stt_model_secondary):
-        if not model:
-            continue
-        for url, headers in build_cf_workers_ai_targets(model, env=env):
-            try:
-                with _prefer_ipv4_getaddrinfo():
-                    if model.rstrip("/").endswith("/whisper"):
-                        raw_headers = {k: v for k, v in headers.items() if k != "Content-Type"}
-                        resp = httpx.post(
-                            url, headers=raw_headers, content=audio_bytes, timeout=8.0
-                        )
-                    else:
-                        resp = httpx.post(
-                            url, headers=headers, json={"audio": b64_audio}, timeout=8.0
-                        )
-                if resp.status_code != 200:
-                    continue
-                res_obj = resp.json().get("result") or {}
-                raw_tx = str(res_obj.get("text") or "").strip()
-                if raw_tx:
-                    repaired = repair_ssra_asr_entities(raw_tx)
+    cf_transport_failed = False
+    if time.monotonic() >= _CF_TRANSPORT_COOLDOWN.get("until", 0.0):
+        for model in (cf_cfg.stt_model_primary, cf_cfg.stt_model_secondary):
+            if not model:
+                continue
+            for url, headers in build_cf_workers_ai_targets(model, env=env):
+                try:
+                    with _prefer_ipv4_getaddrinfo():
+                        if model.rstrip("/").endswith("/whisper"):
+                            raw_headers = {k: v for k, v in headers.items() if k != "Content-Type"}
+                            resp = httpx.post(
+                                url, headers=raw_headers, content=audio_bytes, timeout=cf_timeout
+                            )
+                        else:
+                            resp = httpx.post(
+                                url, headers=headers, json={"audio": b64_audio}, timeout=cf_timeout
+                            )
+                    if resp.status_code != 200:
+                        continue
+                    res_obj = resp.json().get("result") or {}
+                    raw_tx = str(res_obj.get("text") or "").strip()
+                    if raw_tx:
+                        repaired = repair_ssra_asr_entities(raw_tx)
+                        return {
+                            "status": "ok",
+                            "text": repaired,
+                            "backend": "cf_workers_ai",
+                            "model": model,
+                            "locale": locale.value,
+                        }
+                except Exception as exc:
+                    last_err = type(exc).__name__
+                    if isinstance(exc, httpx.TransportError):
+                        cf_transport_failed = True
+
+    if gem_key:
+        if cf_transport_failed:
+            _CF_TRANSPORT_COOLDOWN["until"] = time.monotonic() + 180.0
+        if audio_bytes.startswith(b"RIFF"):
+            mime_type = "audio/wav"
+        elif audio_bytes.startswith(b"OggS"):
+            mime_type = "audio/ogg"
+        elif audio_bytes.startswith(b"fLaC"):
+            mime_type = "audio/flac"
+        else:
+            mime_type = "audio/mp3"
+        gem_stt_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        gem_stt_body = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "text": "Transcribe the spoken audio verbatim. Output only the spoken words."
+                        },
+                        {"inlineData": {"mimeType": mime_type, "data": b64_audio}},
+                    ],
+                }
+            ],
+            "generationConfig": {"temperature": 0.0, "maxOutputTokens": 256},
+        }
+        try:
+            r_stt = httpx.post(
+                gem_stt_url,
+                headers={"x-goog-api-key": gem_key, "Content-Type": "application/json"},
+                json=gem_stt_body,
+                timeout=18.0,
+            )
+            if r_stt.status_code == 200:
+                cands = r_stt.json().get("candidates") or []
+                parts = (cands[0].get("content") or {}).get("parts") or [] if cands else []
+                gem_tx = "".join(str(p.get("text") or "") for p in parts).strip()
+                if gem_tx:
                     return {
                         "status": "ok",
-                        "text": repaired,
-                        "backend": "cf_workers_ai",
-                        "model": model,
+                        "text": repair_ssra_asr_entities(gem_tx),
+                        "backend": "gemini",
+                        "model": "gemini-2.5-flash",
                         "locale": locale.value,
                     }
-            except Exception as exc:
-                last_err = type(exc).__name__
+        except Exception as exc:
+            last_err = type(exc).__name__
 
     return {
         "status": "degraded",
