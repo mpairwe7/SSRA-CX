@@ -2317,3 +2317,268 @@ def test_agentic_tool_audit_phases_1_to_4_regression() -> None:
             last_inbound_at=utc_now(),
             opt_in_consent_active=True,
         )
+
+
+def test_cloudflare_voice_fallback_and_receptionist_endpoints(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify local-first -> Cloudflare Workers AI voice/speech fallback and Call Receptionist endpoints."""
+    import base64
+
+    import httpx
+    from fastapi.testclient import TestClient
+    from ssra_runtime.main import create_runtime_app
+    from ssra_voice import (
+        TtsCachedAudio,
+        build_cf_workers_ai_targets,
+        get_cloudflare_voice_fallback_config,
+        resolve_voice_fallback_chain,
+        synthesize_with_cloudflare_fallback,
+        transcribe_with_cloudflare_fallback,
+    )
+
+    # 1. Config & fallback chain resolution
+    cfg_disabled = get_cloudflare_voice_fallback_config(
+        {"FLAG_CLOUDFLARE_FALLBACK": "false", "CF_NEURON_DAILY_BUDGET": "bad_int"}
+    )
+    assert not cfg_disabled.stt_fallback_active
+    assert not cfg_disabled.tts_fallback_active
+    assert build_cf_workers_ai_targets("@cf/deepgram/aura-2-en", env={}) == []
+
+    cf_env = {
+        "FLAG_CLOUDFLARE_FALLBACK": "true",
+        "CLOUDFLARE_ACCOUNT_ID": "acct_123",
+        "CLOUDFLARE_API_TOKEN": "tok_123",
+        "CF_AIG_GATEWAY": "agrilink-aigateway",
+        "CF_AIG_TOKEN": "aig_123",
+        "STT_FALLBACK_BACKEND": "workers_ai",
+        "STT_FALLBACK_MODEL": "@cf/openai/whisper-large-v3-turbo",
+        "STT_FALLBACK_MODEL_2": "@cf/openai/whisper",
+        "TTS_FALLBACK_BACKEND": "workers_ai",
+        "TTS_FALLBACK_MODEL": "@cf/deepgram/aura-2-en",
+        "TTS_FALLBACK_MODEL_2": "@cf/myshell-ai/melotts",
+        "CF_NEURON_DAILY_BUDGET": "10000",
+    }
+    cfg_active = get_cloudflare_voice_fallback_config(cf_env)
+    assert cfg_active.stt_fallback_active
+    assert cfg_active.tts_fallback_active
+    chain = resolve_voice_fallback_chain(LocaleCode.EN, env=cf_env)
+    assert chain["asr_chain"][0]["provider"] == "local_hf_cache"
+    assert chain["asr_chain"][1]["model"] == "@cf/openai/whisper-large-v3-turbo"
+    assert chain["tts_chain"][2]["model"] == "@cf/deepgram/aura-2-en"
+    assert chain["tts_chain"][3]["model"] == "@cf/myshell-ai/melotts"
+    targets = build_cf_workers_ai_targets("@cf/deepgram/aura-2-en", env=cf_env)
+    assert len(targets) == 2
+
+    # 2. TTS fallback: empty text, local success, local fail -> disabled CF, local fail -> CF Aura & MeloTTS
+    empty_tts = synthesize_with_cloudflare_fallback("   ", env=cf_env)
+    assert empty_tts.backend == "error"
+
+    valid_wav = b"RIFF\x00\x00\x00\x00WAVE" + (b"\x00" * 160)
+    local_ok = synthesize_with_cloudflare_fallback(
+        "Hello taxpayer",
+        local_synthesizer=lambda txt, language, voice: TtsCachedAudio(
+            audio=valid_wav,
+            backend="local_orpheus",
+            voice=voice,
+            language=language,
+            latency_ms=5.0,
+        ),
+        env=cf_env,
+    )
+    assert local_ok.backend == "local_orpheus"
+
+    def _failing_local_synth(txt: str, language: str, voice: str) -> TtsCachedAudio:
+        raise RuntimeError("local GPU offline")
+
+    disabled_tts = synthesize_with_cloudflare_fallback(
+        "Hello taxpayer",
+        local_synthesizer=_failing_local_synth,
+        env={"FLAG_CLOUDFLARE_FALLBACK": "false"},
+    )
+    assert disabled_tts.backend == "error"
+
+    class _FakeResp:
+        def __init__(
+            self,
+            status_code: int,
+            content: bytes = b"",
+            headers: dict[str, str] | None = None,
+            json_data: dict[str, object] | None = None,
+        ) -> None:
+            self.status_code = status_code
+            self.content = content
+            self.headers = headers or {"content-type": "audio/mpeg"}
+            self._json = json_data or {}
+
+        def json(self) -> dict[str, object]:
+            return self._json
+
+    mp3_bytes = b"ID3" + (b"\x01" * 200)
+    call_idx = {"n": 0}
+
+    def _mock_tts_post(url: str, **kwargs: object) -> _FakeResp:
+        call_idx["n"] += 1
+        if call_idx["n"] == 1:
+            raise httpx.ConnectError("gateway timeout")
+        if "aura" in url:
+            return _FakeResp(500)
+        return _FakeResp(
+            200,
+            headers={"content-type": "application/json"},
+            json_data={"result": {"audio": base64.b64encode(valid_wav).decode("ascii")}},
+        )
+
+    monkeypatch.setattr(httpx, "post", _mock_tts_post)
+    cf_melo_res = synthesize_with_cloudflare_fallback(
+        "PAYE is due by the fifteenth.",
+        local_synthesizer=_failing_local_synth,
+        env=cf_env,
+    )
+    assert cf_melo_res.backend == "cf_workers_ai"
+    assert cf_melo_res.voice == "@cf/myshell-ai/melotts"
+
+    def _mock_aura_ok(url: str, **kwargs: object) -> _FakeResp:
+        return _FakeResp(200, content=mp3_bytes, headers={"content-type": "audio/mpeg"})
+
+    monkeypatch.setattr(httpx, "post", _mock_aura_ok)
+    cf_aura_res = synthesize_with_cloudflare_fallback(
+        "PAYE is due by the fifteenth.",
+        env=cf_env,
+    )
+    assert cf_aura_res.backend == "cf_workers_ai"
+    assert cf_aura_res.voice == "@cf/deepgram/aura-2-en"
+
+    def _mock_tts_503(url: str, **kwargs: object) -> _FakeResp:
+        return _FakeResp(503)
+
+    monkeypatch.setattr(httpx, "post", _mock_tts_503)
+    cf_all_fail = synthesize_with_cloudflare_fallback(
+        "PAYE is due by the fifteenth.",
+        env={**cf_env, "TTS_FALLBACK_MODEL": ""},
+    )
+    assert cf_all_fail.backend == "error"
+
+    # 3. ASR fallback: local success, local fail -> disabled CF, local fail -> CF Whisper-turbo & Whisper
+    asr_local_ok = transcribe_with_cloudflare_fallback(
+        valid_wav,
+        local_transcriber=lambda b, loc: "What is NRA PAYE deadline?",
+        env=cf_env,
+    )
+    assert asr_local_ok["backend"] == "local_hf_asr"
+
+    def _failing_local_asr(b: bytes, loc: str) -> str:
+        raise RuntimeError("local ASR unavailable")
+
+    asr_disabled = transcribe_with_cloudflare_fallback(
+        valid_wav,
+        local_transcriber=_failing_local_asr,
+        env={"FLAG_CLOUDFLARE_FALLBACK": "false"},
+    )
+    assert asr_disabled["status"] == "degraded"
+
+    def _mock_asr_post(url: str, **kwargs: object) -> _FakeResp:
+        if "whisper-large-v3-turbo" in url:
+            return _FakeResp(502)
+        return _FakeResp(
+            200,
+            headers={"content-type": "application/json"},
+            json_data={"result": {"text": "How much is PAYE tax?"}},
+        )
+
+    monkeypatch.setattr(httpx, "post", _mock_asr_post)
+    asr_cf_ok = transcribe_with_cloudflare_fallback(
+        valid_wav,
+        local_transcriber=_failing_local_asr,
+        env=cf_env,
+    )
+    assert asr_cf_ok["status"] == "ok"
+    assert asr_cf_ok["backend"] == "cf_workers_ai"
+    assert asr_cf_ok["model"] == "@cf/openai/whisper"
+
+    def _mock_asr_err(url: str, **kwargs: object) -> _FakeResp:
+        raise httpx.ConnectError("network down")
+
+    monkeypatch.setattr(httpx, "post", _mock_asr_err)
+    asr_cf_fail = transcribe_with_cloudflare_fallback(
+        valid_wav,
+        env={**cf_env, "STT_FALLBACK_MODEL": ""},
+    )
+    assert asr_cf_fail["status"] == "degraded"
+
+    # 4. Runtime endpoints: /v1/voice/status, /v1/voice/tts, /v1/voice/asr, /v1/voice/receptionist/turn
+    for k, v in cf_env.items():
+        monkeypatch.setenv(k, v)
+
+    def _mock_runtime_voice_post(url: str, **kwargs: object) -> _FakeResp:
+        return _FakeResp(
+            200,
+            content=mp3_bytes,
+            headers={"content-type": "audio/mpeg"},
+            json_data={"result": {"text": "What is the PAYE filing deadline?"}},
+        )
+
+    monkeypatch.setattr(httpx, "post", _mock_runtime_voice_post)
+
+    app = create_runtime_app()
+    client = TestClient(app)
+
+    st_res = client.get("/v1/voice/status")
+    assert st_res.status_code == 200
+    assert st_res.json()["cloudflare_fallback"]["tts_fallback_active"] is True
+
+    tts_res = client.post(
+        "/v1/voice/tts",
+        json={"text": "Welcome to SSRA Assist.", "locale": "en"},
+    )
+    assert tts_res.status_code == 200
+    assert tts_res.json()["status"] == "ok"
+    assert tts_res.json()["audio_bytes_len"] > 100
+
+    bad_asr = client.post(
+        "/v1/voice/asr",
+        json={"audio_base64": "!!!not_base64!!!", "locale": "en"},
+    )
+    assert bad_asr.status_code == 400
+
+    good_asr = client.post(
+        "/v1/voice/asr",
+        json={"audio_base64": base64.b64encode(valid_wav).decode("ascii"), "locale": "en"},
+    )
+    assert good_asr.status_code == 200
+    assert good_asr.json()["status"] == "ok"
+
+    # Receptionist turn 1: grant consent via DTMF 1
+    t1 = client.post(
+        "/v1/voice/receptionist/turn",
+        json={"session_id": "call_reg_01", "dtmf_digit": "1", "synthesize_tts": True},
+    )
+    assert t1.status_code == 200
+    assert t1.json()["phase"] == "active_ai"
+    assert t1.json()["recording_consent_granted"] is True
+
+    # Receptionist turn 2: ask PAYE question with TTS synthesis
+    t2 = client.post(
+        "/v1/voice/receptionist/turn",
+        json={
+            "session_id": "call_reg_01",
+            "transcript": "When is the PAYE monthly filing deadline?",
+            "synthesize_tts": True,
+        },
+    )
+    assert t2.status_code == 200
+    assert t2.json()["decision_action"] == "STREAM_ASR"
+    assert t2.json()["spoken_response_text"] != ""
+    assert t2.json()["tts"]["audio_bytes_len"] > 100
+
+    # Receptionist turn 3: request officer transfer
+    t3 = client.post(
+        "/v1/voice/receptionist/turn",
+        json={
+            "session_id": "call_reg_01",
+            "transcript": "Please transfer me to a human tax officer",
+        },
+    )
+    assert t3.status_code == 200
+    assert t3.json()["phase"] == "transferred"
+    assert t3.json()["decision_action"] == "WARM_TRANSFER_TO_OFFICER"

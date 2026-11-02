@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import base64
 import hmac
 import os
 import re
 import socket
 import time
 from collections.abc import Awaitable, Callable
+from datetime import date
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, Request, Response
@@ -34,6 +37,16 @@ from ssra_security import (
     evaluate_sovereign_and_production_readiness,
 )
 from ssra_testing import make_conversation_event
+from ssra_voice import (
+    VoiceCallSession,
+    VoiceWerEvidence,
+    build_voice_catalogue_payload,
+    clean_text_for_speech,
+    get_cloudflare_voice_fallback_config,
+    resolve_voice_fallback_chain,
+    synthesize_with_cloudflare_fallback,
+    transcribe_with_cloudflare_fallback,
+)
 
 from ssra_runtime.field_officer import (
     FieldOfficerAssistRequest,
@@ -102,6 +115,48 @@ class BatchAguiTurnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[AguiStreamRequest] = Field(min_length=1, max_length=100)
+
+
+class VoiceTtsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=2000)
+    locale: LocaleCode = LocaleCode.EN
+    voice: str | None = None
+
+
+class VoiceAsrRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    audio_base64: str = Field(min_length=8, max_length=2_800_000)
+    locale: LocaleCode = LocaleCode.EN
+    duration_seconds: float = Field(default=5.0, gt=0.0, le=120.0)
+
+
+class VoiceReceptionistTurnRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_:-]+$")
+    transcript: str = Field(default="", max_length=1000)
+    dtmf_digit: str | None = Field(default=None, max_length=2)
+    locale: LocaleCode = LocaleCode.EN
+    voice_id: str | None = None
+    assistant_speaking: bool = False
+    elapsed_since_tts_end_ms: float | None = None
+    synthesize_tts: bool = False
+
+
+_REFERENCE_WER_EVIDENCE: dict[LocaleCode, VoiceWerEvidence] = {
+    loc: VoiceWerEvidence(
+        locale=loc,
+        word_error_rate=0.05,
+        test_set="reference-call-receptionist-fixture",
+        measured_on=date(2026, 10, 24),
+        utterance_count=200,
+    )
+    for loc in LocaleCode
+}
+_MAX_VOICE_CALL_SESSIONS = 512
 
 
 def probe_valkey_redis(redis_url: str) -> str:
@@ -178,6 +233,7 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
         openapi_version="3.1.0",
     )
     active_runtime = runtime or SSRAConversationRuntime()
+    voice_call_sessions: dict[str, VoiceCallSession] = {}
 
     @app.middleware("http")
     async def runtime_security_middleware(
@@ -554,6 +610,147 @@ def create_runtime_app(runtime: SSRAConversationRuntime | None = None) -> FastAP
                 "X-Accel-Buffering": "no",
             },
         )
+
+    @app.get("/v1/voice/status")
+    def voice_status() -> dict[str, Any]:
+        """Return local HF cache + Cloudflare Workers AI voice/speech fallback status and speaker catalogue."""
+        return {
+            "service": "ssra-voice-receptionist",
+            "fallback_chain": resolve_voice_fallback_chain(LocaleCode.EN),
+            "cloudflare_fallback": get_cloudflare_voice_fallback_config().to_public_dict(),
+            "catalogue": build_voice_catalogue_payload(wer_evidence=_REFERENCE_WER_EVIDENCE),
+        }
+
+    @app.post("/v1/voice/tts")
+    def voice_tts(body: VoiceTtsRequest) -> dict[str, Any]:
+        """Synthesize speech preferring local sovereign TTS first, falling back to Cloudflare Workers AI."""
+        cleaned = clean_text_for_speech(body.text, locale=body.locale)
+        res = synthesize_with_cloudflare_fallback(
+            body.text,
+            locale=body.locale,
+            voice=body.voice,
+        )
+        return {
+            "status": "ok" if not res.error and res.audio else "degraded",
+            "backend": res.backend,
+            "voice": res.voice,
+            "locale": body.locale.value,
+            "cleaned_text": cleaned,
+            "audio_base64": base64.b64encode(res.audio).decode("ascii") if res.audio else "",
+            "audio_bytes_len": len(res.audio),
+            "latency_ms": res.latency_ms,
+            "error": res.error,
+        }
+
+    @app.post("/v1/voice/asr")
+    def voice_asr(body: VoiceAsrRequest) -> dict[str, Any]:
+        """Transcribe speech preferring local sovereign ASR first, falling back to Cloudflare Workers AI."""
+        try:
+            raw_audio = base64.b64decode(body.audio_base64, validate=True)
+        except Exception as exc:
+            raise SSRAError(
+                McpErrorCode.VALIDATION_FAILED,
+                "Invalid base64 audio payload",
+                status_code=400,
+            ) from exc
+        return transcribe_with_cloudflare_fallback(
+            raw_audio,
+            locale=body.locale,
+            duration_seconds=body.duration_seconds,
+        )
+
+    @app.post("/v1/voice/receptionist/turn")
+    def voice_receptionist_turn(body: VoiceReceptionistTurnRequest) -> dict[str, Any]:
+        """Execute a Call Receptionist turn (`VoiceCallSession` + 11-node runtime + Cloudflare TTS fallback)."""
+        sess = voice_call_sessions.get(body.session_id)
+        if sess is None:
+            if len(voice_call_sessions) >= _MAX_VOICE_CALL_SESSIONS:
+                voice_call_sessions.pop(next(iter(voice_call_sessions)), None)
+            sess = VoiceCallSession(
+                session_id=body.session_id,
+                locale=body.locale,
+                voice_id=body.voice_id,
+                wer_evidence=_REFERENCE_WER_EVIDENCE,
+            )
+            sess.start_call()
+            sess.mark_disclosure_finished()
+            voice_call_sessions[body.session_id] = sess
+
+        outcome = sess.process_caller_turn(
+            transcript=body.transcript,
+            dtmf_digit=body.dtmf_digit,
+            assistant_speaking=body.assistant_speaking,
+            elapsed_since_tts_end_ms=body.elapsed_since_tts_end_ms,
+        )
+        spoken_reply = outcome.spoken_response_text or ""
+        intent_name: str | None = None
+        if (
+            not spoken_reply
+            and outcome.decision is not None
+            and outcome.decision.action == "STREAM_ASR"
+            and body.transcript.strip()
+        ):
+            ev = make_conversation_event(
+                body.transcript.strip(),
+                locale=body.locale,
+                channel=ChannelName.VOICE,
+                thread_id=f"thr_call_{body.session_id}",
+                rich_ui=False,
+            )
+            rt_turn = active_runtime.run_turn(ev)
+            intent_name = rt_turn.intent.intent.value if rt_turn.intent else None
+            raw_answer = " ".join(s.text for s in rt_turn.answer.segments).strip()
+            spoken_reply = sess.prepare_spoken_answer(
+                raw_answer,
+                offer_officer=rt_turn.handoff_ticket is not None,
+            )
+        elif (
+            not spoken_reply
+            and outcome.decision is not None
+            and outcome.decision.action == "WARM_TRANSFER_TO_OFFICER"
+        ):
+            spoken_reply = (
+                "Connecting you to an SSRA tax officer now. "
+                "Please hold, or say call me back to schedule a callback."
+            )
+            sess.record_assistant_reply(spoken_reply)
+
+        tts_payload: dict[str, Any] | None = None
+        if body.synthesize_tts and spoken_reply:
+            tts_res = synthesize_with_cloudflare_fallback(
+                spoken_reply,
+                locale=body.locale,
+                voice=sess.voice_id,
+            )
+            tts_payload = {
+                "backend": tts_res.backend,
+                "voice": tts_res.voice,
+                "audio_bytes_len": len(tts_res.audio),
+                "audio_base64": base64.b64encode(tts_res.audio).decode("ascii")
+                if tts_res.audio
+                else "",
+                "latency_ms": tts_res.latency_ms,
+                "error": tts_res.error,
+            }
+
+        return {
+            "session_id": sess.session_id,
+            "phase": outcome.phase,
+            "turn_index": outcome.turn_index,
+            "recording_consent_granted": sess.recording_consent_granted,
+            "ignored_as_echo": outcome.ignored_as_echo,
+            "ignored_as_backchannel": outcome.ignored_as_backchannel,
+            "control_action_applied": outcome.control_action_applied,
+            "speech_rate_slow": outcome.speech_rate_slow,
+            "pending_offer": outcome.pending_offer,
+            "needs_callback": sess.needs_callback,
+            "decision_action": outcome.decision.action if outcome.decision else None,
+            "intent": intent_name,
+            "spoken_response_text": spoken_reply,
+            "heard_assistant_context": sess.last_assistant_spoken_text,
+            "call_state": sess.build_call_state_frame(),
+            "tts": tts_payload,
+        }
 
     return app
 
