@@ -136,20 +136,32 @@ function negotiateAcceptLanguage(acceptLanguage) {
   return bestLocale;
 }
 
-function buildSecurityHeaders(nonce) {
-  return {
-    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; font-src 'self' data:; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types ssra-web-html ssra-web-script-url ssra-ops-html`,
+const IS_HF_SPACE_EMBED = Boolean(
+  process.env.SPACE_ID || process.env.SPACE_HOST || process.env.SSRA_HF_SPACE_EMBED === "1",
+);
+
+function buildSecurityHeaders(nonce, hostHeader = "") {
+  const host = String(hostHeader).toLowerCase().split(":")[0];
+  const isHfSpace = IS_HF_SPACE_EMBED || host.endsWith(".hf.space");
+  const frameAncestors = isHfSpace
+    ? "frame-ancestors 'self' https://huggingface.co https://*.hf.space"
+    : "frame-ancestors 'none'";
+  const headers = {
+    "Content-Security-Policy": `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'nonce-${nonce}'; font-src 'self' data:; connect-src 'self'; img-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; ${frameAncestors}; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types ssra-web-html ssra-web-script-url ssra-ops-html`,
     "X-Nonce": nonce,
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
-    "Cross-Origin-Opener-Policy": "same-origin",
-    "Cross-Origin-Resource-Policy": "same-origin",
+    "Cross-Origin-Opener-Policy": isHfSpace ? "unsafe-none" : "same-origin",
+    "Cross-Origin-Resource-Policy": isHfSpace ? "cross-origin" : "same-origin",
     "X-Permitted-Cross-Domain-Policies": "none",
     "Referrer-Policy": "no-referrer",
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
     "Permissions-Policy": "geolocation=(), microphone=(self), camera=(), payment=(), usb=()",
     "Cache-Control": "private, no-cache, no-store, must-revalidate",
   };
+  if (!isHfSpace) {
+    headers["X-Frame-Options"] = "DENY";
+  }
+  return headers;
 }
 
 function compactHtmlAssetBlocks(html) {
@@ -1732,7 +1744,7 @@ function renderPwaShellHtml(locale, nonce) {
       if ("serviceWorker" in navigator) {
         caches?.keys?.().then((keys) => {
           keys.forEach((k) => {
-            if (k !== "ssra-assist-public-shell-v2026.10.6") caches.delete(k);
+            if (k !== "ssra-assist-public-shell-v2026.10.7") caches.delete(k);
           });
         }).catch(() => {});
         navigator.serviceWorker
@@ -6441,7 +6453,8 @@ function sanitizeBrowserTurnBody(rawBodyStr) {
 
 const server = http.createServer(async (req, res) => {
   const nonce = crypto.randomBytes(16).toString("base64");
-  const secHeaders = buildSecurityHeaders(nonce);
+  const hostHeader = String(req.headers.host ?? "localhost");
+  const secHeaders = buildSecurityHeaders(nonce, hostHeader);
   const method = String(req.method ?? "GET").toUpperCase();
   if (!ALLOWED_METHODS.has(method)) {
     res.writeHead(405, {
@@ -6453,7 +6466,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const hostHeader = String(req.headers.host ?? "localhost");
   if (!VALID_HOST_RE.test(hostHeader)) {
     res.writeHead(400, { "Content-Type": "application/json", ...secHeaders });
     res.end(JSON.stringify({ error: "INVALID_HOST_HEADER" }));
